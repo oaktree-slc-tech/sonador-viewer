@@ -106,7 +106,8 @@ module.exports = (env, argv) => {
       open: true,
       port: 3000,
       host: '0.0.0.0',
-      public: 'http://localhost:' + 3000,
+      disableHostCheck: true,
+      public: 'http://' + (process.env.OHIF_HOST || 'localhost') + ':' + 3000,
       historyApiFallback: {
         disableDotRule: true,
       },
