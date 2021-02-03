@@ -78,6 +78,8 @@ const initOHIFViewer = function() {
         credentials: 'include',
       }).then(response => response.json()).then(function(servers) {
 
+        if (!Array.isArray(servers)) servers = [servers];
+
         // Set dicomWeb server list and fetch studies
         window.config.servers.dicomWeb = servers;
         utils.addServers(window.config.servers, store);
