@@ -25,7 +25,14 @@ import AppContext from '../context/AppContext';
 const { urlUtil: UrlUtil } = OHIF.utils;
 
 function StudyListRoute(props) {
-  const { history, server, user, studyListFunctionsEnabled } = props;
+  const {
+    history,
+    server,
+    user,
+    studyListFunctionsEnabled,
+    pageFromUrl,
+    rowsPerPageFromUrl,
+  } = props;
   const [t] = useTranslation('Common');
   // ~~ STATE
   const [sort, setSort] = useState({
@@ -53,8 +60,10 @@ function StudyListRoute(props) {
     error: null,
   });
   const [activeModalId, setActiveModalId] = useState(null);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [pageNumber, setPageNumber] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(
+    rowsPerPageFromUrl ? rowsPerPageFromUrl : 25
+  );
+  const [pageNumber, setPageNumber] = useState(pageFromUrl ? pageFromUrl : 0);
   const appContext = useContext(AppContext);
   // ~~ RESPONSIVE
   const displaySize = useMedia(
@@ -200,6 +209,21 @@ function StudyListRoute(props) {
     });
   }
 
+  const showNextPage = () => {
+    history.push(`?page=${pageNumber + 1}&items=${rowsPerPage}`);
+    setPageNumber(pageNumber + 1);
+  };
+
+  const showPrevPage = () => {
+    history.push(`?page=${pageNumber - 1}&items=${rowsPerPage}`);
+    setPageNumber(pageNumber - 1);
+  };
+
+  function changeRowsPerPage(Rows) {
+    history.push(`?page=${pageNumber}&items=${Rows}`);
+    setRowsPerPage(Rows);
+  }
+
   return (
     <>
       {studyListFunctionsEnabled ? (
@@ -268,9 +292,9 @@ function StudyListRoute(props) {
         {/* PAGINATION FOOTER */}
         <TablePagination
           currentPage={pageNumber}
-          nextPageFunc={() => setPageNumber(pageNumber + 1)}
-          prevPageFunc={() => setPageNumber(pageNumber - 1)}
-          onRowsPerPageChange={Rows => setRowsPerPage(Rows)}
+          nextPageFunc={showNextPage}
+          prevPageFunc={showPrevPage}
+          onRowsPerPageChange={Rows => changeRowsPerPage(Rows)}
           rowsPerPage={rowsPerPage}
           recordCount={studies.length}
         />
@@ -286,6 +310,7 @@ StudyListRoute.propTypes = {
   user: PropTypes.object,
   history: PropTypes.object,
   studyListFunctionsEnabled: PropTypes.bool,
+  pageFromUrl: PropTypes.number,
 };
 
 StudyListRoute.defaultProps = {
@@ -336,7 +361,6 @@ async function getStudyList(
   } = filters;
   const sortFieldName = sort.fieldName || 'PatientName';
   const sortDirection = sort.direction || 'desc';
-
   const mappedFilters = {
     PatientID: filters.PatientID,
     PatientName: filters.PatientName,
