@@ -15,12 +15,12 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
     location,
     dataset,
     dicomStore,
-    pageNumberIDs,
     studyInstanceUIDs,
     seriesInstanceUIDs,
   } = routeMatch.params;
   const server = useServer({ project, location, dataset, dicomStore });
   const { appConfig = {} } = useContext(AppContext);
+
   const filters = UrlUtil.queryString.getQueryFilters(routeLocation);
 
   let studyListFunctionsEnabled = false;
@@ -31,8 +31,6 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
     <ConnectedStudyList
       filters={filters}
       studyListFunctionsEnabled={studyListFunctionsEnabled}
-      pageFromUrl={filters ? parseInt(filters.page) : undefined}
-      rowsPerPageFromUrl={filters ? parseInt(filters.items) : undefined}
     />
   );
 }
