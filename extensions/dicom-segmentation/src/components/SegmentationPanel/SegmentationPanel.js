@@ -190,6 +190,11 @@ const SegmentationPanel = ({
       refreshSegmentations
     );
 
+    document.addEventListener(
+      'extensiondicomsegmentationsegloadingfailed',
+      cleanSegmentationComboBox
+    );
+
     /*
      * These are specific to each element;
      * Need to iterate cornerstone-tools tracked enabled elements?
@@ -207,6 +212,10 @@ const SegmentationPanel = ({
         'extensiondicomsegmentationsegloaded',
         refreshSegmentations
       );
+      document.removeEventListener(
+        'extensiondicomsegmentationsegloadingfailed',
+        cleanSegmentationComboBox
+      );
       cornerstoneTools.store.state.enabledElements.forEach(enabledElement =>
         enabledElement.removeEventListener(
           'cornerstonetoolslabelmapmodified',
@@ -215,6 +224,17 @@ const SegmentationPanel = ({
       );
     };
   }, [activeIndex, viewports]);
+
+  const cleanSegmentationComboBox = () => {
+    setState(state => ({
+      ...state,
+      segmentsHidden: [],
+      segmentNumbers: [],
+      labelMapList: [],
+      segmentList: [],
+      isDisabled: true,
+    }));
+  }
 
   const refreshSegmentations = () => {
     const activeViewport = getActiveViewport();
@@ -277,7 +297,10 @@ const SegmentationPanel = ({
       activeViewport.SeriesInstanceUID
     );
 
-    return referencedSegDisplaysets.map((displaySet, index) => {
+    const filteredReferencedSegDisplaysets = referencedSegDisplaysets.filter(
+      (segDisplay => segDisplay.loadError !== true && segDisplay.isLoaded));
+
+    return filteredReferencedSegDisplaysets.map((displaySet, index) => {
       const {
         labelmapIndex,
         originLabelMapIndex,
@@ -289,7 +312,7 @@ const SegmentationPanel = ({
       /* Map to display representation */
       const dateStr = `${SeriesDate}:${SeriesTime}`.split('.')[0];
       const date = moment(dateStr, 'YYYYMMDD:HHmmss');
-      const displayDate = date.format('ddd, MMM Do YYYY');
+      const displayDate = date.format('ddd, MMM Do YYYY, h:mm:ss a');
       const displayDescription = displaySet.SeriesDescription;
 
       return {
@@ -709,7 +732,7 @@ const _getReferencedSegDisplaysets = (StudyInstanceUID, SeriesInstanceUID) => {
   referencedDisplaysets.sort((a, b) => {
     const aNumber = Number(`${a.SeriesDate}${a.SeriesTime}`);
     const bNumber = Number(`${b.SeriesDate}${b.SeriesTime}`);
-    return aNumber - bNumber;
+    return bNumber - aNumber;
   });
 
   return referencedDisplaysets;

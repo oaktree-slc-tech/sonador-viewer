@@ -9,7 +9,7 @@ import { SeriesMetadata } from './SeriesMetadata';
 import { api } from 'dicomweb-client';
 // - createStacks
 import { isImage } from '../../utils/isImage';
-import isDisplaySetReconstructable from '../../utils/isDisplaySetReconstructable';
+import { isDisplaySetReconstructable, isSpacingUniform } from '../../utils/isDisplaySetReconstructable';
 import errorHandler from '../../errorHandler';
 import isLowPriorityModality from '../../utils/isLowPriorityModality';
 
@@ -767,6 +767,16 @@ const isMultiFrame = instance => {
   return instance.getTagValue('NumberOfFrames') > 1;
 };
 
+/**
+ * Creates a display set for a series.
+ * Checks if a series is reconstructable to a 3D volume.
+ * If reconstructable, the frames are sorted.
+ *
+ * @param {SeriesMetadata} series The series metadata object from which the display sets will be created
+ * @param {Object[]} instances An array of `OHIFInstanceMetadata` objects.
+ *
+ * @returns {Object} imageSet.
+ */
 const makeDisplaySet = (series, instances) => {
   const instance = instances[0];
   const imageSet = new ImageSet(instances);
@@ -786,7 +796,7 @@ const makeDisplaySet = (series, instances) => {
     isMultiFrame: isMultiFrame(instance),
   });
 
-  // Sort the images in this series if needed
+  // Sort the images in this series by instanceNumber
   const shallSort = true; //!OHIF.utils.ObjectPath.get(Meteor, 'settings.public.ui.sortSeriesByIncomingOrder');
   if (shallSort) {
     imageSet.sortBy((a, b) => {
@@ -804,18 +814,32 @@ const makeDisplaySet = (series, instances) => {
     imageSet.getImage(0).getTagValue('InstanceNumber')
   );
 
-  const isReconstructable = isDisplaySetReconstructable(instances);
+  const displayReconstructableInfo = isDisplaySetReconstructable(instances);
+  imageSet.isReconstructable = displayReconstructableInfo.value;
 
-  imageSet.isReconstructable = isReconstructable.value;
-
+  let displaySpacingInfo = undefined;
   if (shallSort && imageSet.isReconstructable) {
+    // sort images by image position
     imageSet.sortByImagePositionPatient();
+
+    // check if the spacing is uniform and update isReconstructable
+    const datasetIs4D = displayReconstructableInfo.warningIssues.find
+      (issue => issue === ReconstructionIssues.DATASET_4D);
+    displaySpacingInfo = isSpacingUniform(imageSet.images, datasetIs4D);
+    imageSet.isReconstructable = displaySpacingInfo.isUniform;
+
+    if (displaySpacingInfo.missingFrames) {
+      // TODO -> This is currently unused, but may be used for reconstructing
+      // Volumes with gaps later on.
+      imageSet.missingFrames = displaySpacingInfo.missingFrames;
+    }
   }
 
-  if (isReconstructable.missingFrames) {
-    // TODO -> This is currently unused, but may be used for reconstructing
-    // Volumes with gaps later on.
-    imageSet.missingFrames = isReconstructable.missingFrames;
+  if (!imageSet.displayReconstructableInfo) {
+    // It is not reconstrabale Save type of warning
+    imageSet.warningIssues = displaySpacingInfo ?
+      displayReconstructableInfo.warningIssues.concat(displaySpacingInfo.warningIssues) :
+        displayReconstructableInfo.warningIssues;
   }
 
   return imageSet;

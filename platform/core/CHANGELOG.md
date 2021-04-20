@@ -3,6 +3,44 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [2.13.5](https://github.com/OHIF/Viewers/compare/@ohif/core@2.13.4...@ohif/core@2.13.5) (2021-04-16)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+## [2.13.4](https://github.com/OHIF/Viewers/compare/@ohif/core@2.13.3...@ohif/core@2.13.4) (2021-04-15)
+
+
+### Bug Fixes
+
+* **wl:** fix metadata provider window level issues after dicomweb update (string vs number) ([8681036](https://github.com/OHIF/Viewers/commit/8681036b2133cfc325658691a256a86b5e36705f))
+
+
+
+
+
+## [2.13.3](https://github.com/OHIF/Viewers/compare/@ohif/core@2.13.2...@ohif/core@2.13.3) (2021-03-26)
+
+**Note:** Version bump only for package @ohif/core
+
+
+
+
+
+## [2.13.2](https://github.com/OHIF/Viewers/compare/@ohif/core@2.13.1...@ohif/core@2.13.2) (2021-03-25)
+
+
+### Bug Fixes
+
+* IDC-2288: Update toolbar tabs after derived displayset loaded ([#2307](https://github.com/OHIF/Viewers/issues/2307)) ([6e723eb](https://github.com/OHIF/Viewers/commit/6e723ebced58852007ca553792c740976cfc4201))
+
+
+
+
+
 ## [2.13.1](https://github.com/OHIF/Viewers/compare/@ohif/core@2.13.0...@ohif/core@2.13.1) (2021-03-09)
 
 **Note:** Version bump only for package @ohif/core
