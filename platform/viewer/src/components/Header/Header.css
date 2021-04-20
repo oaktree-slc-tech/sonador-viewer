@@ -8,6 +8,11 @@
   display: inline-block;
   position: relative;
 }
+.header-server-information{
+  display: inline-block;
+  position: fixed;
+  left: 50%;
+}
 
 .header-brand {
   text-decoration: none;
@@ -139,4 +144,31 @@
   .header-menu .research-use {
     display: none;
   }
+}
+
+.modal-table{
+  display: table;
+  width:100%;
+  border-collapse:collapse;
+}
+.modal-table-row{
+  display: table-row;
+}
+.modal-table-cell, .modal-table-head{
+  display: table-cell;
+  padding: 5px;
+  border-bottom: var(--ui-border-thickness) solid var(--ui-border-color);
+}
+.modal-table-head{
+  font-weight:bold;
+}
+.modal-title{
+  font-weight: bold;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: var(--ui-border-thickness) solid var(--ui-border-color);
+}
+.modal-table-wrapper{
+  margin: 20px;
 }

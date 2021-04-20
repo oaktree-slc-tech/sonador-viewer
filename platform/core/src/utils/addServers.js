@@ -6,14 +6,14 @@ const addServers = (servers, store) => {
 
   Object.keys(servers).forEach(serverType => {
     const endpoints = servers[serverType];
-    endpoints.forEach(endpoint => {
+    let serversWithTypes = endpoints.map(endpoint => {
       const server = Object.assign({}, endpoint);
       server.type = serverType;
-
-      store.dispatch({
-        type: 'ADD_SERVER',
-        server,
-      });
+      return server;
+    });
+    store.dispatch({
+      type: 'ADD_SERVER',
+      serversWithTypes,
     });
   });
 };
