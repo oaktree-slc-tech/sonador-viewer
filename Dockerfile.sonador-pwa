@@ -1,0 +1,56 @@
+# syntax = docker/dockerfile:experimental
+FROM ubuntu:20.04 as builder
+
+RUN mkdir /usr/src/app
+WORKDIR /usr/src/app
+
+# Copy Files
+COPY .docker /usr/src/app/.docker
+COPY .webpack /usr/src/app/.webpack
+COPY extensions /usr/src/app/extensions
+COPY platform /usr/src/app/platform
+COPY .browserslistrc /usr/src/app/.browserslistrc
+COPY .sonador /usr/src/app/.sonador
+COPY aliases.config.js /usr/src/app/aliases.config.js
+COPY babel.config.js /usr/src/app/babel.config.js
+COPY lerna.json /usr/src/app/lerna.json
+COPY package.json /usr/src/app/package.json
+COPY postcss.config.js /usr/src/app/postcss.config.js
+COPY yarn.lock /usr/src/app/yarn.lock
+
+RUN apt-get update && apt-get install -y python python3-pip make g++
+
+ARG OHIF_HOST
+ENV ENTRY_TARGET=/usr/src/app/platform/viewer/src/sonador.index.js
+ENV APP_CONFIG=/usr/src/app/platform/viewer/public/config/sonador.config-pwa.js
+ENV PATH=/usr/src/app/node_modules/.bin:$PATH
+ENV QUICK_BUILD true
+
+RUN pip3 install -r /usr/src/app/.sonador/requirements.txt \
+  && python3 /usr/src/app/.sonador/create-pwa-config.pydock $APP_CONFIG
+
+# Install Node.js runtime and components
+RUN pip install nodeenv==1.3.5
+RUN nodeenv --node=12.16.3 /opt/nodejs/
+ENV PATH=/opt/nodejs/bin:${PATH}
+RUN npm install -g yarn \
+  && npm install yarn && npm install 
+
+# Run the install before copying the rest of the files
+RUN yarn config set workspaces-experimental true
+RUN yarn install
+RUN yarn run build
+
+# Stage 2: Bundle the built application into a Docker container
+# which runs Nginx using Alpine Linux
+FROM nginx:1.15.5-alpine
+RUN apk add --no-cache bash
+RUN rm -rf /etc/nginx/conf.d
+COPY .docker/Viewer-v2.x /etc/nginx/conf.d
+COPY .docker/Viewer-v2.x/entrypoint.sh /usr/src/
+RUN chmod 777 /usr/src/entrypoint.sh
+COPY --from=builder /usr/src/app/platform/viewer/dist /usr/share/nginx/html
+EXPOSE 80
+EXPOSE 443
+ENTRYPOINT ["/usr/src/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
