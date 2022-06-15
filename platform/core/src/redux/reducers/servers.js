@@ -1,4 +1,4 @@
-import uniqBy from 'lodash/uniqBy';
+var _ = require('lodash');
 
 export const defaultState = {
   servers: [],
@@ -13,7 +13,16 @@ const servers = (state = defaultState, action) => {
   switch (action.type) {
     case 'ADD_SERVER':
       const servers = action.serversWithTypes;
+
+      // Iterate through server list and activate "default"
       servers.forEach(s => (s.default ? (s.active = true) : false));
+
+      // In cases where there is no default, mark first 
+      // server in list as active.
+      if (!_.find(servers, s => s.active) && servers.length) {
+        servers[0].active = true;
+      }
+
       return { ...state.servers, servers };
 
     case 'ACTIVATE_SERVER': {
@@ -22,7 +31,7 @@ const servers = (state = defaultState, action) => {
       newServers.forEach(s => (s.active = false));
       return {
         ...state,
-        servers: uniqBy([...newServers, newServer], 'wadoRoot'),
+        servers: _.uniqBy([...newServers, newServer], 'wadoRoot'),
       };
     }
 
@@ -45,3 +54,4 @@ const servers = (state = defaultState, action) => {
 };
 
 export default servers;
+
