@@ -45,7 +45,7 @@ import { version } from '../package.json';
 const initOHIFViewer = function() {  
   // Initialize OHIF viewer
   // 1. Create ReactJS app
-  // 2. On init of the application, retrieve server list from Sonadr
+  // 2. On init of the application, retrieve server list from Sonador
   // 3. Retrieve studies from PACS
   if (window) {
     config = window.config || {};
