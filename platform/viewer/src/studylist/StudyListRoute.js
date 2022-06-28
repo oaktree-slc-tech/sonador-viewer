@@ -1,7 +1,17 @@
+const _ = require('lodash');
+
 import React, { useState, useEffect, useContext } from 'react';
 import PropTypes from 'prop-types';
+
+import { switchServerActionCreator } from '@ohif/core/src/redux/reducers/servers';
 import OHIF from '@ohif/core';
-import { withRouter } from 'react-router-dom';
+import DICOMweb from '@ohif/core';
+
+import { generatePath } from 'react-router';
+import {
+  withRouter, 
+  useHistory, 
+} from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   StudyList,
@@ -13,9 +23,14 @@ import {
 import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
 import * as RoutesUtil from '../routes/routesUtil';
 import moment from 'moment';
+
+// Google Health API
 import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
 import ConnectedDicomStorePicker from '../googleCloud/ConnectedDicomStorePicker';
 import filesToStudies from '../lib/filesToStudies.js';
+
+// Sonador integration tools
+import ImageServerPicker from '../sonador/ImageServerPicker.js';
 
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
@@ -24,38 +39,106 @@ import AppContext from '../context/AppContext';
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
+
+function getStudyUrlParams() {
+  // Retrieve the currently active query parameters
+  let params = new URLSearchParams(location.search);
+  return params;
+}
+
+
 function StudyListRoute(props) {
-  const { history, server, user, studyListFunctionsEnabled } = props;
+  // Sonador/OHIF Study List
+
+  const {
+    history, 
+    server, 
+    user, 
+    studyListFunctionsEnabled,
+    filters
+  } = props;
+
+  let dcmfilters = filters || {};
+
   const [t] = useTranslation('Common');
-  // ~~ STATE
+  
+  
+  // ~~ STATE Properties
+
+  const updateServerUrl = token => {
+    // Update history to point at the most recent
+    if (!(window.location.pathname || '').includes(token))
+      history.push(RoutesUtil.parseStudyListPath(appConfig, server, {
+        token: token,
+      }));
+  }
+
+  // Study list table controls
   const [sort, setSort] = useState({
     fieldName: 'PatientName',
     direction: 'desc',
   });
+
+  // Study list filter values
   const [filterValues, setFilterValues] = useState({
-    studyDateTo: null,
-    studyDateFrom: null,
-    PatientName: '',
-    PatientID: '',
-    AccessionNumber: '',
-    StudyDate: '',
-    modalities: '',
-    StudyDescription: '',
-    //
-    patientNameOrId: '',
-    accessionOrModalityOrDescription: '',
-    //
-    allFields: '',
+
+    // Study start/end dates
+    studyDateTo: dcmfilters.studyDateTo ? decodeURIComponent(dcmfilters.studyDateTo) : '',
+    studyDateFrom: dcmfilters.studyDateFrom ? decodeURIComponent(cmfilters.studyDateFrom) : '',
+    
+    // DICOM tags
+    PatientName: dcmfilters.PatientName ? decodeURIComponent(dcmfilters.PatientName) : '',
+    PatientID: dcmfilters.PatientID ? decodeURIComponent(filters.PatientID) : '',
+    AccessionNumber: dcmfilters.AccessionNumber ? decodeURIComponent(dcmfilters.AccessionNumber) : '',
+    StudyDate: dcmfilters.StudyDate ? decodeURIComponent(dcmfilters.StudyDate) : '',
+    modalities: dcmfilters.modalities ? decodeURIComponent(dcmfilters.modalities) : '',
+    StudyDescription: dcmfilters.StudyDescription ? decodeURIComponent(dcmfilters.StudyDescription) : '',
+    
+    // patient and study (search multiple tags)
+    patientNameOrId: dcmfilters.patientNameOrId ? decodeURIComponent(dcmfilters.patientNameOrId) : '',
+    accessionOrModalityOrDescription: dcmfilters.accessionOrModalityOrDescription ? 
+      decodeURIComponent(dcmfilters.accessionOrModalityOrDescription) : '',
+    
+    // search all tags
+    allFields: dcmfilters.allFields ? decodeURIComponent(dcmfilters.allFields) : '',
   });
+
+  // Set study list
   const [studies, setStudies] = useState([]);
+
+  // Study list state hooks
+  const [activeModalId, setActiveModalId] = useState(null);
   const [searchStatus, setSearchStatus] = useState({
     isSearchingForStudies: false,
     error: null,
-  });
-  const [activeModalId, setActiveModalId] = useState(null);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [pageNumber, setPageNumber] = useState(0);
+  });  
+
+  // Manage pagination
+  const [rowsPerPage, setRowsPerPage] = useState((dcmfilters || {}).items ? parseInt(filters.items) : 25);
+  const [pageNumber, setPageNumber] = useState((dcmfilters || {}).page ? parseInt(filters.page)-1 : 0);
+
+  const updateRowsPerPage = rows => {
+    // Update the number of rows per page, synchronize state and URL
+
+    let params = getStudyUrlParams();
+    params.set('items', rows);
+    history.push({ search: params.toString() });
+    
+    setRowsPerPage(rows);
+  }
+
+  const updatePageNumber = pnumber => {
+    // Update the page number, synchronize state and URL
+    let params = getStudyUrlParams();
+    params.set('page', pnumber+1);
+    history.push({ search: params.toString() });
+
+    setPageNumber(pnumber);
+  }
+  
   const appContext = useContext(AppContext);
+  
+  
   // ~~ RESPONSIVE
   const displaySize = useMedia(
     [
@@ -66,17 +149,13 @@ function StudyListRoute(props) {
     ['large', 'medium', 'small'],
     'small'
   );
+  
+
   // ~~ DEBOUNCED INPUT
   const debouncedSort = useDebounce(sort, 200);
-  const debouncedFilters = useDebounce(filterValues, 250);
+  const debouncedFilters = useDebounce(filterValues, 500);
 
-  // Google Cloud Adapter for DICOM Store Picking
   const { appConfig = {} } = appContext;
-  const isGoogleCHAIntegrationEnabled =
-    !server && appConfig.enableGoogleCloudAdapter;
-  if (isGoogleCHAIntegrationEnabled && activeModalId !== 'DicomStorePicker') {
-    setActiveModalId('DicomStorePicker');
-  }
 
   // Called when relevant state/props are updated
   // Watches filters and sort, debounced
@@ -92,7 +171,8 @@ function StudyListRoute(props) {
             debouncedSort,
             rowsPerPage,
             pageNumber,
-            displaySize
+            displaySize,
+            history,
           );
 
           setStudies(response);
@@ -146,31 +226,10 @@ function StudyListRoute(props) {
   let healthCareApiButtons = null;
   let healthCareApiWindows = null;
 
-  if (appConfig.enableGoogleCloudAdapter) {
-    const isModalOpen = activeModalId === 'DicomStorePicker';
-    updateURL(isModalOpen, appConfig, server, history);
 
-    healthCareApiWindows = (
-      <ConnectedDicomStorePicker
-        isOpen={activeModalId === 'DicomStorePicker'}
-        onClose={() => setActiveModalId(null)}
-      />
-    );
+  // Switch Sonador Server
+  // updateURL(isModalOpen, appConfig, server, history);
 
-    healthCareApiButtons = (
-      <div
-        className="form-inline btn-group pull-right"
-        style={{ padding: '20px' }}
-      >
-        <button
-          className="btn btn-primary"
-          onClick={() => setActiveModalId('DicomStorePicker')}
-        >
-          {t('Change DICOM Store')}
-        </button>
-      </div>
-    );
-  }
 
   function handleSort(fieldName) {
     let sortFieldName = fieldName;
@@ -192,6 +251,8 @@ function StudyListRoute(props) {
   }
 
   function handleFilterChange(fieldName, value) {
+    // Fetch study list on filter change
+
     setFilterValues(state => {
       return {
         ...state,
@@ -226,10 +287,12 @@ function StudyListRoute(props) {
           </UserManagerContext.Consumer>
         )}
       </WhiteLabelingContext.Consumer>
+      
       <div className="study-list-header">
         <div className="header">
-          <h1 style={{ fontWeight: 300, fontSize: '22px' }}>
-            {t('StudyList')}
+          <h1 style={{ fontWeight: 300, fontSize: '22px', paddingTop: '0.25rem' }}>
+            <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
+              <span style={{color: '#F4CD57', marginLeft: '0.5rem', marginRight: '0.5rem' }}>/</span>{t('Study List')}
           </h1>
         </div>
         <div className="actions">
@@ -268,9 +331,9 @@ function StudyListRoute(props) {
         {/* PAGINATION FOOTER */}
         <TablePagination
           currentPage={pageNumber}
-          nextPageFunc={() => setPageNumber(pageNumber + 1)}
-          prevPageFunc={() => setPageNumber(pageNumber - 1)}
-          onRowsPerPageChange={Rows => setRowsPerPage(Rows)}
+          nextPageFunc={() => updatePageNumber(pageNumber+1)}
+          prevPageFunc={() => updatePageNumber(pageNumber-1)}
+          onRowsPerPageChange={updateRowsPerPage}
           rowsPerPage={rowsPerPage}
           recordCount={studies.length}
         />
@@ -292,7 +355,9 @@ StudyListRoute.defaultProps = {
   studyListFunctionsEnabled: true,
 };
 
+
 function updateURL(isModalOpen, appConfig, server, history) {
+  // Update viewer URL and history
   if (isModalOpen) {
     return;
   }
@@ -327,7 +392,8 @@ async function getStudyList(
   sort,
   rowsPerPage,
   pageNumber,
-  displaySize
+  displaySize,
+  history,
 ) {
   const {
     allFields,
@@ -338,11 +404,14 @@ async function getStudyList(
   const sortDirection = sort.direction || 'desc';
 
   const mappedFilters = {
+
+    // DICOMweb advanced filters
     PatientID: filters.PatientID,
     PatientName: filters.PatientName,
     AccessionNumber: filters.AccessionNumber,
     StudyDescription: filters.StudyDescription,
     ModalitiesInStudy: filters.modalities,
+    
     // NEVER CHANGE
     studyDateFrom: filters.studyDateFrom,
     studyDateTo: filters.studyDateTo,
@@ -351,6 +420,31 @@ async function getStudyList(
     fuzzymatching: server.supportsFuzzyMatching === true,
   };
 
+  // Add mapped filters to the search history
+    let params = getStudyUrlParams();
+
+    // Add mapped DICOM fields
+    _.each(_.omit(mappedFilters, 'studyDateFrom', 'studyDateTo', 'limit', 'offset', 'fuzzymatching'), (v,k) => {
+      if (_.isEmpty(v)) params.delete(k)
+      else params.set(encodeURIComponent(k), encodeURIComponent(v));
+    });
+
+    // Add compound fields
+    _.each({ 
+      allFields: allFields, 
+      patientNameOrId: patientNameOrId,
+      accessionOrModalityOrDescription: accessionOrModalityOrDescription
+    }, (v,k) => {
+      if (_.isEmpty(v)) params.delete(k)
+      else params.set(encodeURIComponent(k), encodeURIComponent(v))
+    });
+
+    // Update URL parameters if there is a change in the search
+    if (params.toString() != location.search) {
+      history.push({ search: params.toString() });
+    }
+
+  // Retrieve studies from server
   const studies = await _fetchStudies(server, mappedFilters, displaySize, {
     allFields,
     patientNameOrId,
@@ -568,5 +662,6 @@ function _getQueryFiltersForValue(filters, fields, value) {
 
   return queryFilters;
 }
+
 
 export default withRouter(StudyListRoute);

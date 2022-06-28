@@ -10,13 +10,22 @@ import isEqual from 'lodash.isequal';
 import AppContext from '../context/AppContext';
 
 const getActiveServer = servers => {
+  // Search the servers list for the active server instance.
+  // @param servers: collection of servers to be searched for active instance.
+  // @returns active server or undefined
   const isActive = a => a.active === true;
 
-  return servers && servers.servers && servers.servers.find(isActive);
+  let activeServer =
+    servers && servers.servers && servers.servers.find(isActive);
+  return activeServer;
 };
 
 const getServers = (appConfig, project, location, dataset, dicomStore) => {
+  // Dynamically retrieve server list
+  // TODO: Remove Google Cloud adapter
   let servers = [];
+
+  // Retrieve server list from Google Cloud
   if (appConfig.enableGoogleCloudAdapter) {
     GoogleCloudApi.urlBase = appConfig.healthcareApiEndpoint;
     const pathUrl = GoogleCloudApi.getUrlBaseDicomWeb(
@@ -44,6 +53,8 @@ const getServers = (appConfig, project, location, dataset, dicomStore) => {
 };
 
 const isValidServer = (server, appConfig) => {
+  // Validate the server as valid/invalid.
+
   if (appConfig.enableGoogleCloudAdapter) {
     return GoogleCloudUtilServers.isValidServer(server);
   }
@@ -52,6 +63,7 @@ const isValidServer = (server, appConfig) => {
 };
 
 const setServers = (dispatch, servers) => {
+  // Update Redux server list
   const action = {
     type: 'SET_SERVERS',
     servers,
@@ -70,7 +82,9 @@ const useServerFromUrl = (
   dataset,
   dicomStore
 ) => {
-  // update state from url available only when gcloud on
+  // Update OHIF state URL
+
+  //
   if (!appConfig.enableGoogleCloudAdapter) {
     return false;
   }
@@ -104,15 +118,24 @@ export default function useServer({
   location,
   dataset,
   dicomStore,
+  token,
 } = {}) {
   // Hooks
   const servers = useSelector(state => state && state.servers);
   const previousServers = usePrevious(servers);
   const dispatch = useDispatch();
-
   const { appConfig = {} } = useContext(AppContext);
 
-  const activeServer = getActiveServer(servers);
+  // Set active server to match token
+  servers.servers.map(server => {
+    if (token) {
+      if (server.token === token) server.active = true;
+      else server.active = false;
+    }
+  });
+
+  // Retrieve active server
+  const activeServer = getActiveServer(servers, token);
   const urlBasedServers =
     getServers(appConfig, project, location, dataset, dicomStore) || [];
   const shouldUpdateServer = useServerFromUrl(
