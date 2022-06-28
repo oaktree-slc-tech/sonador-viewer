@@ -1,13 +1,16 @@
 var _ = require('lodash');
 
+
 export const defaultState = {
   servers: [],
 };
 
-export const swithServerActionCreator = token => ({
+
+export const switchServerActionCreator  = token => ({
   type: 'SWITCH_SERVER',
   token,
 });
+
 
 const servers = (state = defaultState, action) => {
   switch (action.type) {
@@ -52,6 +55,7 @@ const servers = (state = defaultState, action) => {
       return state;
   }
 };
+
 
 export default servers;
 

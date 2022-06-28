@@ -1,7 +1,11 @@
 import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
-import './PaginationArea.styl';
+import { useSearchParams } from 'react-router-dom';
+
 import { withTranslation } from '../../contextProviders';
+
+import './PaginationArea.styl';
+
 
 class TablePagination extends PureComponent {
   static defaultProps = {
