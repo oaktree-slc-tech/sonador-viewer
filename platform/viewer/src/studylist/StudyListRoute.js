@@ -263,81 +263,107 @@ function StudyListRoute(props) {
 
   return (
     <>
-      {studyListFunctionsEnabled ? (
-        <ConnectedDicomFilesUploader
-          isOpen={activeModalId === 'DicomFilesUploader'}
-          onClose={() => setActiveModalId(null)}
-        />
-      ) : null}
-      {healthCareApiWindows}
-      <WhiteLabelingContext.Consumer>
-        {whiteLabeling => (
-          <UserManagerContext.Consumer>
-            {userManager => (
-              <ConnectedHeader
-                useLargeLogo={true}
-                user={user}
-                userManager={userManager}
-              >
-                {whiteLabeling &&
-                  whiteLabeling.createLogoComponentFn &&
-                  whiteLabeling.createLogoComponentFn(React)}
-              </ConnectedHeader>
-            )}
-          </UserManagerContext.Consumer>
-        )}
-      </WhiteLabelingContext.Consumer>
-      
-      <div className="study-list-header">
-        <div className="header">
-          <h1 style={{ fontWeight: 300, fontSize: '22px', paddingTop: '0.25rem' }}>
-            <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
-              <span style={{color: '#F4CD57', marginLeft: '0.5rem', marginRight: '0.5rem' }}>/</span>{t('Study List')}
-          </h1>
-        </div>
-        <div className="actions">
-          {studyListFunctionsEnabled && healthCareApiButtons}
-          {studyListFunctionsEnabled && (
-            <PageToolbar
-              onImport={() => setActiveModalId('DicomFilesUploader')}
-            />
+    {studyListFunctionsEnabled ? (
+      <ConnectedDicomFilesUploader
+        isOpen={activeModalId === 'DicomFilesUploader'}
+        onClose={() => setActiveModalId(null)}
+      />
+    ) : null}
+    {healthCareApiWindows}
+    <WhiteLabelingContext.Consumer>
+      {whiteLabeling => (
+        <UserManagerContext.Consumer>
+          {userManager => (
+            <ConnectedHeader
+              useLargeLogo={true}
+              user={user}
+              userManager={userManager}
+            >
+              {whiteLabeling &&
+                whiteLabeling.createLogoComponentFn &&
+                whiteLabeling.createLogoComponentFn(React)}
+            </ConnectedHeader>
           )}
-          <span className="study-count">{studies.length}</span>
-        </div>
+        </UserManagerContext.Consumer>
+      )}
+    </WhiteLabelingContext.Consumer>
+    
+    
+    {/* Study Header: Search/Filter/Upload */}
+    {server ? (
+      <div className="study-list-header"><div className="header">
+        <h1 style={{ fontWeight: 300, fontSize: '22px', paddingTop: '0.25rem' }}>
+          <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
+            <span style={{color: '#F4CD57', marginLeft: '0.5rem', marginRight: '0.5rem' }}>/</span>{t('Study List')}
+        </h1>
       </div>
+      <div className="actions">
+        {studyListFunctionsEnabled && healthCareApiButtons}
+        {studyListFunctionsEnabled && (
+          <PageToolbar
+            onImport={() => setActiveModalId('DicomFilesUploader')}
+          />
+        )}
+        <span className="study-count">{studies.length}</span>
+      </div></div>
+    ) : null}
 
+    {/* Study List Table Background */}
+    {server ? (
       <div className="table-head-background" />
+    ) : null}
+
+
+    {/* Study List */}
+    {server ? (
       <div className="study-list-container">
-        {/* STUDY LIST OR DROP ZONE? */}
-        <StudyList
-          isLoading={searchStatus.isSearchingForStudies}
-          hasError={searchStatus.error === true}
-          // Rows
-          studies={studies}
-          onSelectItem={studyInstanceUID => {
-            const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
-              studyInstanceUIDs: studyInstanceUID,
-            });
-            history.push(viewerPath);
-          }}
-          // Table Header
-          sort={sort}
-          onSort={handleSort}
-          filterValues={filterValues}
-          onFilterChange={handleFilterChange}
-          studyListDateFilterNumDays={appConfig.studyListDateFilterNumDays}
-          displaySize={displaySize}
-        />
-        {/* PAGINATION FOOTER */}
-        <TablePagination
-          currentPage={pageNumber}
-          nextPageFunc={() => updatePageNumber(pageNumber+1)}
-          prevPageFunc={() => updatePageNumber(pageNumber-1)}
-          onRowsPerPageChange={updateRowsPerPage}
-          rowsPerPage={rowsPerPage}
-          recordCount={studies.length}
-        />
+      
+      <StudyList
+        isLoading={searchStatus.isSearchingForStudies}
+        hasError={searchStatus.error === true}
+        // Rows
+        studies={studies}
+        onSelectItem={studyInstanceUID => {
+          const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
+            studyInstanceUIDs: studyInstanceUID,
+          });
+          history.push(viewerPath);
+        }}
+        
+        // Table Header
+        sort={sort}
+        onSort={handleSort}
+        filterValues={filterValues}
+        onFilterChange={handleFilterChange}
+        studyListDateFilterNumDays={appConfig.studyListDateFilterNumDays}
+        displaySize={displaySize}
+      />
+      
+      {/* Footer: Pagination Controls */}
+      <TablePagination
+        currentPage={pageNumber}
+        nextPageFunc={() => updatePageNumber(pageNumber+1)}
+        prevPageFunc={() => updatePageNumber(pageNumber-1)}
+        onRowsPerPageChange={updateRowsPerPage}
+        rowsPerPage={rowsPerPage}
+        recordCount={studies.length}
+      />
       </div>
+    ) : null}
+
+    
+    {/* Welcome Message (Empty State) */}
+    {!server ? (
+      <div className="notFound"><div className="study-list-header">
+        <div className="header"><h1 style={{ fontSize: '30px', textAlign: 'center', }}>
+          {t('Welcome!')}
+        </h1>
+        <h2 style={{ fontWeight: 300, fontSize: '22px', textAlign: 'center', paddingTop: '12px', }}>
+          {window.sonador.home.message}
+        </h2>
+        </div>
+      </div></div>
+    ) : null}
     </>
   );
 }

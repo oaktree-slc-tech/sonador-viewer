@@ -1,13 +1,15 @@
+import isEqual from 'lodash.isequal';
+
 import React, { useContext } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+
+import * as GoogleCloudUtilServers from '../googleCloud/utils/getServers';
 import GoogleCloudApi from '../googleCloud/api/GoogleCloudApi';
 import usePrevious from './usePrevious';
 
-import * as GoogleCloudUtilServers from '../googleCloud/utils/getServers';
-import { useSelector, useDispatch } from 'react-redux';
-import isEqual from 'lodash.isequal';
-
 // Contexts
 import AppContext from '../context/AppContext';
+
 
 const getActiveServer = servers => {
   // Search the servers list for the active server instance.
@@ -19,6 +21,7 @@ const getActiveServer = servers => {
     servers && servers.servers && servers.servers.find(isActive);
   return activeServer;
 };
+
 
 const getServers = (appConfig, project, location, dataset, dicomStore) => {
   // Dynamically retrieve server list
