@@ -128,9 +128,9 @@ const checkIfCanAddMeasurementsToDisplaySet = (
   const imageIds = images.map(i => i.getImageId());
   const SOPInstanceUIDs = images.map(i => i.SOPInstanceUID);
   imageDisplaySet.SRLabels = [];
+  const colors = new Map();
   measurements.forEach(measurement => {
     const { coords } = measurement;
-
     coords.forEach((coord, index) => {
       if (coord.ReferencedSOPSequence !== undefined) {
         const imageIndex = SOPInstanceUIDs.findIndex(
@@ -139,23 +139,50 @@ const checkIfCanAddMeasurementsToDisplaySet = (
             coord.ReferencedSOPSequence.ReferencedSOPInstanceUID
         );
         if (imageIndex > -1) {
+          if (!srDisplaySet.referencedDisplaySets.includes(imageDisplaySet)) {
+            srDisplaySet.referencedDisplaySets.push(imageDisplaySet);
+          }
+
           const imageId = imageIds[imageIndex];
           const imageMetadata = images[imageIndex].getData().metadata;
 
           if (coord.GraphicType === 'TEXT') {
+            const key =
+              measurement.labels[index].label + measurement.labels[index].value;
+            let color = colors.get(key);
+            if (!color) {
+              // random dark color
+              color =
+                'hsla(' + Math.floor(Math.random() * 360) + ', 70%, 30%, 1)';
+              colors.set(key, color);
+            }
+
+            measurement.labels[index].color = color;
+            measurement.isSRText = true;
+            measurement.labels[index].visible = true;
+
             imageDisplaySet.SRLabels.push({
               ReferencedSOPInstanceUID:
                 coord.ReferencedSOPSequence.ReferencedSOPInstanceUID,
               labels: measurement.labels[index],
             });
-          }
 
-          addMeasurement(
-            measurement,
-            imageId,
-            imageMetadata,
-            imageDisplaySet.displaySetInstanceUID
-          );
+            if (index === 0) {
+              addMeasurement(
+                measurement,
+                imageId,
+                imageMetadata,
+                imageDisplaySet.displaySetInstanceUID
+              );
+            }
+          } else {
+            addMeasurement(
+              measurement,
+              imageId,
+              imageMetadata,
+              imageDisplaySet.displaySetInstanceUID
+            );
+          }
         }
       }
     });
