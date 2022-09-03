@@ -355,12 +355,12 @@ function StudyListRoute(props) {
     {/* Welcome Message (Empty State) */}
     {!server ? (
       <div className="notFound"><div className="study-list-header">
-        <div className="header"><h1 style={{ fontSize: '30px', textAlign: 'center', }}>
+        <div className="header"><h1 style={{ fontSize: '30px', }}>
           {t('Welcome!')}
         </h1>
-        <h2 style={{ fontWeight: 300, fontSize: '22px', textAlign: 'center', paddingTop: '12px', }}>
+        <p style={{ fontWeight: 300, fontSize: '22px', paddingTop: '36px', lineHeight: '2.0rem' }}>
           {window.sonador.home.message}
-        </h2>
+        </p>
         </div>
       </div></div>
     ) : null}

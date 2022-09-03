@@ -71,7 +71,7 @@ const initOHIFViewer = function() {
   ReactDOM.render(app, document.getElementById('root'), function() {
 
     // Retrieve Sonador PACS server list
-    if (window.sonador.host) {
+    if (window.sonador && window.sonador.host) {
       var sonador_pacsurl = window.sonador.host+window.sonador.api.pacs;
 
       fetch(sonador_pacsurl, {
