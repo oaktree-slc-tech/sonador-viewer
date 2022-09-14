@@ -4,6 +4,7 @@ import DicomUploader from './DicomUploader';
 import { withTranslation } from 'react-i18next';
 import { servicesManager } from './../App.js';
 
+
 function DicomFileUploaderModal({
                                  isOpen = false,
                                  onClose,
@@ -40,5 +41,6 @@ DicomFileUploaderModal.propTypes = {
   onClose: PropTypes.func,
   url: PropTypes.string,
 };
+
 
 export default withTranslation('Common')(DicomFileUploaderModal);

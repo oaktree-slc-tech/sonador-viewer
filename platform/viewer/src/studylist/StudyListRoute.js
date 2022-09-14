@@ -37,6 +37,11 @@ import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
 import AppContext from '../context/AppContext';
 
+// Studylist styling
+import '../styles/global-viewer.css';
+import './styles/studylist.css';
+
+
 const { urlUtil: UrlUtil } = OHIF.utils;
 
 
@@ -183,10 +188,13 @@ function StudyListRoute(props) {
         }
       };
 
-      if (server) {
+      // Users must have the "query" permission in order to execute searches
+      // against Sonador Imaging servers
+      if (server && server.perms && server.perms.query) {
         fetchStudies();
       }
     },
+    
     // TODO: Can we update studies directly?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -263,7 +271,10 @@ function StudyListRoute(props) {
 
   return (
     <>
-    {studyListFunctionsEnabled ? (
+    
+    {/*  DICOM Upload Modal: Enabled if the user has been granted the "upload" 
+        permission for the server */}
+    {(studyListFunctionsEnabled && server && server.perms && server.perms.upload) ? (
       <ConnectedDicomFilesUploader
         isOpen={activeModalId === 'DicomFilesUploader'}
         onClose={() => setActiveModalId(null)}
@@ -274,11 +285,7 @@ function StudyListRoute(props) {
       {whiteLabeling => (
         <UserManagerContext.Consumer>
           {userManager => (
-            <ConnectedHeader
-              useLargeLogo={true}
-              user={user}
-              userManager={userManager}
-            >
+            <ConnectedHeader useLargeLogo={true} user={user} userManager={userManager}>
               {whiteLabeling &&
                 whiteLabeling.createLogoComponentFn &&
                 whiteLabeling.createLogoComponentFn(React)}
@@ -294,28 +301,44 @@ function StudyListRoute(props) {
       <div className="study-list-header"><div className="header">
         <h1 style={{ fontWeight: 300, fontSize: '22px', paddingTop: '0.25rem' }}>
           <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
-            <span style={{color: '#F4CD57', marginLeft: '0.5rem', marginRight: '0.5rem' }}>/</span>{t('Study List')}
+
+          {/* Study list: requires "query permission" */}
+          {(server.perms && server.perms.query) ? (
+            <span className="sonador-studylistt-title">
+              <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">/</span>
+              <span className="hide-xs">{t('Study List')}</span>
+            </span>
+          ) : null}
         </h1>
       </div>
+
+      {/* Toolbar Buttons */}
       <div className="actions">
         {studyListFunctionsEnabled && healthCareApiButtons}
-        {studyListFunctionsEnabled && (
-          <PageToolbar
-            onImport={() => setActiveModalId('DicomFilesUploader')}
-          />
+
+        {/* DICOM Upload Button: requires "upload" permission */}
+        {studyListFunctionsEnabled && server.perms && server.perms.upload && (
+          <PageToolbar onImport={() => setActiveModalId('DicomFilesUploader')} />
         )}
-        <span className="study-count">{studies.length}</span>
+
+        {/* DICOM Query Results: requires "query" permission */}
+        {server.perms && server.perms.query && (
+          <span>
+            <span className="study-count">{studies.length}</span>
+            <span className="sonador-lightgray spacer-left-05rem font-light fontsize-medium hide-xs">{t('Studies')}</span>
+          </span>
+        )}
       </div></div>
     ) : null}
 
     {/* Study List Table Background */}
-    {server ? (
+    {(server && server.perms && server.perms.query) ? (
       <div className="table-head-background" />
     ) : null}
 
 
-    {/* Study List */}
-    {server ? (
+    {/* Study List: requires "query permission" */}
+    {(server && server.perms && server.perms.query) ? (
       <div className="study-list-container">
       
       <StudyList
@@ -355,10 +378,9 @@ function StudyListRoute(props) {
     {/* Welcome Message (Empty State) */}
     {!server ? (
       <div className="notFound"><div className="study-list-header">
-        <div className="header"><h1 style={{ fontSize: '30px', }}>
-          {t('Welcome!')}
-        </h1>
-        <p style={{ fontWeight: 300, fontSize: '22px', paddingTop: '36px', lineHeight: '2.0rem' }}>
+        <div className="header">
+        <h1 className="state-message-large">{t('Welcome!')}</h1>
+        <p className="state-message-large">
           {window.sonador.home.message}
         </p>
         </div>

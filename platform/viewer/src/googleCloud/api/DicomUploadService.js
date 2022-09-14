@@ -2,8 +2,13 @@ import { httpErrorToStr, checkDicomFile } from '../utils/helpers';
 import { api } from 'dicomweb-client';
 import { errorHandler } from '@ohif/core';
 
+
 class DicomUploadService {
+  // DICOMweb upload service
+
   async smartUpload(files, url, uploadCallback, cancellationToken) {
+    // Upload file to the web server
+
     const CHUNK_SIZE = 1; // Only one file per request is supported so far
     const MAX_PARALLEL_JOBS = 50; // FIXME: tune MAX_PARALLEL_JOBS number
 
@@ -16,19 +21,38 @@ class DicomUploadService {
     let completed = false;
 
     const processJob = async (resolve, reject) => {
+
+      // Process files in the upload array (queue) until they have all been removed
       while (filesArray.length > 0) {
+
+        // Stop all uploads if cancellation token is true        
         if (cancellationToken.get()) return;
+
+        // Pull file from queue        
         let chunk = filesArray.slice(0, CHUNK_SIZE);
         filesArray = filesArray.slice(CHUNK_SIZE);
         let error = null;
+        
         try {
-          if (chunk.length > 1) throw new Error('Not implemented');
+          // Upload file to remote server
+
+          if (chunk.length > 1)
+            throw new Error('DICOMweb upload service does not support parallel uploads');
           if (chunk.length === 1) await this.simpleUpload(chunk[0], url);
+
         } catch (err) {
+          // Catch error and convert to string reprsentation
+          
           // It looks like a stupid bug of Babel that err is not an actual Exception object
           error = httpErrorToStr(err);
         }
-        chunk.forEach(file => uploadCallback(file.fileId, error));
+
+        // Invoke callback for each error. FileID, error, and fileArray are all provided
+        // to the callback so that files which failed due to transfer errors can be re-queued 
+        // and re-tried.
+        chunk.forEach(file => uploadCallback(file.fileId, error, filesArray));
+        
+        // All files in queue have been processed, exit
         if (!completed && filesArray.length === 0) {
           completed = true;
           resolve();
@@ -45,6 +69,8 @@ class DicomUploadService {
   }
 
   async simpleUpload(file, url) {
+    // Uploaded the provided file to the specified URL
+
     const client = this.getClient(url);
     const loadedFile = await this.readFile(file);
     const content = loadedFile.content;
@@ -55,6 +81,8 @@ class DicomUploadService {
   }
 
   readFile(file) {
+    // Read file contents in preparation of upload
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -85,5 +113,6 @@ class DicomUploadService {
     });
   }
 }
+
 
 export default new DicomUploadService();

@@ -1,6 +1,6 @@
 :root {
-  /* Sizes */
 
+  /* Sizes */
   --top-bar-height: 40px;
   --top-bar-expanded-height: 160px;
   --toolbar-height: 78px;
@@ -12,18 +12,15 @@
   --snackbar-size: 344px;
 
   /* Transitions */
-
   --transition-duration: 0.3s;
   --transition-effect: ease;
   --sidepanel-transition: all 0.3s ease;
 
   /* Thicknesses */
-
   --viewport-border-thickness: 1px;
   --ui-border-thickness: 1px;
 
   /** Colors **/
-
   --snackbar-success: rgba(94, 164, 0, 0.9);
   --snackbar-error: rgba(236, 61, 61, 0.9);
   --snackbar-warning: rgba(235, 173, 23, 0.9);
