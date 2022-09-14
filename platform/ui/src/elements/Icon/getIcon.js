@@ -90,6 +90,7 @@ import eye from './icons/eye.svg';
 import eyeClosed from './icons/eye-closed.svg';
 import envelopeSquare from './icons/envelope-square.svg';
 
+
 const ICONS = {
   eye,
   'eye-closed': eyeClosed,

@@ -1,0 +1,93 @@
+/* Flex Grid Layout Utils */
+.columns {
+  display: flex;
+  padding: 0.5rem 1rem 0.5rem 1rem;
+}
+
+.columns .flush-left {
+  margin-left: -1rem;
+}
+
+.columns :not(:first-child) {
+  margin-left: 1rem;
+}
+
+.columns .push-right {
+  margin-left: auto;
+}
+
+
+/* Grid Alignment */
+.vertical-top { vertical-align: top; }
+
+
+/* Cursor Properties */
+.cursor-pointer { cursor: pointer; }
+
+
+/* Grid Layout Utils */
+.no-spacer-left { margin-left: 0 !important; }
+.spacer-left-025rem { margin-left: 0.25rem !important; }
+.spacer-left-05rem { margin-left: 0.5rem !important; }
+.spacer-left-1rem { margin-left: 1rem !important; }
+.spacer-left-15rem { margin-left: 1.5rem !important; }
+.spacer-left-2rem { margin-left: 2rem !important; }
+.spacer-left-3rem { margin-left: 3rem !important; }
+
+.no-spacer-right { margin-right: 0 !important; }
+.spacer-right-05rem { margin-right: 0.5rem !important; }
+
+
+/* Icon Sizes */
+.icon-size-20 { height: 20px; width: 20px; }
+.icon-size-16 { height: 16px; width: 16px; }
+
+
+/* Text Properties */
+.font-light { font-weight: 100; }
+.font-medium { font-weight: 400; }
+
+.fontsize-medium { font-size: 1.25rem;}
+
+.error { color: red; }
+.warning { color: yellow; }
+.success { color: green; }
+
+.sonador-gold { color: #F4CD57; }
+.sonador-lightgold {
+  --tw-text-opacity: 1;
+  color: rgba(250,243,183, var(--tw-text-opacity));
+}
+.sonador-darkgray {
+  --tw-text-opacity: 1;
+  color:  rgba(96,101,111,var(--tw-text-opacity));
+}
+.sonador-gray {
+  --tw-text-opacity: 1;
+  color:  rgba(161,159,173,var(--tw-text-opacity));
+}
+.sonador-lightergray {
+  --tw-text-opacity: 1;
+  color:  rgba(191,191,191,var(--tw-text-opacity));
+}
+.sonador-lightgray {
+  --tw-text-opacity: 1;
+  color:  rgba(242,242,242,var(--tw-text-opacity)); 
+}
+
+
+/* Phone Layout */
+
+@media only screen and (max-width:  500px) {
+  .hide-xs { display:  none; }
+
+  .OHIFModal__header {
+    padding-left: 0.5rem; padding-right: 0.5rem;
+  }
+  .OHIFModal__content {
+    padding-left: 0; padding-right: 0;
+  }
+  .OHIFModal__content .modal-table-wrapper {
+     margin-left: 0.5rem; margin-right: 0.5rem;
+  }
+}
