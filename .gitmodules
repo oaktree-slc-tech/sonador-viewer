@@ -1,3 +1,6 @@
 [submodule "testdata"]
 	path = testdata
 	url = https://github.com/OHIF/viewer-testdata-dicomweb.git
+[submodule "extensions/dicom-ecg"]
+	path = extensions/dicom-ecg
+	url = git@code.oak-tree.tech:oak-tree/medical-imaging/dicom-ecg.git
