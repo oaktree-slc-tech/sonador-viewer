@@ -30,6 +30,7 @@ import OHIFDicomRtExtension from '@ohif/extension-dicom-rt';
 import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
+import OHIFDicomEkgExtension from '@ohif/extension-dicom-ecg';
 
 
 // OHIF Server Components
@@ -62,7 +63,7 @@ const initOHIFViewer = function() {
       OHIFDicomSegmentationExtension,
       OHIFDicomRtExtension,
       OHIFDicomTagBrowserExtension,
-      //OHIFDebuggingExtension,
+      OHIFDicomEkgExtension
     ],
   };
 

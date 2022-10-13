@@ -8,6 +8,10 @@ import 'regenerator-runtime/runtime';
 import App from './App.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
+
+// Import OHIF DICOM ECG extension
+import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg'
+
 // test
 
 /**
@@ -54,6 +58,7 @@ const appProps = {
     OHIFDicomPDFExtension,
     OHIFDicomSegmentationExtension,
     OHIFDicomRtExtension,
+    OHIFDicomECGExtension,
     //OHIFDebuggingExtension,
     //OHIFDicomTagBrowserExtension,
   ],
