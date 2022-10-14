@@ -16,7 +16,7 @@ import OHIFDicomRtExtension from '@ohif/extension-dicom-rt';
 import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
-import OHIFLesionTrackerExtension from '@ohif/extension-lesion-tracker';
+import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
 
 
 function installViewer(config, containerId = 'root', callback) {
@@ -30,7 +30,7 @@ function installViewer(config, containerId = 'root', callback) {
       OHIFDicomSegmentationExtension,
       OHIFDicomRtExtension,
       OHIFDicomTagBrowserExtension,
-      OHIFLesionTrackerExtension,
+      OHIFDicomECGExtension,
     ];
 
   if (!container) {
@@ -44,5 +44,5 @@ function installViewer(config, containerId = 'root', callback) {
 
 export { App, installViewer, 
   OHIFExtCornerstone, OHIFVTKExtension, OHIFDicomHtmlExtension, OHIFDicomMicroscopyExtension, OHIFDicomPDFExtension, 
-  OHIFDicomSegmentationExtension, OHIFDicomRtExtension, OHIFDicomTagBrowserExtension, OHIFLesionTrackerExtension
+  OHIFDicomSegmentationExtension, OHIFDicomRtExtension, OHIFDicomTagBrowserExtension, OHIFDicomECGExtension,
 };
