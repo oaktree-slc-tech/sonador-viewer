@@ -5,7 +5,7 @@ import csTools from 'cornerstone-tools';
 import { commandsManager } from './../App.js';
 // Our target output kills the `as` and "import" throws a keyword error
 // import { import as toolImport, getToolState } from 'cornerstone-tools';
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
 const toolImport = csTools.import;
 const scrollToIndex = toolImport('util/scrollToIndex');
@@ -52,7 +52,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
     cineFrameRate: activeViewportCineData.cineFrameRate,
     isPlaying: activeViewportCineData.isPlaying,
     onPlayPauseChanged: isPlaying => {
-      const cine = cloneDeep(activeViewportCineData);
+      const cine = _.cloneDeep(activeViewportCineData);
       cine.isPlaying = !cine.isPlaying;
 
       propsFromDispatch.dispatchSetViewportSpecificData(activeViewportIndex, {
@@ -60,7 +60,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       });
     },
     onFrameRateChanged: frameRate => {
-      const cine = cloneDeep(activeViewportCineData);
+      const cine = _.cloneDeep(activeViewportCineData);
       cine.cineFrameRate = frameRate;
 
       propsFromDispatch.dispatchSetViewportSpecificData(activeViewportIndex, {

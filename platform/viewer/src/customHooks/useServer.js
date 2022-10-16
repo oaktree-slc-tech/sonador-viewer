@@ -1,5 +1,3 @@
-import isEqual from 'lodash.isequal';
-
 import React, { useContext } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 

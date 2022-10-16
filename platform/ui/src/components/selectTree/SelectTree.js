@@ -6,7 +6,7 @@ import { Icon } from './../../elements/Icon';
 import InputRadio from './InputRadio.js';
 import PropTypes from 'prop-types';
 import SelectTreeBreadcrumb from './SelectTreeBreadcrumb.js';
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
 export class SelectTree extends Component {
   static propTypes = {
@@ -109,9 +109,9 @@ export class SelectTree extends Component {
     if (this.state.searchTerm) {
       treeItems = this.filterItems();
     } else if (this.state.currentNode) {
-      treeItems = cloneDeep(this.state.currentNode.items);
+      treeItems = _.cloneDeep(this.state.currentNode.items);
     } else {
-      treeItems = cloneDeep(this.props.items);
+      treeItems = _.cloneDeep(this.props.items);
     }
 
     return treeItems.map((item, index) => {

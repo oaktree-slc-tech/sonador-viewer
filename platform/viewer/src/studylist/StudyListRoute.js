@@ -1,15 +1,11 @@
-const _ = require('lodash');
-
+import * as _ from 'lodash';
 import React, { useState, useEffect, useContext } from 'react';
 import PropTypes from 'prop-types';
-
-import { switchServerActionCreator } from '@ohif/core/src/redux/reducers/servers';
-import OHIF from '@ohif/core';
-import DICOMweb from '@ohif/core';
-
-import { generatePath } from 'react-router';
-import { withRouter, useHistory } from 'react-router-dom';
+import moment from 'moment';
 import { useTranslation } from 'react-i18next';
+import { withRouter } from 'react-router-dom';
+
+import OHIF from '@ohif/core';
 import {
   StudyList,
   PageToolbar,
@@ -19,21 +15,15 @@ import {
 } from '@ohif/ui';
 import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
 import * as RoutesUtil from '../routes/routesUtil';
-import moment from 'moment';
-
 // Google Health API
 import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
-import ConnectedDicomStorePicker from '../googleCloud/ConnectedDicomStorePicker';
 import filesToStudies from '../lib/filesToStudies.js';
-
 // Sonador integration tools
 import ImageServerPicker from '../sonador/ImageServerPicker.js';
-
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
 import AppContext from '../context/AppContext';
-
 // Studylist styling
 import '../styles/global-viewer.css';
 import './styles/studylist.css';
