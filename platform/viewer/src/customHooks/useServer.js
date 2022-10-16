@@ -10,7 +10,6 @@ import usePrevious from './usePrevious';
 // Contexts
 import AppContext from '../context/AppContext';
 
-
 const getActiveServer = servers => {
   // Search the servers list for the active server instance.
   // @param servers: collection of servers to be searched for active instance.
@@ -21,7 +20,6 @@ const getActiveServer = servers => {
     servers && servers.servers && servers.servers.find(isActive);
   return activeServer;
 };
-
 
 const getServers = (appConfig, project, location, dataset, dicomStore) => {
   // Dynamically retrieve server list

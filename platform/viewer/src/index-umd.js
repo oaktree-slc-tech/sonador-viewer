@@ -7,7 +7,6 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import App from './App.js';
 
-
 import OHIFExtCornerstone from '@ohif/extension-cornerstone';
 import OHIFVTKExtension from '@ohif/extension-vtk';
 import OHIFDicomHtmlExtension from '@ohif/extension-dicom-html';
@@ -18,20 +17,19 @@ import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFLesionTrackerExtension from '@ohif/extension-lesion-tracker';
 
-
 function installViewer(config, containerId = 'root', callback) {
   const container = document.getElementById(containerId);
-    const defaultExtensions = [
-      OHIFExtCornerstone,
-      OHIFVTKExtension,
-      OHIFDicomHtmlExtension,
-      OHIFDicomMicroscopyExtension,
-      OHIFDicomPDFExtension,
-      OHIFDicomSegmentationExtension,
-      OHIFDicomRtExtension,
-      OHIFDicomTagBrowserExtension,
-      OHIFLesionTrackerExtension,
-    ];
+  const defaultExtensions = [
+    OHIFExtCornerstone,
+    OHIFVTKExtension,
+    OHIFDicomHtmlExtension,
+    OHIFDicomMicroscopyExtension,
+    OHIFDicomPDFExtension,
+    OHIFDicomSegmentationExtension,
+    OHIFDicomRtExtension,
+    OHIFDicomTagBrowserExtension,
+    OHIFLesionTrackerExtension,
+  ];
 
   if (!container) {
     throw new Error(
@@ -42,7 +40,16 @@ function installViewer(config, containerId = 'root', callback) {
   return ReactDOM.render(<App config={config} />, container, callback);
 }
 
-export { App, installViewer, 
-  OHIFExtCornerstone, OHIFVTKExtension, OHIFDicomHtmlExtension, OHIFDicomMicroscopyExtension, OHIFDicomPDFExtension, 
-  OHIFDicomSegmentationExtension, OHIFDicomRtExtension, OHIFDicomTagBrowserExtension, OHIFLesionTrackerExtension
+export {
+  App,
+  installViewer,
+  OHIFExtCornerstone,
+  OHIFVTKExtension,
+  OHIFDicomHtmlExtension,
+  OHIFDicomMicroscopyExtension,
+  OHIFDicomPDFExtension,
+  OHIFDicomSegmentationExtension,
+  OHIFDicomRtExtension,
+  OHIFDicomTagBrowserExtension,
+  OHIFLesionTrackerExtension,
 };

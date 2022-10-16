@@ -62,7 +62,15 @@ class LocationsList extends Component {
 
     const body = (
       <tbody id="LocationList">
-        {locations.filter(location => (location.name.split('/')[3].toLowerCase().includes(filter.toLowerCase()) || filter=="")).map(this.renderTableRow)}
+        {locations
+          .filter(
+            location =>
+              location.name
+                .split('/')[3]
+                .toLowerCase()
+                .includes(filter.toLowerCase()) || filter == ''
+          )
+          .map(this.renderTableRow)}
       </tbody>
     );
 

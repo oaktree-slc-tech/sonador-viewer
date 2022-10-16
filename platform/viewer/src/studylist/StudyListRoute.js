@@ -8,10 +8,7 @@ import OHIF from '@ohif/core';
 import DICOMweb from '@ohif/core';
 
 import { generatePath } from 'react-router';
-import {
-  withRouter, 
-  useHistory, 
-} from 'react-router-dom';
+import { withRouter, useHistory } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   StudyList,
@@ -41,9 +38,7 @@ import AppContext from '../context/AppContext';
 import '../styles/global-viewer.css';
 import './styles/studylist.css';
 
-
 const { urlUtil: UrlUtil } = OHIF.utils;
-
 
 function getStudyUrlParams() {
   // Retrieve the currently active query parameters
@@ -51,32 +46,26 @@ function getStudyUrlParams() {
   return params;
 }
 
-
 function StudyListRoute(props) {
   // Sonador/OHIF Study List
 
-  const {
-    history, 
-    server, 
-    user, 
-    studyListFunctionsEnabled,
-    filters
-  } = props;
+  const { history, server, user, studyListFunctionsEnabled, filters } = props;
 
   let dcmfilters = filters || {};
 
   const [t] = useTranslation('Common');
-  
-  
+
   // ~~ STATE Properties
 
   const updateServerUrl = token => {
     // Update history to point at the most recent
     if (!(window.location.pathname || '').includes(token))
-      history.push(RoutesUtil.parseStudyListPath(appConfig, server, {
-        token: token,
-      }));
-  }
+      history.push(
+        RoutesUtil.parseStudyListPath(appConfig, server, {
+          token: token,
+        })
+      );
+  };
 
   // Study list table controls
   const [sort, setSort] = useState({
@@ -86,26 +75,46 @@ function StudyListRoute(props) {
 
   // Study list filter values
   const [filterValues, setFilterValues] = useState({
-
     // Study start/end dates
-    studyDateTo: dcmfilters.studyDateTo ? decodeURIComponent(dcmfilters.studyDateTo) : '',
-    studyDateFrom: dcmfilters.studyDateFrom ? decodeURIComponent(cmfilters.studyDateFrom) : '',
-    
+    studyDateTo: dcmfilters.studyDateTo
+      ? decodeURIComponent(dcmfilters.studyDateTo)
+      : '',
+    studyDateFrom: dcmfilters.studyDateFrom
+      ? decodeURIComponent(cmfilters.studyDateFrom)
+      : '',
+
     // DICOM tags
-    PatientName: dcmfilters.PatientName ? decodeURIComponent(dcmfilters.PatientName) : '',
-    PatientID: dcmfilters.PatientID ? decodeURIComponent(filters.PatientID) : '',
-    AccessionNumber: dcmfilters.AccessionNumber ? decodeURIComponent(dcmfilters.AccessionNumber) : '',
-    StudyDate: dcmfilters.StudyDate ? decodeURIComponent(dcmfilters.StudyDate) : '',
-    modalities: dcmfilters.modalities ? decodeURIComponent(dcmfilters.modalities) : '',
-    StudyDescription: dcmfilters.StudyDescription ? decodeURIComponent(dcmfilters.StudyDescription) : '',
-    
+    PatientName: dcmfilters.PatientName
+      ? decodeURIComponent(dcmfilters.PatientName)
+      : '',
+    PatientID: dcmfilters.PatientID
+      ? decodeURIComponent(filters.PatientID)
+      : '',
+    AccessionNumber: dcmfilters.AccessionNumber
+      ? decodeURIComponent(dcmfilters.AccessionNumber)
+      : '',
+    StudyDate: dcmfilters.StudyDate
+      ? decodeURIComponent(dcmfilters.StudyDate)
+      : '',
+    modalities: dcmfilters.modalities
+      ? decodeURIComponent(dcmfilters.modalities)
+      : '',
+    StudyDescription: dcmfilters.StudyDescription
+      ? decodeURIComponent(dcmfilters.StudyDescription)
+      : '',
+
     // patient and study (search multiple tags)
-    patientNameOrId: dcmfilters.patientNameOrId ? decodeURIComponent(dcmfilters.patientNameOrId) : '',
-    accessionOrModalityOrDescription: dcmfilters.accessionOrModalityOrDescription ? 
-      decodeURIComponent(dcmfilters.accessionOrModalityOrDescription) : '',
-    
+    patientNameOrId: dcmfilters.patientNameOrId
+      ? decodeURIComponent(dcmfilters.patientNameOrId)
+      : '',
+    accessionOrModalityOrDescription: dcmfilters.accessionOrModalityOrDescription
+      ? decodeURIComponent(dcmfilters.accessionOrModalityOrDescription)
+      : '',
+
     // search all tags
-    allFields: dcmfilters.allFields ? decodeURIComponent(dcmfilters.allFields) : '',
+    allFields: dcmfilters.allFields
+      ? decodeURIComponent(dcmfilters.allFields)
+      : '',
   });
 
   // Set study list
@@ -116,11 +125,15 @@ function StudyListRoute(props) {
   const [searchStatus, setSearchStatus] = useState({
     isSearchingForStudies: false,
     error: null,
-  });  
+  });
 
   // Manage pagination
-  const [rowsPerPage, setRowsPerPage] = useState((dcmfilters || {}).items ? parseInt(filters.items) : 25);
-  const [pageNumber, setPageNumber] = useState((dcmfilters || {}).page ? parseInt(filters.page)-1 : 0);
+  const [rowsPerPage, setRowsPerPage] = useState(
+    (dcmfilters || {}).items ? parseInt(filters.items) : 25
+  );
+  const [pageNumber, setPageNumber] = useState(
+    (dcmfilters || {}).page ? parseInt(filters.page) - 1 : 0
+  );
 
   const updateRowsPerPage = rows => {
     // Update the number of rows per page, synchronize state and URL
@@ -128,22 +141,21 @@ function StudyListRoute(props) {
     let params = getStudyUrlParams();
     params.set('items', rows);
     history.push({ search: params.toString() });
-    
+
     setRowsPerPage(rows);
-  }
+  };
 
   const updatePageNumber = pnumber => {
     // Update the page number, synchronize state and URL
     let params = getStudyUrlParams();
-    params.set('page', pnumber+1);
+    params.set('page', pnumber + 1);
     history.push({ search: params.toString() });
 
     setPageNumber(pnumber);
-  }
-  
+  };
+
   const appContext = useContext(AppContext);
-  
-  
+
   // ~~ RESPONSIVE
   const displaySize = useMedia(
     [
@@ -154,7 +166,6 @@ function StudyListRoute(props) {
     ['large', 'medium', 'small'],
     'small'
   );
-  
 
   // ~~ DEBOUNCED INPUT
   const debouncedSort = useDebounce(sort, 200);
@@ -177,7 +188,7 @@ function StudyListRoute(props) {
             rowsPerPage,
             pageNumber,
             displaySize,
-            history,
+            history
           );
 
           setStudies(response);
@@ -194,7 +205,7 @@ function StudyListRoute(props) {
         fetchStudies();
       }
     },
-    
+
     // TODO: Can we update studies directly?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -234,10 +245,8 @@ function StudyListRoute(props) {
   let healthCareApiButtons = null;
   let healthCareApiWindows = null;
 
-
   // Switch Sonador Server
   // updateURL(isModalOpen, appConfig, server, history);
-
 
   function handleSort(fieldName) {
     let sortFieldName = fieldName;
@@ -271,121 +280,144 @@ function StudyListRoute(props) {
 
   return (
     <>
-    
-    {/*  DICOM Upload Modal: Enabled if the user has been granted the "upload" 
+      {/*  DICOM Upload Modal: Enabled if the user has been granted the "upload" 
         permission for the server */}
-    {(studyListFunctionsEnabled && server && server.perms && server.perms.upload) ? (
-      <ConnectedDicomFilesUploader
-        isOpen={activeModalId === 'DicomFilesUploader'}
-        onClose={() => setActiveModalId(null)}
-      />
-    ) : null}
-    {healthCareApiWindows}
-    <WhiteLabelingContext.Consumer>
-      {whiteLabeling => (
-        <UserManagerContext.Consumer>
-          {userManager => (
-            <ConnectedHeader useLargeLogo={true} user={user} userManager={userManager}>
-              {whiteLabeling &&
-                whiteLabeling.createLogoComponentFn &&
-                whiteLabeling.createLogoComponentFn(React)}
-            </ConnectedHeader>
-          )}
-        </UserManagerContext.Consumer>
-      )}
-    </WhiteLabelingContext.Consumer>
-    
-    
-    {/* Study Header: Search/Filter/Upload */}
-    {server ? (
-      <div className="study-list-header"><div className="header">
-        <h1 style={{ fontWeight: 300, fontSize: '22px', paddingTop: '0.25rem' }}>
-          <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
-
-          {/* Study list: requires "query permission" */}
-          {(server.perms && server.perms.query) ? (
-            <span className="sonador-studylistt-title">
-              <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">/</span>
-              <span className="hide-xs">{t('Study List')}</span>
-            </span>
-          ) : null}
-        </h1>
-      </div>
-
-      {/* Toolbar Buttons */}
-      <div className="actions">
-        {studyListFunctionsEnabled && healthCareApiButtons}
-
-        {/* DICOM Upload Button: requires "upload" permission */}
-        {studyListFunctionsEnabled && server.perms && server.perms.upload && (
-          <PageToolbar onImport={() => setActiveModalId('DicomFilesUploader')} />
+      {studyListFunctionsEnabled &&
+      server &&
+      server.perms &&
+      server.perms.upload ? (
+        <ConnectedDicomFilesUploader
+          isOpen={activeModalId === 'DicomFilesUploader'}
+          onClose={() => setActiveModalId(null)}
+        />
+      ) : null}
+      {healthCareApiWindows}
+      <WhiteLabelingContext.Consumer>
+        {whiteLabeling => (
+          <UserManagerContext.Consumer>
+            {userManager => (
+              <ConnectedHeader
+                useLargeLogo={true}
+                user={user}
+                userManager={userManager}
+              >
+                {whiteLabeling &&
+                  whiteLabeling.createLogoComponentFn &&
+                  whiteLabeling.createLogoComponentFn(React)}
+              </ConnectedHeader>
+            )}
+          </UserManagerContext.Consumer>
         )}
+      </WhiteLabelingContext.Consumer>
 
-        {/* DICOM Query Results: requires "query" permission */}
-        {server.perms && server.perms.query && (
-          <span>
-            <span className="study-count">{studies.length}</span>
-            <span className="sonador-lightgray spacer-left-05rem font-light fontsize-medium hide-xs">{t('Studies')}</span>
-          </span>
-        )}
-      </div></div>
-    ) : null}
+      {/* Study Header: Search/Filter/Upload */}
+      {server ? (
+        <div className="study-list-header">
+          <div className="header">
+            <h1
+              style={{
+                fontWeight: 300,
+                fontSize: '22px',
+                paddingTop: '0.25rem',
+              }}
+            >
+              <ImageServerPicker
+                activeServer={server}
+                user={user}
+                onServerChange={updateServerUrl}
+              />
 
-    {/* Study List Table Background */}
-    {(server && server.perms && server.perms.query) ? (
-      <div className="table-head-background" />
-    ) : null}
+              {/* Study list: requires "query permission" */}
+              {server.perms && server.perms.query ? (
+                <span className="sonador-studylistt-title">
+                  <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">
+                    /
+                  </span>
+                  <span className="hide-xs">{t('Study List')}</span>
+                </span>
+              ) : null}
+            </h1>
+          </div>
 
+          {/* Toolbar Buttons */}
+          <div className="actions">
+            {studyListFunctionsEnabled && healthCareApiButtons}
 
-    {/* Study List: requires "query permission" */}
-    {(server && server.perms && server.perms.query) ? (
-      <div className="study-list-container">
-      
-      <StudyList
-        isLoading={searchStatus.isSearchingForStudies}
-        hasError={searchStatus.error === true}
-        // Rows
-        studies={studies}
-        onSelectItem={studyInstanceUID => {
-          const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
-            studyInstanceUIDs: studyInstanceUID,
-          });
-          history.push(viewerPath);
-        }}
-        
-        // Table Header
-        sort={sort}
-        onSort={handleSort}
-        filterValues={filterValues}
-        onFilterChange={handleFilterChange}
-        studyListDateFilterNumDays={appConfig.studyListDateFilterNumDays}
-        displaySize={displaySize}
-      />
-      
-      {/* Footer: Pagination Controls */}
-      <TablePagination
-        currentPage={pageNumber}
-        nextPageFunc={() => updatePageNumber(pageNumber+1)}
-        prevPageFunc={() => updatePageNumber(pageNumber-1)}
-        onRowsPerPageChange={updateRowsPerPage}
-        rowsPerPage={rowsPerPage}
-        recordCount={studies.length}
-      />
-      </div>
-    ) : null}
+            {/* DICOM Upload Button: requires "upload" permission */}
+            {studyListFunctionsEnabled &&
+              server.perms &&
+              server.perms.upload && (
+                <PageToolbar
+                  onImport={() => setActiveModalId('DicomFilesUploader')}
+                />
+              )}
 
-    
-    {/* Welcome Message (Empty State) */}
-    {!server ? (
-      <div className="notFound"><div className="study-list-header">
-        <div className="header">
-        <h1 className="state-message-large">{t('Welcome!')}</h1>
-        <p className="state-message-large">
-          {window.sonador.home.message}
-        </p>
+            {/* DICOM Query Results: requires "query" permission */}
+            {server.perms && server.perms.query && (
+              <span>
+                <span className="study-count">{studies.length}</span>
+                <span className="sonador-lightgray spacer-left-05rem font-light fontsize-medium hide-xs">
+                  {t('Studies')}
+                </span>
+              </span>
+            )}
+          </div>
         </div>
-      </div></div>
-    ) : null}
+      ) : null}
+
+      {/* Study List Table Background */}
+      {server && server.perms && server.perms.query ? (
+        <div className="table-head-background" />
+      ) : null}
+
+      {/* Study List: requires "query permission" */}
+      {server && server.perms && server.perms.query ? (
+        <div className="study-list-container">
+          <StudyList
+            isLoading={searchStatus.isSearchingForStudies}
+            hasError={searchStatus.error === true}
+            // Rows
+            studies={studies}
+            onSelectItem={studyInstanceUID => {
+              const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
+                studyInstanceUIDs: studyInstanceUID,
+              });
+              history.push(viewerPath);
+            }}
+            // Table Header
+            sort={sort}
+            onSort={handleSort}
+            filterValues={filterValues}
+            onFilterChange={handleFilterChange}
+            studyListDateFilterNumDays={appConfig.studyListDateFilterNumDays}
+            displaySize={displaySize}
+          />
+
+          {/* Footer: Pagination Controls */}
+          <TablePagination
+            currentPage={pageNumber}
+            nextPageFunc={() => updatePageNumber(pageNumber + 1)}
+            prevPageFunc={() => updatePageNumber(pageNumber - 1)}
+            onRowsPerPageChange={updateRowsPerPage}
+            rowsPerPage={rowsPerPage}
+            recordCount={studies.length}
+          />
+        </div>
+      ) : null}
+
+      {/* Welcome Message (Empty State) */}
+      {!server ? (
+        <div className="notFound">
+          <div className="study-list-header">
+            <div className="header">
+              <h1 className="state-message-large">{t('Welcome!')}</h1>
+              <p className="state-message-large">
+                {window.sonador.home.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -402,7 +434,6 @@ StudyListRoute.propTypes = {
 StudyListRoute.defaultProps = {
   studyListFunctionsEnabled: true,
 };
-
 
 function updateURL(isModalOpen, appConfig, server, history) {
   // Update viewer URL and history
@@ -441,7 +472,7 @@ async function getStudyList(
   rowsPerPage,
   pageNumber,
   displaySize,
-  history,
+  history
 ) {
   const {
     allFields,
@@ -452,14 +483,13 @@ async function getStudyList(
   const sortDirection = sort.direction || 'desc';
 
   const mappedFilters = {
-
     // DICOMweb advanced filters
     PatientID: filters.PatientID,
     PatientName: filters.PatientName,
     AccessionNumber: filters.AccessionNumber,
     StudyDescription: filters.StudyDescription,
     ModalitiesInStudy: filters.modalities,
-    
+
     // NEVER CHANGE
     studyDateFrom: filters.studyDateFrom,
     studyDateTo: filters.studyDateTo,
@@ -469,28 +499,41 @@ async function getStudyList(
   };
 
   // Add mapped filters to the search history
-    let params = getStudyUrlParams();
+  let params = getStudyUrlParams();
 
-    // Add mapped DICOM fields
-    _.each(_.omit(mappedFilters, 'studyDateFrom', 'studyDateTo', 'limit', 'offset', 'fuzzymatching'), (v,k) => {
-      if (_.isEmpty(v)) params.delete(k)
+  // Add mapped DICOM fields
+  _.each(
+    _.omit(
+      mappedFilters,
+      'studyDateFrom',
+      'studyDateTo',
+      'limit',
+      'offset',
+      'fuzzymatching'
+    ),
+    (v, k) => {
+      if (_.isEmpty(v)) params.delete(k);
       else params.set(encodeURIComponent(k), encodeURIComponent(v));
-    });
-
-    // Add compound fields
-    _.each({ 
-      allFields: allFields, 
-      patientNameOrId: patientNameOrId,
-      accessionOrModalityOrDescription: accessionOrModalityOrDescription
-    }, (v,k) => {
-      if (_.isEmpty(v)) params.delete(k)
-      else params.set(encodeURIComponent(k), encodeURIComponent(v))
-    });
-
-    // Update URL parameters if there is a change in the search
-    if (params.toString() != location.search) {
-      history.push({ search: params.toString() });
     }
+  );
+
+  // Add compound fields
+  _.each(
+    {
+      allFields: allFields,
+      patientNameOrId: patientNameOrId,
+      accessionOrModalityOrDescription: accessionOrModalityOrDescription,
+    },
+    (v, k) => {
+      if (_.isEmpty(v)) params.delete(k);
+      else params.set(encodeURIComponent(k), encodeURIComponent(v));
+    }
+  );
+
+  // Update URL parameters if there is a change in the search
+  if (params.toString() != location.search) {
+    history.push({ search: params.toString() });
+  }
 
   // Retrieve studies from server
   const studies = await _fetchStudies(server, mappedFilters, displaySize, {
@@ -710,6 +753,5 @@ function _getQueryFiltersForValue(filters, fields, value) {
 
   return queryFilters;
 }
-
 
 export default withRouter(StudyListRoute);

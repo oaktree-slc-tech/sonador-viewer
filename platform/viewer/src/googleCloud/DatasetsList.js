@@ -47,7 +47,7 @@ class DatasetsList extends Component {
 
   render() {
     const { loading, datasets, filter, error } = this.props;
-    
+
     if (error) {
       return <p>{error}</p>;
     }
@@ -62,7 +62,15 @@ class DatasetsList extends Component {
 
     const body = (
       <tbody id="DatasetList">
-        {datasets.filter(dataset => (dataset.name.split('/')[5].toLowerCase().includes(filter.toLowerCase()) || filter=="")).map(this.renderTableRow)}
+        {datasets
+          .filter(
+            dataset =>
+              dataset.name
+                .split('/')[5]
+                .toLowerCase()
+                .includes(filter.toLowerCase()) || filter == ''
+          )
+          .map(this.renderTableRow)}
       </tbody>
     );
 
