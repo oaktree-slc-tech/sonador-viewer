@@ -300,7 +300,6 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.get('@toolbarOverlay').should('not.exist');
   });
 
-
   it('checks if Layout tool will multiply the number of viewports displayed', () => {
     //Click on Layout button and verify if overlay is displayed
     cy.get('@layoutBtn')

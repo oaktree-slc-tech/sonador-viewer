@@ -27,11 +27,7 @@ const MEASUREMENT_ACTION_MAP = {
  * @param {Object} servicesManager
  * @param {Object} configuration
  */
-export default function init({
-  servicesManager,
-  commandsManager,
-  configuration,
-}) {
+export default function init({ servicesManager, commandsManager }) {
   const { UIDialogService } = servicesManager.services;
 
   // TODO: MEASUREMENT_COMPLETED (not present in initial implementation)

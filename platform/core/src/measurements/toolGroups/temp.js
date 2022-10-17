@@ -1,7 +1,7 @@
 import { length, ellipticalRoi } from '../tools';
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
-const childTools = cloneDeep([length, ellipticalRoi]);
+const childTools = _.cloneDeep([length, ellipticalRoi]);
 
 // Exclude temp tools from case progress
 childTools.forEach(childTool => {

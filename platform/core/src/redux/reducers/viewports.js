@@ -1,4 +1,4 @@
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 import produce, { setAutoFreeze } from 'immer';
 
 import {
@@ -38,7 +38,7 @@ const findActiveViewportSpecificData = (
   currentViewportSpecificData = {}
 ) => {
   const numberOfViewports = numRows * numColumns;
-  const viewportSpecificData = cloneDeep(currentViewportSpecificData);
+  const viewportSpecificData = _.cloneDeep(currentViewportSpecificData);
 
   if (numberOfViewports < Object.keys(viewportSpecificData).length) {
     Object.keys(viewportSpecificData).forEach(key => {

@@ -74,7 +74,6 @@
     "hammerjs": "^2.0.8",
     "i18next": "^17.0.3",
     "i18next-browser-languagedetector": "^3.0.1",
-    "lodash.isequal": "4.5.0",
     "moment": "^2.24.0",
     "oidc-client": "1.7.x",
     "prop-types": "^15.7.2",
@@ -85,6 +84,7 @@
     "react-resize-detector": "^4.2.0",
     "react-router": "^5.0.1",
     "react-router-dom": "^5.0.1",
+    "react-table": "^7.8.0",
     "react-transition-group": "^4.1.1",
     "redux": "^4.0.1",
     "redux-logger": "^3.0.6",
@@ -92,13 +92,12 @@
     "redux-thunk": "^2.3.0",
     "reselect": "^4.0.0",
     "vtk.js": "^11.14.0",
-    "@ohif/extension-dicom-ecg": "^X.X.X"
+    "@ohif/extension-dicom-ecg": "^X.X.X",
+    "lodash": "4.17.21"
   },
   "devDependencies": {
     "cypress": "^6.0.0",
     "gh-pages": "2.0.1",
-    "identity-obj-proxy": "3.0.x",
-    "lodash": "4.17.21",
-    "lodash.clonedeep": "4.5.0"
+    "identity-obj-proxy": "3.0.x"
   }
 }

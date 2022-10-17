@@ -9,7 +9,11 @@ import dicomUploader from './api/DicomUploadService';
 
 // Icons
 import {
-  ChevronRightIcon, ChevronDownIcon, CheckIcon, ShieldExclamationIcon, XCircleIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+  CheckIcon,
+  ShieldExclamationIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/solid';
 
 // Upload button SVG files
@@ -21,11 +25,9 @@ import '../styles/global-viewer.css';
 import './googleCloud.css';
 import './styles/dicom-uploader.css';
 
-
 // Retry limit
 const retryLimit = 100;
-const notValidDicomFileError = 'This is not a valid DICOM file.'
-
+const notValidDicomFileError = 'This is not a valid DICOM file.';
 
 class DicomUploader extends Component {
   // DICOM uploader: provides tools to transfer files to a DICOMweb server
@@ -59,7 +61,10 @@ class DicomUploader extends Component {
     // Number of files left in the transfer queue
     // @returns str
     return (
-      this.state.uploadedList.length + this.props.t(' of ') + this.state.totalCount + this.props.t(' files')
+      this.state.uploadedList.length +
+      this.props.t(' of ') +
+      this.state.totalCount +
+      this.props.t(' files')
     );
   }
 
@@ -73,7 +78,10 @@ class DicomUploader extends Component {
   percentsFloat() {
     // Progress of uploads
     // @returns float
-    return (100 * this.state.uploadedList.length) / Object.keys(this.state.files).length;
+    return (
+      (100 * this.state.uploadedList.length) /
+      Object.keys(this.state.files).length
+    );
   }
 
   percents() {
@@ -94,7 +102,9 @@ class DicomUploader extends Component {
   errorsMessage() {
     const errors = this.state.errorsCount === 1 ? ' error' : ' errors';
     return (
-      this.state.errorsCount + errors + this.props.t(' while uploading, click for more info')
+      this.state.errorsCount +
+      errors +
+      this.props.t(' while uploading, click for more info')
     );
   }
 
@@ -141,8 +151,15 @@ class DicomUploader extends Component {
       this.uploadCallback.call(this, fileId, error, filesArray);
 
     // Configure DICOM upload service and begin upload of files
-    dicomUploader.setRetrieveAuthHeaderFunction(this.props.retrieveAuthHeaderFunction);
-    dicomUploader.smartUpload(files.target.files, this.props.url, uploadCallback, cancellationToken);
+    dicomUploader.setRetrieveAuthHeaderFunction(
+      this.props.retrieveAuthHeaderFunction
+    );
+    dicomUploader.smartUpload(
+      files.target.files,
+      this.props.url,
+      uploadCallback,
+      cancellationToken
+    );
   };
 
   uploadCallback(fileId, error, filesArray) {
@@ -163,19 +180,20 @@ class DicomUploader extends Component {
       let uploadedVolume = this.state.uploadedVolume + file.size;
       this.setState({ uploadedVolume });
       this.setState({ successCount: this.state.successCount + 1 });
-
     } else {
       // File upload encountered an error
 
       file.error = error;
 
-      if ((file.retry || 0) < retryLimit && !(error || '').includes(notValidDicomFileError)) {
+      if (
+        (file.retry || 0) < retryLimit &&
+        !(error || '').includes(notValidDicomFileError)
+      ) {
         // Retry limit not yet exceeded, re-queue for transfer. Files which failed because
         // they are not valid DICOM files are skipped.
 
         file.retry = (file.retry || 0) + 1;
         filesArray.unshift(file.ref);
-
       } else {
         // Number of retries exceeded, increment transfer error count
 
@@ -188,7 +206,6 @@ class DicomUploader extends Component {
     this.setState({ lastFile: file.name });
     let uploadedList = this.state.uploadedList;
     if (uploadedList.indexOf(file) == -1) {
-      
       // Add file to uploaded list (if not already a member)
       uploadedList.push(file);
     }
@@ -196,7 +213,7 @@ class DicomUploader extends Component {
   }
 
   renderTableRow = file => {
-    // Render completion of a single file transfer. Notify user that file has been processed. 
+    // Render completion of a single file transfer. Notify user that file has been processed.
     // Show warnings and errors that happened during transfer.
 
     let sicon = null;
@@ -209,12 +226,12 @@ class DicomUploader extends Component {
       // File processed successfully
 
       sicon = <CheckIcon className="success icon-size-16 spacer-left-1rem" />;
-
     } else if (file.error !== null && (file.retry || 0) < retryLimit) {
       // File experienced upload error, but has been requeued for retry
 
-      sicon = <ShieldExclamationIcon className="warning icon-size-16 spacer-left-1rem" />;
-
+      sicon = (
+        <ShieldExclamationIcon className="warning icon-size-16 spacer-left-1rem" />
+      );
     } else {
       // File uploaded failed
 
@@ -225,31 +242,59 @@ class DicomUploader extends Component {
     if (file.error !== null && (file.retry || 0) < retryLimit) {
       // File experienced an upload error, but has been re-queued for retry
 
-      message = <span className="warning spacer-left-3rem vertical-top font-light">{this.props.t('Error & Retry')}</span>;
-      error = <span className="spacer-left-05rem vertical-top">{file.error}</span>;
+      message = (
+        <span className="warning spacer-left-3rem vertical-top font-light">
+          {this.props.t('Error & Retry')}
+        </span>
+      );
+      error = (
+        <span className="spacer-left-05rem vertical-top">{file.error}</span>
+      );
       if (file.retry) {
-        rmessage = <span className="spacer-left-2rem vertical-top">{file.retry}/{retryLimit}</span>;
+        rmessage = (
+          <span className="spacer-left-2rem vertical-top">
+            {file.retry}/{retryLimit}
+          </span>
+        );
       }
-
     } else if (file.error !== null) {
       // File upload failed
 
-      message = <span className="error spacer-left-3rem vertical-top font-light">{this.props.t('Error/Failed')}</span>;
-      error = <span className="spacer-left-3rem vertical-top">{file.error}</span>;
+      message = (
+        <span className="error spacer-left-3rem vertical-top font-light">
+          {this.props.t('Error/Failed')}
+        </span>
+      );
+      error = (
+        <span className="spacer-left-3rem vertical-top">{file.error}</span>
+      );
       if (file.retry) {
-        rmessage = <span className="error spacer-left-2rem vertical-top">{file.retry}/{retryLimit}</span>;
+        rmessage = (
+          <span className="error spacer-left-2rem vertical-top">
+            {file.retry}/{retryLimit}
+          </span>
+        );
       }
     } else {
       // File transfer successful
 
-      message = <span className="spacer-left-3rem font-light vertical-top">{this.props.t('Successful')}</span>;      
+      message = (
+        <span className="spacer-left-3rem font-light vertical-top">
+          {this.props.t('Successful')}
+        </span>
+      );
     }
 
     return (
-      <tr key={file.id}><td>{sicon}
-        <span className="spacer-left-2rem vertical-top">{file.name}</span>
-        {message}{error}{rmessage}
-      </td></tr>
+      <tr key={file.id}>
+        <td>
+          {sicon}
+          <span className="spacer-left-2rem vertical-top">{file.name}</span>
+          {message}
+          {error}
+          {rmessage}
+        </td>
+      </tr>
     );
   };
 
@@ -257,79 +302,108 @@ class DicomUploader extends Component {
     const { t } = this.props;
 
     if (this.state.files === null) {
-
-      // Upload Controls      
+      // Upload Controls
       return (
         <div className="dicom-uploader">
           <div className="button">
             <label htmlFor="file">{React.createElement(buttonFile)}</label>
-            <input id="file" className="invisible-input" type="file"
+            <input
+              id="file"
+              className="invisible-input"
+              type="file"
               onChange={this.uploadFiles}
-              multiple />
+              multiple
+            />
           </div>
 
           <div className="button">
             <label htmlFor="folder">{React.createElement(buttonFolder)}</label>
-            <input id="folder" className="invisible-input" type="file"
+            <input
+              id="folder"
+              className="invisible-input"
+              type="file"
               onChange={this.uploadFiles}
-              webkitdirectory="true" mozdirectory="true"
-              multiple />
+              webkitdirectory="true"
+              mozdirectory="true"
+              multiple
+            />
           </div>
         </div>
       );
     }
 
     // Upload Progress
-    return (<>
-      {(this.state.errorsCount || this.state.successCount) ? (
-        <div className="upload-summary columns">
-          <div className="push-right"></div>
-          {this.state.successCount ? (
-            <div className="success-count">
-              <span className="success">{this.state.successCount}</span>
-              <span className="success font-light spacer-left-025rem">{t('Uploaded Successfully')}</span>
+    return (
+      <>
+        {this.state.errorsCount || this.state.successCount ? (
+          <div className="upload-summary columns">
+            <div className="push-right"></div>
+            {this.state.successCount ? (
+              <div className="success-count">
+                <span className="success">{this.state.successCount}</span>
+                <span className="success font-light spacer-left-025rem">
+                  {t('Uploaded Successfully')}
+                </span>
+              </div>
+            ) : null}
+            {this.state.errorsCount ? (
+              <div className="error-count">
+                <span className="error">{this.state.errorsCount}</span>
+                <span className="error font-light spacer-left-025rem">
+                  {t('Errors')}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Progress Bar */}
+        <Line
+          percent={this.percentsFloat()}
+          strokeWidth={4}
+          strokeColor="#0BBDE2"
+        />
+
+        {/* Progress Summary */}
+        <div className="upload-progress columns">
+          {this.state.uploadDetailsVisible ? (
+            <div
+              className="toggle-details flush-left cursor-pointer"
+              onClick={() => this.setState({ uploadDetailsVisible: false })}
+            >
+              <ChevronDownIcon className="icon-size-20" />
+              <span className="font-light vertical-top spacer-left-025rem">
+                {t('Hide Details')}
+              </span>
             </div>
-          ): null}
-          {this.state.errorsCount ? (
-            <div className="error-count">
-              <span className="error">{this.state.errorsCount}</span>
-              <span className="error font-light spacer-left-025rem">{t('Errors')}</span>
+          ) : (
+            <div
+              className="toggle-details flush-left cursor-pointer"
+              onClick={() => this.setState({ uploadDetailsVisible: true })}
+            >
+              <ChevronRightIcon className="icon-size-20" />
+              <span className="font-light vertical-top spacer-left-025rem">
+                {t('Show Details')}
+              </span>
             </div>
-          ) : null}
+          )}
+          <div className="files-remaining push-right font-light">
+            {this.filesLeft()}
+          </div>
+          <div className="progress no-spacer-right">{this.percents()}%</div>
         </div>
-      ) : null}
 
-      {/* Progress Bar */}
-      <Line percent={this.percentsFloat()} strokeWidth={4} strokeColor='#0BBDE2' />
-      
-      {/* Progress Summary */}
-      <div className="upload-progress columns">
+        {/* File Transfer List */}
         {this.state.uploadDetailsVisible ? (
-          <div className="toggle-details flush-left cursor-pointer" 
-              onClick={() => this.setState({ uploadDetailsVisible : false})}>
-            <ChevronDownIcon className="icon-size-20" />
-            <span className="font-light vertical-top spacer-left-025rem">{t('Hide Details')}</span>
-          </div>
-        ) : (
-          <div className="toggle-details flush-left cursor-pointer" 
-              onClick={() => this.setState({ uploadDetailsVisible : true})}>
-            <ChevronRightIcon className="icon-size-20" />
-            <span className="font-light vertical-top spacer-left-025rem">{t('Show Details')}</span>
-          </div>
-        )}
-        <div className="files-remaining push-right font-light">{this.filesLeft()}</div>
-        <div className="progress no-spacer-right">{this.percents()}%</div>
-      </div>
-
-      {/* File Transfer List */}
-      {this.state.uploadDetailsVisible ? (
-        <table id="tblProjectList" className="noselect upload-file-list">
-          <tbody id="ProjectList">{this.state.uploadedList.map(this.renderTableRow)}</tbody>
-        </table>
-      ) : null}      
-    </>);
+          <table id="tblProjectList" className="noselect upload-file-list">
+            <tbody id="ProjectList">
+              {this.state.uploadedList.map(this.renderTableRow)}
+            </tbody>
+          </table>
+        ) : null}
+      </>
+    );
   }
 }
-
 
 export default withTranslation('Common')(DicomUploader);

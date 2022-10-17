@@ -1,9 +1,9 @@
 import { targets } from './toolGroups/targets';
 import { nonTargets } from './toolGroups/nonTargets';
 import { temp } from './toolGroups/temp';
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
-const ltTools = cloneDeep([targets, nonTargets, temp]);
+const ltTools = _.cloneDeep([targets, nonTargets, temp]);
 
 ltTools.forEach(toolGroup => {
   toolGroup.childTools.forEach(tool => {

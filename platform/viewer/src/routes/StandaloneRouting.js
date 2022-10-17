@@ -1,9 +1,9 @@
 import React, { Component } from 'react';
-import OHIF from '@ohif/core';
 import PropTypes from 'prop-types';
 import qs from 'querystring';
 
-import { extensionManager } from './../App.js';
+import OHIF from '@ohif/core';
+import { extensionManager } from '../App.js';
 import ConnectedViewer from '../connectedComponents/ConnectedViewer';
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
 import NotFound from '../routes/NotFound';

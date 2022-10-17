@@ -8,10 +8,6 @@ const mapStateToProps = state => {
   };
 };
 
-
-const ConnectedHeader = connect(
-  mapStateToProps,
-)(Header);
-
+const ConnectedHeader = connect(mapStateToProps)(Header);
 
 export default ConnectedHeader;

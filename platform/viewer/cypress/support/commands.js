@@ -152,9 +152,11 @@ Cypress.Commands.add('addLine', (viewport, firstClick, secondClick) => {
 
     // TODO: Added a wait which appears necessary in Cornerstone Tools >4?
     cy.wrap($viewport)
-      .click(x1, y1).wait(100)
+      .click(x1, y1)
+      .wait(100)
       .trigger('mousemove', { clientX: x2, clientY: y2 })
-      .click(x2, y2).wait(100);
+      .click(x2, y2)
+      .wait(100);
   });
 });
 
@@ -216,7 +218,11 @@ Cypress.Commands.add('waitDicomImage', (timeout = 50000) => {
             resolve();
           };
           const enabledElements = $cornerstone.getEnabledElements();
-          if (enabledElements && enabledElements.length && !enabledElements[0].invalid) {
+          if (
+            enabledElements &&
+            enabledElements.length &&
+            !enabledElements[0].invalid
+          ) {
             // Sometimes the page finishes rendering before this gets run,
             // if so, just resolve immediately.
             resolve();
@@ -552,13 +558,12 @@ Cypress.Commands.add(
   (function_label, shortcut) => {
     // Within scopes all `.get` and `.contains` to within the matched elements
     // dom instead of checking from document
-    cy.get('.HotkeysPreferences')
-      .within(() => {
-        cy.contains(function_label) // label we're looking for
-          .parent()
-          .find('input') // closest input to that label
-          .type(shortcut, { force: true }); // Set new shortcut for that function
-      });
+    cy.get('.HotkeysPreferences').within(() => {
+      cy.contains(function_label) // label we're looking for
+        .parent()
+        .find('input') // closest input to that label
+        .type(shortcut, { force: true }); // Set new shortcut for that function
+    });
   }
 );
 

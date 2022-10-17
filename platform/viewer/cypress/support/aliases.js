@@ -25,12 +25,12 @@ export function initCommonElementsAliases() {
     '.pull-left > .RoundedButtonGroup > .roundedButtonWrapper > .roundedButton'
   ).as('seriesBtn');
   cy.get('section.sidepanel.from-left').as('seriesPanel');
-  cy.get('div.OHIFCornerstoneViewportOverlay > div.bottom-left.overlay-element > div').as(
-    'viewportInfoBottomLeft'
-  );
-  cy.get('div.OHIFCornerstoneViewportOverlay > div.bottom-right.overlay-element > div').as(
-    'viewportInfoBottomRight'
-  );
+  cy.get(
+    'div.OHIFCornerstoneViewportOverlay > div.bottom-left.overlay-element > div'
+  ).as('viewportInfoBottomLeft');
+  cy.get(
+    'div.OHIFCornerstoneViewportOverlay > div.bottom-right.overlay-element > div'
+  ).as('viewportInfoBottomRight');
   cy.get('.left-mid.orientation-marker').as('viewportInfoMidLeft');
   cy.get('.top-mid.orientation-marker').as('viewportInfoMidTop');
 }

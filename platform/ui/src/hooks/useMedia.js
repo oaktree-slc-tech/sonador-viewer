@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import isEqual from 'lodash.isequal';
+import * as _ from 'lodash';
 /**
  * Get display size value for matched mediaQueryList
  * @param {MediaQueryList[]} mediaQueryMap - Array of mappings, containing MediaQueryLists
@@ -141,8 +141,8 @@ const useMedia = (
     } = state;
     if (
       (mediaQueriesStringList &&
-        !isEqual(mediaQueriesStringList, _mediaQueriesStringList)) ||
-      (mediaTypesAliases && !isEqual(mediaTypesAliases, _mediaTypesAliases))
+        !_.isEqual(mediaQueriesStringList, _mediaQueriesStringList)) ||
+      (mediaTypesAliases && !_.isEqual(mediaTypesAliases, _mediaTypesAliases))
     ) {
       updateState({
         mediaQueriesStringList,

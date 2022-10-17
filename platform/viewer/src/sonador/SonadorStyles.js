@@ -21,5 +21,4 @@ const SonadorDialogStyles = {
   },
 };
 
-
 export default SonadorDialogStyles;
