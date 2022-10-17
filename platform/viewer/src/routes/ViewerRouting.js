@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+
 import { utils, user } from '@ohif/core';
-//
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
 import useServer from '../customHooks/useServer';
 import useQuery from '../customHooks/useQuery';

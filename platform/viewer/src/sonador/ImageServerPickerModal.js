@@ -3,17 +3,14 @@ import PropTypes from 'prop-types';
 
 import { withTranslation } from 'react-i18next';
 
-import { servicesManager } from './../App.js';
+import { servicesManager } from '../App.js';
 
 import ConnectedImageServerDatasetSelector from './ConnectedImageServerDatasetSelector.js';
 
 function ImageServerPickerModal({
   isOpen = false,
   onClose,
-  switchServer,
   user,
-  activeServer,
-  servers,
   onServerChange,
   t,
 }) {

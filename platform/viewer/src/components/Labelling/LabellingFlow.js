@@ -28,7 +28,7 @@ const LabellingFlow = ({
   });
 
   useEffect(() => {
-    const newMeasurementData = cloneDeep(measurementData);
+    const newMeasurementData = _.cloneDeep(measurementData);
 
     if (editDescription) {
       newMeasurementData.description = undefined;

@@ -17,15 +17,7 @@ const { urlUtil: UrlUtil } = OHIF.utils;
 function StudyListRouting({ match: routeMatch, location: routeLocation }) {
   // Manage routes for the Sonador study list
 
-  const {
-    project,
-    location,
-    dataset,
-    dicomStore,
-    studyInstanceUIDs,
-    seriesInstanceUIDs,
-    token,
-  } = routeMatch.params;
+  const { project, location, dataset, dicomStore, token } = routeMatch.params;
 
   // Determine which server to use: if unable to find active server, return 404
   const servers = useSelector(state => state && state.servers);

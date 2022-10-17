@@ -1,7 +1,8 @@
 import React from 'react';
-import './NotFound.css';
 import { Link } from 'react-router-dom';
+
 import { useAppContext } from '../context/AppContext';
+import './NotFound.css';
 
 export default function NotFound({
   message = 'Sorry, this page does not exist.',

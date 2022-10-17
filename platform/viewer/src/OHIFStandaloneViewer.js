@@ -5,13 +5,14 @@ import { Route, Switch } from 'react-router-dom';
 import { NProgress } from '@tanem/react-nprogress';
 import { CSSTransition } from 'react-transition-group';
 import { connect } from 'react-redux';
+import { SignoutCallbackComponent } from 'redux-oidc';
+
 import {
   ViewerbaseDragDropContext,
   ErrorBoundary,
   asyncComponent,
   retryImport,
 } from '@ohif/ui';
-import { SignoutCallbackComponent } from 'redux-oidc';
 import * as RoutesUtil from './routes/routesUtil';
 
 import NotFound from './routes/NotFound.js';

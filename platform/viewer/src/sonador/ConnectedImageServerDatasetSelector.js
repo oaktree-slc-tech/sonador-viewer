@@ -1,6 +1,6 @@
 import { connect } from 'react-redux';
-import { switchServerActionCreator } from '@ohif/core/src/redux/reducers/servers';
 
+import { switchServerActionCreator } from '@ohif/core/src/redux/reducers/servers';
 import ImageServerDatasetSelector from './ImageServerDatasetSelector.js';
 
 const mapStateToProps = state => {

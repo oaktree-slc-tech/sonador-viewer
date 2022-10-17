@@ -5,84 +5,53 @@ import PropTypes from 'prop-types';
 import classNames from 'classnames';
 import { Dropdown, AboutContent, withModal } from '@ohif/ui';
 //
-import { UserPreferences } from './../UserPreferences';
+import { UserPreferences } from '../UserPreferences';
 import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 import './Header.css';
-import Modal from 'react-modal';
 
-const customStyles = {
-  content: {
-    top: '15%',
-    left: '50%',
-    right: 'auto',
-    bottom: 'auto',
-    marginRight: '-50%',
-    transform: 'translate(-50%, -50%)',
-    width: '40%',
-    color: '#91B9CD',
-    backgroundColor: 'black',
-    font: 'inherit',
-    border: '2px solid #44626F',
-    borderRadius: '3px',
-    cursor: 'pointer',
-    padding: '0',
-  },
-  overlay: {
-    backgroundColor: 'rgb(23 23 23 /.85)',
-    zIndex: 3,
-  },
-};
-
-function Header(props) {
-  const {
-    t,
-    user,
-    userManager,
-    modal: { show },
-    useLargeLogo,
-    linkPath,
-    linkText,
-    location,
-    children,
-    servers,
-  } = props;
-  const [options, setOptions] = useState([]);
+function Header({
+  t,
+  user,
+  userManager,
+  modal: { show },
+  useLargeLogo,
+  linkPath,
+  linkText,
+  location,
+  children,
+}) {
   const hasLink = linkText && linkPath;
 
-  useEffect(() => {
-    const optionsValue = [
-      {
-        title: t('About'),
-        icon: { name: 'info' },
-        onClick: () =>
-          show({
-            content: AboutContent,
-            title: t('OHIF Viewer - About'),
-          }),
+  const options = [
+    {
+      title: t('About'),
+      icon: { name: 'info' },
+      onClick: () =>
+        show({
+          content: AboutContent,
+          title: t('OHIF Viewer - About'),
+        }),
+    },
+    {
+      title: t('Preferences'),
+      icon: {
+        name: 'user',
       },
-      {
-        title: t('Preferences'),
-        icon: {
-          name: 'user',
-        },
-        onClick: () =>
-          show({
-            content: UserPreferences,
-            title: t('User Preferences'),
-          }),
-      },
-    ];
+      onClick: () =>
+        show({
+          content: UserPreferences,
+          title: t('User Preferences'),
+        }),
+    },
+  ];
 
-    if (user && userManager) {
-      optionsValue.push({
-        title: t('Logout'),
-        icon: { name: 'power-off' },
-        onClick: () => userManager.signoutRedirect(),
-      });
-    }
-
-    setOptions(optionsValue);
-  }, [setOptions, show, t, user, userManager]);
+  if (user && userManager) {
+    options.push({
+      title: t('Logout'),
+      icon: { name: 'power-off' },
+      onClick: () => userManager.signoutRedirect(),
+    });
+  }
 
   return (
     <>

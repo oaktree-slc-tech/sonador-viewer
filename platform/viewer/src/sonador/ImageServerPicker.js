@@ -1,10 +1,7 @@
-import React, { useState, Component } from 'react';
+import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import Modal from 'react-modal';
 
 import ImageServerPickerModal from './ImageServerPickerModal.js';
-
-import SonadorDialogStyles from './SonadorStyles.js';
 
 // Study List styles
 import './ImageServerPicker.css';

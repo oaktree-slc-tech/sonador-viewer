@@ -1,4 +1,5 @@
-const _ = require('lodash');
+import * as _ from 'lodash';
+
 import { asyncComponent, retryImport } from '@ohif/ui';
 import OHIF from '@ohif/core';
 
