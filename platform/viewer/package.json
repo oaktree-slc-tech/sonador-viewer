@@ -92,7 +92,7 @@
     "redux-thunk": "^2.3.0",
     "reselect": "^4.0.0",
     "vtk.js": "^11.14.0",
-    "@ohif/extension-dicom-ecg": "^X.X.X"
+    "@ohif/extension-dicom-ecg": "^X.X.X",
     "lodash": "4.17.21"
   },
   "devDependencies": {
