@@ -8,11 +8,12 @@ describe('OHIF VTK Extension', () => {
     // TODO: Added 1s wait because we are loading initial series list
     // from QIDO-RS, which is breaking some cypress checks
 
-
     //Waiting for the desired thumbnail content to be displayed
-    cy.get('[data-cy="thumbnail-list"]').wait(1000).should($list => {
-      expect($list).to.contain('CT WB 5.0  B35f');
-    });
+    cy.get('[data-cy="thumbnail-list"]')
+      .wait(1000)
+      .should($list => {
+        expect($list).to.contain('CT WB 5.0  B35f');
+      });
 
     // TODO: We shouldn't have to drag the thumbnail
     // This is a known bug; 2D MPR button does not show until viewport

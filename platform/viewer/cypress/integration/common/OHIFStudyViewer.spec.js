@@ -53,7 +53,8 @@ describe('OHIF Study Viewer Page', function() {
     cy.get('.btnAction', { timeout: 10000 })
       .first()
       .contains('Relabel')
-      .click().should('be.visible');
+      .click()
+      .should('be.visible');
 
     // Search for "Bone"
     cy.get('.searchInput').type('Bone');
@@ -73,7 +74,7 @@ describe('OHIF Study Viewer Page', function() {
     cy.get('.btnAction')
       .last()
       .contains('Delete')
-      .click()
+      .click();
 
     // Close panel
     cy.get('@measurementsBtn').click();
@@ -115,7 +116,6 @@ describe('OHIF Study Viewer Page', function() {
     cy.get('@measurementsPanel').should('not.be.enabled');
   });
    */
-
 
   it('checks if measurement item can be deleted through the context menu on the viewport', function() {
     cy.addLengthMeasurement([100, 100], [200, 100]); //Adding measurement in the viewport
@@ -264,7 +264,6 @@ describe('OHIF Study Viewer Page', function() {
       .trigger('mousedown', 'top', { which: 3 })
       .trigger('mousemove', 'center', { which: 3 })
       .trigger('mouseup');
-
 
     const expectedText = 'Zoom: 442%';
     cy.get('@viewportInfoBottomRight').should('contains.text', expectedText);

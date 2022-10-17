@@ -1,4 +1,4 @@
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
 const defaultState = {
   studyData: {},
@@ -7,8 +7,8 @@ const defaultState = {
 const servers = (state = defaultState, action) => {
   switch (action.type) {
     case 'SET_STUDY_DATA': {
-      const updatedStudyData = cloneDeep(state.studyData);
-      updatedStudyData[action.StudyInstanceUID] = cloneDeep(action.data);
+      const updatedStudyData = _.cloneDeep(state.studyData);
+      updatedStudyData[action.StudyInstanceUID] = _.cloneDeep(action.data);
 
       return Object.assign({}, state, { studyData: updatedStudyData });
     }

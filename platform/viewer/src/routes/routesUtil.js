@@ -1,43 +1,50 @@
-const _ = require('lodash');
+import * as _ from 'lodash';
+
 import { asyncComponent, retryImport } from '@ohif/ui';
 import OHIF from '@ohif/core';
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
-
 // Dynamic Import Routes (CodeSplitting)
 const IHEInvokeImageDisplay = asyncComponent(() =>
   retryImport(() =>
-    import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay.js')
+    import(
+      /* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay.js'
+    )
   )
 );
 const ViewerRouting = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting.js'))
+  retryImport(() =>
+    import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting.js')
+  )
 );
 
 const StudyListRouting = asyncComponent(() =>
-  retryImport(() => import(
-    /* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting.js'
-  ))
+  retryImport(() =>
+    import(
+      /* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting.js'
+    )
+  )
 );
 const StandaloneRouting = asyncComponent(() =>
-  retryImport(() => import(
-    /* webpackChunkName: "ConnectedStandaloneRouting" */ '../connectedComponents/ConnectedStandaloneRouting.js'
-  ))
+  retryImport(() =>
+    import(
+      /* webpackChunkName: "ConnectedStandaloneRouting" */ '../connectedComponents/ConnectedStandaloneRouting.js'
+    )
+  )
 );
 const ViewerLocalFileData = asyncComponent(() =>
-  retryImport(() => import(
-    /* webpackChunkName: "ViewerLocalFileData" */ '../connectedComponents/ViewerLocalFileData.js'
-  ))
+  retryImport(() =>
+    import(
+      /* webpackChunkName: "ViewerLocalFileData" */ '../connectedComponents/ViewerLocalFileData.js'
+    )
+  )
 );
-
 
 const reload = () => window.location.reload();
 
-
 const ROUTES_DEF = {
   default: {
-
     // Load viewer for specific studies
     viewer: {
       path: [
@@ -51,12 +58,7 @@ const ROUTES_DEF = {
       component: StandaloneRouting,
     },
     list: {
-      path: [
-        '/server/:token',
-        '/server/:token/viewer',
-        '/studylist', 
-        '/',
-      ],
+      path: ['/server/:token', '/server/:token/viewer', '/studylist', '/'],
       component: StudyListRouting,
       condition: appConfig => {
         return appConfig.showStudyList;
@@ -68,21 +70,19 @@ const ROUTES_DEF = {
     },
     IHEInvokeImageDisplay: {
       path: '/IHEInvokeImageDisplay',
-      component: IHEInvokeImageDisplay
+      component: IHEInvokeImageDisplay,
     },
   },
   sonador: {
     viewer: {
-      path:
-        '/server/:token/viewer/study/:studyInstanceUIDs',
+      path: '/server/:token/viewer/study/:studyInstanceUIDs',
       component: ViewerRouting,
       condition: appConfig => {
         return !!appConfig.enableGoogleCloudAdapter;
       },
     },
     list: {
-      path:
-        '/server/:token/viewer',
+      path: '/server/:token/viewer',
       component: StudyListRouting,
       condition: appConfig => {
         const showList = appConfig.showStudyList;
@@ -101,7 +101,9 @@ const getRoutes = appConfig => {
     for (let routeKey in routesConfig) {
       const route = routesConfig[routeKey];
       const validRoute =
-        typeof route.condition === 'function' ? route.condition(appConfig) : true;
+        typeof route.condition === 'function'
+          ? route.condition(appConfig)
+          : true;
 
       if (validRoute) {
         routes.push({
@@ -120,13 +122,11 @@ const parsePath = (path, server, params) => {
   let _path;
 
   if (_.isArray(path)) {
-
     // If path is an array, look for a path string that includes all of the parameter keys.
     _path = _.find(path, v => {
       return _.every(_.keys(params), k => (v || '').includes(k));
     });
   } else {
-
     // For string path values, use value as provided
     _path = path;
   }
@@ -144,15 +144,19 @@ const parseViewerPath = (appConfig = {}, server = {}, params) => {
   // Create viewer URL from the provided configuration, server, and URL parameters.
   // Use the Sonador viewer path if there is a server token, otherwise use the default
   // viewer path.
-  let viewerPath = params.token || server.token ? ROUTES_DEF.sonador.viewer.path : ROUTES_DEF.default.viewer.path;
+  let viewerPath =
+    params.token || server.token
+      ? ROUTES_DEF.sonador.viewer.path
+      : ROUTES_DEF.default.viewer.path;
   if (!params.token && server.token) params.token = server.token;
 
   return parsePath(viewerPath, server, params);
 };
 
-
 const parseStudyListPath = (appConfig = {}, server = {}, params) => {
-  let studyListPath = params.token ? ROUTES_DEF.sonador.list.path : ROUTES_DEF.default.list.path;
+  let studyListPath = params.token
+    ? ROUTES_DEF.sonador.list.path
+    : ROUTES_DEF.default.list.path;
 
   return parsePath(studyListPath, server, params);
 };

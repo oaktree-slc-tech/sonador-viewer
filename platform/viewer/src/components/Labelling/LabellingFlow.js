@@ -1,7 +1,7 @@
 import { Icon, SelectTree } from '@ohif/ui';
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import cloneDeep from 'lodash.clonedeep';
+import * as _ from 'lodash';
 
 import LabellingTransition from './LabellingTransition.js';
 import OHIFLabellingData from './OHIFLabellingData.js';
@@ -28,7 +28,7 @@ const LabellingFlow = ({
   });
 
   useEffect(() => {
-    const newMeasurementData = cloneDeep(measurementData);
+    const newMeasurementData = _.cloneDeep(measurementData);
 
     if (editDescription) {
       newMeasurementData.description = undefined;
@@ -65,7 +65,7 @@ const LabellingFlow = ({
   };
 
   const descriptionCancel = () => {
-    const { description = '' } = cloneDeep(state);
+    const { description = '' } = _.cloneDeep(state);
     descriptionInput.current.value = description;
     setState(state => ({ ...state, editDescription: false }));
   };

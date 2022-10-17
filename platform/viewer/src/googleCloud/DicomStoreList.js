@@ -61,8 +61,16 @@ class DicomStoreList extends Component {
     }
 
     const body = (
-      <tbody id="StoreList">{
-        stores.filter(store => (store.name.split('/')[7].toLowerCase().includes(filter.toLowerCase()) || filter=="")).map(this.renderTableRow)}
+      <tbody id="StoreList">
+        {stores
+          .filter(
+            store =>
+              store.name
+                .split('/')[7]
+                .toLowerCase()
+                .includes(filter.toLowerCase()) || filter == ''
+          )
+          .map(this.renderTableRow)}
       </tbody>
     );
 

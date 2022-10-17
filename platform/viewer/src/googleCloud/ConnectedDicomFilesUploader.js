@@ -4,7 +4,6 @@ import OHIF from '@ohif/core';
 
 const isActive = a => a.active === true;
 
-
 const mapStateToProps = state => {
   const activeServer = state.servers.servers.find(isActive);
 
@@ -19,11 +18,9 @@ const mapStateToProps = state => {
   };
 };
 
-
 const ConnectedDicomFileUploader = connect(
   mapStateToProps,
   null
 )(DicomFileUploaderModal);
-
 
 export default ConnectedDicomFileUploader;

@@ -7,7 +7,6 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import App from './App.js';
 
-
 import OHIFExtCornerstone from '@ohif/extension-cornerstone';
 import OHIFVTKExtension from '@ohif/extension-vtk';
 import OHIFDicomHtmlExtension from '@ohif/extension-dicom-html';
@@ -17,7 +16,6 @@ import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
-
 
 function installViewer(config, containerId = 'root', callback) {
   const container = document.getElementById(containerId);
@@ -42,7 +40,16 @@ function installViewer(config, containerId = 'root', callback) {
   return ReactDOM.render(<App config={config} />, container, callback);
 }
 
-export { App, installViewer, 
-  OHIFExtCornerstone, OHIFVTKExtension, OHIFDicomHtmlExtension, OHIFDicomMicroscopyExtension, OHIFDicomPDFExtension, 
-  OHIFDicomSegmentationExtension, OHIFDicomRtExtension, OHIFDicomTagBrowserExtension, OHIFDicomECGExtension,
+export {
+  App,
+  installViewer,
+  OHIFExtCornerstone,
+  OHIFVTKExtension,
+  OHIFDicomHtmlExtension,
+  OHIFDicomMicroscopyExtension,
+  OHIFDicomPDFExtension,
+  OHIFDicomSegmentationExtension,
+  OHIFDicomRtExtension,
+  OHIFDicomTagBrowserExtension,
+  OHIFDicomECGExtension,
 };

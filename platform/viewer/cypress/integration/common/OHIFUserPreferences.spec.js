@@ -333,7 +333,6 @@ describe('OHIF User Preferences', () => {
         .scrollIntoView()
         .click();
 
-
       // Header should be in "English (USA)""
       cy.get('.research-use')
         .scrollIntoView()

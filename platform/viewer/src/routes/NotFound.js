@@ -1,12 +1,15 @@
 import React from 'react';
-import './NotFound.css';
 import { Link } from 'react-router-dom';
-import { useAppContext } from '../context/AppContext';
 
-export default function NotFound({ message = 'Sorry, this page does not exist.', showGoBackButton = true }) {
-  
+import { useAppContext } from '../context/AppContext';
+import './NotFound.css';
+
+export default function NotFound({
+  message = 'Sorry, this page does not exist.',
+  showGoBackButton = true,
+}) {
   const context = useAppContext();
-  
+
   return (
     <div className={'not-found'}>
       <div>
