@@ -20,7 +20,7 @@ class PageToolbar extends PureComponent {
         <div className="addNewStudy btn-file">
           <label
             htmlFor="btnImport"
-            style={{ width: '18px' }}
+            style={{ width: '24px' }}
             onClick={this.onImport}
           >
             <Icon name="plus" />
