@@ -27,20 +27,35 @@
 
 /* Grid Layout Utils */
 .no-spacer-left { margin-left: 0 !important; }
+.spacer-left-015rem { margin-left: 0.15rem !important; }
 .spacer-left-025rem { margin-left: 0.25rem !important; }
+.spacer-left-035rem { margin-left: 0.35rem; }
 .spacer-left-05rem { margin-left: 0.5rem !important; }
 .spacer-left-1rem { margin-left: 1rem !important; }
 .spacer-left-15rem { margin-left: 1.5rem !important; }
 .spacer-left-2rem { margin-left: 2rem !important; }
 .spacer-left-3rem { margin-left: 3rem !important; }
 
+.negspace-bottom-05rem { margin-bottom: -0.5rem; }
+
 .no-spacer-right { margin-right: 0 !important; }
+.spacer-right-035rem { margin-right: 0.35rem; }
 .spacer-right-05rem { margin-right: 0.5rem !important; }
 
 
 /* Icon Sizes */
+.icon-size-30 { height: 30px; width: 30px; }
+.icon-size-24 { height: 24px; width: 24px; }
 .icon-size-20 { height: 20px; width: 20px; }
 .icon-size-16 { height: 16px; width: 16px; }
+
+.action-icon {
+  color: var(--text-secondary-color);
+}
+
+.action-icon :hover {
+  color: var(--hover-color);
+}
 
 
 /* Text Properties */

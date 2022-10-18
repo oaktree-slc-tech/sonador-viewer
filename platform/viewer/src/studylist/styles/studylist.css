@@ -29,3 +29,7 @@ p.state-message-large {
 		padding-left: 1rem; padding-right: 1rem;
 	}
 }
+
+.study-list-header .actions .refreshApp {
+  cursor: pointer;
+}

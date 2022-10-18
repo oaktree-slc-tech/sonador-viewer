@@ -192,12 +192,12 @@ const viewports = (state = DEFAULT_STATE, action) => {
     // Allow fall-through
     // eslint-disable-next-line
     case SET_SPECIFIC_DATA: {
-      const layout = cloneDeep(state.layout);
+      const layout = _.cloneDeep(state.layout);
       const viewportIndex = useActiveViewport
         ? state.activeViewportIndex
         : action.viewportIndex;
 
-      let viewportSpecificData = cloneDeep(state.viewportSpecificData);
+      let viewportSpecificData = _.cloneDeep(state.viewportSpecificData);
       viewportSpecificData[viewportIndex] = {
         ...action.viewportSpecificData,
       };
@@ -216,7 +216,7 @@ const viewports = (state = DEFAULT_STATE, action) => {
      * @return {Object} New state.
      */
     case CLEAR_VIEWPORT: {
-      let viewportSpecificData = cloneDeep(state.viewportSpecificData);
+      let viewportSpecificData = _.cloneDeep(state.viewportSpecificData);
 
       if (action.viewportIndex) {
         viewportSpecificData[action.viewportIndex] = {};

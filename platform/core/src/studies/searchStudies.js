@@ -8,13 +8,13 @@ const studySearchPromises = new Map();
  * @param {Object} filter Filter that will be used on search
  * @returns {Promise} resolved with an array of studies information or rejected with an error
  */
-export default function searchStudies(server, filter) {
+export default function searchStudies(server, filter, isForce) {
   const promiseKeyObj = {
     qidoRoot: server.qidoRoot,
     filter,
   };
   const promiseKey = JSON.stringify(promiseKeyObj);
-  if (studySearchPromises.has(promiseKey)) {
+  if (studySearchPromises.has(promiseKey) && !isForce) {
     return studySearchPromises.get(promiseKey);
   } else {
     const promise = Studies(server, filter);

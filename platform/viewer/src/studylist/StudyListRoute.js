@@ -1,5 +1,5 @@
 import * as _ from 'lodash';
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import moment from 'moment';
 import { useTranslation } from 'react-i18next';
@@ -15,15 +15,25 @@ import {
 } from '@ohif/ui';
 import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
 import * as RoutesUtil from '../routes/routesUtil';
+
 // Google Health API
 import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
 import filesToStudies from '../lib/filesToStudies.js';
+
 // Sonador integration tools
 import ImageServerPicker from '../sonador/ImageServerPicker.js';
+
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
 import AppContext from '../context/AppContext';
+
+// Icons
+import {
+  CheckIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/solid";
+
 // Studylist styling
 import '../styles/global-viewer.css';
 import './styles/studylist.css';
@@ -165,30 +175,42 @@ function StudyListRoute(props) {
 
   // Called when relevant state/props are updated
   // Watches filters and sort, debounced
+  const fetchStudies = useCallback(
+    async (isForce = false) => {
+      try {
+        setSearchStatus({ error: null, isSearchingForStudies: true });
+        console.log('in the beggining of the function');
+
+        const response = await getStudyList(
+          server,
+          debouncedFilters,
+          debouncedSort,
+          rowsPerPage,
+          pageNumber,
+          displaySize,
+          history,
+          isForce
+        );
+
+        setStudies(response);
+        setSearchStatus({ error: null, isSearchingForStudies: false });
+      } catch (error) {
+        console.warn(error);
+        setSearchStatus({ error: true, isFetching: false });
+      }
+    },
+    [
+      debouncedFilters,
+      debouncedSort,
+      rowsPerPage,
+      pageNumber,
+      displaySize,
+      server,
+    ]
+  );
+
   useEffect(
     () => {
-      const fetchStudies = async () => {
-        try {
-          setSearchStatus({ error: null, isSearchingForStudies: true });
-
-          const response = await getStudyList(
-            server,
-            debouncedFilters,
-            debouncedSort,
-            rowsPerPage,
-            pageNumber,
-            displaySize,
-            history
-          );
-
-          setStudies(response);
-          setSearchStatus({ error: null, isSearchingForStudies: false });
-        } catch (error) {
-          console.warn(error);
-          setSearchStatus({ error: true, isFetching: false });
-        }
-      };
-
       // Users must have the "query" permission in order to execute searches
       // against Sonador Imaging servers
       if (server && server.perms && server.perms.query) {
@@ -198,14 +220,7 @@ function StudyListRoute(props) {
 
     // TODO: Can we update studies directly?
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      debouncedFilters,
-      debouncedSort,
-      rowsPerPage,
-      pageNumber,
-      displaySize,
-      server,
-    ]
+    [fetchStudies]
   );
 
   // TODO: Update Server
@@ -267,6 +282,10 @@ function StudyListRoute(props) {
       };
     });
   }
+
+  const refreshApp = async () => {
+    await fetchStudies(true);
+  };
 
   return (
     <>
@@ -331,16 +350,24 @@ function StudyListRoute(props) {
 
           {/* Toolbar Buttons */}
           <div className="actions">
+            {server.perms && server.perms.query && (
+              <span className="refreshApp action-icon" onClick={refreshApp}>
+                <ArrowPathIcon className="icon-size-30 margin-top-0.25rem negspace-bottom-05rem spacer-right-015rem"
+                  title="Reload Study List" />
+              </span>
+            )}
+            
             {studyListFunctionsEnabled && healthCareApiButtons}
 
             {/* DICOM Upload Button: requires "upload" permission */}
             {studyListFunctionsEnabled &&
               server.perms &&
               server.perms.upload && (
-                <PageToolbar
+
+              <PageToolbar
                   onImport={() => setActiveModalId('DicomFilesUploader')}
-                />
-              )}
+              />
+            )}
 
             {/* DICOM Query Results: requires "query" permission */}
             {server.perms && server.perms.query && (
@@ -462,7 +489,8 @@ async function getStudyList(
   rowsPerPage,
   pageNumber,
   displaySize,
-  history
+  history,
+  isForce
 ) {
   const {
     allFields,
@@ -530,6 +558,7 @@ async function getStudyList(
     allFields,
     patientNameOrId,
     accessionOrModalityOrDescription,
+    isForce,
   });
 
   // Only the fields we use
@@ -649,7 +678,7 @@ async function _fetchStudies(
   server,
   filters,
   displaySize,
-  { allFields, patientNameOrId, accessionOrModalityOrDescription }
+  { allFields, patientNameOrId, accessionOrModalityOrDescription, isForce }
 ) {
   let queryFiltersArray = [filters];
 
@@ -690,7 +719,11 @@ async function _fetchStudies(
   const queryPromises = [];
 
   queryFiltersArray.forEach(filter => {
-    const searchStudiesPromise = OHIF.studies.searchStudies(server, filter);
+    const searchStudiesPromise = OHIF.studies.searchStudies(
+      server,
+      filter,
+      isForce
+    );
     queryPromises.push(searchStudiesPromise);
   });
 
