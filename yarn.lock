@@ -221,11 +221,6 @@
   resolved "https://registry.yarnpkg.com/@babel/helper-plugin-utils/-/helper-plugin-utils-7.0.0.tgz#bbb3fbee98661c569034237cc03967ba99b4f250"
   integrity sha512-CYAOUCARwExnEixLdB6sDm2dIJ/YgEAKDM1MOeMeZu9Ld/bDgVo8aiWrXwcY7OBh+1Ea2uUcVRcxKk0GJvW7QA==
 
-"@babel/helper-plugin-utils@^7.8.0":
-  version "7.19.0"
-  resolved "https://registry.yarnpkg.com/@babel/helper-plugin-utils/-/helper-plugin-utils-7.19.0.tgz#4796bb14961521f0f8715990bee2fb6e51ce21bf"
-  integrity sha512-40Ryx7I8mT+0gaNxm8JGTZFUITNqdLAgdg0hXzeVZxVD6nFsdhQvip6v8dqkRHzsz1VFpFAaOCHNn0vKBL7Czw==
-
 "@babel/helper-regex@^7.0.0", "@babel/helper-regex@^7.4.4":
   version "7.5.5"
   resolved "https://registry.yarnpkg.com/@babel/helper-regex/-/helper-regex-7.5.5.tgz#0aa6824f7100a2e0e89c1527c23936c152cab351"
@@ -437,13 +432,6 @@
   integrity sha512-bDe4xKNhb0LI7IvZHiA13kff0KEfaGX/Hv4lMA9+7TEc63hMNvfKo6ZFpXhKuEp+II/q35Gc4NoMeDZyaUbj9w==
   dependencies:
     "@babel/helper-plugin-utils" "^7.0.0"
-
-"@babel/plugin-syntax-optional-chaining@^7.8.3":
-  version "7.8.3"
-  resolved "https://registry.yarnpkg.com/@babel/plugin-syntax-optional-chaining/-/plugin-syntax-optional-chaining-7.8.3.tgz#4f69c2ab95167e0180cd5336613f8c5788f7d48a"
-  integrity sha512-KoK9ErH1MBlCPxV0VANkXW2/dw4vlbGDrFgz8bmUsBGYkFRcbRwMh6cIJubdPrkxRwuGdtCk0v/wPTKbQgBjkg==
-  dependencies:
-    "@babel/helper-plugin-utils" "^7.8.0"
 
 "@babel/plugin-transform-arrow-functions@^7.2.0":
   version "7.2.0"
@@ -5952,6 +5940,11 @@ dicom-parser@^1.8.11:
   resolved "https://registry.yarnpkg.com/dicom-parser/-/dicom-parser-1.8.11.tgz#ffd86289a6b85bb0047379084b57fcc1b28fe7f8"
   integrity sha512-KbxEDqv4Stynv5AxDh90+jY7MtPvI2uyOG62yD8zKu/pcZqoQYfPX44rB0ULjpxt6YIfXfajrs7B1L97RbjNsg==
 
+dicom-parser@^1.8.13:
+  version "1.8.19"
+  resolved "https://registry.yarnpkg.com/dicom-parser/-/dicom-parser-1.8.19.tgz#b0c89f1de22e3cc4ddb56ce5d574296e0b079d43"
+  integrity sha512-GDsRcsBziaLFkDclRrT2sOk5u2+MxpFbRGeGAMdfOsBbiQHk/Ex8NyCxlNHRFPPEd1H6sfl3HtNYjykGYbjfhQ==
+
 dicom-parser@^1.8.9:
   version "1.8.9"
   resolved "https://registry.yarnpkg.com/dicom-parser/-/dicom-parser-1.8.9.tgz#c69b036b8234df1cfad9978d0d6f0caad1582e74"
@@ -6144,6 +6137,11 @@ domhandler@^2.3.0:
   dependencies:
     domelementtype "1"
 
+dompurify@^2.4.0:
+  version "2.4.0"
+  resolved "https://registry.yarnpkg.com/dompurify/-/dompurify-2.4.0.tgz#c9c88390f024c2823332615c9e20a453cf3825dd"
+  integrity sha512-Be9tbQMZds4a3C6xTmz68NlMfeONA//4dOavl/1rNw50E+/QO0KVpbcU0PcaW0nsQxurXls9ZocqFxk8R2mWEA==
+
 domutils@1.5.1:
   version "1.5.1"
   resolved "https://registry.yarnpkg.com/domutils/-/domutils-1.5.1.tgz#dcd8488a26f563d61079e48c9f7b7e32373682cf"
@@ -6201,6 +6199,14 @@ ecc-jsbn@~0.1.1:
   dependencies:
     jsbn "~0.1.0"
     safer-buffer "^2.1.0"
+
+ecg-dicom-web-viewer@^2.0.0:
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/ecg-dicom-web-viewer/-/ecg-dicom-web-viewer-2.0.2.tgz#0ea472a82880fec8c18d9db7161e23c40cdf513b"
+  integrity sha512-liT11YCkup941V/VXKQyfJkAItyv2XggRbSvdJYSiRyawbgPGTUZwCrM1mExHWijsBoQG5Io8bb4EKS5vzZR7A==
+  dependencies:
+    dicom-parser "^1.8.13"
+    dompurify "^2.4.0"
 
 ee-first@1.1.1:
   version "1.1.1"
