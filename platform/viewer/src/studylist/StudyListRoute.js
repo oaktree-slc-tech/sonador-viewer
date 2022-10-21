@@ -29,10 +29,7 @@ import WhiteLabelingContext from '../context/WhiteLabelingContext';
 import AppContext from '../context/AppContext';
 
 // Icons
-import {
-  CheckIcon,
-  ArrowPathIcon,
-} from "@heroicons/react/24/solid";
+import { ArrowPathIcon } from '@heroicons/react/24/solid';
 
 // Studylist styling
 import '../styles/global-viewer.css';
@@ -72,7 +69,6 @@ function StudyListRoute(props) {
     fieldName: 'PatientName',
     direction: 'desc',
   });
-
   // Study list filter values
   const [filterValues, setFilterValues] = useState({
     // Study start/end dates
@@ -96,8 +92,8 @@ function StudyListRoute(props) {
     StudyDate: dcmfilters.StudyDate
       ? decodeURIComponent(dcmfilters.StudyDate)
       : '',
-    modalities: dcmfilters.modalities
-      ? decodeURIComponent(dcmfilters.modalities)
+    modalities: dcmfilters.modalitiesInStudy
+      ? dcmfilters.modalitiesInStudy
       : '',
     StudyDescription: dcmfilters.StudyDescription
       ? decodeURIComponent(dcmfilters.StudyDescription)
@@ -179,8 +175,6 @@ function StudyListRoute(props) {
     async (isForce = false) => {
       try {
         setSearchStatus({ error: null, isSearchingForStudies: true });
-        console.log('in the beggining of the function');
-
         const response = await getStudyList(
           server,
           debouncedFilters,
@@ -191,7 +185,6 @@ function StudyListRoute(props) {
           history,
           isForce
         );
-
         setStudies(response);
         setSearchStatus({ error: null, isSearchingForStudies: false });
       } catch (error) {
@@ -200,12 +193,13 @@ function StudyListRoute(props) {
       }
     },
     [
-      debouncedFilters,
+      server,
       debouncedSort,
       rowsPerPage,
       pageNumber,
       displaySize,
-      server,
+      history,
+      debouncedFilters
     ]
   );
 
@@ -352,22 +346,23 @@ function StudyListRoute(props) {
           <div className="actions">
             {server.perms && server.perms.query && (
               <span className="refreshApp action-icon" onClick={refreshApp}>
-                <ArrowPathIcon className="icon-size-30 margin-top-0.25rem negspace-bottom-05rem spacer-right-015rem"
-                  title="Reload Study List" />
+                <ArrowPathIcon
+                  className="icon-size-30 margin-top-0.25rem negspace-bottom-05rem spacer-right-015rem"
+                  title="Reload Study List"
+                />
               </span>
             )}
-            
+
             {studyListFunctionsEnabled && healthCareApiButtons}
 
             {/* DICOM Upload Button: requires "upload" permission */}
             {studyListFunctionsEnabled &&
               server.perms &&
               server.perms.upload && (
-
-              <PageToolbar
+                <PageToolbar
                   onImport={() => setActiveModalId('DicomFilesUploader')}
-              />
-            )}
+                />
+              )}
 
             {/* DICOM Query Results: requires "query" permission */}
             {server.perms && server.perms.query && (
