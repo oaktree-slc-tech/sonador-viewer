@@ -1,7 +1,7 @@
 // https://developers.google.com/web/tools/workbox/guides/codelabs/webpack
 // ~~ WebPack
 const path = require('path');
-const merge = require('webpack-merge');
+const { merge } = require('webpack-merge');
 const webpack = require('webpack');
 const webpackBase = require('./../../../.webpack/webpack.base.js');
 // ~~ Plugins
@@ -9,7 +9,6 @@ const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const ExtractCssChunksPlugin = require('extract-css-chunks-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const { InjectManifest } = require('workbox-webpack-plugin');
 // ~~ Rules
 const extractStyleChunksRule = require('./rules/extractStyleChunks.js');
 // ~~ Directories
@@ -46,7 +45,7 @@ module.exports = (env, argv) => {
       path: DIST_DIR,
       filename: isProdBuild ? '[name].bundle.[chunkhash].js' : '[name].js',
       publicPath: PUBLIC_URL, // Used by HtmlWebPackPlugin for asset prefix
-      devtoolModuleFilenameTemplate: function(info) {
+      devtoolModuleFilenameTemplate: function (info) {
         if (isProdBuild) {
           return `webpack:///${info.resourcePath}`;
         } else {
@@ -94,8 +93,7 @@ module.exports = (env, argv) => {
           to: `${DIST_DIR}/app-config.js`,
         },
         {
-          from:
-            '../../../node_modules/cornerstone-wado-image-loader/dist/dynamic-import',
+          from: '../../../node_modules/cornerstone-wado-image-loader/dist/dynamic-import',
           to: DIST_DIR,
         },
       ]),
@@ -115,12 +113,6 @@ module.exports = (env, argv) => {
       }),
       // No longer maintained; but good for generating icons + manifest
       // new FaviconsWebpackPlugin( path.join(PUBLIC_DIR, 'assets', 'icons-512.png')),
-      new InjectManifest({
-        swDest: 'sw.js',
-        swSrc: path.join(SRC_DIR, 'service-worker.js'),
-        // Increase the limit to 4mb:
-        // maximumFileSizeToCacheInBytes: 4 * 1024 * 1024
-      }),
     ],
     optimization: {
       splitChunks: {

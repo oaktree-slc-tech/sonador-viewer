@@ -115,7 +115,6 @@ if (window && window.sonador && window.sonador.host) {
         // Logo
         createLogoComponentFn: function(React) {
           return React.createElement('a', {
-            rel: 'noopener noreferrer',
             target: '_self',
             href: '/',
             className: 'header-brand',

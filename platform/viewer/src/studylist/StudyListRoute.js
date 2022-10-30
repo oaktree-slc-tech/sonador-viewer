@@ -54,7 +54,7 @@ function StudyListRoute(props) {
 
   // ~~ STATE Properties
 
-  const updateServerUrl = token => {
+  const updateServerUrl = (token) => {
     // Update history to point at the most recent
     if (!(window.location.pathname || '').includes(token))
       history.push(
@@ -76,7 +76,7 @@ function StudyListRoute(props) {
       ? decodeURIComponent(dcmfilters.studyDateTo)
       : '',
     studyDateFrom: dcmfilters.studyDateFrom
-      ? decodeURIComponent(cmfilters.studyDateFrom)
+      ? decodeURIComponent(dcmfilters.studyDateFrom)
       : '',
 
     // DICOM tags
@@ -103,9 +103,10 @@ function StudyListRoute(props) {
     patientNameOrId: dcmfilters.patientNameOrId
       ? decodeURIComponent(dcmfilters.patientNameOrId)
       : '',
-    accessionOrModalityOrDescription: dcmfilters.accessionOrModalityOrDescription
-      ? decodeURIComponent(dcmfilters.accessionOrModalityOrDescription)
-      : '',
+    accessionOrModalityOrDescription:
+      dcmfilters.accessionOrModalityOrDescription
+        ? decodeURIComponent(dcmfilters.accessionOrModalityOrDescription)
+        : '',
 
     // search all tags
     allFields: dcmfilters.allFields
@@ -131,7 +132,7 @@ function StudyListRoute(props) {
     (dcmfilters || {}).page ? parseInt(filters.page) - 1 : 0
   );
 
-  const updateRowsPerPage = rows => {
+  const updateRowsPerPage = (rows) => {
     // Update the number of rows per page, synchronize state and URL
 
     let params = getStudyUrlParams();
@@ -141,7 +142,7 @@ function StudyListRoute(props) {
     setRowsPerPage(rows);
   };
 
-  const updatePageNumber = pnumber => {
+  const updatePageNumber = (pnumber) => {
     // Update the page number, synchronize state and URL
     let params = getStudyUrlParams();
     params.set('page', pnumber + 1);
@@ -199,7 +200,7 @@ function StudyListRoute(props) {
       pageNumber,
       displaySize,
       history,
-      debouncedFilters
+      debouncedFilters,
     ]
   );
 
@@ -207,7 +208,7 @@ function StudyListRoute(props) {
     () => {
       // Users must have the "query" permission in order to execute searches
       // against Sonador Imaging servers
-      if (server && server.perms && server.perms.query) {
+      if (server?.perms?.query) {
         fetchStudies();
       }
     },
@@ -226,7 +227,7 @@ function StudyListRoute(props) {
   //   });
   // }
 
-  const onDrop = async acceptedFiles => {
+  const onDrop = async (acceptedFiles) => {
     try {
       const studiesFromFiles = await filesToStudies(acceptedFiles);
       setStudies(studiesFromFiles);
@@ -269,7 +270,7 @@ function StudyListRoute(props) {
   function handleFilterChange(fieldName, value) {
     // Fetch study list on filter change
 
-    setFilterValues(state => {
+    setFilterValues((state) => {
       return {
         ...state,
         [fieldName]: value,
@@ -283,12 +284,9 @@ function StudyListRoute(props) {
 
   return (
     <>
-      {/*  DICOM Upload Modal: Enabled if the user has been granted the "upload" 
+      {/*  DICOM Upload Modal: Enabled if the user has been granted the "upload"
         permission for the server */}
-      {studyListFunctionsEnabled &&
-      server &&
-      server.perms &&
-      server.perms.upload ? (
+      {studyListFunctionsEnabled && server?.perms?.upload ? (
         <ConnectedDicomFilesUploader
           isOpen={activeModalId === 'DicomFilesUploader'}
           onClose={() => setActiveModalId(null)}
@@ -296,16 +294,15 @@ function StudyListRoute(props) {
       ) : null}
       {healthCareApiWindows}
       <WhiteLabelingContext.Consumer>
-        {whiteLabeling => (
+        {(whiteLabeling) => (
           <UserManagerContext.Consumer>
-            {userManager => (
+            {(userManager) => (
               <ConnectedHeader
                 useLargeLogo={true}
                 user={user}
                 userManager={userManager}
               >
-                {whiteLabeling &&
-                  whiteLabeling.createLogoComponentFn &&
+                {whiteLabeling?.createLogoComponentFn &&
                   whiteLabeling.createLogoComponentFn(React)}
               </ConnectedHeader>
             )}
@@ -331,7 +328,7 @@ function StudyListRoute(props) {
               />
 
               {/* Study list: requires "query permission" */}
-              {server.perms && server.perms.query ? (
+              {server.perms?.query ? (
                 <span className="sonador-studylistt-title">
                   <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">
                     /
@@ -344,7 +341,7 @@ function StudyListRoute(props) {
 
           {/* Toolbar Buttons */}
           <div className="actions">
-            {server.perms && server.perms.query && (
+            {server.perms?.query && (
               <span className="refreshApp action-icon" onClick={refreshApp}>
                 <ArrowPathIcon
                   className="icon-size-30 margin-top-0.25rem negspace-bottom-05rem spacer-right-015rem"
@@ -356,16 +353,14 @@ function StudyListRoute(props) {
             {studyListFunctionsEnabled && healthCareApiButtons}
 
             {/* DICOM Upload Button: requires "upload" permission */}
-            {studyListFunctionsEnabled &&
-              server.perms &&
-              server.perms.upload && (
-                <PageToolbar
-                  onImport={() => setActiveModalId('DicomFilesUploader')}
-                />
-              )}
+            {studyListFunctionsEnabled && server?.perms?.upload && (
+              <PageToolbar
+                onImport={() => setActiveModalId('DicomFilesUploader')}
+              />
+            )}
 
             {/* DICOM Query Results: requires "query" permission */}
-            {server.perms && server.perms.query && (
+            {server.perms?.query && (
               <span>
                 <span className="study-count">{studies.length}</span>
                 <span className="sonador-lightgray spacer-left-05rem font-light fontsize-medium hide-xs">
@@ -378,19 +373,17 @@ function StudyListRoute(props) {
       ) : null}
 
       {/* Study List Table Background */}
-      {server && server.perms && server.perms.query ? (
-        <div className="table-head-background" />
-      ) : null}
+      {server?.perms?.query ? <div className="table-head-background" /> : null}
 
       {/* Study List: requires "query permission" */}
-      {server && server.perms && server.perms.query ? (
+      {server?.perms?.query ? (
         <div className="study-list-container">
           <StudyList
             isLoading={searchStatus.isSearchingForStudies}
             hasError={searchStatus.error === true}
             // Rows
             studies={studies}
-            onSelectItem={studyInstanceUID => {
+            onSelectItem={(studyInstanceUID) => {
               const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
                 studyInstanceUIDs: studyInstanceUID,
               });
@@ -487,11 +480,8 @@ async function getStudyList(
   history,
   isForce
 ) {
-  const {
-    allFields,
-    patientNameOrId,
-    accessionOrModalityOrDescription,
-  } = filters;
+  const { allFields, patientNameOrId, accessionOrModalityOrDescription } =
+    filters;
   const sortFieldName = sort.fieldName || 'PatientName';
   const sortDirection = sort.direction || 'desc';
 
@@ -557,7 +547,7 @@ async function getStudyList(
   });
 
   // Only the fields we use
-  const mappedStudies = studies.map(study => {
+  const mappedStudies = studies.map((study) => {
     const PatientName =
       typeof study.PatientName === 'string' ? study.PatientName : undefined;
 
@@ -616,7 +606,7 @@ async function getStudyList(
  */
 function _sortStudies(studies, field, order) {
   // Make sure our StudyDate is in a valid format and create copy of studies array
-  const sortedStudies = studies.map(study => {
+  const sortedStudies = studies.map((study) => {
     if (!moment(study.StudyDate, 'MMM DD, YYYY', true).isValid()) {
       study.StudyDate = moment(study.StudyDate, 'YYYYMMDD').format(
         'MMM DD, YYYY'
@@ -626,7 +616,7 @@ function _sortStudies(studies, field, order) {
   });
 
   // Sort by field
-  sortedStudies.sort(function(a, b) {
+  sortedStudies.sort(function (a, b) {
     let fieldA = a[field];
     let fieldB = b[field];
     if (field === 'StudyDate') {
@@ -713,7 +703,7 @@ async function _fetchStudies(
 
   const queryPromises = [];
 
-  queryFiltersArray.forEach(filter => {
+  queryFiltersArray.forEach((filter) => {
     const searchStudiesPromise = OHIF.studies.searchStudies(
       server,
       filter,
@@ -726,10 +716,12 @@ async function _fetchStudies(
   const studies = [];
 
   // Flatten and dedupe
-  lotsOfStudies.forEach(arrayOfStudies => {
+  lotsOfStudies.forEach((arrayOfStudies) => {
     if (arrayOfStudies) {
-      arrayOfStudies.forEach(study => {
-        if (!studies.some(s => s.StudyInstanceUID === study.StudyInstanceUID)) {
+      arrayOfStudies.forEach((study) => {
+        if (
+          !studies.some((s) => s.StudyInstanceUID === study.StudyInstanceUID)
+        ) {
           studies.push(study);
         }
       });
@@ -753,7 +745,7 @@ function _getQueryFiltersForValue(filters, fields, value) {
     return queryFilters;
   }
 
-  fields.forEach(field => {
+  fields.forEach((field) => {
     const filter = Object.assign(
       {
         PatientID: '',
