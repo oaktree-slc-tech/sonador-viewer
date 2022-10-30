@@ -4,7 +4,6 @@ import { I18nextProvider } from 'react-i18next';
 import PropTypes from 'prop-types';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router } from 'react-router-dom';
-import { hot } from 'react-hot-loader/root';
 
 import OHIFCornerstoneExtension from '@ohif/extension-cornerstone';
 
@@ -28,7 +27,6 @@ import {
   LoggerService,
   MeasurementService,
   utils,
-  redux as reduxOHIF,
 } from '@ohif/core';
 
 import i18n from '@ohif/i18n';
@@ -352,7 +350,6 @@ function _makeAbsoluteIfNecessary(url, base_url) {
 /*
  * Only wrap/use hot if in dev.
  */
-const ExportedApp = process.env.NODE_ENV === 'development' ? hot(App) : App;
 
-export default ExportedApp;
+export default App;
 export { commandsManager, extensionManager, hotkeysManager, servicesManager };

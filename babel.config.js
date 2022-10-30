@@ -39,7 +39,6 @@ module.exports = {
         ['@babel/preset-env', { modules: false }],
         '@babel/preset-react',
       ],
-      plugins: ['react-hot-loader/babel'],
       ignore: ['**/*.test.jsx', '**/*.test.js', '__snapshots__', '__tests__'],
     },
   },
