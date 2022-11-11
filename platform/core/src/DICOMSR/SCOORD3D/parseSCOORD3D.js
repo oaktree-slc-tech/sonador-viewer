@@ -1,25 +1,24 @@
 import { ImageSet } from '../../classes';
 import getMeasurements from './utils/getMeasurements';
-import getReferencedImagesList from './utils/getReferencedImagesList';
 import isRehydratable from './utils/isRehydratable';
 import addMeasurement from './utils/addMeasurement';
 
 const parseSCOORD3D = ({ servicesManager, displaySets }) => {
   const { MeasurementService } = servicesManager.services;
 
-  const srDisplaySets = displaySets.filter(ds => ds.Modality === 'SR');
+  const srDisplaySets = displaySets.filter((ds) => ds.Modality === 'SR');
   const imageDisplaySets = displaySets.filter(
-    ds =>
+    (ds) =>
       ds.Modality !== 'SR' &&
       ds.Modality !== 'SEG' &&
       ds.Modality !== 'RTSTRUCT'
   );
 
-  imageDisplaySets.forEach(imageDisplaySet => {
+  imageDisplaySets.forEach((imageDisplaySet) => {
     imageDisplaySet.SRLabels = [];
   });
 
-  srDisplaySets.forEach(srDisplaySet => {
+  srDisplaySets.forEach((srDisplaySet) => {
     const firstInstance = srDisplaySet.metadata;
     if (!firstInstance) {
       return;
@@ -27,7 +26,6 @@ const parseSCOORD3D = ({ servicesManager, displaySets }) => {
 
     const { ContentSequence } = firstInstance;
 
-    srDisplaySet.referencedImages = getReferencedImagesList(ContentSequence);
     srDisplaySet.measurements = getMeasurements(ContentSequence);
     const mappings = MeasurementService.getSourceMappings(
       'CornerstoneTools',
@@ -38,7 +36,7 @@ const parseSCOORD3D = ({ servicesManager, displaySets }) => {
     srDisplaySet.isRehydratable = isRehydratable(srDisplaySet, mappings);
     srDisplaySet.isLoaded = true;
 
-    imageDisplaySets.forEach(imageDisplaySet => {
+    imageDisplaySets.forEach((imageDisplaySet) => {
       // Check currently added displaySets and add measurements if the sources exist.
       checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, imageDisplaySet);
     });
@@ -64,8 +62,8 @@ const checkIfCanAddMeasurementsToDisplaySet = (
   /**
    * Filter measurements that references the correct sop class.
    */
-  measurements = measurements.filter(measurement => {
-    return measurement.coords.some(coord => {
+  measurements = measurements.filter((measurement) => {
+    return measurement.coords.some((coord) => {
       if (coord.ReferencedSOPSequence === undefined) {
         /** we miss the referenced information. We can compare the annotation SCOORD3D coordinates with
          * the ImagePatientPosition of the frames. However (WARNING!!!),
@@ -128,15 +126,15 @@ const checkIfCanAddMeasurementsToDisplaySet = (
     return;
   }
 
-  const imageIds = images.map(i => i.getImageId());
-  const SOPInstanceUIDs = images.map(i => i.SOPInstanceUID);
+  const imageIds = images.map((i) => i.getImageId());
+  const SOPInstanceUIDs = images.map((i) => i.SOPInstanceUID);
   const colors = new Map();
-  measurements.forEach(measurement => {
+  measurements.forEach((measurement) => {
     const { coords } = measurement;
     coords.forEach((coord, index) => {
       if (coord.ReferencedSOPSequence !== undefined) {
         const imageIndex = SOPInstanceUIDs.findIndex(
-          SOPInstanceUID =>
+          (SOPInstanceUID) =>
             SOPInstanceUID ===
             coord.ReferencedSOPSequence.ReferencedSOPInstanceUID
         );
