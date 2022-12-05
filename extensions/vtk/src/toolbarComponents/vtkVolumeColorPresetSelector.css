@@ -1,0 +1,9 @@
+.vtk-color-preset-meta-title {
+  color: var(--table-text-primary-color);
+}
+
+.vtk-color-preset-item {
+  list-style-type: none;
+  padding: 0.5rem;
+  margin: 0;
+}

@@ -34,7 +34,6 @@ import {
 } from './components';
 import { useDebounce, useMedia } from './hooks';
 
-
 // Elements
 import {
   ICONS,
@@ -55,6 +54,12 @@ import { ScrollableArea } from './ScrollableArea/ScrollableArea.js';
 import Toolbar from './viewer/Toolbar.js';
 import ToolbarButton from './viewer/ToolbarButton.js';
 import ViewerbaseDragDropContext from './utils/viewerbaseDragDropContext.js';
+import {
+  viewerbaseGetDisplaySet,
+  viewerbaseDisplaySetReconstructable,
+} from './utils/viewerbaseDisplaySet.js';
+import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
+import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
 import { asyncComponent, retryImport } from './utils/asyncComponent';
 import {
   SnackbarProvider,
@@ -72,10 +77,15 @@ import {
   useLogger,
 } from './contextProviders';
 
+const eventTypes = {
+  sidebar: {
+    toggle: 'ohif:ui:side-bar:toggle',
+  },
+};
+
 export {
   // Elements
   ICONS,
-  //
   Checkbox,
   Dropdown,
   Label,
@@ -134,11 +144,20 @@ export {
   LoggerProvider,
   withLogger,
   useLogger,
+
   // Hooks
   useDebounce,
   useMedia,
+
   // Utils
   ViewerbaseDragDropContext,
   asyncComponent,
   retryImport,
+  viewerbaseGetDisplaySet,
+  viewerbaseDisplaySetReconstructable,
+  setLayoutAndViewportData,
+  setMultiPanelLayout,
+
+  // Events
+  eventTypes,
 };

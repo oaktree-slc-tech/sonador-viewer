@@ -32,7 +32,7 @@ const SnackbarProvider = ({ children, service }) => {
   const [snackbarItems, setSnackbarItems] = useState([]);
 
   const show = useCallback(
-    options => {
+    (options) => {
       if (!options || (!options.title && !options.message)) {
         console.warn(
           'Snackbar cannot be rendered without required parameters: title | message'
@@ -52,7 +52,7 @@ const SnackbarProvider = ({ children, service }) => {
         visible: true,
       };
 
-      setSnackbarItems(state => [...state, newItem]);
+      setSnackbarItems((state) => [...state, newItem]);
       setCount(count + 1);
     },
     [count, DEFAULT_OPTIONS]
@@ -73,9 +73,9 @@ const SnackbarProvider = ({ children, service }) => {
   }, [show]);
 
   const hide = useCallback(
-    id => {
-      const hideItem = items => {
-        const newItems = items.map(item => {
+    (id) => {
+      const hideItem = (items) => {
+        const newItems = items.map((item) => {
           if (item.id === id) {
             item.visible = false;
           }
@@ -86,10 +86,12 @@ const SnackbarProvider = ({ children, service }) => {
         return newItems;
       };
 
-      setSnackbarItems(state => hideItem(state));
+      setSnackbarItems((state) => hideItem(state));
 
       setTimeout(() => {
-        setSnackbarItems(state => [...state.filter(item => item.id !== id)]);
+        setSnackbarItems((state) => [
+          ...state.filter((item) => item.id !== id),
+        ]);
       }, 1000);
     },
     [setSnackbarItems]
@@ -152,7 +154,7 @@ SnackbarProvider.propTypes = {
  * High Order Component to use the snackbar methods through a Class Component
  *
  */
-export const withSnackbar = Component => {
+export const withSnackbar = (Component) => {
   return function WrappedComponent(props) {
     const snackbarContext = {
       ...useSnackbarContext(),

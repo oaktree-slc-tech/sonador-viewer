@@ -30,6 +30,7 @@ import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomEkgExtension from '@ohif/extension-dicom-ecg';
+import OHIF3DCTVolumeViewerExtension from '@ohif/extension-viewer3dct';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -39,7 +40,7 @@ import store from './store';
 //import OHIFDebuggingExtension from '@ohif/extension-debugging';
 import { version } from '../package.json';
 
-const initOHIFViewer = function() {
+const initOHIFViewer = function () {
   // Initialize OHIF viewer
   // 1. Create ReactJS app
   // 2. On init of the application, retrieve server list from Sonador
@@ -59,20 +60,25 @@ const initOHIFViewer = function() {
   const appProps = {
     config,
     defaultExtensions: [
-      OHIFVTKExtension,
       OHIFDicomHtmlExtension,
       OHIFDicomMicroscopyExtension,
       OHIFDicomPDFExtension,
       OHIFDicomSegmentationExtension,
       OHIFDicomRtExtension,
+      OHIFDicomEkgExtension,
+
+      // 3D Volume Visualization
+      OHIFVTKExtension,
+      OHIF3DCTVolumeViewerExtension,
+
+      // Metadata
       OHIFDicomTagBrowserExtension,
-      OHIFDicomEkgExtension
     ],
   };
 
   // Initialize and render application
   const app = React.createElement(App, appProps, null);
-  ReactDOM.render(app, document.getElementById('root'), function() {
+  ReactDOM.render(app, document.getElementById('root'), function () {
     // Retrieve Sonador PACS server list
     if (window.sonador && window.sonador.host) {
       var sonador_pacsurl = window.sonador.host + window.sonador.api.pacs;
@@ -80,8 +86,8 @@ const initOHIFViewer = function() {
       fetch(sonador_pacsurl, {
         credentials: 'include',
       })
-        .then(response => response.json())
-        .then(function(servers) {
+        .then((response) => response.json())
+        .then(function (servers) {
           console.log(servers, 'here');
           if (!Array.isArray(servers)) servers = [servers];
 
@@ -89,7 +95,7 @@ const initOHIFViewer = function() {
           window.config.servers.dicomWeb = servers;
           utils.addServers(window.config.servers, store);
         })
-        .catch(function(err) {
+        .catch(function (err) {
           console.log(
             'Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.',
             err
@@ -106,14 +112,14 @@ if (window && window.sonador && window.sonador.host) {
 
   // Retrieve Sonador Remote Configuration
   fetch(sonador_configurl)
-    .then(response => response.json())
-    .then(function(ohifconfig) {
+    .then((response) => response.json())
+    .then(function (ohifconfig) {
       window.config = ohifconfig;
 
       // Logos and branding for viewer
       window.config.whiteLabeling = {
         // Logo
-        createLogoComponentFn: function(React) {
+        createLogoComponentFn: function (React) {
           return React.createElement('a', {
             target: '_self',
             href: '/',
@@ -139,7 +145,7 @@ if (window && window.sonador && window.sonador.host) {
       // Initialize viewer
       initOHIFViewer();
     })
-    .catch(function(err) {
+    .catch(function (err) {
       console.log(
         'Unable to load OHIF configuration from remote config: ',
         window.sonador.config,

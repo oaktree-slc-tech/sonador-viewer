@@ -1,7 +1,7 @@
 {
   "name": "@ohif/extension-vtk",
   "version": "1.12.39",
-  "description": "OHIF extension for VTK.js",
+  "description": "MPR tool for OHIF (VTK.js)",
   "author": "OHIF",
   "license": "MIT",
   "repository": "OHIF/Viewers",
@@ -49,8 +49,8 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",
-    "lodash.throttle": "^4.1.1",
-    "react-vtkjs-viewport": "^0.14.5"
+    "@sonador/react-vtkjs-viewport": "^0.1.0",
+    "lodash.throttle": "^4.1.1"
   },
   "devDependencies": {
     "@ohif/core": "^2.16.33",

@@ -7,6 +7,7 @@ import { ReconstructionIssues } from './../enums.js';
  *
  * @returns {Object} value, reconstructionIssues.
  */
+
 function isDisplaySetReconstructable(instances) {
   if (!instances.length) {
     return { value: false };
@@ -66,12 +67,8 @@ function processSingleframe(instances) {
   // -- Have different orientations within a displaySet.
   for (let ii = 1; ii < n; ++ii) {
     const instance = instances[ii].getData().metadata;
-    const {
-      Rows,
-      Columns,
-      SamplesPerPixel,
-      ImageOrientationPatient,
-    } = instance;
+    const { Rows, Columns, SamplesPerPixel, ImageOrientationPatient } =
+      instance;
 
     if (Rows !== firstImageRows || Columns !== firstImageColumns) {
       reconstructionIssues.push(ReconstructionIssues.VARYING_IMAGESDIMENSIONS);

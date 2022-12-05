@@ -1,15 +1,18 @@
 import throttle from 'lodash.throttle';
+import { vec3 } from 'gl-matrix';
+
 import {
+  getImageData,
   vtkInteractorStyleMPRWindowLevel,
   vtkInteractorStyleRotatableMPRCrosshairs,
   vtkSVGRotatableCrosshairsWidget,
   vtkInteractorStyleMPRRotate,
-} from 'react-vtkjs-viewport';
-import { getImageData } from 'react-vtkjs-viewport';
-import { vec3 } from 'gl-matrix';
+} from '@sonador/react-vtkjs-viewport';
+
+import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants.js';
+
 import setMPRLayout from './utils/setMPRLayout.js';
 import setViewportToVTK from './utils/setViewportToVTK.js';
-import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants.js';
 import OHIFVTKViewport from './OHIFVTKViewport';
 
 const { BlendMode } = Constants;
@@ -98,7 +101,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
     rgbTransferFunction.setRange(lower, upper);
 
-    apis.forEach(api => {
+    apis.forEach((api) => {
       api.updateVOI(windowWidth, windowCenter);
     });
   }
@@ -123,7 +126,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     resetMPRView() {
       // Reset orientation
-      apis.forEach(api => api.resetOrientation());
+      apis.forEach((api) => api.resetOrientation());
 
       // Reset VOI
       if (defaultVOI) setVOI(defaultVOI);
@@ -307,7 +310,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     enableLevelTool: () => {
       function updateVOI(apis, windowWidth, windowCenter) {
-        apis.forEach(api => {
+        apis.forEach((api) => {
           api.updateVOI(windowWidth, windowCenter);
         });
       }
@@ -316,7 +319,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       const callbacks = {
         setOnLevelsChanged: ({ windowCenter, windowWidth }) => {
-          apis.forEach(api => {
+          apis.forEach((api) => {
             const renderWindow = api.genericRenderWindow.getRenderWindow();
 
             renderWindow.render();
@@ -337,19 +340,19 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
     setSlabThickness: ({ slabThickness }) => {
-      apis.forEach(api => {
+      apis.forEach((api) => {
         api.setSlabThickness(slabThickness);
       });
     },
     changeSlabThickness: ({ change }) => {
-      apis.forEach(api => {
+      apis.forEach((api) => {
         const slabThickness = Math.max(api.getSlabThickness() + change, 0.1);
 
         api.setSlabThickness(slabThickness);
       });
     },
     setBlendModeToComposite: () => {
-      apis.forEach(api => {
+      apis.forEach((api) => {
         const renderWindow = api.genericRenderWindow.getRenderWindow();
         const istyle = renderWindow.getInteractor().getInteractorStyle();
 
@@ -367,7 +370,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
     setBlendModeToMaximumIntensity: () => {
-      apis.forEach(api => {
+      apis.forEach((api) => {
         const renderWindow = api.genericRenderWindow.getRenderWindow();
         const mapper = api.volumes[0].getMapper();
         if (mapper.setBlendModeToMaximumIntensity) {
@@ -377,7 +380,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
     setBlendMode: ({ blendMode }) => {
-      apis.forEach(api => {
+      apis.forEach((api) => {
         const renderWindow = api.genericRenderWindow.getRenderWindow();
 
         api.volumes[0].getMapper().setBlendMode(blendMode);
@@ -386,7 +389,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
     mpr2d: async ({ viewports }) => {
-      // TODO push a lot of this backdoor logic lower down to the library level.
+      // Activate 2D MPR view. MPR view creates a 3 panel layout with axial, sagittal, and coronal
+      // layouts of the same volume.
+
+      // Retrieve currently active display set.
       const displaySet =
         viewports.viewportSpecificData[viewports.activeViewportIndex];
 
@@ -396,7 +402,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       const viewportProps = [
         {
-          //Axial
+          // Axial
           orientation: {
             sliceNormal: [0, 0, 1],
             viewUp: [0, -1, 0],
@@ -453,7 +459,8 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       apis[0].svgWidgets.rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
 
       // Check if we have full WebGL 2 support
-      const openGLRenderWindow = apis[0].genericRenderWindow.getOpenGLRenderWindow();
+      const openGLRenderWindow =
+        apis[0].genericRenderWindow.getOpenGLRenderWindow();
 
       if (!openGLRenderWindow.getWebgl2()) {
         // Throw a warning if we don't have WebGL 2 support,

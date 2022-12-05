@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
 import VTKViewport from './VTKViewport';
@@ -5,6 +7,7 @@ import VTKViewport from './VTKViewport';
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
 
 const mapStateToProps = (state, ownProps) => {
+  // Retrieve VTK viewport data kept in the Redux store
   let dataFromStore;
 
   if (state.extensions && state.extensions.vtk) {
@@ -37,19 +40,25 @@ const mapDispatchToProps = (dispatch, ownProps) => {
       dispatch(setViewportActive(viewportIndex));
     },
 
-    setViewportSpecificData: data => {
+    setViewportSpecificData: (data) => {
       dispatch(setViewportSpecificData(viewportIndex, data));
     },
   };
 };
 
 const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
+  // Merge properties from different sources to prevent collissions
+
+  // Add hooks so that it is possible to trigger "afterCreation" callbacks from different sources.
+  // afterCreation is the callback provided by the toolbar module.
+  // componentAfterCreation is the callback passed in directly.
   const { afterCreation } = propsFromState;
+  const { afterCreation: componentAfterCreation } = ownProps;
 
   const props = {
     ...propsFromState,
     ...propsFromDispatch,
-    ...ownProps,
+    ..._.omit(ownProps, 'afterCreation'),
     /**
      * Our component sets up the underlying dom element on "componentDidMount"
      * for use with VTK.
@@ -60,12 +69,15 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
      *
      * A similar approach is taken with the Cornerstone extension.
      */
-    onCreated: api => {
+    onCreated: (api) => {
       // Store the API details for later
       //setViewportSpecificData({ vtkApi: api });
 
       if (afterCreation && typeof afterCreation === 'function') {
         afterCreation(api);
+      }
+      if (componentAfterCreation && _.isFunction(componentAfterCreation)) {
+        componentAfterCreation(api);
       }
     },
   };

@@ -8,7 +8,13 @@ import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.
 import { version } from '../package.json';
 const { studyMetadataManager } = OHIF.utils;
 
-export default {
+const SegmentationPanelTabUpdatedEvent = 'segmentation-panel-tab-updated';
+
+const eventTypes = {
+  SegmentationPanelTabUpdatedEvent,
+};
+
+const segmentationExtension = {
   /**
    * Only required property. Should be a unique value across all extensions.
    */
@@ -30,9 +36,9 @@ export default {
   getPanelModule({ commandsManager, api, servicesManager }) {
     const { UINotificationService, LoggerService } = servicesManager.services;
 
-    const ExtendedSegmentationPanel = props => {
+    const ExtendedSegmentationPanel = (props) => {
       const { activeContexts } = api.hooks.useAppContext();
-      const onDisplaySetLoadFailureHandler = error => {
+      const onDisplaySetLoadFailureHandler = (error) => {
         const message =
           error.message.includes('orthogonal') ||
           error.message.includes('oblique')
@@ -49,7 +55,7 @@ export default {
         });
       };
 
-      const segmentItemClickHandler = data => {
+      const segmentItemClickHandler = (data) => {
         commandsManager.runCommand('jumpToImage', data);
         commandsManager.runCommand('jumpToSlice', data);
       };
@@ -61,7 +67,7 @@ export default {
         });
       };
 
-      const onConfigurationChangeHandler = configuration => {
+      const onConfigurationChangeHandler = (configuration) => {
         commandsManager.runCommand('setSegmentationConfiguration', {
           globalOpacity: configuration.fillAlpha,
           outlineThickness: configuration.outlineWidth,
@@ -89,8 +95,6 @@ export default {
       );
     };
 
-    const SegmentationPanelTabUpdatedEvent = 'segmentation-panel-tab-updated';
-
     /**
      * Trigger's an event to update the state of the panel's RoundedButtonGroup.
      *
@@ -99,7 +103,7 @@ export default {
      *
      * @param {object} data
      */
-    const triggerSegmentationPanelTabUpdatedEvent = data => {
+    const triggerSegmentationPanelTabUpdatedEvent = (data) => {
       const event = new CustomEvent(SegmentationPanelTabUpdatedEvent, {
         detail: data,
       });
@@ -184,3 +188,6 @@ export default {
   },
   getSopClassHandlerModule,
 };
+
+export default segmentationExtension;
+export { eventTypes };

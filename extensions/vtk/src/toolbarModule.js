@@ -1,5 +1,5 @@
 import SlabThicknessToolbarComponent from './toolbarComponents/SlabThicknessToolbarComponent';
-import VTKMPRToolbarButton from './toolbarComponents/VTKMPRToolbarButton';
+import { VTKMPRToolbarButton } from './toolbarComponents/VTKMPRToolbarButton';
 
 const TOOLBAR_BUTTON_TYPES = {
   COMMAND: 'command',
@@ -18,7 +18,7 @@ const definitions = [
   },
   {
     id: 'WWWC',
-    label: 'WWWC',
+    label: 'Levels',
     icon: 'level',
     //
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
