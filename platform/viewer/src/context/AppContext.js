@@ -7,12 +7,13 @@ let AppContext = React.createContext({});
 export const CONTEXTS = {
   CORNERSTONE: 'ACTIVE_VIEWPORT::CORNERSTONE',
   VTK: 'ACTIVE_VIEWPORT::VTK',
+  VIEWER3DCT: 'ACTIVE_VIEWPORT::VIEWER3DCT',
 };
 
 export const useAppContext = () => useContext(AppContext);
 
 export const AppProvider = ({ children, config }) => {
-  const activeContexts = useSelector(state => getActiveContexts(state));
+  const activeContexts = useSelector((state) => getActiveContexts(state));
 
   return (
     <AppContext.Provider value={{ appConfig: config, activeContexts }}>
@@ -21,7 +22,7 @@ export const AppProvider = ({ children, config }) => {
   );
 };
 
-export const withAppContext = Component => {
+export const withAppContext = (Component) => {
   return function WrappedComponent(props) {
     const { appConfig, activeContexts } = useAppContext();
     return (

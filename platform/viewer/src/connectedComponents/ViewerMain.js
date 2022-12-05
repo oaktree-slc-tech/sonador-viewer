@@ -29,8 +29,8 @@ class ViewerMain extends Component {
 
   getDisplaySets(studies) {
     const displaySets = [];
-    studies.forEach(study => {
-      study.displaySets.forEach(dSet => {
+    studies.forEach((study) => {
+      study.displaySets.forEach((dSet) => {
         if (!dSet.plugin) {
           dSet.plugin = 'cornerstone';
         }
@@ -42,7 +42,7 @@ class ViewerMain extends Component {
   }
 
   findDisplaySet(studies, StudyInstanceUID, displaySetInstanceUID) {
-    const study = studies.find(study => {
+    const study = studies.find((study) => {
       return study.StudyInstanceUID === StudyInstanceUID;
     });
 
@@ -50,7 +50,7 @@ class ViewerMain extends Component {
       return;
     }
 
-    return study.displaySets.find(displaySet => {
+    return study.displaySets.find((displaySet) => {
       return displaySet.displaySetInstanceUID === displaySetInstanceUID;
     });
   }
@@ -69,7 +69,7 @@ class ViewerMain extends Component {
   componentDidUpdate(prevProps) {
     const prevViewportAmount = prevProps.layout.viewports.length;
     const viewportAmount = this.props.layout.viewports.length;
-    const isVtk = this.props.layout.viewports.some(vp => !!vp.vtk);
+    const isVtk = this.props.layout.viewports.some((vp) => !!vp.vtk);
 
     if (
       this.props.studies !== prevProps.studies ||
@@ -108,9 +108,9 @@ class ViewerMain extends Component {
 
       const foundDisplaySet =
         displaySets.find(
-          ds =>
+          (ds) =>
             !dirtyViewportPanes.some(
-              v => v.displaySetInstanceUID === ds.displaySetInstanceUID
+              (v) => v.displaySetInstanceUID === ds.displaySetInstanceUID
             )
         ) || displaySets[displaySets.length - 1];
 
@@ -144,7 +144,7 @@ class ViewerMain extends Component {
     if (displaySet.isDerived) {
       const { Modality } = displaySet;
       if (Modality === 'SEG' && servicesManager) {
-        const onDisplaySetLoadFailureHandler = error => {
+        const onDisplaySetLoadFailureHandler = (error) => {
           const message =
             error.message.includes('orthogonal') ||
             error.message.includes('oblique')
@@ -161,17 +161,15 @@ class ViewerMain extends Component {
           });
         };
 
-        const {
-          referencedDisplaySet,
-          activatedLabelmapPromise,
-        } = displaySet.getSourceDisplaySet(
-          this.props.studies,
-          true,
-          onDisplaySetLoadFailureHandler
-        );
+        const { referencedDisplaySet, activatedLabelmapPromise } =
+          displaySet.getSourceDisplaySet(
+            this.props.studies,
+            true,
+            onDisplaySetLoadFailureHandler
+          );
         displaySet = referencedDisplaySet;
 
-        activatedLabelmapPromise.then(activatedLabelmapIndex => {
+        activatedLabelmapPromise.then((activatedLabelmapIndex) => {
           const selectionFired = new CustomEvent(
             'extensiondicomsegmentationsegselected',
             {
@@ -235,7 +233,7 @@ class ViewerMain extends Component {
   componentWillUnmount() {
     // Clear the entire viewport specific data
     const { viewportSpecificData } = this.props;
-    Object.keys(viewportSpecificData).forEach(viewportIndex => {
+    Object.keys(viewportSpecificData).forEach((viewportIndex) => {
       this.props.clearViewportSpecificData(viewportIndex);
     });
 

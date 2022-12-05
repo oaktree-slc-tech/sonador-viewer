@@ -8,7 +8,7 @@ const { setActiveViewportSpecificData } = OHIF.redux.actions;
 
 const mapDispatchToProps = (dispatch, ownProps) => {
   return {
-    onThumbnailClick: displaySetInstanceUID => {
+    onThumbnailClick: (displaySetInstanceUID) => {
       let displaySet = findDisplaySetByUID(
         ownProps.studyMetadata,
         displaySetInstanceUID
@@ -19,7 +19,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
       if (displaySet.isDerived) {
         const { Modality } = displaySet;
         if (Modality === 'SEG' && servicesManager) {
-          const onDisplaySetLoadFailureHandler = error => {
+          const onDisplaySetLoadFailureHandler = (error) => {
             const message =
               error.message.includes('orthogonal') ||
               error.message.includes('oblique')
@@ -37,17 +37,15 @@ const mapDispatchToProps = (dispatch, ownProps) => {
             });
           };
 
-          const {
-            referencedDisplaySet,
-            activatedLabelmapPromise,
-          } = displaySet.getSourceDisplaySet(
-            ownProps.studyMetadata,
-            true,
-            onDisplaySetLoadFailureHandler
-          );
+          const { referencedDisplaySet, activatedLabelmapPromise } =
+            displaySet.getSourceDisplaySet(
+              ownProps.studyMetadata,
+              true,
+              onDisplaySetLoadFailureHandler
+            );
           displaySet = referencedDisplaySet;
 
-          activatedLabelmapPromise.then(activatedLabelmapIndex => {
+          activatedLabelmapPromise.then((activatedLabelmapIndex) => {
             const selectionFired = new CustomEvent(
               'extensiondicomsegmentationsegselected',
               {
@@ -104,9 +102,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
   };
 };
 
-const ConnectedStudyBrowser = connect(
-  null,
-  mapDispatchToProps
-)(StudyBrowser);
+const ConnectedStudyBrowser = connect(null, mapDispatchToProps)(StudyBrowser);
 
 export default ConnectedStudyBrowser;

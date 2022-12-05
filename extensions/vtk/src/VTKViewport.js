@@ -1,10 +1,10 @@
 import React, { useEffect, useCallback } from 'react';
-import { View2D } from 'react-vtkjs-viewport';
+import { View2D } from '@sonador/react-vtkjs-viewport';
 import PropTypes from 'prop-types';
 
 import './VTKViewport.css';
 
-const VTKViewport = props => {
+const VTKViewport = (props) => {
   const style = { width: '100%', height: '100%', position: 'relative' };
 
   const setViewportActiveHandler = useCallback(() => {
@@ -17,7 +17,7 @@ const VTKViewport = props => {
   });
 
   useEffect(() => {
-    const handleScrollEvent = evt => {
+    const handleScrollEvent = (evt) => {
       const vtkViewportApiReference = props.onScroll(props.viewportIndex) || {};
       const viewportUID = vtkViewportApiReference.uid;
       const viewportWasScrolled = viewportUID === evt.detail.uid;

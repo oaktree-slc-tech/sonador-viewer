@@ -74,7 +74,7 @@ async function loadAndCacheDerivedDisplaySets(
   // Filter by type
   const displaySetsPerModality = {};
 
-  derivedDisplaySets.forEach(displaySet => {
+  derivedDisplaySets.forEach((displaySet) => {
     const Modality = displaySet.Modality;
 
     if (displaySetsPerModality[Modality] === undefined) {
@@ -86,15 +86,15 @@ async function loadAndCacheDerivedDisplaySets(
 
   // For each type, see if any are loaded, if not load the most recent.
   await Promise.all(
-    Object.keys(displaySetsPerModality).map(async key => {
+    Object.keys(displaySetsPerModality).map(async (key) => {
       const displaySets = displaySetsPerModality[key];
 
-      const isLoaded = displaySets.some(displaySet => displaySet.isLoaded);
+      const isLoaded = displaySets.some((displaySet) => displaySet.isLoaded);
       if (isLoaded) {
         return;
       }
 
-      if (displaySets.some(displaySet => displaySet.loadError)) {
+      if (displaySets.some((displaySet) => displaySet.loadError)) {
         return;
       }
 
@@ -102,7 +102,7 @@ async function loadAndCacheDerivedDisplaySets(
       let recentDateTime = 0;
       let recentDisplaySet = displaySets[0];
 
-      displaySets.forEach(displaySet => {
+      displaySets.forEach((displaySet) => {
         const dateTime = Number(
           `${displaySet.SeriesDate}${displaySet.SeriesTime}`
         );
@@ -118,7 +118,7 @@ async function loadAndCacheDerivedDisplaySets(
           typeof recentDisplaySet.getSourceDisplaySet === 'function'
         ) {
           if (recentDisplaySet.Modality === 'SEG' && logger) {
-            const onDisplaySetLoadFailureHandler = error => {
+            const onDisplaySetLoadFailureHandler = (error) => {
               const message =
                 error.message.includes('orthogonal') ||
                 error.message.includes('oblique')
@@ -138,14 +138,12 @@ async function loadAndCacheDerivedDisplaySets(
 
             let activatedLabelmapIndex = -1;
             while (activatedLabelmapIndex == -1) {
-              const {
-                referencedDisplaySet,
-                activatedLabelmapPromise,
-              } = await recentDisplaySet.getSourceDisplaySet(
-                studies,
-                true,
-                onDisplaySetLoadFailureHandler
-              );
+              const { referencedDisplaySet, activatedLabelmapPromise } =
+                await recentDisplaySet.getSourceDisplaySet(
+                  studies,
+                  true,
+                  onDisplaySetLoadFailureHandler
+                );
 
               activatedLabelmapIndex = await activatedLabelmapPromise;
               const selectionFired = new CustomEvent(
@@ -160,7 +158,7 @@ async function loadAndCacheDerivedDisplaySets(
                 `${recentDisplaySet.SeriesDate}${recentDisplaySet.SeriesTime}`
               );
               recentDateTime = 0;
-              displaySets.forEach(displaySet => {
+              displaySets.forEach((displaySet) => {
                 const dateTime = Number(
                   `${displaySet.SeriesDate}${displaySet.SeriesTime}`
                 );

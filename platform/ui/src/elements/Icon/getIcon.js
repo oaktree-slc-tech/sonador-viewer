@@ -25,6 +25,7 @@ import createComment from './icons/create-comment.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
+import viewer3d01 from './icons/3d-viewer-alt1.svg';
 import d3Rotate from './icons/3d-rotate.svg';
 import database from './icons/database.svg';
 import dotCircle from './icons/dot-circle.svg';
@@ -90,7 +91,6 @@ import eye from './icons/eye.svg';
 import eyeClosed from './icons/eye-closed.svg';
 import envelopeSquare from './icons/envelope-square.svg';
 
-
 const ICONS = {
   eye,
   'eye-closed': eyeClosed,
@@ -105,6 +105,7 @@ const ICONS = {
   'sort-down': sortDown,
   info,
   cube,
+  viewer3d01,
   crosshairs,
   'dot-circle': dotCircle,
   'angle-left': angleLeft,

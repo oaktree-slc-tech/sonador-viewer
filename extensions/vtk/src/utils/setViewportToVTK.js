@@ -1,4 +1,4 @@
-import setLayoutAndViewportData from './setLayoutAndViewportData.js';
+import { setLayoutAndViewportData } from '@ohif/ui';
 
 export default function setViewportToVTK(
   displaySet,
@@ -20,7 +20,7 @@ export default function setViewportToVTK(
       // plugin: 'vtk',
       vtk: {
         mode: 'mpr', // TODO: not used
-        afterCreation: api => {
+        afterCreation: (api) => {
           resolve(api);
         },
       },
