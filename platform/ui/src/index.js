@@ -81,6 +81,20 @@ const eventTypes = {
   sidebar: {
     toggle: 'ohif:ui:side-bar:toggle',
   },
+  viewport: {
+    update: 'ohif:ui:viewport:update',
+  },
+};
+
+const TOOLBAR_BUTTON_TYPES = {
+  COMMAND: 'command',
+  SET_TOOL_ACTIVE: 'setToolActive',
+  BUILT_IN: 'builtIn',
+};
+
+const TOOLBAR_BUTTON_BEHAVIORS = {
+  CINE: 'CINE',
+  DOWNLOAD_SCREEN_SHOT: 'DOWNLOAD_SCREEN_SHOT',
 };
 
 export {
@@ -157,6 +171,10 @@ export {
   viewerbaseDisplaySetReconstructable,
   setLayoutAndViewportData,
   setMultiPanelLayout,
+
+  // Constants
+  TOOLBAR_BUTTON_TYPES,
+  TOOLBAR_BUTTON_BEHAVIORS,
 
   // Events
   eventTypes,

@@ -14,6 +14,7 @@ import { StudyLoadingListener } from './StudyLoadingListener';
 import { StudyMetadataSource } from './StudyMetadataSource';
 import { StudyPrefetcher } from './StudyPrefetcher';
 import { TypeSafeCollection } from './TypeSafeCollection';
+import { TypedArrayProp } from './TypedArrayProp.js';
 
 export {
   OHIFStudyMetadataSource,
@@ -51,6 +52,7 @@ const classes = {
   TypeSafeCollection,
   OHIFError,
   StudyMetadataSource,
+  TypedArrayProp,
 };
 
 export default classes;

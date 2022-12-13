@@ -29,9 +29,7 @@ import withCommandsManager from './withCommandsManager.js';
 import { version } from '../package.json';
 
 const OHIFVTKViewport = asyncComponent(() =>
-  retryImport(() =>
-    import(/* webpackChunkName: "OHIFVTKViewport" */ './OHIFVTKViewport.js')
-  )
+  retryImport(() => import('./OHIFVTKViewport.js'))
 );
 
 // Tools for working with VTK data

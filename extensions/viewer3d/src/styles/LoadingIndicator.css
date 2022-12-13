@@ -1,0 +1,15 @@
+.ohif-m3d-model-container .loadingIndicator {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+}
+
+.ohif-m3d-model-container .loadingIndicator .indicatorContents {
+  font-weight: 300;
+  position: absolute;
+  font-size: 18px;
+  text-align: center;
+  top: 50%;
+  width: 100%;
+}

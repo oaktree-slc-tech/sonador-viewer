@@ -7,7 +7,7 @@ import VTKVolumeViewport from './VTKVolumeViewport.js';
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
 
 const mapStateToProps = (state, ownProps) => {
-  // Retrieve global viewport properties for CT volume rendering viewport
+  // Retrieve global viewport properties for volume rendering viewport
   let dataFromStore;
 
   // Retrieve parsed 3D volume viewer options from data store

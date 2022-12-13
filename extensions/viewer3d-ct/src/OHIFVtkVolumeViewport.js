@@ -169,16 +169,17 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
   }
 
   resizeViewport() {
+    // Resize VTK.js render window
     if (this.api && this.api.genericRenderWindow) {
       this.api.genericRenderWindow.resize();
     }
   }
 
   componentDidMount() {
-    // Initialize component
+    // Retrieve image volume and initialize component
     this.boundResizeViewport = this.resizeViewport.bind(this);
 
-    // Subscribe to VTK tab events in order update component after UI changes
+    // Subscribe to OHIF tab events in order update component after UI changes
     document.addEventListener(
       segmentationEventTypes.SegmentationPanelTabUpdatedEvent,
       this.boundResizeViewport
@@ -196,6 +197,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     const { displaySet } = this.props.viewportData;
     const prevDisplaySet = prevProps.viewportData.displaySet;
 
+    // Display set changed, re-render component
     if (
       displaySet.displaySetInstanceUID !==
         prevDisplaySet.displaySetInstanceUID ||
@@ -208,7 +210,6 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
   componentWillUnmount() {
     // Remove event handlers and reactive logic for viewport
-    console.log('Remove reactive logic');
 
     // Unsubscribe from VTK tab events
     document.removeEventListener(
@@ -219,6 +220,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
       uiEvents.sidebar.toggle,
       this.boundResizeViewport
     );
+    this.api = null;
   }
 
   render() {

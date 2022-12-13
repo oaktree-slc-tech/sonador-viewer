@@ -6,17 +6,16 @@ import {
   viewerbaseGetDisplaySet,
   viewerbaseDisplaySetReconstructable,
 } from '@ohif/ui';
-import { utils } from '@ohif/core';
+import { utils, redux } from '@ohif/core';
 
 const { studyMetadataManager } = utils;
-
-let isVisible = false;
 
 const _isCTVolumeReconstructable = (
   viewportSpecificData = {},
   activeViewportIndex
 ) => {
   // Determine if the series instance supports 3D volume reconstruction
+
   try {
     // Determine if the displayset supports 3D reconstruction
     let isVisible = viewerbaseDisplaySetReconstructable(
@@ -54,18 +53,12 @@ function Viewer3DCTToolbarButton({
   const { id, label, icon } = button;
 
   // Determine which viewport is active
-  const { viewportSpecificData, activeViewportIndex } = useSelector((state) => {
-    const { viewports = {} } = state;
-    const { viewportSpecificData, activeViewportIndex } = viewports;
+  const { viewportSpecificData, activeViewportIndex } = useSelector(
+    redux.selectors.getActiveViewportData
+  );
 
-    return {
-      viewportSpecificData,
-      activeViewportIndex,
-    };
-  });
-
-  // Should the 3D viewer button be visible
-  isVisible = _isCTVolumeReconstructable(
+  // Should the 3D volume rendering button be visible
+  const isVisible = _isCTVolumeReconstructable(
     viewportSpecificData,
     activeViewportIndex
   );

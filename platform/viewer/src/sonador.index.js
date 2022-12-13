@@ -31,6 +31,7 @@ import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomEkgExtension from '@ohif/extension-dicom-ecg';
 import OHIF3DCTVolumeViewerExtension from '@ohif/extension-viewer3dct';
+import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -67,9 +68,10 @@ const initOHIFViewer = function () {
       OHIFDicomRtExtension,
       OHIFDicomEkgExtension,
 
-      // 3D Volume Visualization
+      // 3D Visualization
       OHIFVTKExtension,
       OHIF3DCTVolumeViewerExtension,
+      OHIFM3DViewerExtension,
 
       // Metadata
       OHIFDicomTagBrowserExtension,
@@ -88,7 +90,6 @@ const initOHIFViewer = function () {
       })
         .then((response) => response.json())
         .then(function (servers) {
-          console.log(servers, 'here');
           if (!Array.isArray(servers)) servers = [servers];
 
           // Set dicomWeb server list and fetch studies

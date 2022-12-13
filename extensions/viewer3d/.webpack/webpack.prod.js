@@ -19,7 +19,7 @@ module.exports = (env, argv) => {
     },
     output: {
       path: ROOT_DIR,
-      library: 'OHIFExtViewer3DCT',
+      library: 'OHIFExtViewerM3D',
       libraryTarget: 'umd',
       libraryExport: 'default',
       filename: pkg.main,

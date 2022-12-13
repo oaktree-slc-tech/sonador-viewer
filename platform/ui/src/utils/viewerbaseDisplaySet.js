@@ -6,7 +6,7 @@ const viewerbaseGetDisplaySet = (
   viewportSpecificData = {},
   activeViewportIndex
 ) => {
-  // Retrieve the desired displayset from the psecified viewport specific data and active index
+  // Retrieve the displayset for the currently active viewport
 
   const { displaySetInstanceUID, StudyInstanceUID } =
     viewportSpecificData[activeViewportIndex];
@@ -30,23 +30,31 @@ const viewerbaseDisplaySetReconstructable = (
 ) => {
   // Determine if the specified viewport data supports 3D reconstruction
 
-  if (!viewportSpecificData[activeViewportIndex]) {
-    return false;
+  try {
+    if (!viewportSpecificData[activeViewportIndex]) {
+      return false;
+    }
+
+    // Retrieve study and displayset
+    const { study, displaySet } = viewerbaseGetDisplaySet(
+      viewportSpecificData,
+      activeViewportIndex
+    );
+
+    if (!study || !displaySet) {
+      return false;
+    }
+
+    // Determine if the displayset supports 3D reconstruction
+    return displaySet.isReconstructable;
+  } catch (err) {
+    console.log(
+      'Unable to determine if the display set was reconstructable due to an error. ',
+      err
+    );
   }
 
-  // Retrieve study and displayset
-  const { study, displaySet } = viewerbaseGetDisplaySet(
-    viewportSpecificData,
-    activeViewportIndex
-  );
-
-  if (!study || !displaySet) {
-    return false;
-  }
-
-  // Determine if the displayset supports 3D reconstruction
-  return displaySet.isReconstructable;
+  return false;
 };
 
-export { viewerbaseGetDisplaySet };
-export { viewerbaseDisplaySetReconstructable };
+export { viewerbaseGetDisplaySet, viewerbaseDisplaySetReconstructable };

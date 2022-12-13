@@ -1,12 +1,13 @@
 import React from 'react';
-import OHIFDicomPDFSopClassHandler from './OHIFDicomPDFSopClassHandler.js';
+
 import { version } from '../package.json';
+import OHIFDicomPDFSopClassHandler from './OHIFDicomPDFSopClassHandler.js';
 
 const Component = React.lazy(() => {
   return import('./ConnectedOHIFDicomPDFViewer');
 });
 
-const ConnectedOHIFDicomPDFViewer = props => {
+const ConnectedOHIFDicomPDFViewer = (props) => {
   return (
     <React.Suspense fallback={<div>Loading...</div>}>
       <Component {...props} />
@@ -20,10 +21,10 @@ export default {
    */
   id: 'pdf',
   version,
-  getViewportModule() {
-    return ConnectedOHIFDicomPDFViewer;
-  },
   getSopClassHandlerModule() {
     return OHIFDicomPDFSopClassHandler;
+  },
+  getViewportModule() {
+    return ConnectedOHIFDicomPDFViewer;
   },
 };
