@@ -3,16 +3,22 @@
 All notable changes to this project will be documented in this file. See
 [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-## [2.16.33](https://github.com/OHIF/Viewers/compare/@ohif/core@2.16.32...@ohif/core@2.16.33) (2022-11-12)
-
+## [2.16.34](https://github.com/OHIF/Viewers/compare/@ohif/core@2.16.33...@ohif/core@2.16.34) (2022-12-12)
 
 ### Bug Fixes
 
-* handle missing ReferencedInstanceSequence attribute ([#2786](https://github.com/OHIF/Viewers/issues/2786)) ([4473807](https://github.com/OHIF/Viewers/commit/44738078dbd8dc6b27d2d669e25417e37371f48d))
+- [#2964](https://github.com/OHIF/Viewers/issues/2964) Reword message for
+  segmentation error loading due to orientation tolerance
+  ([#3017](https://github.com/OHIF/Viewers/issues/3017))
+  ([597ac11](https://github.com/OHIF/Viewers/commit/597ac11c4daee1b1e14148804551e20611cfef08))
 
+## [2.16.33](https://github.com/OHIF/Viewers/compare/@ohif/core@2.16.32...@ohif/core@2.16.33) (2022-11-12)
 
+### Bug Fixes
 
-
+- handle missing ReferencedInstanceSequence attribute
+  ([#2786](https://github.com/OHIF/Viewers/issues/2786))
+  ([4473807](https://github.com/OHIF/Viewers/commit/44738078dbd8dc6b27d2d669e25417e37371f48d))
 
 ## [2.16.32](https://github.com/OHIF/Viewers/compare/@ohif/core@2.16.31...@ohif/core@2.16.32) (2022-11-02)
 
