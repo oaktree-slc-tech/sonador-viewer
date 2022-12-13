@@ -1,10 +1,7 @@
+import { TOOLBAR_BUTTON_TYPES } from '@ohif/ui';
+
 import SlabThicknessToolbarComponent from './toolbarComponents/SlabThicknessToolbarComponent';
 import { VTKMPRToolbarButton } from './toolbarComponents/VTKMPRToolbarButton';
-
-const TOOLBAR_BUTTON_TYPES = {
-  COMMAND: 'command',
-  SET_TOOL_ACTIVE: 'setToolActive',
-};
 
 const definitions = [
   {

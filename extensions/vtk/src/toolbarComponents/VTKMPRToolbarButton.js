@@ -1,12 +1,11 @@
 import React from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
+
+import { utils, redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseDisplaySetReconstructable } from '@ohif/ui';
-import { utils } from '@ohif/core';
 
 const { studyMetadataManager } = utils;
-
-let isVisible = true;
 
 function VTKMPRToolbarButton({
   parentContext,
@@ -17,17 +16,11 @@ function VTKMPRToolbarButton({
   className,
 }) {
   const { id, label, icon } = button;
-  const { viewportSpecificData, activeViewportIndex } = useSelector((state) => {
-    const { viewports = {} } = state;
-    const { viewportSpecificData, activeViewportIndex } = viewports;
+  const { viewportSpecificData, activeViewportIndex } = useSelector(
+    redux.selectors.getActiveViewportData
+  );
 
-    return {
-      viewportSpecificData,
-      activeViewportIndex,
-    };
-  });
-
-  isVisible = viewerbaseDisplaySetReconstructable(
+  const isVisible = viewerbaseDisplaySetReconstructable(
     viewportSpecificData,
     activeViewportIndex
   );

@@ -63,6 +63,7 @@
     "@ohif/extension-vtk": "^1.12.39",
     "@ohif/extension-dicom-ecg": "^X.X.X",
     "@ohif/extension-viewer3dct": "^0.1.0",
+    "@ohif/extension-viewerm3d": "^0.1.0",
     "@ohif/i18n": "^0.53.0",
     "@ohif/ui": "^1.10.10",
     "@tanem/react-nprogress": "^1.1.25",

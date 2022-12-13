@@ -3,19 +3,26 @@ import dicomParser from 'dicom-parser';
 import PDFJS from 'pdfjs-dist';
 import PropTypes from 'prop-types';
 
-import TypedArrayProp from './TypedArrayProp';
+import OHIF from '@ohif/core';
+const { TypedArrayProp } = OHIF.classes;
+
 import './DicomPDFViewport.css';
 
 import pdfjsBuild from 'pdfjs-dist/build/pdf';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
+
+import {
+  SOP_CLASS_UIDS,
+  PDF_DOCUMENT_MIMETYPE,
+} from './OHIFDicomPDFSopClassHandler.js';
+
 pdfjsBuild.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-// TODO: Should probably use dcmjs for this
-const SOP_CLASS_UIDS = {
-  ENCAPSULATED_PDF: '1.2.840.10008.5.1.4.1.1.104.1',
-};
+const { createEncapsulatedDocumentFileUrl } = OHIF.utils;
 
 class DicomPDFViewport extends Component {
+  // Viewport instance able to display DICOM encapsulated PDF documents
+
   constructor(props) {
     super(props);
 
@@ -46,15 +53,18 @@ class DicomPDFViewport extends Component {
   };
 
   async componentDidMount() {
-    const { rawPdf } = this.props
+    const { rawPdf } = this.props;
     const dataSet = !rawPdf && this.parseByteArray(this.props.byteArray);
     const fileURL = this.getPDFFileUrl(dataSet, this.props.byteArray);
 
-    this.setState(state => ({ ...state, fileURL }));
+    this.setState((state) => ({ ...state, fileURL }));
 
     if (!this.props.useNative) {
       const pdf = await PDFJS.getDocument(fileURL).promise;
-      this.setState(state => ({ ...state, pdf }), () => this.updatePDFCanvas());
+      this.setState(
+        (state) => ({ ...state, pdf }),
+        () => this.updatePDFCanvas()
+      );
     }
   }
 
@@ -100,7 +110,8 @@ class DicomPDFViewport extends Component {
   }
 
   getPDFFileUrl = (dataSet, byteArray) => {
-    let pdfByteArray = byteArray;
+    // Unpack the PDF document data to a file URL
+    // @returns fileURL which can be used to load the PDF file
 
     if (dataSet) {
       const SOPClassUID = dataSet.string('x00080016');
@@ -108,20 +119,14 @@ class DicomPDFViewport extends Component {
       if (SOPClassUID !== SOP_CLASS_UIDS.ENCAPSULATED_PDF) {
         throw new Error('This is not a DICOM-encapsulated PDF');
       }
-
-      const fileTag = dataSet.elements.x00420011;
-      const offset = fileTag.dataOffset;
-      const remainder = offset + fileTag.length;
-      pdfByteArray = dataSet.byteArray.slice(offset, remainder);
     }
 
-    const PDF = new Blob([pdfByteArray], { type: 'application/pdf' });
-    const fileURL = URL.createObjectURL(PDF);
-
-    return fileURL;
+    return createEncapsulatedDocumentFileUrl(dataSet, byteArray, {
+      mimetype: PDF_DOCUMENT_MIMETYPE,
+    });
   };
 
-  onPageChange = async event => {
+  onPageChange = async (event) => {
     const { currentPageIndex, pdf } = this.state;
     let newPageIndex = currentPageIndex;
 
@@ -146,7 +151,7 @@ class DicomPDFViewport extends Component {
       }
     }
 
-    this.setState(state => ({ ...state, currentPageIndex: newPageIndex }));
+    this.setState((state) => ({ ...state, currentPageIndex: newPageIndex }));
   };
 
   onZoomChange = () => {
@@ -162,28 +167,25 @@ class DicomPDFViewport extends Component {
       newZoomValue -= 0.25;
     }
 
-    this.setState(state => ({ ...state, scale: newZoomValue }));
+    this.setState((state) => ({ ...state, scale: newZoomValue }));
   };
 
-  parseByteArray = byteArray => {
+  parseByteArray = (byteArray) => {
     const options = { untilTag: '' };
 
     let dataSet;
     try {
       dataSet = dicomParser.parseDicom(byteArray, options);
     } catch (error) {
-      this.setState(state => ({ ...state, error }));
+      this.setState((state) => ({ ...state, error }));
     }
 
     return dataSet;
   };
 
   setViewportActiveHandler = () => {
-    const {
-      setViewportActive,
-      viewportIndex,
-      activeViewportIndex,
-    } = this.props;
+    const { setViewportActive, viewportIndex, activeViewportIndex } =
+      this.props;
 
     if (viewportIndex !== activeViewportIndex) {
       setViewportActive(viewportIndex);
@@ -237,11 +239,11 @@ class DicomPDFViewport extends Component {
               <div id="pdf-canvas-container">
                 <canvas
                   id="pdf-canvas"
-                  ref={canvas => (this.canvas = canvas)}
+                  ref={(canvas) => (this.canvas = canvas)}
                 />
                 <div
                   id="text-layer"
-                  ref={textLayer => (this.textLayer = textLayer)}
+                  ref={(textLayer) => (this.textLayer = textLayer)}
                 ></div>
               </div>
             </div>

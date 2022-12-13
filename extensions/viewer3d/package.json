@@ -1,7 +1,7 @@
 {
-  "name": "@ohif/extension-viewer3dct",
+  "name": "@ohif/extension-viewerm3d",
   "version": "0.1.0",
-  "description": "Volume rendering extension supporting CT for OHIF",
+  "description": "Support for viewing 3D files (STL and GLB) within OHIF",
   "author": "Sonador",
   "license": "MIT",
   "repository": "OHIF/Viewers",
@@ -30,16 +30,12 @@
   "peerDependencies": {
     "@ohif/core": "^0.50.0",
     "@ohif/ui": "^0.50.0",
-    "@ohif/extension-vtk": "^0.50.0",
     "prop-types": "^15.6.2",
     "react": "^16.8.6",
     "react-dom": "^16.8.6"
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",
-    "@sonador/react-vtkjs-viewport": "^0.1.0",
-    "@cornerstonejs/core": "^0.16.3",
-    "@cornerstonejs/streaming-image-volume-loader": "^0.5.3",
-    "@cornerstonejs/tools": "^0.24.3"
+    "three": "^0.147.0"
   }
 }

@@ -1,17 +1,18 @@
-import { LayoutButton } from '@ohif/ui';
-import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
+
+import OHIF from '@ohif/core';
+import { LayoutButton } from '@ohif/ui';
 
 const { setLayout, setViewportActive } = OHIF.redux.actions;
 
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   return {
     currentLayout: state.viewports.layout,
     activeViewportIndex: state.viewports.activeViewportIndex,
   };
 };
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
     // TODO: Change if layout switched becomes more complex
     onChange: (selectedCell, currentLayout, activeViewportIndex) => {
@@ -53,7 +54,7 @@ const mergeProps = (propsFromState, propsFromDispatch) => {
   const { currentLayout, activeViewportIndex } = propsFromState;
 
   return {
-    onChange: selectedCell =>
+    onChange: (selectedCell) =>
       onChangeFromDispatch(selectedCell, currentLayout, activeViewportIndex),
   };
 };

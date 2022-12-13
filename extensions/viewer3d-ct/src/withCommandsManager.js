@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function withCommandsManager(Component, commandsManager = {}) {
-  // Add viewer event handlers to the viewport to synchronize volumes with active slices and window controls
+  // Add viewer event handlers which interface with the OHIF commands manager
 
   return class WithCommandsManager extends React.Component {
     render() {

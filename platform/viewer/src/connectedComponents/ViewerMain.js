@@ -1,3 +1,5 @@
+import { eventTypes as uiEvents } from '@ohif/ui';
+
 import './ViewerMain.css';
 import { servicesManager } from './../App.js';
 import { Component } from 'react';
@@ -208,6 +210,14 @@ class ViewerMain extends Component {
     }
 
     this.props.setViewportSpecificData(viewportIndex, displaySet);
+
+    // Trigger viewport event
+    const e = new CustomEvent(uiEvents.viewport.update, {
+      viewportIndex,
+      StudyInstanceUID,
+      displaySet,
+    });
+    document.dispatchEvent(e);
   };
 
   render() {

@@ -13,9 +13,10 @@ const OHIFVtkVolumeViewport = asyncComponent(() =>
   retryImport(() => import('./OHIFVtkVolumeViewport.js'))
 );
 
-// 3D CT Volume Rendering Plugin: provide CT volume rendering capabilities
+// 3D Volume Rendering Plugin: provide volume rendering capabilities
 export default {
   id: 'viewer3dct',
+  version,
 
   getViewportModule({ commandsManager, servicesManager }) {
     // Create connected volume rendering viewport
@@ -29,7 +30,6 @@ export default {
     );
     return withCommandsManager(ExtendedVtkVolumeViewport, commandsManager);
   },
-
   getToolbarModule() {
     return toolbarModule;
   },

@@ -5,11 +5,18 @@ import toolbarModule from './toolbarModule.js';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import { version } from '../package.json';
 
+import { setEnabledElement, getEnabledElement } from './state';
+
+const cornerstoneState = {
+  setEnabledElement,
+  getEnabledElement,
+};
+
 const Component = React.lazy(() => {
   return import('./OHIFCornerstoneViewport');
 });
 
-const OHIFCornerstoneViewport = props => {
+const OHIFCornerstoneViewport = (props) => {
   return (
     <React.Suspense fallback={<div>Loading...</div>}>
       <Component {...props} />
@@ -37,13 +44,13 @@ export default {
     init({ servicesManager, configuration });
   },
   getViewportModule({ commandsManager, appConfig }) {
-    const ExtendedOHIFCornerstoneViewport = props => {
+    const ExtendedOHIFCornerstoneViewport = (props) => {
       /**
        * TODO: This appears to be used to set the redux parameters for
        * the viewport when new images are loaded. It's very ugly
        * and we should remove it.
        */
-      const onNewImageHandler = jumpData => {
+      const onNewImageHandler = (jumpData) => {
         /** Do not trigger all viewports to render unnecessarily */
         jumpData.refreshViewports = false;
         commandsManager.runCommand('jumpToImage', jumpData);
@@ -72,4 +79,4 @@ export default {
   },
 };
 
-export { CornerstoneViewportDownloadForm };
+export { CornerstoneViewportDownloadForm, cornerstoneState };

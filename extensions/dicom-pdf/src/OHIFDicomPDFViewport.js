@@ -1,13 +1,16 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import OHIF from '@ohif/core';
+import { str2ab } from '@ohif/core';
+
 import OHIFComponentPlugin from './OHIFComponentPlugin.js';
 import DicomPDFViewport from './DicomPDFViewport';
-import { str2ab } from '@ohif/core';
 
 const { DicomLoaderService } = OHIF.utils;
 
 class OHIFDicomPDFViewport extends Component {
+  // OHIF viewport with support displaying PDF documents. (Based on PDF.js.)
   static propTypes = {
     studies: PropTypes.object,
     displaySet: PropTypes.object,
@@ -34,10 +37,13 @@ class OHIFDicomPDFViewport extends Component {
   }
 
   componentDidMount() {
+    // Retrieve PDF document and initialize viewport
     const { displaySet, studies } = this.props.viewportData;
 
+    // File available from cache, retrieve and set inline byte array
     if (displaySet.metadata && displaySet.metadata.EncapsulatedDocument) {
-      const { InlineBinary, BulkDataURI } = displaySet.metadata.EncapsulatedDocument;
+      const { InlineBinary, BulkDataURI } =
+        displaySet.metadata.EncapsulatedDocument;
       if (InlineBinary) {
         const inlineBinaryData = atob(InlineBinary);
         const byteArray = str2ab(inlineBinaryData);
@@ -45,9 +51,11 @@ class OHIFDicomPDFViewport extends Component {
         return;
       }
     }
+
+    // Retrieve from remote server
     DicomLoaderService.findDicomDataPromise(displaySet, studies).then(
-      data => this.setState({ byteArray: new Uint8Array(data) }),
-      error => {
+      (data) => this.setState({ byteArray: new Uint8Array(data) }),
+      (error) => {
         this.setState({ error });
         throw new Error(error);
       }
@@ -55,18 +63,15 @@ class OHIFDicomPDFViewport extends Component {
   }
 
   render() {
-    const {
-      setViewportActive,
-      viewportIndex,
-      activeViewportIndex,
-    } = this.props;
+    const { setViewportActive, viewportIndex, activeViewportIndex } =
+      this.props;
     const { byteArray, error, rawPdf } = this.state;
     const { id, init, destroy } = OHIFDicomPDFViewport;
     const pluginProps = { id, init, destroy };
 
     return (
       <OHIFComponentPlugin {...pluginProps}>
-        {(byteArray) && (
+        {byteArray && (
           <DicomPDFViewport
             byteArray={byteArray}
             rawPdf={rawPdf}
