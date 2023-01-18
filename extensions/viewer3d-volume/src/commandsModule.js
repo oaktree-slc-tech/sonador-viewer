@@ -30,7 +30,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
     // Retrieve active viewport data and locate VTK API
     const currentData = layout.viewports[activeViewportIndex];
-    if (currentData && currentData.viewer3dct) {
+    if (currentData && currentData.viewer3dvol) {
       return apis[activeViewportIndex];
     }
 
@@ -62,7 +62,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
   }
 
   const actions = {
-    closeViwer3dCT() {
+    closeViewer3d() {
       // Exit 3D CT volume viewer
 
       // Enable default (Cornerstone) layout for the viewer
@@ -174,7 +174,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
             .getInteractorStyle();
 
           // Set volume options to default render
-          _applyVtkVolumeRenderOptions(api);
+          _applyVtkVolumeRenderOptions(api, {
+            vtkColorPreset:
+              vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
+                displaySet.Modality
+              ),
+          });
         });
 
         // Set rotate tool active
@@ -187,8 +192,8 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
   window.viewer3dActions = actions;
 
   const definitions = {
-    closeViwer3dCT: {
-      commandFn: actions.closeViwer3dCT,
+    closeViewer3d: {
+      commandFn: actions.closeViewer3d,
       options: {},
     },
     setVtkVolumeColorPreset: {
@@ -226,7 +231,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
   return {
     definitions,
-    defaultContext: 'ACTIVE_VIEWPORT::VIEWER3DCT',
+    defaultContext: 'ACTIVE_VIEWPORT::VIEWER3DVOL',
   };
 };
 

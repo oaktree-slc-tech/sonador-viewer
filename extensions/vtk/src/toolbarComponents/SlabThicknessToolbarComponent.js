@@ -7,11 +7,11 @@ import './slab-thickness-toolbar-button.styl';
 
 const SLIDER = {
   MIN: 0.1,
-  MAX: 1000,
+  MAX: 10,
   STEP: 0.1,
 };
 
-const ToolbarLabel = props => {
+const ToolbarLabel = (props) => {
   const { label } = props;
   return <div className="toolbar-button-label">{label}</div>;
 };
@@ -20,7 +20,7 @@ ToolbarLabel.propTypes = {
   label: PropTypes.string.isRequired,
 };
 
-const ToolbarSlider = props => {
+const ToolbarSlider = (props) => {
   const { value, min, max, onChange } = props;
   return (
     <div className="toolbar-slider-container">
@@ -44,8 +44,8 @@ ToolbarSlider.propTypes = {
   onChange: PropTypes.func.isRequired,
 };
 
-const _getSelectOptions = button => {
-  return button.operationButtons.map(button => {
+const _getSelectOptions = (button) => {
+  return button.operationButtons.map((button) => {
     return {
       key: button.label,
       value: button.id,
@@ -105,7 +105,7 @@ const _applyModeOperation = (
   }
 };
 
-const _getInitialState = currentSelectedOption => {
+const _getInitialState = (currentSelectedOption) => {
   return {
     value: SLIDER.MIN,
     sliderMin: SLIDER.MIN,
@@ -138,7 +138,7 @@ function SlabThicknessToolbarComponent({
   function onChangeSelect(selectedValue) {
     // find select value
     const operation = operationButtons.find(
-      button => button.id === selectedValue
+      (button) => button.id === selectedValue
     );
 
     if (operation === state.operation) {

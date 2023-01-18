@@ -11,6 +11,7 @@ import vtkVolumeColorPresets, {
   VTK_VOLUME_CPROFILE_CT_BONE,
   VTK_VOLUME_CPROFILE_CT_BONES,
   VTK_VOLUME_CPROFILE_CT_CARDIAC,
+  getDefaultVolumePresetForModality,
 } from './utils/volume/vtkVolumePresets.js';
 import applyVtkVolumeRenderOptions from './utils/volume/applyVtkVolumeRenderOptions.js';
 import {
@@ -42,6 +43,9 @@ const vtkUtils = {
     VTK_VOLUME_CPROFILE_CT_BONE,
     VTK_VOLUME_CPROFILE_CT_BONES,
     VTK_VOLUME_CPROFILE_CT_CARDIAC,
+  },
+  volumeColorPresetUtils: {
+    getDefaultVolumePresetForModality,
   },
   vtkInteractorStyleVolumeBase,
   applyVtkVolumeRenderOptions,

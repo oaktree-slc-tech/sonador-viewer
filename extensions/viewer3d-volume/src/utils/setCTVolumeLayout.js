@@ -13,7 +13,7 @@ export default function setCTVolumeLayout(
     viewportPropsArray,
     numRows,
     numColumns,
-    'viewer3dct',
-    'ct'
+    'viewer3dvol',
+    'vol'
   );
 }

@@ -6,6 +6,7 @@ import toolbarModule from './toolbarModule.js';
 import getSopClassHandlerModule from './getOHIFDicomSegSopClassHandler.js';
 import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.js';
 import { version } from '../package.json';
+import commandsModule from './commandsModule.js';
 const { studyMetadataManager } = OHIF.utils;
 
 const SegmentationPanelTabUpdatedEvent = 'segmentation-panel-tab-updated';
@@ -125,6 +126,15 @@ const segmentationExtension = {
       });
     };
 
+    const onSegmentationsCompletelyLoaded = () => {
+      commandsManager.runCommand('jumpToFirstSegment');
+    };
+
+    document.addEventListener(
+      'segseriesselected',
+      onSegmentationsCompletelyLoaded
+    );
+
     document.addEventListener(
       'extensiondicomsegmentationsegloaded',
       onSegmentationsLoaded
@@ -185,6 +195,9 @@ const segmentationExtension = {
       ],
       defaultContext: ['VIEWER'],
     };
+  },
+  getCommandsModule({ commandsManager, servicesManager }) {
+    return commandsModule({ commandsManager, servicesManager });
   },
   getSopClassHandlerModule,
 };

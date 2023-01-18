@@ -15,7 +15,7 @@ const OHIFVtkVolumeViewport = asyncComponent(() =>
 
 // 3D Volume Rendering Plugin: provide volume rendering capabilities
 export default {
-  id: 'viewer3dct',
+  id: 'viewer3dvol',
   version,
 
   getViewportModule({ commandsManager, servicesManager }) {

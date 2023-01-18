@@ -14,10 +14,8 @@ const { nameMap } = DicomMetaDictionary;
 const { metadataProvider } = OHIFCornerstone;
 
 const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
-  const [
-    activeDisplaySetInstanceUID,
-    setActiveDisplaySetInstanceUID,
-  ] = useState(displaySetInstanceUID);
+  const [activeDisplaySetInstanceUID, setActiveDisplaySetInstanceUID] =
+    useState(displaySetInstanceUID);
   const [activeInstance, setActiveInstance] = useState(1);
   const [tags, setTags] = useState([]);
   const [meta, setMeta] = useState('');
@@ -27,10 +25,10 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
 
   useEffect(() => {
     const activeDisplaySet = displaySets.find(
-      ds => ds.displaySetInstanceUID === activeDisplaySetInstanceUID
+      (ds) => ds.displaySetInstanceUID === activeDisplaySetInstanceUID
     );
 
-    const newDisplaySetList = displaySets.map(displaySet => {
+    const newDisplaySetList = displaySets.map((displaySet) => {
       const {
         displaySetInstanceUID,
         SeriesDate,
@@ -95,7 +93,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
   }, [activeDisplaySetInstanceUID, activeInstance, displaySets]);
 
   const selectedDisplaySetValue = displaySetList.find(
-    ds => ds.value === activeDisplaySetInstanceUID
+    (ds) => ds.value === activeDisplaySetInstanceUID
   );
 
   let instanceSelectList = null;
@@ -109,7 +107,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
           min={1}
           max={instanceList.length}
           value={activeInstance}
-          valueRenderer={value => <p>Instance Number: {value}</p>}
+          valueRenderer={(value) => <p>Instance Number: {value}</p>}
           onChange={({ target }) => {
             const instanceIndex = parseInt(target.value);
             setActiveInstance(instanceIndex);
@@ -166,7 +164,7 @@ function DicomTagTable({ tags, meta }) {
 function getFormattedRowsFromTags(tags, meta) {
   const rows = [];
 
-  tags.forEach(tagInfo => {
+  tags.forEach((tagInfo) => {
     if (tagInfo.vr === 'SQ') {
       rows.push([
         `${tagInfo.tagIndent}${tagInfo.tag}`,
@@ -229,7 +227,17 @@ function getSortedTags(metadata) {
 function getRows(metadata, depth = 0) {
   // Tag, Type, Value, Keyword
 
-  const keywords = Object.keys(metadata);
+  let keywords;
+  try {
+    keywords = Object.keys(metadata);
+  } catch (err) {
+    console.warn('Invalid metadata structure: ', metadata);
+    console.error(
+      'Unable to retrieve keywords from metadata due to an error: ',
+      err
+    );
+    keywords = [];
+  }
 
   let tagIndent = '';
 
@@ -274,7 +282,7 @@ function getRows(metadata, depth = 0) {
         continue;
       }
 
-      sequenceAsArray.forEach(item => {
+      sequenceAsArray.forEach((item) => {
         const sequenceRows = getRows(item, depth + 1);
 
         if (sequenceRows.length) {

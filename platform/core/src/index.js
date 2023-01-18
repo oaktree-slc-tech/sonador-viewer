@@ -97,7 +97,6 @@ export {
   UIDialogService,
   MeasurementService,
   LoggerService,
-
   str2ab,
 };
 

@@ -131,6 +131,7 @@ const checkIfCanAddMeasurementsToDisplaySet = (
   const colors = new Map();
   measurements.forEach((measurement) => {
     const { coords } = measurement;
+
     coords.forEach((coord, index) => {
       if (coord.ReferencedSOPSequence !== undefined) {
         const imageIndex = SOPInstanceUIDs.findIndex(

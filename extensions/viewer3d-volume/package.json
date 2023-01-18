@@ -1,7 +1,7 @@
 {
-  "name": "@ohif/extension-viewer3dct",
-  "version": "0.1.0",
-  "description": "Volume rendering extension supporting CT for OHIF",
+  "name": "@ohif/extension-viewer3d-volume",
+  "version": "0.2.0",
+  "description": "Volume rendering extension for OHIF",
   "author": "Sonador",
   "license": "MIT",
   "repository": "OHIF/Viewers",

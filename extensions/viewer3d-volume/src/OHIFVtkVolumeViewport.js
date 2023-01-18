@@ -40,6 +40,13 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
   static id = 'OHIFVtkVolumeViewport';
 
+  state = {
+    ...OHIFVtkBaseViewport.state,
+    defaultColorPreset:
+      vtkUtils.volumeColorPresetsConstants.VTK_VOLUME_CPROFILE_CT_BONE,
+    activeColorPreset: '',
+  };
+
   constructor() {
     super(...arguments);
   }
@@ -58,7 +65,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     options = options || {};
 
     // Set color preset options
-    const { activeColorPreset, defaultColorPreset } = this.props;
+    const { activeColorPreset, defaultColorPreset } = this.state;
     options.vtkColorPreset = activeColorPreset || defaultColorPreset;
 
     vtkUtils.applyVtkVolumeRenderOptions(
@@ -177,7 +184,30 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
   componentDidMount() {
     // Retrieve image volume and initialize component
+    const _component = this;
     this.boundResizeViewport = this.resizeViewport.bind(this);
+
+    let loadAsync;
+    const { displaySet } = this.props.viewportData;
+    const { defaultColorPreset } = this.state;
+
+    // Ensure that the default color profile is the correct one for the modality.
+    if (
+      displaySet &&
+      displaySet.Modality &&
+      defaultColorPreset !=
+        vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
+          displaySet.Modality
+        )
+    ) {
+      loadAsync = true;
+      this.setState({
+        defaultColorPreset:
+          vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
+            displaySet.Modality
+          ),
+      });
+    }
 
     // Subscribe to OHIF tab events in order update component after UI changes
     document.addEventListener(
@@ -189,8 +219,14 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
       this.boundResizeViewport
     );
 
-    // Load volumetric data
-    this.setStateFromProps();
+    // Load volumetric data: if state properties were changed, loadVolumeData needs
+    // to be called asynchronously.
+    const loadVolumeData = () => _component.setStateFromProps();
+    if (loadAsync) {
+      window.setTimeout(loadVolumeData, 10);
+    } else {
+      loadVolumeData();
+    }
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -250,14 +286,9 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 // Add volume rendering options to the interface
 OHIFVtkVolumeViewport.propTypes = {
   ...OHIFVtkBaseViewport.propTypes,
-  defaultColorPreset: PropTypes.string.isRequired,
-  activeColorPreset: PropTypes.string.isRequired,
 };
 OHIFVtkVolumeViewport.defaultProps = {
   ...(OHIFVtkBaseViewport.defaultProps || {}),
-  defaultColorPreset:
-    vtkUtils.volumeColorPresetsConstants.VTK_VOLUME_CPROFILE_CT_BONE,
-  activeColorPreset: '',
 };
 
 export default OHIFVtkVolumeViewport;
