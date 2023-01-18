@@ -30,7 +30,10 @@ const _isCTVolumeReconstructable = (
       );
 
       // Check if the modality is CT
-      return displaySet && displaySet.Modality == 'CT';
+      return (
+        displaySet &&
+        (displaySet.Modality == 'CT' || displaySet.Modality == 'MR')
+      );
     }
   } catch (err) {
     console.error(

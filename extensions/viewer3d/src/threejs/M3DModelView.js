@@ -13,8 +13,19 @@ import {
   AnimationMixer,
   Color,
   Mesh,
+  Group,
   MeshBasicMaterial,
+  MeshPhongMaterial,
+  MeshStandardMaterial,
+  EdgesGeometry,
+  LineBasicMaterial,
+  LineSegments,
+  WireFrame,
   PerspectiveCamera,
+  HemisphereLight,
+  DirectionalLight,
+  AmbientLight,
+  PointLight,
   Scene,
   WebGLRenderer,
   PMREMGenerator,
@@ -24,11 +35,14 @@ import {
 
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
+import { MIMETYPE_GLB, MIMETYPE_STL } from '../OHIFDicom3DSopClassHandler.js';
+
 export default class M3DModelView extends Component {
-  // OHIF model view class (wraps a Three.js scene)
+  // OHIF model view class (wraps a Three.js scene). Models are loaded from the modelFileUrl
 
   constructor(props) {
     super(props);
@@ -37,14 +51,17 @@ export default class M3DModelView extends Component {
   }
 
   static propTypes = {
-    modelFileUrl: PropTypes.string.isRequired,
     modelType: PropTypes.string.isRequired,
+    models: PropTypes.array.isRequired,
     onCreated: PropTypes.func,
     onDestroyed: PropTypes.func,
     cameraOptions: PropTypes.object.isRequired,
     cameraStart: PropTypes.array.isRequired,
     renderOptions: PropTypes.object.isRequired,
+    defaultGeometryColor: PropTypes.node.isRequired,
+    coordinateTransform: PropTypes.object.isRequired,
     interactionControlOptions: PropTypes.object.isRequired,
+    lightOptions: PropTypes.object.isRequired,
     env: PropTypes.object.isRequired,
     deviceRenderDefault: PropTypes.number.isRequired,
     getStaticUrl: PropTypes.func.isRequired,
@@ -68,20 +85,37 @@ export default class M3DModelView extends Component {
     },
     cameraStart: [0, 0, 10],
     renderOptions: { antialias: true },
-    env: { sigma: 0 },
+    defaultGeometryColor: 0x049ef4,
+    coordinateTransform: {},
+    env: { sigma: 0.0 },
     interactionControlOptions: {
       target: [0, 0.5, 0],
       enablePan: true,
       enableDamping: true,
+      dampingFactor: 0.025,
+    },
+    lightOptions: {
+      // ambient: { color: 0x000000, intensity: 1, },
+      hemisphere: { sky: 0x000000, ground: 'darkslategrey', intensity: 1.5 },
+      directional: [
+        // Directional ights to be added to the scene. The unitPos vector will
+        // be multipled by the spatial dimensions of the model for scaling.
+        { color: 0x000000, intensity: 2, unitPos: [10, 10, 10] },
+      ],
+      lights: [
+        // Point lights to be added to the scene. The unitPos vector will be multipled
+        // by the spatial dimensions of the model for scaling.
+        // { color: 0xffffff, unitPos: [0, 2, 0], intensity: 0.5 },
+      ],
     },
     cine: {},
     deviceRenderDefault: 60,
   };
 
   initGlbLoader() {
-    // Initialize model loader
+    // Initialize GLB model loader
     // @returns model loader instance
-    const { modelType, getStaticUrl } = this.props;
+    const { getStaticUrl } = this.props;
 
     // Initialize GLTF loader
     const loader = new GLTFLoader();
@@ -102,12 +136,32 @@ export default class M3DModelView extends Component {
     return loader;
   }
 
+  initStlLoader() {
+    // Initialize SLT model loader
+    // @returns model loader instance
+    return new STLLoader();
+  }
+
+  initLoader() {
+    // Initialize loader instance for the viewport
+    const { modelType } = this.props;
+
+    if (modelType == MIMETYPE_GLB) {
+      return this.initGlbLoader();
+    } else if (modelType == MIMETYPE_STL) {
+      return this.initStlLoader();
+    }
+
+    throw new Error('Unsupported 3D model type');
+  }
+
   initRenderer() {
     // Initialize renderer
     // @returns render instance
     const { renderOptions: roptions } = this.props;
 
     const renderer = new WebGLRenderer(roptions);
+    renderer.outputEncoding;
     return renderer;
   }
 
@@ -159,7 +213,7 @@ export default class M3DModelView extends Component {
     // and determining camera parameters.
     if (model) {
       // Create a scene model and calculate size of scene
-      const box = new Box3().setFromObject(this.sceneData.scene);
+      const box = new Box3().setFromObject(model);
       const size = box.getSize(new Vector3());
 
       // Figure out how to fit the box in the view:
@@ -232,6 +286,62 @@ export default class M3DModelView extends Component {
     return camera;
   }
 
+  lightScene(model, scene) {
+    // Add lignts to the scene
+    const { lightOptions } = this.props;
+
+    // Create ambient light to provide some degree of lighting in case of no model.
+    if (lightOptions.ambient) {
+      const ambientLight = new AmbientLight(
+        lightOptions.ambient.color,
+        lightOptions.ambient.intensity
+      );
+      scene.add(ambientLight);
+    }
+
+    // Create hemisphere light
+    if (lightOptions.hemisphere) {
+      const hemisphereLight = new HemisphereLight(
+        lightOptions.hemisphere.sky,
+        lightOptions.hemisphere.grounnd,
+        lightOptions.hemisphere.intensity
+      );
+      scene.add(hemisphereLight);
+    }
+
+    if (model) {
+      // Calculate the size of the model
+      const box = new Box3().setFromObject(model);
+      const size = box.getSize(new Vector3());
+
+      if (lightOptions.directional && lightOptions.directional.length) {
+        // Add directional lights to scene
+        _.each(lightOptions.directional, function (dl) {
+          const dlight = new DirectionalLight(dl.color, dl.intensity);
+          dlight.position.set(
+            dl.unitPos[0] * size.x,
+            dl.unitPos[1] * size.y,
+            dl.unitPos[2] * size.z
+          );
+          scene.add(dlight);
+        });
+      }
+
+      if (lightOptions.lights && lightOptions.lights.length) {
+        // Add points lights to the scene
+        _.each(lightOptions.lights, function (l) {
+          const light = new PointLight(l.color, l.intensity, 0);
+          light.position.set(
+            l.unitPos[0] * size.x,
+            l.unitPos[1] * size.y,
+            l.unitPos[2] * size.y
+          );
+          scene.add(light);
+        });
+      }
+    }
+  }
+
   initGenerator(renderer) {
     // Initialize "Prefiltered, Mipmapped Radiance Environment Map (PMREM)" instance
     const generator = new PMREMGenerator(renderer);
@@ -280,7 +390,10 @@ export default class M3DModelView extends Component {
     }
 
     // Apply options to controls and return
-    _.extend(controls, _.pick(coptions, 'enablePan', 'enableDamping'));
+    _.extend(
+      controls,
+      _.pick(coptions, 'enablePan', 'enableDamping', 'dampingFactor')
+    );
     return controls;
   }
 
@@ -290,25 +403,137 @@ export default class M3DModelView extends Component {
     return mixer;
   }
 
-  async fetchModelData(murl) {
+  async fetchModelData(model_urls, options) {
     // Fetch model data from the provided URL
     // @returns array of model instances
-    const [sceneData] = await Promise.all([this.loader.loadAsync(murl)]);
+    const { defaultGeometryColor } = this.props;
+
+    options = options || {};
+    _.defaults(options, {
+      defaultColor: defaultGeometryColor,
+      colors: [],
+    });
+
+    // Retrieve model data
+    var _component = this;
+    const sceneComponents = await Promise.all(
+      _.map(model_urls, function (murl) {
+        return _component.loader.loadAsync(murl);
+      })
+    );
+
+    // Unpack model data to a scene
+    let sceneData;
+    _.each(sceneComponents, function (s, idx) {
+      if (!sceneData && s.scene) {
+        // GLB file containing a complete scene
+        sceneData = s;
+      } else {
+        // STL files
+
+        // Create scene data structure
+        if (!sceneData) {
+          sceneData = {};
+        }
+        if (!sceneData.geometries) {
+          sceneData.geometries = [];
+        }
+
+        // Create mesh instances for loaded STL data
+        if (s.type == 'BufferGeometry') {
+          // Set color of the model
+          let mcolor;
+          if (options.colors[idx]) {
+            mcolor = new Color(options.colors[idx]).getHex();
+          } else {
+            mcolor = options.defaultColor;
+          }
+
+          const mtx = new MeshPhongMaterial({
+            color: mcolor,
+          });
+          const msh = new Mesh(s, mtx);
+          sceneData.geometries.push(msh);
+        }
+      }
+    });
 
     return sceneData;
   }
 
   async loadModelData() {
     // Load model data from file
-    const { modelType, modelFileUrl } = this.props;
+    const _component = this;
+    const { modelType, models, coordinateTransform } = this.props;
 
-    // Retriete model file and add to scene
-    this.sceneData = await this.fetchModelData(modelFileUrl);
-    this.model = this.sceneData ? this.sceneData.scene : undefined;
+    // Retrieve models and add to scene
+    const model_urls = _.map(models, function (m) {
+      // Ensure that the model instance type matches the scene type
+      if (modelType != m.modelType) {
+        throw new Error(
+          'Unable to create scene, model type does not match scene type.'
+        );
+      }
 
+      return m.modelFileUrl;
+    });
+
+    // For GLB scenes, ensure that only a single model is defined.
+    if (modelType == MIMETYPE_GLB && model_urls.length > 1) {
+      throw new Error(
+        'Unable to create scene, only a single GLB file is supported per series by the viewer'
+      );
+    }
+
+    if (model_urls.length) {
+      this.sceneData = await this.fetchModelData(model_urls, {
+        colors: _.map(models, (m) => m.modelColor),
+      });
+      this.model = this.sceneData ? this.sceneData.scene : undefined;
+    }
+
+    // Add full model to the scene
     if (this.model) {
       // Add model to the scene
       this.scene.add(this.model);
+    }
+
+    // Add geometries to the scene
+    if (
+      this.sceneData &&
+      this.sceneData.geometries &&
+      this.sceneData.geometries.length
+    ) {
+      //  Create a group for the geometries and add all meshes to the group
+      const mgroup = new Group();
+      _.each(this.sceneData.geometries, function (g) {
+        // Initialize wireframe
+        // var g = new EdgesGeometry(m.geometry);
+        // var mtx = new LineBasicMaterial({ color: 0x049ef4, });
+        // var wf = new LineSegments(g, mtx);
+
+        mgroup.add(g);
+      });
+
+      // Apply coordinate transformations
+      if (coordinateTransform && coordinateTransform.rotation) {
+        mgroup.rotation.setFromVector3(
+          new Vector3(...coordinateTransform.rotation)
+        );
+      }
+
+      // If no scene object under scene data, add the group as the scene.
+      if (!this.sceneData.scene) {
+        this.sceneData.scene = mgroup;
+      }
+
+      // If no moddel specified as part of an existing scene, make the group the model.
+      if (!this.model) {
+        this.model = mgroup;
+      }
+
+      // Add the group to the scene
+      this.scene.add(mgroup);
     }
   }
 
@@ -417,9 +642,10 @@ export default class M3DModelView extends Component {
 
   async componentDidMount() {
     // Initialize Three.js container and components
+    const { modelType } = this.props;
 
     // Initialize model loader
-    this.loader = this.initGlbLoader();
+    this.loader = this.initLoader();
 
     // Create clock and renderer, add canvas element to the component, set initial size
     this.clock = this.initClock();
@@ -446,6 +672,9 @@ export default class M3DModelView extends Component {
     this.camera = this.initCamera(this.model);
     this.controls = this.initControls(this.renderer, this.camera);
 
+    // Add lights to scene
+    this.lightScene(this.model, this.scene);
+
     // Render scene
     this.resize();
     this.renderScene();
@@ -471,8 +700,6 @@ export default class M3DModelView extends Component {
 
       // Begin interaction loop
       this.animate();
-
-      console.log('Scene data: ', this.sceneData);
     }
   }
 

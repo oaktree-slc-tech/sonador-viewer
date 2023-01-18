@@ -8,11 +8,11 @@ const TOOLBAR_BUTTON_TYPES = {
 
 const definitions = [
   {
-    id: 'ExitCT3DVolumeViewer',
+    id: 'Exit3DVolumeViewer',
     label: 'Exit 3D Viewer',
     icon: 'times',
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'closeViwer3dCT',
+    commandName: 'closeViewer3d',
     commandOptions: {},
   },
   {
@@ -67,5 +67,5 @@ const definitions = [
 
 export default {
   definitions,
-  defaultContext: 'ACTIVE_VIEWPORT::VIEWER3DCT',
+  defaultContext: 'ACTIVE_VIEWPORT::VIEWER3DVOL',
 };

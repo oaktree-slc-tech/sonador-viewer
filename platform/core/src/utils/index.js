@@ -3,6 +3,7 @@ import StackManager from './StackManager.js';
 import absoluteUrl from './absoluteUrl';
 import addServers from './addServers';
 import guid from './guid';
+import { color } from './colors.js';
 import sortBy from './sortBy.js';
 import studyMetadataManager from './studyMetadataManager';
 import writeScript from './writeScript.js';
@@ -44,6 +45,7 @@ const utils = {
   progressTrackingUtils,
   xhrRetryRequestHook,
   createEncapsulatedDocumentFileUrl,
+  color,
 };
 
 export {

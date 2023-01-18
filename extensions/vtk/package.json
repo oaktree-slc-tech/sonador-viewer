@@ -1,7 +1,7 @@
 {
   "name": "@ohif/extension-vtk",
+  "version": "1.12.41",
   "description": "MPR tool for OHIF (VTK.js)",
-  "version": "1.12.40",
   "author": "OHIF",
   "license": "MIT",
   "repository": "OHIF/Viewers",
@@ -35,7 +35,7 @@
     "cornerstone-core": "^2.6.1",
     "cornerstone-tools": "^6.0.6",
     "cornerstone-wado-image-loader": "^4.2.1",
-    "dcmjs": "0.24.10",
+    "dcmjs": "0.29.3",
     "dicom-parser": "^1.8.11",
     "i18next": "^17.0.3",
     "i18next-browser-languagedetector": "^3.0.1",
@@ -53,7 +53,7 @@
     "lodash.throttle": "^4.1.1"
   },
   "devDependencies": {
-    "@ohif/core": "^2.16.34",
+    "@ohif/core": "^2.16.35",
     "@ohif/ui": "^1.10.10",
     "cornerstone-tools": "^6.0.6",
     "cornerstone-wado-image-loader": "^4.2.1",

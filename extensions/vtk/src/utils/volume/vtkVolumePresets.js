@@ -1,6 +1,8 @@
 const VTK_VOLUME_CPROFILE_CT_BONE = 'vtkMRMLVolumePropertyNode3';
 const VTK_VOLUME_CPROFILE_CT_BONES = 'vtkMRMLVolumePropertyNode4';
 const VTK_VOLUME_CPROFILE_CT_CARDIAC = 'vtkMRMLVolumePropertyNode5';
+const VTK_VOLUME_CPROFILE_MRI_DEFAULT = 'vtkMRMLVolumePropertyNode23';
+const VTK_VOLUME_PROFILE_DTI_FABRAIN = 'vtkMRMLVolumePropertyNode26';
 
 const vtkVolumeColorPresets = [
   {
@@ -19,6 +21,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '143.556 419.736',
+    modality: 'CT',
   },
   {
     name: 'CT-AAA2',
@@ -36,6 +39,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '0 1600',
+    modality: 'CT',
   },
   {
     name: 'CT-Bone',
@@ -52,6 +56,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-16.4458 641.385',
+    modality: 'CT',
   },
   {
     name: 'CT-Bones',
@@ -68,6 +73,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '152.19 952',
+    modality: 'CT',
   },
   {
     name: 'CT-Cardiac',
@@ -85,6 +91,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-77.6875 260.439',
+    modality: 'CT',
   },
   {
     name: 'CT-Cardiac2',
@@ -102,6 +109,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '42.8964 1587',
+    modality: 'CT',
   },
   {
     name: 'CT-Cardiac3',
@@ -119,6 +127,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-86.9767 1224.16',
+    modality: 'CT',
   },
   {
     name: 'CT-Chest-Contrast-Enhanced',
@@ -136,6 +145,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '67.0106 439.291',
+    modality: 'CT',
   },
   {
     name: 'CT-Chest-Vessels',
@@ -153,6 +163,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-1278.35 439.291',
+    modality: 'CT',
   },
   {
     name: 'CT-Coronary-Arteries',
@@ -170,6 +181,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '136.47 478.693',
+    modality: 'CT',
   },
   {
     name: 'CT-Coronary-Arteries-2',
@@ -187,6 +199,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '142.677 384.347',
+    modality: 'CT',
   },
   {
     name: 'CT-Coronary-Arteries-3',
@@ -204,6 +217,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '128.643 584.878',
+    modality: 'CT',
   },
   {
     name: 'CT-Cropped-Volume-Bone',
@@ -220,6 +234,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-451 1050',
+    modality: 'CT',
   },
   {
     name: 'CT-Fat',
@@ -237,6 +252,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-100 101.2',
+    modality: 'CT',
   },
   {
     name: 'CT-Liver-Vasculature',
@@ -254,6 +270,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '149.113 1197.95',
+    modality: 'CT',
   },
   {
     name: 'CT-Lung',
@@ -271,6 +288,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-600 -399',
+    modality: 'CT',
   },
   {
     name: 'CT-MIP',
@@ -286,6 +304,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-637.62 700',
+    modality: 'CT',
   },
   {
     name: 'CT-Muscle',
@@ -303,6 +322,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-155.407 419.736',
+    modality: 'CT',
   },
   {
     name: 'CT-Pulmonary-Arteries',
@@ -320,6 +340,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-568.625 447.798',
+    modality: 'CT',
   },
   {
     name: 'CT-Soft-Tissue',
@@ -336,6 +357,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '-167.01 240',
+    modality: 'CT',
   },
   {
     name: 'CT-Air',
@@ -352,6 +374,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '-1200.0 -200.0',
+    modality: 'CT',
   },
   {
     name: 'MR-Angio',
@@ -369,13 +392,14 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '151.354 200.873',
+    modality: 'MR',
   },
   {
     name: 'MR-Default',
     gradientOpacity: '4 0 1 255 1',
     specularPower: '1',
     scalarOpacity: '12 0 0 20 0 40 0.15 120 0.3 220 0.375 1024 0.5',
-    id: 'vtkMRMLVolumePropertyNode23',
+    id: VTK_VOLUME_CPROFILE_MRI_DEFAULT,
     specular: '0',
     shade: '1',
     ambient: '0.2',
@@ -385,6 +409,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '0 220',
+    modality: 'MR',
   },
   {
     name: 'MR-MIP',
@@ -400,6 +425,7 @@ const vtkVolumeColorPresets = [
     diffuse: '1',
     interpolation: '1',
     effectiveRange: '0 416.637',
+    modality: 'MR',
   },
   {
     name: 'MR-T2-Brain',
@@ -416,6 +442,7 @@ const vtkVolumeColorPresets = [
     diffuse: '0.6',
     interpolation: '1',
     effectiveRange: '0 412.406',
+    modality: 'MR',
   },
   {
     name: 'DTI-FA-Brain',
@@ -423,7 +450,7 @@ const vtkVolumeColorPresets = [
     specularPower: '40',
     scalarOpacity:
       '16 0 0 0 0 0.3501 0.0158 0.49379 0.7619 0.6419 1 0.9920 1 0.9950 0 0.9950 0',
-    id: 'vtkMRMLVolumePropertyNode26',
+    id: VTK_VOLUME_PROFILE_DTI_FABRAIN,
     specular: '0.5',
     shade: '1',
     ambient: '0.3',
@@ -433,12 +460,32 @@ const vtkVolumeColorPresets = [
     diffuse: '0.9',
     interpolation: '1',
     effectiveRange: '0 1',
+    modality: 'DTI',
   },
 ];
 
+const getDefaultVolumePresetForModality = (modality) => {
+  // Retrieve the default preset for the specified modality.
+  // @input modality: modality for which the volume preset should be retrieved
+  // @returns str or undefined
+  if (modality == 'MR') {
+    return VTK_VOLUME_CPROFILE_MRI_DEFAULT;
+  } else if (modality == 'CT') {
+    return VTK_VOLUME_CPROFILE_CT_BONE;
+  } else if (modality == 'DTI') {
+    return VTK_VOLUME_PROFILE_DTI_FABRAIN;
+  }
+
+  return undefined;
+};
+
 export default vtkVolumeColorPresets;
 export {
+  vtkVolumeColorPresets,
   VTK_VOLUME_CPROFILE_CT_BONE,
   VTK_VOLUME_CPROFILE_CT_BONES,
   VTK_VOLUME_CPROFILE_CT_CARDIAC,
+  VTK_VOLUME_CPROFILE_MRI_DEFAULT,
+  VTK_VOLUME_PROFILE_DTI_FABRAIN,
+  getDefaultVolumePresetForModality,
 };

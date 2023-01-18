@@ -52,7 +52,9 @@ const mapDispatchToProps = (dispatch, ownProps) => {
                 detail: { activatedLabelmapIndex: activatedLabelmapIndex },
               }
             );
+            const segThumbnailSelected = new CustomEvent('segseriesselected');
             document.dispatchEvent(selectionFired);
+            document.dispatchEvent(segThumbnailSelected);
           });
         } else if (Modality !== 'SR') {
           displaySet = displaySet.getSourceDisplaySet(ownProps.studyMetadata);

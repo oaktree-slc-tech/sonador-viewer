@@ -7,7 +7,7 @@ let AppContext = React.createContext({});
 export const CONTEXTS = {
   CORNERSTONE: 'ACTIVE_VIEWPORT::CORNERSTONE',
   VTK: 'ACTIVE_VIEWPORT::VTK',
-  VIEWER3DCT: 'ACTIVE_VIEWPORT::VIEWER3DCT',
+  VIEWER3DVOL: 'ACTIVE_VIEWPORT::VIEWER3DVOL',
 };
 
 export const useAppContext = () => useContext(AppContext);

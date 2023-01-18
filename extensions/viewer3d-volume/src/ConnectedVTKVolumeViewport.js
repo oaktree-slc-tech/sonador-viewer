@@ -11,15 +11,15 @@ const mapStateToProps = (state, ownProps) => {
   let dataFromStore;
 
   // Retrieve parsed 3D volume viewer options from data store
-  if (state.extensions && state.extensions.viewer3dct) {
-    dataFromStore = state.extensions.viewer3dct;
+  if (state.extensions && state.extensions.viewer3dvol) {
+    dataFromStore = state.extensions.viewer3dvol;
   }
 
   // If viewport is active, enable prefectching.
   const { viewportIndex } = ownProps;
   const isActive = viewportIndex === state.viewports.activeViewportIndex;
   const viewportLayout = state.viewports.layout.viewports[viewportIndex];
-  const pluginDetails = viewportLayout.viewer3dct || viewportLayout.vtk || {};
+  const pluginDetails = viewportLayout.viewer3dvol || viewportLayout.vtk || {};
 
   const cprops = {
     activeViewportIndex: state.viewports.activeViewportIndex,

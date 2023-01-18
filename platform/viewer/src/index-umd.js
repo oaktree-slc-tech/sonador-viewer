@@ -15,7 +15,7 @@ import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
-import OHIF3DCTVolumeViewerExtension from '@ohif/extension-viewer3dct';
+import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -27,17 +27,17 @@ import { version } from '../package.json';
 function installViewer(config, containerId = 'root', callback) {
   const container = document.getElementById(containerId);
   const defaultExtensions = [
+    OHIFExtCornerstone,
     OHIFDicomHtmlExtension,
     OHIFDicomMicroscopyExtension,
     OHIFDicomPDFExtension,
     OHIFDicomSegmentationExtension,
     OHIFDicomRtExtension,
-    OHIFVTKExtension,
     OHIFDicomECGExtension,
 
     // 3D Volume Extensions
     OHIFVTKExtension,
-    OHIF3DCTVolumeViewerExtension,
+    OHIF3DVolumeViewerExtension,
 
     // Metadata
     OHIFDicomTagBrowserExtension,

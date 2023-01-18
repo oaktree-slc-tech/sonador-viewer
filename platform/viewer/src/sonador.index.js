@@ -30,7 +30,7 @@ import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomEkgExtension from '@ohif/extension-dicom-ecg';
-import OHIF3DCTVolumeViewerExtension from '@ohif/extension-viewer3dct';
+import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
 import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
 
 // OHIF Server Components
@@ -70,7 +70,7 @@ const initOHIFViewer = function () {
 
       // 3D Visualization
       OHIFVTKExtension,
-      OHIF3DCTVolumeViewerExtension,
+      OHIF3DVolumeViewerExtension,
       OHIFM3DViewerExtension,
 
       // Metadata
