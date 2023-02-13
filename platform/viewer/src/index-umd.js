@@ -16,6 +16,7 @@ import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
 import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
+import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -27,7 +28,6 @@ import { version } from '../package.json';
 function installViewer(config, containerId = 'root', callback) {
   const container = document.getElementById(containerId);
   const defaultExtensions = [
-    OHIFExtCornerstone,
     OHIFDicomHtmlExtension,
     OHIFDicomMicroscopyExtension,
     OHIFDicomPDFExtension,
@@ -38,6 +38,7 @@ function installViewer(config, containerId = 'root', callback) {
     // 3D Volume Extensions
     OHIFVTKExtension,
     OHIF3DVolumeViewerExtension,
+    OHIFM3DViewerExtension,
 
     // Metadata
     OHIFDicomTagBrowserExtension,
@@ -62,7 +63,8 @@ export {
   OHIFDicomSegmentationExtension,
   OHIFDicomRtExtension,
   OHIFDicomTagBrowserExtension,
-  OHIF3DCTVolumeViewerExtension,
+  OHIF3DVolumeViewerExtension,
   OHIFDicomECGExtension,
+  OHIFM3DViewerExtension,
   version,
 };
