@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants.js';
+import Constants from '@kitware/vtk.js/Rendering/Core/VolumeMapper/Constants.js';
 
 import csTools from 'cornerstone-tools';
 import { vtkUtils } from '@ohif/extension-vtk';

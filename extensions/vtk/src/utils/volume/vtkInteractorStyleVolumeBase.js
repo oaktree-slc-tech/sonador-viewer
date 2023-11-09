@@ -1,11 +1,11 @@
-import macro from 'vtk.js/Sources/macro';
-import Constants from 'vtk.js/Sources/Rendering/Core/InteractorStyle/Constants';
-import vtkInteractorStyleManipulator from 'vtk.js/Sources/Interaction/Style/InteractorStyleManipulator';
-import vtkMouseCameraTrackballRotateManipulator from 'vtk.js/Sources/Interaction/Manipulators/MouseCameraTrackballRotateManipulator';
-import vtkMouseCameraTrackballPanManipulator from 'vtk.js/Sources/Interaction/Manipulators/MouseCameraTrackballPanManipulator';
-import vtkMouseCameraTrackballZoomManipulator from 'vtk.js/Sources/Interaction/Manipulators/MouseCameraTrackballZoomManipulator';
-import vtkMouseRangeManipulator from 'vtk.js/Sources/Interaction/Manipulators/MouseRangeManipulator';
-import vtkCoordinate from 'vtk.js/Sources/Rendering/Core/Coordinate';
+import macro from '@kitware/vtk.js/macro';
+import Constants from '@kitware/vtk.js/Rendering/Core/InteractorStyle/Constants';
+import vtkInteractorStyleManipulator from '@kitware/vtk.js/Interaction/Style/InteractorStyleManipulator';
+import vtkMouseCameraTrackballRotateManipulator from '@kitware/vtk.js/Interaction/Manipulators/MouseCameraTrackballRotateManipulator';
+import vtkMouseCameraTrackballPanManipulator from '@kitware/vtk.js/Interaction/Manipulators/MouseCameraTrackballPanManipulator';
+import vtkMouseCameraTrackballZoomManipulator from '@kitware/vtk.js/Interaction/Manipulators/MouseCameraTrackballZoomManipulator';
+import vtkMouseRangeManipulator from '@kitware/vtk.js/Interaction/Manipulators/MouseRangeManipulator';
+import vtkCoordinate from '@kitware/vtk.js/Rendering/Core/Coordinate';
 
 const { States } = Constants;
 
@@ -35,7 +35,7 @@ function vtkInteractorStyleVolumeBase(publicAPI, model) {
   publicAPI.setVolumeActor = (actor) => {
     // Add a reference for the volume actor
     model.volumeActor = actor;
-    const renderer = model.interactor.getCurrentRenderer();
+    const renderer = model._interactor.getCurrentRenderer();
     const camera = renderer.getActiveCamera();
   };
 }

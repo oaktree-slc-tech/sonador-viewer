@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import vtkBoundingBox from 'vtk.js/Sources/Common/DataModel/BoundingBox';
+import vtkBoundingBox from '@kitware/vtk.js/Common/DataModel/BoundingBox';
 
 import applyVtkColorPreset from './applyVtkColorPreset.js';
 import vtkVolumeColorPresets, {
