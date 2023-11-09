@@ -37,7 +37,8 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",
-    "@sonador/react-vtkjs-viewport": "^0.1.0",
+    "@kitware/vtk.js": "^24.19.1",
+    "@sonador/react-vtkjs-viewport": "^0.1.2",
     "@cornerstonejs/core": "^0.16.3",
     "@cornerstonejs/streaming-image-volume-loader": "^0.5.3",
     "@cornerstonejs/tools": "^0.24.3"

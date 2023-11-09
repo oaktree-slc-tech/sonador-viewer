@@ -147,6 +147,45 @@ deployment recipe.
    - `git remote add upstream https://github.com/OHIF/Viewers.git`
 5. `yarn install` to restore dependencies and link projects
 
+### Sonador Setup Instructions WIP
+
+Node version 16.18.0+
+
+```bash
+git submodule update --init --recursive
+yarn config set @sonador:registry https://code.oak-tree.tech/api/v4/projects/335/packages/npm/ -g
+npm config set @sonador:registry https://code.oak-tree.tech/api/v4/projects/335/packages/npm/ -g
+yarn install
+```
+
+#### Environment variables
+
+OHIF_HOST
+
+- dns name of your development machine. if working against production install;
+  it has to be subdomain of that instance.
+- e.g. imaging.gke.oak-tree.tech for gcp instance of OHIF. value is
+  subdomain.gke.oak-tree.tech example: OHIF_HOST=viewer.gke.oak-tree.tech
+- add subdomain to etc hosts 127.0.0.1 viewer.gke.oak-tree.tech
+
+APP_CONFIG
+
+- API configuration for instance you are using.
+- For local: APP_CONFIG=config/sonador.config-dev.js
+- For GKE instance: APP_CONFIG=config/sonador.imaging-gke.js
+
+ENTRY_TARGET
+
+- Always `ENTRY_TARGET=sonador.index.js`
+
+Example export commands for GKE env export OHIF_HOST=viewer.gke.oak-tree.tech
+export APP_CONFIG=config/sonador.imaging-gke.js export
+ENTRY_TARGET=sonador.index.js
+
+Start `yarn run dev`
+
+Go to `http://viewer.gke.oak-tree.tech:3000` (Not supported in Chrome)
+
 #### To Develop
 
 _From this repository's root directory:_
@@ -273,17 +312,20 @@ development of OHIF Viewer:
   Leidos Biomedical Research under Task Order HHSN26100071 from NCI.
   [IDC Viewer](https://learn.canceridc.dev/portal/visualization) is a customized
   version of the OHIF Viewer.
-  
+
 ### Research notice
+
 Please note that this repository is participating in a study into sustainability
- of open source projects. Data will be gathered about this repository for
- approximately the next 12 months, starting from June 2021.
+of open source projects. Data will be gathered about this repository for
+approximately the next 12 months, starting from June 2021.
 
 Data collected will include number of contributors, number of PRs, time taken to
- close/merge these PRs, and issues closed.
+close/merge these PRs, and issues closed.
 
 For more information, please visit
-[our informational page](https://sustainable-open-science-and-software.github.io/) or download our [participant information sheet](https://sustainable-open-science-and-software.github.io/assets/PIS_sustainable_software.pdf).
+[our informational page](https://sustainable-open-science-and-software.github.io/)
+or download our
+[participant information sheet](https://sustainable-open-science-and-software.github.io/assets/PIS_sustainable_software.pdf).
 
 ## License
 

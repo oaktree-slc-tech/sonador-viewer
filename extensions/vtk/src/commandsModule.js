@@ -9,7 +9,7 @@ import {
   vtkInteractorStyleMPRRotate,
 } from '@sonador/react-vtkjs-viewport';
 
-import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants.js';
+import Constants from '@kitware/vtk.js/Rendering/Core/VolumeMapper/Constants.js';
 
 import setMPRLayout from './utils/setMPRLayout.js';
 import setViewportToVTK from './utils/setViewportToVTK.js';
