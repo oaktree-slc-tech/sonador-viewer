@@ -1,11 +1,5 @@
-import DicomBrowserSelect from './components/DicomBrowserSelect.js';
-
 import getCommandsModule from './getCommandsModule';
 import toolbarModule from './toolbarModule';
-
-/**
- * Constants
- */
 
 /**
  * Extension
@@ -26,5 +20,3 @@ export default {
     return toolbarModule;
   },
 };
-
-export { DicomBrowserSelect };
