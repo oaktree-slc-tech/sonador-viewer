@@ -1,10 +1,11 @@
 import { api } from 'dicomweb-client';
-import DICOMWeb from '../../DICOMWeb';
-import str2ab from '../str2ab';
-import unpackOverlay from './unpackOverlay';
 
+import DICOMWeb from '../../DICOMWeb';
 import errorHandler from '../../errorHandler';
+import str2ab from '../str2ab';
 import getXHRRetryRequestHook from '../xhrRetryRequestHook';
+
+import unpackOverlay from './unpackOverlay';
 
 export default async function fetchOverlayData(instance, server) {
   const OverlayDataPromises = [];
@@ -25,24 +26,16 @@ export default async function fetchOverlayData(instance, server) {
         const arraybuffer = str2ab(inlineBinaryData);
 
         instance[OverlayDataTag] = unpackOverlay(arraybuffer);
-      } else if (
-        instance[OverlayDataTag] &&
-        instance[OverlayDataTag].BulkDataURI
-      ) {
-        OverlayDataPromises.push(
-          _getOverlayData(instance[OverlayDataTag], server)
-        );
+      } else if (instance[OverlayDataTag] && instance[OverlayDataTag].BulkDataURI) {
+        OverlayDataPromises.push(_getOverlayData(instance[OverlayDataTag], server));
         OverlayDataTags.push(OverlayDataTag);
-      } else if (
-        instance[OverlayDataTag] &&
-        instance[OverlayDataTag] instanceof ArrayBuffer
-      ) {
+      } else if (instance[OverlayDataTag] && instance[OverlayDataTag] instanceof ArrayBuffer) {
         instance[OverlayDataTag] = unpackOverlay(instance[OverlayDataTag]);
       }
     }
 
     if (OverlayDataPromises.length) {
-      Promise.all(OverlayDataPromises).then(results => {
+      Promise.all(OverlayDataPromises).then((results) => {
         for (let i = 0; i < results.length; i++) {
           instance[OverlayDataTags[i]] = results[i];
         }
@@ -79,6 +72,6 @@ async function _getOverlayData(tag, server) {
 
   return dicomWeb
     .retrieveBulkData(options)
-    .then(result => result[0])
+    .then((result) => result[0])
     .then(unpackOverlay);
 }

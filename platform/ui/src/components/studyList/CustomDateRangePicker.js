@@ -1,28 +1,24 @@
 //  If you want to continue using CSS stylesheets and classes...
 //  https://github.com/airbnb/react-dates#initialize
+import React from 'react';
+import { DateRangePicker } from 'react-dates';
+import { useTranslation } from 'react-i18next';
+import moment from 'moment';
+import PropTypes from 'prop-types';
+
+import i18n from '@ohif/i18n';
+
 import 'react-dates/initialize';
+
 import 'react-dates/lib/css/_datepicker.css';
 import './CustomDateRangePicker.css';
-
-import React from 'react';
-import PropTypes from 'prop-types';
-import { DateRangePicker } from 'react-dates';
-import moment from 'moment';
-import i18n from '@ohif/i18n';
-import { useTranslation } from 'react-i18next';
 
 function CustomDateRangePicker(props) {
   moment.locale(i18n.language); // using i18n in the date picker
 
   const { t } = useTranslation('DatePicker');
 
-  const {
-    onDatesChange,
-    startDate,
-    endDate,
-    presets,
-    ...dateRangePickerProps
-  } = props;
+  const { onDatesChange, startDate, endDate, presets, ...dateRangePickerProps } = props;
 
   const renderDatePresets = () => {
     const { presets } = props;
@@ -36,9 +32,7 @@ function CustomDateRangePicker(props) {
             <button
               key={text}
               type="button"
-              className={`PresetDateRangePicker_button ${
-                isSelected ? 'PresetDateRangePicker_button__selected' : ''
-              }`}
+              className={`PresetDateRangePicker_button ${isSelected ? 'PresetDateRangePicker_button__selected' : ''}`}
               onClick={() =>
                 onDatesChange({
                   startDate: start,
@@ -82,7 +76,7 @@ function CustomDateRangePicker(props) {
           <select
             className="DateRangePicker_select"
             value={month.month()}
-            onChange={e => onMonthSelect(month, e.target.value)}
+            onChange={(e) => onMonthSelect(month, e.target.value)}
           >
             {moment.months().map((label, value) => (
               <option key={value} value={value}>
@@ -92,11 +86,10 @@ function CustomDateRangePicker(props) {
           </select>
         </div>
         <div style={containerStyle}>
-          {}
           <select
             className="DateRangePicker_select"
             value={month.year()}
-            onChange={e => onYearSelect(month, e.target.value)}
+            onChange={(e) => onYearSelect(month, e.target.value)}
           >
             {renderYearsOptions()}
           </select>

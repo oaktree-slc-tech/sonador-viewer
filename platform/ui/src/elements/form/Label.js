@@ -1,8 +1,7 @@
-import './Label.css';
-
 import React from 'react';
-
 import PropTypes from 'prop-types';
+
+import './Label.css';
 
 class Label extends React.Component {
   constructor(props) {

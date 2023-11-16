@@ -1,14 +1,9 @@
-import {
-  applyMiddleware,
-  combineReducers,
-  createStore,
-  compose,
-} from 'redux/es/redux.js';
-
-// import { createLogger } from 'redux-logger';
 import { reducer as oidcReducer } from 'redux-oidc';
-import { redux } from '@ohif/core';
 import thunkMiddleware from 'redux-thunk';
+
+import { redux } from '@ohif/core';
+
+import { applyMiddleware, combineReducers, compose, createStore } from 'redux';
 
 // Combine our @ohif/core and oidc reducers
 // Set init data, using values found in localStorage
@@ -28,11 +23,7 @@ if (window.config && window.config.disableServersCache === true) {
   delete preloadedState.servers;
 }
 
-const store = createStore(
-  rootReducer,
-  preloadedState,
-  composeEnhancers(applyMiddleware(...middleware))
-);
+const store = createStore(rootReducer, preloadedState, composeEnhancers(applyMiddleware(...middleware)));
 
 // When the store's preferences change,
 // Update our cached preferences in localStorage

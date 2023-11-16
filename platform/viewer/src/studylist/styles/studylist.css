@@ -1,33 +1,33 @@
 /* Sonador Study List */
 
 h1.state-message-large {
-	font-size: 30px;
+  font-size: 30px;
 }
 p.state-message-large {
-	font-weight: 300;
-	font-size: 22px;
-	padding-top: 36px;
-	line-height: 2.0rem;
+  font-weight: 300;
+  font-size: 22px;
+  padding-top: 36px;
+  line-height: 2rem;
 }
 
-
-@media only screen and (max-width:  500px) {
-  
+@media only screen and (max-width: 500px) {
   .study-list-header {
-  	margin-left: 0;
-  	padding-left: 0; padding-right: 0;
+    margin-left: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .study-list-container thead.table-head tr.filters th {
-  	padding-left:  0; padding-right: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
-
-@media only screen and (max-width:  500px) {
-	.state-message-large {
-		padding-left: 1rem; padding-right: 1rem;
-	}
+@media only screen and (max-width: 500px) {
+  .state-message-large {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
 
 .study-list-header .actions .refreshApp {

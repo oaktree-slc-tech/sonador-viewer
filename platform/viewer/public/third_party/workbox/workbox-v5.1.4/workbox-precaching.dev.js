@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.precaching = (function(
+this.workbox.precaching = (function (
   exports,
   cacheNames_js,
   getFriendlyURL_js,
@@ -82,12 +82,9 @@ this.workbox.precaching = (function(
 
   function createCacheKey(entry) {
     if (!entry) {
-      throw new WorkboxError_js.WorkboxError(
-        'add-to-cache-list-unexpected-type',
-        {
-          entry,
-        }
-      );
+      throw new WorkboxError_js.WorkboxError('add-to-cache-list-unexpected-type', {
+        entry,
+      });
     } // If a precache manifest entry is a string, it's assumed to be a versioned
     // URL, like '/app.abcd1234.js'. Return as-is.
 
@@ -102,12 +99,9 @@ this.workbox.precaching = (function(
     const { revision, url } = entry;
 
     if (!url) {
-      throw new WorkboxError_js.WorkboxError(
-        'add-to-cache-list-unexpected-type',
-        {
-          entry,
-        }
-      );
+      throw new WorkboxError_js.WorkboxError('add-to-cache-list-unexpected-type', {
+        entry,
+      });
     } // If there's just a URL and no revision, then it's also assumed to be a
     // versioned URL.
 
@@ -213,16 +207,11 @@ this.workbox.precaching = (function(
     const alreadyPrecachedCount = urlsAlreadyPrecached.length;
 
     if (precachedCount || alreadyPrecachedCount) {
-      let message = `Precaching ${precachedCount} file${
-        precachedCount === 1 ? '' : 's'
-      }.`;
+      let message = `Precaching ${precachedCount} file${precachedCount === 1 ? '' : 's'}.`;
 
       if (alreadyPrecachedCount > 0) {
         message +=
-          ` ${alreadyPrecachedCount} ` +
-          `file${
-            alreadyPrecachedCount === 1 ? ' is' : 's are'
-          } already cached.`;
+          ` ${alreadyPrecachedCount} ` + `file${alreadyPrecachedCount === 1 ? ' is' : 's are'} already cached.`;
       }
 
       logger_js.logger.groupCollapsed(message);
@@ -291,20 +280,13 @@ this.workbox.precaching = (function(
         }
 
         const { cacheKey, url } = createCacheKey(entry);
-        const cacheMode =
-          typeof entry !== 'string' && entry.revision ? 'reload' : 'default';
+        const cacheMode = typeof entry !== 'string' && entry.revision ? 'reload' : 'default';
 
-        if (
-          this._urlsToCacheKeys.has(url) &&
-          this._urlsToCacheKeys.get(url) !== cacheKey
-        ) {
-          throw new WorkboxError_js.WorkboxError(
-            'add-to-cache-list-conflicting-entries',
-            {
-              firstEntry: this._urlsToCacheKeys.get(url),
-              secondEntry: cacheKey,
-            }
-          );
+        if (this._urlsToCacheKeys.has(url) && this._urlsToCacheKeys.get(url) !== cacheKey) {
+          throw new WorkboxError_js.WorkboxError('add-to-cache-list-conflicting-entries', {
+            firstEntry: this._urlsToCacheKeys.get(url),
+            secondEntry: cacheKey,
+          });
         }
 
         if (typeof entry !== 'string' && entry.integrity) {
@@ -312,12 +294,9 @@ this.workbox.precaching = (function(
             this._cacheKeysToIntegrities.has(cacheKey) &&
             this._cacheKeysToIntegrities.get(cacheKey) !== entry.integrity
           ) {
-            throw new WorkboxError_js.WorkboxError(
-              'add-to-cache-list-conflicting-integrities',
-              {
-                url,
-              }
-            );
+            throw new WorkboxError_js.WorkboxError('add-to-cache-list-conflicting-integrities', {
+              url,
+            });
           }
 
           this._cacheKeysToIntegrities.set(cacheKey, entry.integrity);
@@ -330,9 +309,7 @@ this.workbox.precaching = (function(
         if (urlsToWarnAbout.length > 0) {
           const warningMessage =
             `Workbox is precaching URLs without revision ` +
-            `info: ${urlsToWarnAbout.join(
-              ', '
-            )}\nThis is generally NOT safe. ` +
+            `info: ${urlsToWarnAbout.join(', ')}\nThis is generally NOT safe. ` +
             `Learn more at https://bit.ly/wb-precache`;
 
           {
@@ -368,9 +345,7 @@ this.workbox.precaching = (function(
       const alreadyPrecached = [];
       const cache = await self.caches.open(this._cacheName);
       const alreadyCachedRequests = await cache.keys();
-      const existingCacheKeys = new Set(
-        alreadyCachedRequests.map(request => request.url)
-      );
+      const existingCacheKeys = new Set(alreadyCachedRequests.map((request) => request.url));
 
       for (const [url, cacheKey] of this._urlsToCacheKeys) {
         if (existingCacheKeys.has(cacheKey)) {
@@ -398,7 +373,7 @@ this.workbox.precaching = (function(
         });
       });
       await Promise.all(precacheRequests);
-      const updatedURLs = toBePrecached.map(item => item.url);
+      const updatedURLs = toBePrecached.map((item) => item.url);
 
       {
         printInstallDetails(updatedURLs, alreadyPrecached);
@@ -458,14 +433,7 @@ this.workbox.precaching = (function(
      * field when making the request.
      */
 
-    async _addURLToCache({
-      cacheKey,
-      url,
-      cacheMode,
-      event,
-      plugins,
-      integrity,
-    }) {
+    async _addURLToCache({ cacheKey, url, cacheMode, event, plugins, integrity }) {
       const request = new Request(url, {
         integrity,
         cache: cacheMode,
@@ -619,11 +587,7 @@ this.workbox.precaching = (function(
         } catch (error) {
           if (fallbackToNetwork) {
             {
-              logger_js.logger.debug(
-                `Unable to respond with precached response. ` +
-                  `Falling back to network.`,
-                error
-              );
+              logger_js.logger.debug(`Unable to respond with precached response. ` + `Falling back to network.`, error);
             }
 
             return fetch(request);
@@ -707,14 +671,11 @@ this.workbox.precaching = (function(
    * @memberof module:workbox-precaching
    */
 
-  function removeIgnoredSearchParams(
-    urlObject,
-    ignoreURLParametersMatching = []
-  ) {
+  function removeIgnoredSearchParams(urlObject, ignoreURLParametersMatching = []) {
     // Convert the iterable into an array at the start of the loop to make sure
     // deletion doesn't mess up iteration.
     for (const paramName of [...urlObject.searchParams.keys()]) {
-      if (ignoreURLParametersMatching.some(regExp => regExp.test(paramName))) {
+      if (ignoreURLParametersMatching.some((regExp) => regExp.test(paramName))) {
         urlObject.searchParams.delete(paramName);
       }
     }
@@ -742,20 +703,12 @@ this.workbox.precaching = (function(
 
   function* generateURLVariations(
     url,
-    {
-      ignoreURLParametersMatching,
-      directoryIndex,
-      cleanURLs,
-      urlManipulation,
-    } = {}
+    { ignoreURLParametersMatching, directoryIndex, cleanURLs, urlManipulation } = {}
   ) {
     const urlObject = new URL(url, location.href);
     urlObject.hash = '';
     yield urlObject.href;
-    const urlWithoutIgnoredParams = removeIgnoredSearchParams(
-      urlObject,
-      ignoreURLParametersMatching
-    );
+    const urlWithoutIgnoredParams = removeIgnoredSearchParams(urlObject, ignoreURLParametersMatching);
     yield urlWithoutIgnoredParams.href;
 
     if (directoryIndex && urlWithoutIgnoredParams.pathname.endsWith('/')) {
@@ -856,7 +809,7 @@ this.workbox.precaching = (function(
   } = {}) => {
     const cacheName = cacheNames_js.cacheNames.getPrecacheName(); // See https://github.com/Microsoft/TypeScript/issues/28357#issuecomment-436484705
 
-    self.addEventListener('fetch', event => {
+    self.addEventListener('fetch', (event) => {
       const precachedURL = getCacheKeyForURL(event.request.url, {
         cleanURLs,
         directoryIndex,
@@ -867,8 +820,7 @@ this.workbox.precaching = (function(
       if (!precachedURL) {
         {
           logger_js.logger.debug(
-            `Precaching did not find a match for ` +
-              getFriendlyURL_js.getFriendlyURL(event.request.url)
+            `Precaching did not find a match for ` + getFriendlyURL_js.getFriendlyURL(event.request.url)
           );
         }
 
@@ -877,10 +829,10 @@ this.workbox.precaching = (function(
 
       let responsePromise = self.caches
         .open(cacheName)
-        .then(cache => {
+        .then((cache) => {
           return cache.match(precachedURL);
         })
-        .then(cachedResponse => {
+        .then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
           } // Fall back to the network if we don't have a cached response
@@ -889,9 +841,7 @@ this.workbox.precaching = (function(
           {
             logger_js.logger.warn(
               `The precached response for ` +
-                `${getFriendlyURL_js.getFriendlyURL(
-                  precachedURL
-                )} in ${cacheName} was not found. ` +
+                `${getFriendlyURL_js.getFriendlyURL(precachedURL)} in ${cacheName} was not found. ` +
                 `Falling back to the network instead.`
             );
           }
@@ -900,12 +850,11 @@ this.workbox.precaching = (function(
         });
 
       {
-        responsePromise = responsePromise.then(response => {
+        responsePromise = responsePromise.then((response) => {
           // Workbox is going to handle the route.
           // print the routing details to the console.
           logger_js.logger.groupCollapsed(
-            `Precaching is responding to: ` +
-              getFriendlyURL_js.getFriendlyURL(event.request.url)
+            `Precaching is responding to: ` + getFriendlyURL_js.getFriendlyURL(event.request.url)
           );
           logger_js.logger.log(`Serving the precached url: ${precachedURL}`);
           logger_js.logger.groupCollapsed(`View request details here.`);
@@ -989,21 +938,16 @@ this.workbox.precaching = (function(
    * @memberof module:workbox-precaching
    */
 
-  const deleteOutdatedCaches = async (
-    currentPrecacheName,
-    substringToFind = SUBSTRING_TO_FIND
-  ) => {
+  const deleteOutdatedCaches = async (currentPrecacheName, substringToFind = SUBSTRING_TO_FIND) => {
     const cacheNames = await self.caches.keys();
-    const cacheNamesToDelete = cacheNames.filter(cacheName => {
+    const cacheNamesToDelete = cacheNames.filter((cacheName) => {
       return (
         cacheName.includes(substringToFind) &&
         cacheName.includes(self.registration.scope) &&
         cacheName !== currentPrecacheName
       );
     });
-    await Promise.all(
-      cacheNamesToDelete.map(cacheName => self.caches.delete(cacheName))
-    );
+    await Promise.all(cacheNamesToDelete.map((cacheName) => self.caches.delete(cacheName)));
     return cacheNamesToDelete;
   };
 
@@ -1023,15 +967,14 @@ this.workbox.precaching = (function(
 
   function cleanupOutdatedCaches() {
     // See https://github.com/Microsoft/TypeScript/issues/28357#issuecomment-436484705
-    self.addEventListener('activate', event => {
+    self.addEventListener('activate', (event) => {
       const cacheName = cacheNames_js.cacheNames.getPrecacheName();
       event.waitUntil(
-        deleteOutdatedCaches(cacheName).then(cachesDeleted => {
+        deleteOutdatedCaches(cacheName).then((cachesDeleted) => {
           {
             if (cachesDeleted.length > 0) {
               logger_js.logger.log(
-                `The following out-of-date precaches were cleaned up ` +
-                  `automatically:`,
+                `The following out-of-date precaches were cleaned up ` + `automatically:`,
                 cachesDeleted
               );
             }
@@ -1167,7 +1110,7 @@ this.workbox.precaching = (function(
       https://opensource.org/licenses/MIT.
     */
 
-  const installListener = event => {
+  const installListener = (event) => {
     const precacheController = getOrCreatePrecacheController();
     const plugins = precachePlugins.get();
     event.waitUntil(
@@ -1176,11 +1119,10 @@ this.workbox.precaching = (function(
           event,
           plugins,
         })
-        .catch(error => {
+        .catch((error) => {
           {
             logger_js.logger.error(
-              `Service worker installation failed. It will ` +
-                `be retried automatically during the next navigation.`
+              `Service worker installation failed. It will ` + `be retried automatically during the next navigation.`
             );
           } // Re-throw the error to ensure installation fails.
 
@@ -1189,7 +1131,7 @@ this.workbox.precaching = (function(
     );
   };
 
-  const activateListener = event => {
+  const activateListener = (event) => {
     const precacheController = getOrCreatePrecacheController();
     event.waitUntil(precacheController.activate());
   };

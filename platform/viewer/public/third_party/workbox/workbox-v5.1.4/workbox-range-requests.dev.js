@@ -1,10 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.rangeRequests = (function(
-  exports,
-  WorkboxError_js,
-  assert_js,
-  logger_js
-) {
+this.workbox.rangeRequests = (function (exports, WorkboxError_js, assert_js, logger_js) {
   'use strict';
 
   try {
@@ -179,15 +174,8 @@ this.workbox.rangeRequests = (function(
 
       const boundaries = parseRangeHeader(rangeHeader);
       const originalBlob = await originalResponse.blob();
-      const effectiveBoundaries = calculateEffectiveBoundaries(
-        originalBlob,
-        boundaries.start,
-        boundaries.end
-      );
-      const slicedBlob = originalBlob.slice(
-        effectiveBoundaries.start,
-        effectiveBoundaries.end
-      );
+      const effectiveBoundaries = calculateEffectiveBoundaries(originalBlob, boundaries.start, boundaries.end);
+      const slicedBlob = originalBlob.slice(effectiveBoundaries.start, effectiveBoundaries.end);
       const slicedBlobSize = slicedBlob.size;
       const slicedResponse = new Response(slicedBlob, {
         // Status code 206 is for a Partial Content response.
@@ -199,15 +187,13 @@ this.workbox.rangeRequests = (function(
       slicedResponse.headers.set('Content-Length', String(slicedBlobSize));
       slicedResponse.headers.set(
         'Content-Range',
-        `bytes ${effectiveBoundaries.start}-${effectiveBoundaries.end - 1}/` +
-          originalBlob.size
+        `bytes ${effectiveBoundaries.start}-${effectiveBoundaries.end - 1}/` + originalBlob.size
       );
       return slicedResponse;
     } catch (error) {
       {
         logger_js.logger.warn(
-          `Unable to construct a partial response; returning a ` +
-            `416 Range Not Satisfiable response instead.`
+          `Unable to construct a partial response; returning a ` + `416 Range Not Satisfiable response instead.`
         );
         logger_js.logger.groupCollapsed(`View details here.`);
         logger_js.logger.log(error);

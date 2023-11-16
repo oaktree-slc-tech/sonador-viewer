@@ -1,12 +1,12 @@
 import csTools from 'cornerstone-tools';
-import OHIF from '../../../';
 
+import OHIF from '../../../';
 /** Internal imports */
 import TOOL_NAMES from '../constants/toolNames';
+
 import getRenderableData from './getRenderableData';
 
-const globalImageIdSpecificToolStateManager =
-  csTools.globalImageIdSpecificToolStateManager;
+const globalImageIdSpecificToolStateManager = csTools.globalImageIdSpecificToolStateManager;
 
 /**
  * Add a measurement to a display set.
@@ -15,12 +15,7 @@ const globalImageIdSpecificToolStateManager =
  * @param {*} imageId
  * @param {*} displaySetInstanceUID
  */
-export default function addMeasurement(
-  measurement,
-  imageId,
-  imageMetadata,
-  displaySetInstanceUID
-) {
+export default function addMeasurement(measurement, imageId, imageMetadata, displaySetInstanceUID) {
   // TODO -> Render rotated ellipse .
   const toolName = TOOL_NAMES.DICOM_SR_DISPLAY_TOOL;
 
@@ -32,7 +27,7 @@ export default function addMeasurement(
     isSRText: measurement.isSRText,
   };
 
-  measurement.coords.forEach(coord => {
+  measurement.coords.forEach((coord) => {
     const { GraphicType, GraphicData, ValueType } = coord;
 
     if (measurementData.renderableData[GraphicType] === undefined) {
@@ -73,8 +68,7 @@ export default function addMeasurement(
   // Remove the unneeded coord now its processed, but keep the SOPInstanceUID.
   // NOTE: We assume that each SCOORD in the MeasurementGroup maps onto one frame,
   // It'd be super werid if it didn't anyway as a SCOORD.
-  measurement.ReferencedSOPInstanceUID =
-    measurement.coords[0].ReferencedSOPSequence.ReferencedSOPInstanceUID;
+  measurement.ReferencedSOPInstanceUID = measurement.coords[0].ReferencedSOPSequence.ReferencedSOPInstanceUID;
 
   return measurement;
 }

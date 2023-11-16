@@ -3,9 +3,8 @@ import _ from 'lodash';
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
-import classnames from 'classnames';
 
-import { utils, redux as coreRedux } from '@ohif/core';
+import { redux as coreRedux } from '@ohif/core';
 
 import { viewerbaseGetDisplaySet } from '@ohif/ui';
 
@@ -13,10 +12,8 @@ import { DicomBrowserSelect } from '@ohif/extension-dicom-tag-browser';
 
 import vtkVolumeColorPresets, {
   VTK_VOLUME_CPROFILE_CT_BONE,
-  VTK_VOLUME_CPROFILE_MRI_DEFAULT,
   getDefaultVolumePresetForModality,
 } from '../utils/volume/vtkVolumePresets.js';
-import redux from '../redux';
 
 import './vtkVolumeColorPresetSelector.css';
 
@@ -49,20 +46,13 @@ const vtkVolumeColorPresetSelector = (props) => {
   const { label } = button;
 
   // Retrieve modality for the currently active display set
-  const { viewportSpecificData, activeViewportIndex } = useSelector(
-    coreRedux.selectors.getActiveViewportData
-  );
+  const { viewportSpecificData, activeViewportIndex } = useSelector(coreRedux.selectors.getActiveViewportData);
   let cmodality;
   try {
-    const { study, displaySet } = viewerbaseGetDisplaySet(
-      viewportSpecificData,
-      activeViewportIndex
-    );
+    const { study, displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
     cmodality = displaySet.Modality;
   } catch (err) {
-    console.log(
-      'Unable to locate study and series for currently active viewport'
-    );
+    console.log('Unable to locate study and series for currently active viewport');
   }
 
   // Filter color presets by modality
@@ -74,19 +64,14 @@ const vtkVolumeColorPresetSelector = (props) => {
   // Check if desired "default" preset is available in modality list. If not, retrieve
   // the default preset for the displayset modality.
   let dcpreset;
-  if (
-    !_.includes(modalityColorPresets, (v) => v.id == defaultColorPreset) &&
-    cmodality
-  ) {
+  if (!_.includes(modalityColorPresets, (v) => v.id == defaultColorPreset) && cmodality) {
     dcpreset = getDefaultVolumePresetForModality(cmodality);
   } else {
     dcpreset = defaultColorPreset;
   }
 
   // Active preset
-  const [activeColorPreset, setActiveColorPreset] = useState(
-    dcpreset || defaultColorPreset
-  );
+  const [activeColorPreset, setActiveColorPreset] = useState(dcpreset || defaultColorPreset);
 
   // Available VTK volume color presets
   const vtkColorProfileList = _.map(modalityColorPresets, (v) => {
@@ -98,8 +83,7 @@ const vtkVolumeColorPresetSelector = (props) => {
   });
 
   // Profile list state hooks
-  const [vtkColorProfileSelectList, setVtkColorProfileSelectList] =
-    useState(vtkColorProfileList);
+  const [vtkColorProfileSelectList, setVtkColorProfileSelectList] = useState(vtkColorProfileList);
 
   // Create dispatch operation to route to commands module
   const _applyColorPreset = (val) => {
@@ -115,13 +99,10 @@ const vtkVolumeColorPresetSelector = (props) => {
   useEffect(() => {
     // Route change in color preset to toolbar/commands module
     toolbarClickCallback(_applyColorPreset(activeColorPreset));
-  }, [activeColorPreset]);
+  }, [_applyColorPreset, activeColorPreset, toolbarClickCallback]);
 
   // Initial property display value and styles
-  let selectedColorProfile = _.find(
-    vtkColorProfileSelectList,
-    (cp) => cp.value === activeColorPreset
-  );
+  let selectedColorProfile = _.find(vtkColorProfileSelectList, (cp) => cp.value === activeColorPreset);
 
   const style = {
     marginLeft: '1rem',

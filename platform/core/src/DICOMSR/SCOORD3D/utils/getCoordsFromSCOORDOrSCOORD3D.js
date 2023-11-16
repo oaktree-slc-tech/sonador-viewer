@@ -1,4 +1,4 @@
-const getCoordsFromSCOORDOrSCOORD3D = graphicItem => {
+const getCoordsFromSCOORDOrSCOORD3D = (graphicItem) => {
   const { ValueType, GraphicType, GraphicData } = graphicItem;
   const coords = { ValueType, GraphicType, GraphicData };
 
@@ -7,12 +7,9 @@ const getCoordsFromSCOORDOrSCOORD3D = graphicItem => {
     coords.ReferencedSOPSequence = ReferencedSOPSequence;
   } else if (ValueType === 'SCOORD3D') {
     if (graphicItem.ReferencedFrameOfReferenceUID) {
-      coords.ReferencedFrameOfReferenceSequence =
-        graphicItem.ReferencedFrameOfReferenceUID;
+      coords.ReferencedFrameOfReferenceSequence = graphicItem.ReferencedFrameOfReferenceUID;
     } else if (graphicItem.ContentSequence) {
-      const {
-        ReferencedFrameOfReferenceSequence,
-      } = graphicItem.ContentSequence;
+      const { ReferencedFrameOfReferenceSequence } = graphicItem.ContentSequence;
       coords.ReferencedFrameOfReferenceSequence = ReferencedFrameOfReferenceSequence;
     }
   }

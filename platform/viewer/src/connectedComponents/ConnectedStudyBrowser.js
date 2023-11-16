@@ -1,18 +1,18 @@
-import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
+
+import OHIF from '@ohif/core';
+
+import { StudyBrowser } from '@ohif/ui';
+
+import { servicesManager } from '../App';
 import findDisplaySetByUID from './findDisplaySetByUID';
-import { servicesManager } from './../App.js';
-import { StudyBrowser } from '../../../ui/src/components/studyBrowser/StudyBrowser';
 
 const { setActiveViewportSpecificData } = OHIF.redux.actions;
 
 const mapDispatchToProps = (dispatch, ownProps) => {
   return {
     onThumbnailClick: (displaySetInstanceUID) => {
-      let displaySet = findDisplaySetByUID(
-        ownProps.studyMetadata,
-        displaySetInstanceUID
-      );
+      let displaySet = findDisplaySetByUID(ownProps.studyMetadata, displaySetInstanceUID);
 
       const { LoggerService, UINotificationService } = servicesManager.services;
 
@@ -21,8 +21,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
         if (Modality === 'SEG' && servicesManager) {
           const onDisplaySetLoadFailureHandler = (error) => {
             const message =
-              error.message.includes('orthogonal') ||
-              error.message.includes('oblique')
+              error.message.includes('orthogonal') || error.message.includes('oblique')
                 ? 'The segmentation has been detected as non coplanar,\
                 If you really think it is coplanar,\
                 please adjust the tolerance in the segmentation panel settings (at your own peril!)'
@@ -37,21 +36,17 @@ const mapDispatchToProps = (dispatch, ownProps) => {
             });
           };
 
-          const { referencedDisplaySet, activatedLabelmapPromise } =
-            displaySet.getSourceDisplaySet(
-              ownProps.studyMetadata,
-              true,
-              onDisplaySetLoadFailureHandler
-            );
+          const { referencedDisplaySet, activatedLabelmapPromise } = displaySet.getSourceDisplaySet(
+            ownProps.studyMetadata,
+            true,
+            onDisplaySetLoadFailureHandler
+          );
           displaySet = referencedDisplaySet;
 
           activatedLabelmapPromise.then((activatedLabelmapIndex) => {
-            const selectionFired = new CustomEvent(
-              'extensiondicomsegmentationsegselected',
-              {
-                detail: { activatedLabelmapIndex: activatedLabelmapIndex },
-              }
-            );
+            const selectionFired = new CustomEvent('extensiondicomsegmentationsegselected', {
+              detail: { activatedLabelmapIndex: activatedLabelmapIndex },
+            });
             const segThumbnailSelected = new CustomEvent('segseriesselected');
             document.dispatchEvent(selectionFired);
             document.dispatchEvent(segThumbnailSelected);
@@ -61,9 +56,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
         }
 
         if (!displaySet) {
-          const error = new Error(
-            `Referenced series for ${Modality} dataset not present.`
-          );
+          const error = new Error(`Referenced series for ${Modality} dataset not present.`);
           const message = `Referenced series for ${Modality} dataset not present.`;
           LoggerService.error({ error, message });
           UINotificationService.show({

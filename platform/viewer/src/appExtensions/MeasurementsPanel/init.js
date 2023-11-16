@@ -1,21 +1,18 @@
-import OHIF from '@ohif/core';
 import cornerstone from 'cornerstone-core';
 import csTools from 'cornerstone-tools';
 import throttle from 'lodash.throttle';
 
+import OHIF from '@ohif/core';
+
 import LabellingFlow from '../../components/Labelling/LabellingFlow';
 import ToolContextMenu from '../../connectedComponents/ToolContextMenu';
 
-const {
-  onAdded,
-  onRemoved,
-  onModified,
-} = OHIF.measurements.MeasurementHandlers;
+const { onAdded, onRemoved, onModified } = OHIF.measurements.MeasurementHandlers;
 
 const MEASUREMENT_ACTION_MAP = {
   added: onAdded,
   removed: onRemoved,
-  modified: throttle(event => {
+  modified: throttle((event) => {
     return onModified(event);
   }, 300),
 };
@@ -37,12 +34,9 @@ export default function init({ servicesManager, commandsManager }) {
   const onMeasurementAdded = onMeasurementsChanged.bind(this, 'added');
   const onMeasurementRemoved = onMeasurementsChanged.bind(this, 'removed');
   const onMeasurementModified = onMeasurementsChanged.bind(this, 'modified');
-  const onLabelmapModified = onMeasurementsChanged.bind(
-    this,
-    'labelmapModified'
-  );
+  const onLabelmapModified = onMeasurementsChanged.bind(this, 'labelmapModified');
 
-  const _getDefaultPosition = event => ({
+  const _getDefaultPosition = (event) => ({
     x: (event && event.currentPoints.client.x) || 0,
     y: (event && event.currentPoints.client.y) || 0,
   });
@@ -60,10 +54,7 @@ export default function init({ servicesManager, commandsManager }) {
       measurementData.response = response;
     }
 
-    commandsManager.runCommand(
-      'updateTableWithNewMeasurementData',
-      measurementData
-    );
+    commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
   };
 
   const showLabellingDialog = (props, contentProps, measurementData) => {
@@ -80,17 +71,15 @@ export default function init({ servicesManager, commandsManager }) {
       content: LabellingFlow,
       contentProps: {
         measurementData,
-        labellingDoneCallback: () =>
-          UIDialogService.dismiss({ id: 'labelling' }),
-        updateLabelling: labellingData =>
-          _updateLabellingHandler(labellingData, measurementData),
+        labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
+        updateLabelling: (labellingData) => _updateLabellingHandler(labellingData, measurementData),
         ...contentProps,
       },
       ...props,
     });
   };
 
-  const onRightClick = event => {
+  const onRightClick = (event) => {
     if (!UIDialogService) {
       console.warn('Unable to show dialog; no UI Dialog Service available.');
       return;
@@ -132,7 +121,7 @@ export default function init({ servicesManager, commandsManager }) {
     });
   };
 
-  const onTouchPress = event => {
+  const onTouchPress = (event) => {
     if (!UIDialogService) {
       console.warn('Unable to show dialog; no UI Dialog Service available.');
       return;
@@ -169,7 +158,7 @@ export default function init({ servicesManager, commandsManager }) {
    * Need to fallback to event.which;
    *
    */
-  const handleClick = cornerstoneMouseClickEvent => {
+  const handleClick = (cornerstoneMouseClickEvent) => {
     const mouseUpEvent = cornerstoneMouseClickEvent.detail.event;
     const isRightClick = mouseUpEvent.which === 3;
 
@@ -183,22 +172,10 @@ export default function init({ servicesManager, commandsManager }) {
   function elementEnabledHandler(evt) {
     const element = evt.detail.element;
 
-    element.addEventListener(
-      csTools.EVENTS.MEASUREMENT_ADDED,
-      onMeasurementAdded
-    );
-    element.addEventListener(
-      csTools.EVENTS.MEASUREMENT_REMOVED,
-      onMeasurementRemoved
-    );
-    element.addEventListener(
-      csTools.EVENTS.MEASUREMENT_MODIFIED,
-      onMeasurementModified
-    );
-    element.addEventListener(
-      csTools.EVENTS.LABELMAP_MODIFIED,
-      onLabelmapModified
-    );
+    element.addEventListener(csTools.EVENTS.MEASUREMENT_ADDED, onMeasurementAdded);
+    element.addEventListener(csTools.EVENTS.MEASUREMENT_REMOVED, onMeasurementRemoved);
+    element.addEventListener(csTools.EVENTS.MEASUREMENT_MODIFIED, onMeasurementModified);
+    element.addEventListener(csTools.EVENTS.LABELMAP_MODIFIED, onLabelmapModified);
 
     element.addEventListener(csTools.EVENTS.TOUCH_PRESS, onTouchPress);
     element.addEventListener(csTools.EVENTS.MOUSE_CLICK, handleClick);
@@ -211,22 +188,10 @@ export default function init({ servicesManager, commandsManager }) {
   function elementDisabledHandler(evt) {
     const element = evt.detail.element;
 
-    element.removeEventListener(
-      csTools.EVENTS.MEASUREMENT_ADDED,
-      onMeasurementAdded
-    );
-    element.removeEventListener(
-      csTools.EVENTS.MEASUREMENT_REMOVED,
-      onMeasurementRemoved
-    );
-    element.removeEventListener(
-      csTools.EVENTS.MEASUREMENT_MODIFIED,
-      onMeasurementModified
-    );
-    element.removeEventListener(
-      csTools.EVENTS.LABELMAP_MODIFIED,
-      onLabelmapModified
-    );
+    element.removeEventListener(csTools.EVENTS.MEASUREMENT_ADDED, onMeasurementAdded);
+    element.removeEventListener(csTools.EVENTS.MEASUREMENT_REMOVED, onMeasurementRemoved);
+    element.removeEventListener(csTools.EVENTS.MEASUREMENT_MODIFIED, onMeasurementModified);
+    element.removeEventListener(csTools.EVENTS.LABELMAP_MODIFIED, onLabelmapModified);
 
     element.removeEventListener(csTools.EVENTS.TOUCH_PRESS, onTouchPress);
     element.removeEventListener(csTools.EVENTS.MOUSE_CLICK, handleClick);
@@ -236,12 +201,6 @@ export default function init({ servicesManager, commandsManager }) {
     // element.removeEventListener(cornerstone.EVENTS.NEW_IMAGE, onNewImage);
   }
 
-  cornerstone.events.addEventListener(
-    cornerstone.EVENTS.ELEMENT_ENABLED,
-    elementEnabledHandler
-  );
-  cornerstone.events.addEventListener(
-    cornerstone.EVENTS.ELEMENT_DISABLED,
-    elementDisabledHandler
-  );
+  cornerstone.events.addEventListener(cornerstone.EVENTS.ELEMENT_ENABLED, elementEnabledHandler);
+  cornerstone.events.addEventListener(cornerstone.EVENTS.ELEMENT_DISABLED, elementDisabledHandler);
 }

@@ -1,5 +1,5 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.rangeRequests = (function(t, e, n) {
+  (this.workbox.rangeRequests = (function (t, e, n) {
     'use strict';
     try {
       self['workbox:range-requests:5.1.4'] && _();
@@ -9,7 +9,7 @@
         if (206 === n.status) return n;
         const r = t.headers.get('range');
         if (!r) throw new e.WorkboxError('no-range-header');
-        const s = (function(t) {
+        const s = (function (t) {
             const n = t.trim().toLowerCase();
             if (!n.startsWith('bytes='))
               throw new e.WorkboxError('unit-must-be-bytes', {
@@ -30,7 +30,7 @@
             };
           })(r),
           a = await n.blob(),
-          o = (function(t, n, r) {
+          o = (function (t, n, r) {
             const s = t.size;
             if ((r && r > s) || (n && n < 0))
               throw new e.WorkboxError('range-not-satisfiable', {
@@ -57,10 +57,7 @@
           });
         return (
           u.headers.set('Content-Length', String(d)),
-          u.headers.set(
-            'Content-Range',
-            `bytes ${o.start}-${o.end - 1}/` + a.size
-          ),
+          u.headers.set('Content-Range', `bytes ${o.start}-${o.end - 1}/` + a.size),
           u
         );
       } catch (t) {
@@ -73,10 +70,8 @@
     return (
       (t.RangeRequestsPlugin = class {
         constructor() {
-          this.cachedResponseWillBeUsed = async ({
-            request: t,
-            cachedResponse: e,
-          }) => (e && t.headers.has('range') ? await r(t, e) : e);
+          this.cachedResponseWillBeUsed = async ({ request: t, cachedResponse: e }) =>
+            e && t.headers.has('range') ? await r(t, e) : e;
         }
       }),
       (t.createPartialResponse = r),

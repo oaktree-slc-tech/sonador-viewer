@@ -1,20 +1,19 @@
-import { InstanceMetadata, SeriesMetadata, StudyMetadata } from './metadata';
-
 import CommandsManager from './CommandsManager.js';
-import { DICOMFileLoadingListener } from './StudyLoadingListener';
 import HotkeysManager from './HotkeysManager.js';
 import ImageSet from './ImageSet';
 import LogManager from './LogManager';
-import PubSub from './PubSub';
+import { InstanceMetadata, SeriesMetadata, StudyMetadata } from './metadata';
 import MetadataProvider from './MetadataProvider';
 import OHIFError from './OHIFError.js';
 import { OHIFStudyMetadataSource } from './OHIFStudyMetadataSource';
+import PubSub from './PubSub';
+import { DICOMFileLoadingListener } from './StudyLoadingListener';
 import { StackLoadingListener } from './StudyLoadingListener';
 import { StudyLoadingListener } from './StudyLoadingListener';
 import { StudyMetadataSource } from './StudyMetadataSource';
 import { StudyPrefetcher } from './StudyPrefetcher';
-import { TypeSafeCollection } from './TypeSafeCollection';
 import { TypedArrayProp } from './TypedArrayProp.js';
+import { TypeSafeCollection } from './TypeSafeCollection';
 
 export {
   OHIFStudyMetadataSource,

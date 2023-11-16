@@ -14,21 +14,12 @@
 .DicomPDFViewport #canvas {
   height: calc(100% - var(--header-height));
   overflow-y: scroll;
-}
-
-.DicomPDFViewport #text-layer {
-  height: 100%;
-  margin-top: var(--header-height);
+  display: flex;
+  justify-content: center;
 }
 
 .DicomPDFViewport #pdf-canvas-container {
   position: relative;
-}
-
-.DicomPDFViewport canvas, #text-layer {
-  display: block;
-  margin: 0 auto;
-  overflow: hidden;
 }
 
 .DicomPDFViewport #toolbar button {
@@ -42,21 +33,7 @@
   cursor: pointer;
 }
 
-.DicomPDFViewport #text-layer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  opacity: 0.2;
-  line-height: 1;
-}
-
-.DicomPDFViewport #text-layer>span {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0% 0%;
+.react-pdf__Page__textContent,
+.react-pdf__Page__annotations {
+  display: none !important;
 }

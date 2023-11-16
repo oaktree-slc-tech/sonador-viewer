@@ -1,11 +1,9 @@
 import log from '../log';
 import studies from '../studies';
 import utils from '../utils';
-import {
-  retrieveMeasurementFromSR,
-  stowSRFromMeasurements,
-} from './handleStructuredReport';
+
 import findMostRecentStructuredReport from './utils/findMostRecentStructuredReport';
+import { retrieveMeasurementFromSR, stowSRFromMeasurements } from './handleStructuredReport';
 
 /**
  *
@@ -59,8 +57,7 @@ const storeMeasurements = async (measurementData, filter, server) => {
   const serverUrl = server.wadoRoot;
   const firstMeasurementKey = Object.keys(measurementData)[0];
   const firstMeasurement = measurementData[firstMeasurementKey][0];
-  const StudyInstanceUID =
-    firstMeasurement && firstMeasurement.StudyInstanceUID;
+  const StudyInstanceUID = firstMeasurement && firstMeasurement.StudyInstanceUID;
 
   try {
     await stowSRFromMeasurements(measurementData, serverUrl);
@@ -72,9 +69,7 @@ const storeMeasurements = async (measurementData, filter, server) => {
       message: 'Measurements saved successfully',
     };
   } catch (error) {
-    log.error(
-      `[DICOMSR] Error while saving the measurements: ${error.message}`
-    );
+    log.error(`[DICOMSR] Error while saving the measurements: ${error.message}`);
     throw new Error('Error while saving the measurements.');
   }
 };

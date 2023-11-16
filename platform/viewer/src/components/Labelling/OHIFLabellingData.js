@@ -29,7 +29,7 @@ const items = [
   'Subcutaneous',
 ];
 
-const OHIFLabellingData = items.map(item => {
+const OHIFLabellingData = items.map((item) => {
   return {
     label: item,
     value: item,

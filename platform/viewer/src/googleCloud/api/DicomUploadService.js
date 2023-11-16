@@ -1,6 +1,8 @@
-import { httpErrorToStr, checkDicomFile } from '../utils/helpers';
 import { api } from 'dicomweb-client';
+
 import { errorHandler } from '@ohif/core';
+
+import { checkDicomFile, httpErrorToStr } from '../utils/helpers';
 
 class DicomUploadService {
   // DICOMweb upload service
@@ -33,10 +35,7 @@ class DicomUploadService {
         try {
           // Upload file to remote server
 
-          if (chunk.length > 1)
-            throw new Error(
-              'DICOMweb upload service does not support parallel uploads'
-            );
+          if (chunk.length > 1) throw new Error('DICOMweb upload service does not support parallel uploads');
           if (chunk.length === 1) await this.simpleUpload(chunk[0], url);
         } catch (err) {
           // Catch error and convert to string reprsentation
@@ -48,7 +47,7 @@ class DicomUploadService {
         // Invoke callback for each error. FileID, error, and fileArray are all provided
         // to the callback so that files which failed due to transfer errors can be re-queued
         // and re-tried.
-        chunk.forEach(file => uploadCallback(file.fileId, error, filesArray));
+        chunk.forEach((file) => uploadCallback(file.fileId, error, filesArray));
 
         // All files in queue have been processed, exit
         if (!completed && filesArray.length === 0) {
@@ -59,7 +58,7 @@ class DicomUploadService {
       }
     };
 
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       for (let i = 0; i < parallelJobsCount; i++) {
         processJob(resolve);
       }
@@ -72,8 +71,7 @@ class DicomUploadService {
     const client = this.getClient(url);
     const loadedFile = await this.readFile(file);
     const content = loadedFile.content;
-    if (!checkDicomFile(content))
-      throw new Error('This is not a valid DICOM file.');
+    if (!checkDicomFile(content)) throw new Error('This is not a valid DICOM file.');
 
     await client.storeInstances({ datasets: [content] });
   }
@@ -91,7 +89,7 @@ class DicomUploadService {
           content: reader.result,
         });
       };
-      reader.onerror = error => reject(error);
+      reader.onerror = (error) => reject(error);
       reader.readAsArrayBuffer(file);
     });
   }

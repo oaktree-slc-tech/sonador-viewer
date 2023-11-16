@@ -34,11 +34,11 @@ export class TypeSafeCollection {
   }
 
   _elementWithPayload(payload, silent) {
-    return this._elements(silent).find(item => item.payload === payload);
+    return this._elements(silent).find((item) => item.payload === payload);
   }
 
   _elementWithId(id, silent) {
-    return this._elements(silent).find(item => item.id === id);
+    return this._elements(silent).find((item) => item.id === id);
   }
 
   _trigger(event, data) {
@@ -254,17 +254,13 @@ export class TypeSafeCollection {
       const all = this.all(options);
       if (all.length > 0) {
         if (_isObject(propertyMap)) {
-          found = all.find(item =>
-            _compareToPropertyMapStrict(propertyMap, item)
-          );
+          found = all.find((item) => _compareToPropertyMapStrict(propertyMap, item));
         } else {
           found = all[0]; // simply extract the first element...
         }
       }
     } else if (_isObject(propertyMap)) {
-      found = this._elements().find(item =>
-        _compareToPropertyMapStrict(propertyMap, item.payload)
-      );
+      found = this._elements().find((item) => _compareToPropertyMapStrict(propertyMap, item.payload));
       if (found) {
         found = found.payload;
       }
@@ -302,7 +298,7 @@ export class TypeSafeCollection {
    * @returns {Array} An array with all elements that match the given criteria and sorted in the specified sorting order.
    */
   findAllBy(propertyMap, options) {
-    const found = this.findAllEntriesBy(propertyMap).map(item => item[0]); // Only payload is relevant...
+    const found = this.findAllEntriesBy(propertyMap).map((item) => item[0]); // Only payload is relevant...
     if (_isObject(options)) {
       if ('sort' in options) {
         _sortListBy(found, options.sort);
@@ -342,7 +338,7 @@ export class TypeSafeCollection {
    * @returns {Array} An array with all elements stored in the collection.
    */
   all(options) {
-    let list = this._elements().map(item => item.payload);
+    let list = this._elements().map((item) => item.payload);
     if (_isObject(options)) {
       if ('sort' in options) {
         _sortListBy(list, options.sort);
@@ -361,10 +357,7 @@ export class TypeSafeCollection {
  * Atention! The underscore version of this function should not be used for performance reasons.
  */
 function _isObject(subject) {
-  return (
-    subject instanceof Object ||
-    (typeof subject === 'object' && subject !== null)
-  );
+  return subject instanceof Object || (typeof subject === 'object' && subject !== null);
 }
 
 /**
@@ -402,8 +395,7 @@ function _getPropertyValue(targetObject, propertyName) {
     const fragmentCount = fragments.length;
     if (fragmentCount > 0) {
       const firstFragment = fragments[0];
-      const remainingFragments =
-        fragmentCount > 1 ? fragments.slice(1).join(PROPERTY_SEPARATOR) : null;
+      const remainingFragments = fragmentCount > 1 ? fragments.slice(1).join(PROPERTY_SEPARATOR) : null;
       propertyValue = targetObject[firstFragment];
       if (remainingFragments !== null) {
         propertyValue = _getPropertyValue(propertyValue, remainingFragments);
@@ -425,10 +417,7 @@ function _compareToPropertyMapStrict(propertyMap, targetObject) {
   // "for in" loops do not thown exceptions for invalid data types...
   for (let propertyName in propertyMap) {
     if (_hasOwnProperty.call(propertyMap, propertyName)) {
-      if (
-        propertyMap[propertyName] !==
-        _getPropertyValue(targetObject, propertyName)
-      ) {
+      if (propertyMap[propertyName] !== _getPropertyValue(targetObject, propertyName)) {
         result = false;
         break;
       } else if (result !== true) {
@@ -456,10 +445,7 @@ function _isValidSortingSpecifier(specifiers) {
       if (item instanceof Array) {
         const property = item[0];
         const order = item[1];
-        if (
-          _isString(property) &&
-          (order === ORDER_ASC || order === ORDER_DESC)
-        ) {
+        if (_isString(property) && (order === ORDER_ASC || order === ORDER_DESC)) {
           continue;
         }
       }

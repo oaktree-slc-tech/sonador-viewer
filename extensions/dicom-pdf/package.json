@@ -11,9 +11,9 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=10",
-    "npm": ">=6",
-    "yarn": ">=1.16.0"
+    "node": ">=18",
+    "npm": ">=8",
+    "yarn": ">=1.22.0"
   },
   "files": [
     "dist",
@@ -38,7 +38,7 @@
     "@babel/runtime": "^7.5.5",
     "classnames": "^2.2.6",
     "lodash.isequal": "^4.5.0",
-    "pdfjs-dist": "^2.2.228"
+    "react-pdf": "^7.5.1"
   },
   "gitHead": "a5baa9228c0eda0df880136bde4420d78e6f8706"
 }

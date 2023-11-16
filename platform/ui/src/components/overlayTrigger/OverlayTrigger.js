@@ -1,12 +1,10 @@
-import contains from 'dom-helpers/query/contains';
 import React, { cloneElement } from 'react';
-import PropTypes from 'prop-types';
 import ReactDOM from 'react-dom';
+import PropTypes from 'prop-types';
 import warning from 'warning';
 
-import { Overlay } from './Overlay';
-
 import createChainedFunction from './createChainedFunction';
+import { Overlay } from './Overlay';
 
 /**
  * Check if value one is inside or equal to the of value
@@ -20,6 +18,11 @@ function isOneOf(one, of) {
     return of.indexOf(one) >= 0;
   }
   return one === of;
+}
+
+function contains(context, node) {
+  if (context.contains) return context.contains(node);
+  if (context.compareDocumentPosition) return context === node || !!(context.compareDocumentPosition(node) & 16);
 }
 
 const triggerType = PropTypes.oneOf(['click', 'hover', 'focus']);
@@ -108,15 +111,10 @@ class OverlayTrigger extends React.Component {
     this.handleToggle = this.handleToggle.bind(this);
     this.handleDelayedShow = this.handleDelayedShow.bind(this);
     this.handleDelayedHide = this.handleDelayedHide.bind(this);
-    this.handleHide = createChainedFunction(
-      this.handleHide.bind(this),
-      props.handleHide
-    );
+    this.handleHide = createChainedFunction(this.handleHide.bind(this), props.handleHide);
 
-    this.handleMouseOver = e =>
-      this.handleMouseOverOut(this.handleDelayedShow, e, 'fromElement');
-    this.handleMouseOut = e =>
-      this.handleMouseOverOut(this.handleDelayedHide, e, 'toElement');
+    this.handleMouseOver = (e) => this.handleMouseOverOut(this.handleDelayedShow, e, 'fromElement');
+    this.handleMouseOut = (e) => this.handleMouseOverOut(this.handleDelayedHide, e, 'toElement');
 
     this._mountNode = null;
 
@@ -153,8 +151,7 @@ class OverlayTrigger extends React.Component {
       return;
     }
 
-    const delay =
-      this.props.delayHide != null ? this.props.delayHide : this.props.delay;
+    const delay = this.props.delayHide != null ? this.props.delayHide : this.props.delay;
 
     if (!delay) {
       this.hide();
@@ -178,8 +175,7 @@ class OverlayTrigger extends React.Component {
       return;
     }
 
-    const delay =
-      this.props.delayShow != null ? this.props.delayShow : this.props.delay;
+    const delay = this.props.delayShow != null ? this.props.delayShow : this.props.delay;
 
     if (!delay) {
       this.show();
@@ -223,12 +219,7 @@ class OverlayTrigger extends React.Component {
 
   makeOverlay(overlay, props) {
     return (
-      <Overlay
-        {...props}
-        show={this.state.show}
-        onHide={this.handleHide}
-        target={this}
-      >
+      <Overlay {...props} show={this.state.show} onHide={this.handleHide} target={this}>
         {overlay}
       </Overlay>
     );
@@ -239,25 +230,11 @@ class OverlayTrigger extends React.Component {
   }
 
   renderOverlay() {
-    ReactDOM.unstable_renderSubtreeIntoContainer(
-      this,
-      this._overlay,
-      this._mountNode
-    );
+    ReactDOM.unstable_renderSubtreeIntoContainer(this, this._overlay, this._mountNode);
   }
 
   render() {
-    const {
-      trigger,
-      overlay,
-      children,
-      onBlur,
-      onClick,
-      onFocus,
-      onMouseOut,
-      onMouseOver,
-      ...props
-    } = this.props;
+    const { trigger, overlay, children, onBlur, onClick, onFocus, onMouseOut, onMouseOver, ...props } = this.props;
 
     delete props.delay;
     delete props.delayShow;
@@ -278,10 +255,7 @@ class OverlayTrigger extends React.Component {
     triggerProps.onClick = createChainedFunction(childProps.onClick, onClick);
 
     if (isOneOf('click', trigger)) {
-      triggerProps.onClick = createChainedFunction(
-        triggerProps.onClick,
-        this.handleToggle
-      );
+      triggerProps.onClick = createChainedFunction(triggerProps.onClick, this.handleToggle);
     }
 
     if (isOneOf('hover', trigger)) {
@@ -293,29 +267,13 @@ class OverlayTrigger extends React.Component {
           'users can see the overlay as well.'
       );
 
-      triggerProps.onMouseOver = createChainedFunction(
-        childProps.onMouseOver,
-        onMouseOver,
-        this.handleMouseOver
-      );
-      triggerProps.onMouseOut = createChainedFunction(
-        childProps.onMouseOut,
-        onMouseOut,
-        this.handleMouseOut
-      );
+      triggerProps.onMouseOver = createChainedFunction(childProps.onMouseOver, onMouseOver, this.handleMouseOver);
+      triggerProps.onMouseOut = createChainedFunction(childProps.onMouseOut, onMouseOut, this.handleMouseOut);
     }
 
     if (isOneOf('focus', trigger)) {
-      triggerProps.onFocus = createChainedFunction(
-        childProps.onFocus,
-        onFocus,
-        this.handleDelayedShow
-      );
-      triggerProps.onBlur = createChainedFunction(
-        childProps.onBlur,
-        onBlur,
-        this.handleDelayedHide
-      );
+      triggerProps.onFocus = createChainedFunction(childProps.onFocus, onFocus, this.handleDelayedShow);
+      triggerProps.onBlur = createChainedFunction(childProps.onBlur, onBlur, this.handleDelayedHide);
     }
 
     this._overlay = this.makeOverlay(overlay, props);

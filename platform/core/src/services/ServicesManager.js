@@ -14,9 +14,7 @@ export default class ServicesManager {
    */
   registerService(service, configuration = {}) {
     if (!service) {
-      log.warn(
-        'Attempting to register a null/undefined service. Exiting early.'
-      );
+      log.warn('Attempting to register a null/undefined service. Exiting early.');
       return;
     }
 
@@ -26,9 +24,7 @@ export default class ServicesManager {
     }
 
     if (this.registeredServiceNames.includes(service.name)) {
-      log.warn(
-        `Service name ${service.name} has already been registered. Exiting before duplicating services.`
-      );
+      log.warn(`Service name ${service.name} has already been registered. Exiting before duplicating services.`);
       return;
     }
 
@@ -52,7 +48,7 @@ export default class ServicesManager {
    * @param {Object[]} services - Array of services
    */
   registerServices(services) {
-    services.forEach(service => {
+    services.forEach((service) => {
       const hasConfiguration = Array.isArray(service);
 
       if (hasConfiguration) {

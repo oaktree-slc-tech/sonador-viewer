@@ -54,15 +54,10 @@ const mergeProps = (propsFromState, propsFromDispatch) => {
   const { currentLayout, activeViewportIndex } = propsFromState;
 
   return {
-    onChange: (selectedCell) =>
-      onChangeFromDispatch(selectedCell, currentLayout, activeViewportIndex),
+    onChange: (selectedCell) => onChangeFromDispatch(selectedCell, currentLayout, activeViewportIndex),
   };
 };
 
-const ConnectedLayoutButton = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps
-)(LayoutButton);
+const ConnectedLayoutButton = connect(mapStateToProps, mapDispatchToProps, mergeProps)(LayoutButton);
 
 export default ConnectedLayoutButton;

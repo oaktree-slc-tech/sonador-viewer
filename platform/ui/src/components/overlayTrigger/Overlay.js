@@ -1,8 +1,8 @@
-import classNames from 'classnames';
 import React, { cloneElement } from 'react';
-import PropTypes from 'prop-types';
 import { Overlay as BaseOverlay } from 'react-overlays';
-import elementType from 'prop-types-extra/lib/elementType';
+import classNames from 'classnames';
+import PropTypes from 'prop-types';
+
 import { withTranslation } from '../../contextProviders';
 
 import Fade from './Fade';
@@ -25,7 +25,7 @@ const propTypes = {
   /**
    * Use animation
    */
-  animation: PropTypes.oneOfType([PropTypes.bool, elementType]),
+  animation: PropTypes.oneOfType([PropTypes.bool, PropTypes.elementType]),
 
   /**
    * Callback fired before the Overlay transitions in

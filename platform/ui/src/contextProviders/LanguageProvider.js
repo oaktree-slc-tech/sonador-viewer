@@ -1,13 +1,11 @@
 // Reference > https://reactjs.org/docs/context.html
 import React from 'react';
-import {
-  withTranslation as I18NextWithTranslation,
-  I18nextProvider,
-} from 'react-i18next';
+import { I18nextProvider, withTranslation as I18NextWithTranslation } from 'react-i18next';
+
 import i18n from '@ohif/i18n';
 
-const WrapperI18n = Component => {
-  const WrapperComponent = props => (
+const WrapperI18n = (Component) => {
+  const WrapperComponent = (props) => (
     <I18nextProvider i18n={i18n}>
       <Component {...props} />
     </I18nextProvider>
@@ -16,8 +14,8 @@ const WrapperI18n = Component => {
   return WrapperComponent;
 };
 
-const withTranslation = namespace => Component => {
-  const TranslatedComponent = props => {
+const withTranslation = (namespace) => (Component) => {
+  const TranslatedComponent = (props) => {
     return <Component {...props} />;
   };
 

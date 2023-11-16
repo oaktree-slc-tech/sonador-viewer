@@ -1,9 +1,6 @@
 // TODO: This is duplicated in TypeSafeCollection
 function isObject(subject) {
-  return (
-    subject instanceof Object ||
-    (typeof subject === 'object' && subject !== null)
-  );
+  return subject instanceof Object || (typeof subject === 'object' && subject !== null);
 }
 
 // TODO: This is duplicated in TypeSafeCollection
@@ -16,7 +13,7 @@ function search(object, query, property = null, result = []) {
   // Create the search pattern
   const pattern = new RegExp(query.trim(), 'i');
 
-  Object.keys(object).forEach(key => {
+  Object.keys(object).forEach((key) => {
     const item = object[key];
 
     // Stop here if item is empty
@@ -53,7 +50,7 @@ function encodeId(input) {
   }
 
   // Create a converter to replace non accepted chars
-  const converter = match => '_' + match[0].charCodeAt(0).toString(16) + '_';
+  const converter = (match) => '_' + match[0].charCodeAt(0).toString(16) + '_';
 
   // Encode the given string and return it
   return string.replace(/[^a-zA-Z0-9-]/g, converter);

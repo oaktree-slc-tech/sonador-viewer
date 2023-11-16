@@ -6,12 +6,7 @@ import ReactTooltip from 'react-tooltip';
 import './StructureSetItem.css';
 
 const ColoredCircle = ({ color }) => {
-  return (
-    <div
-      className="item-color"
-      style={{ backgroundColor: `rgba(${color.join(',')})` }}
-    ></div>
-  );
+  return <div className="item-color" style={{ backgroundColor: `rgba(${color.join(',')})` }}></div>;
 };
 
 ColoredCircle.propTypes = {
@@ -72,13 +67,7 @@ const StructureSetItem = ({
           <a data-tip data-for={`StructureHover${index}`}>
             <span>{label}</span>
           </a>
-          <ReactTooltip
-            id={`StructureHover${index}`}
-            delayShow={250}
-            place="right"
-            border={true}
-            type="light"
-          >
+          <ReactTooltip id={`StructureHover${index}`} delayShow={250} place="right" border={true} type="light">
             <span>{label}</span>
           </ReactTooltip>
           {!isDisabled && (
@@ -87,7 +76,7 @@ const StructureSetItem = ({
               name={isVisible ? 'eye' : 'eye-closed'}
               width="20px"
               height="20px"
-              onClick={event => {
+              onClick={(event) => {
                 event.stopPropagation();
 
                 if (isDisabled) {
@@ -102,29 +91,29 @@ const StructureSetItem = ({
           )}
         </div>
 
-        {false && <div className="item-info">{'...'}</div>}
-        {false && (
-          <div className="item-actions">
-            <button
-              className="btnAction"
-              onClick={() => console.log('Relabelling...')}
-            >
-              <span style={{ marginRight: '4px' }}>
-                <Icon name="edit" width="14px" height="14px" />
-              </span>
-              Relabel
-            </button>
-            <button
-              className="btnAction"
-              onClick={() => console.log('Editing description...')}
-            >
-              <span style={{ marginRight: '4px' }}>
-                <Icon name="edit" width="14px" height="14px" />
-              </span>
-              Description
-            </button>
-          </div>
-        )}
+        {/*{false && <div className="item-info">{'...'}</div>}*/}
+        {/*{false && (*/}
+        {/*  <div className="item-actions">*/}
+        {/*    <button*/}
+        {/*      className="btnAction"*/}
+        {/*      onClick={() => console.log('Relabelling...')}*/}
+        {/*    >*/}
+        {/*      <span style={{ marginRight: '4px' }}>*/}
+        {/*        <Icon name="edit" width="14px" height="14px" />*/}
+        {/*      </span>*/}
+        {/*      Relabel*/}
+        {/*    </button>*/}
+        {/*    <button*/}
+        {/*      className="btnAction"*/}
+        {/*      onClick={() => console.log('Editing description...')}*/}
+        {/*    >*/}
+        {/*      <span style={{ marginRight: '4px' }}>*/}
+        {/*        <Icon name="edit" width="14px" height="14px" />*/}
+        {/*      </span>*/}
+        {/*      Description*/}
+        {/*    </button>*/}
+        {/*  </div>*/}
+        {/*)}*/}
       </div>
     </TableListItem>
   );
@@ -137,15 +126,9 @@ const StructureSetItem = ({
             key={index}
             placement="left"
             overlay={
-              <Tooltip
-                placement="left"
-                className="in tooltip-warning"
-                id="tooltip-left"
-              >
+              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
                 <div className="warningTitle">Unsupported Region</div>
-                <div className="warningContent">
-                  Contour type currently unsupported.
-                </div>
+                <div className="warningContent">Contour type currently unsupported.</div>
               </Tooltip>
             }
           >

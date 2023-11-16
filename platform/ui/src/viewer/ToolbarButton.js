@@ -1,10 +1,12 @@
-import './toolbar-button.styl';
-
-import { Icon } from './../elements/Icon';
-import PropTypes from 'prop-types';
 import React from 'react';
 import classnames from 'classnames';
+import PropTypes from 'prop-types';
+
 import { withTranslation } from '../contextProviders';
+
+import { Icon } from './../elements/Icon';
+
+import './toolbar-button.styl';
 
 export function ToolbarButton(props) {
   const { isActive, icon, labelWhenActive, onClick, t } = props;
@@ -13,11 +15,9 @@ export function ToolbarButton(props) {
   const label = isActive && labelWhenActive ? labelWhenActive : props.label;
 
   const arrowIconName = props.isExpanded ? 'caret-up' : 'caret-down';
-  const arrowIcon = props.isExpandable && (
-    <Icon name={arrowIconName} className="expand-caret" />
-  );
+  const arrowIcon = props.isExpandable && <Icon name={arrowIconName} className="expand-caret" />;
 
-  const handleClick = event => {
+  const handleClick = (event) => {
     if (onClick) {
       onClick(event, props);
     }
@@ -26,11 +26,7 @@ export function ToolbarButton(props) {
   const cypressSelectorId = props.label.toLowerCase();
 
   return (
-    <div
-      className={className}
-      onClick={handleClick}
-      data-cy={cypressSelectorId}
-    >
+    <div className={className} onClick={handleClick} data-cy={cypressSelectorId}>
       {iconProps && <Icon {...iconProps} />}
       <div className="toolbar-button-label">
         {t(label)}

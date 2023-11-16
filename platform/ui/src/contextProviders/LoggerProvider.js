@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 const LoggerContext = createContext(null);
@@ -12,6 +12,21 @@ const LoggerProvider = ({ children, service }) => {
     infos: [],
   });
 
+  /**
+   * Logs an error
+   *
+   * @param {object} props { error, stack, message, displayOnConsole }
+   * @returns void
+   */
+  const error = useCallback(({ error = {}, stack = '', message = '', displayOnConsole = true }) => {
+    const errorObject = { error, stack, message, displayOnConsole };
+    setState((state) => ({ ...state, errors: [...state.errors, errorObject] }));
+
+    if (displayOnConsole) {
+      console.error(error);
+    }
+  });
+
   useEffect(() => {
     const onErrorHandler = ({ error: errorObject, message }) => {
       error({ error: errorObject, message });
@@ -20,27 +35,7 @@ const LoggerProvider = ({ children, service }) => {
     return () => {
       window.removeEventListener('error', onErrorHandler);
     };
-  }, []);
-
-  /**
-   * Logs an error
-   *
-   * @param {object} props { error, stack, message, displayOnConsole }
-   * @returns void
-   */
-  const error = ({
-    error = {},
-    stack = '',
-    message = '',
-    displayOnConsole = true,
-  }) => {
-    const errorObject = { error, stack, message, displayOnConsole };
-    setState(state => ({ ...state, errors: [...state.errors, errorObject] }));
-
-    if (displayOnConsole) {
-      console.error(error);
-    }
-  };
+  }, [error]);
 
   /**
    * Logs an info
@@ -48,8 +43,8 @@ const LoggerProvider = ({ children, service }) => {
    * @param {object} props { message, displayOnConsole }
    * @returns void
    */
-  const info = ({ message = '', displayOnConsole = true }) => {
-    setState(state => ({
+  const info = useCallback(({ message = '', displayOnConsole = true }) => {
+    setState((state) => ({
       ...state,
       infos: state.infos.push({ message, displayOnConsole }),
     }));
@@ -57,7 +52,7 @@ const LoggerProvider = ({ children, service }) => {
     if (displayOnConsole) {
       console.info(message);
     }
-  };
+  });
 
   /**
    * Sets the implementation of a log service that can be used by extensions
@@ -78,7 +73,7 @@ const LoggerProvider = ({ children, service }) => {
  *
  * @returns
  */
-export const withLogger = Component => {
+export const withLogger = (Component) => {
   return function WrappedComponent(props) {
     const { error, info, state } = useLogger();
     return <Component {...props} logger={{ error, info, state }} />;
@@ -90,10 +85,7 @@ LoggerProvider.defaultProps = {
 };
 
 LoggerProvider.propTypes = {
-  children: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-  ]).isRequired,
+  children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,
   service: PropTypes.shape({
     setServiceImplementation: PropTypes.func,
   }),

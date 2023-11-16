@@ -1,7 +1,8 @@
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+
+import DICOMFileLoader from './dicomFileLoader';
 import FileLoader from './fileLoader';
 import PDFFileLoader from './pdfFileLoader';
-import DICOMFileLoader from './dicomFileLoader';
 
 class FileLoaderService extends FileLoader {
   fileType;
@@ -22,7 +23,7 @@ class FileLoaderService extends FileLoader {
         const list = obj[listKey];
 
         // in case key not found, group it using counter
-        key = !!key ? key : '' + nonKeyCounter++;
+        key = key ? key : '' + nonKeyCounter++;
 
         if (!acc[key]) {
           acc[key] = { ...obj };
@@ -35,16 +36,10 @@ class FileLoaderService extends FileLoader {
       }, {});
     };
 
-    const studiesGrouped = Object.values(
-      groupBy(studies, 'StudyInstanceUID', 'series')
-    );
+    const studiesGrouped = Object.values(groupBy(studies, 'StudyInstanceUID', 'series'));
 
-    const result = studiesGrouped.map(studyGroup => {
-      const seriesGrouped = groupBy(
-        studyGroup.series,
-        'SeriesInstanceUID',
-        'instances'
-      );
+    const result = studiesGrouped.map((studyGroup) => {
+      const seriesGrouped = groupBy(studyGroup.series, 'SeriesInstanceUID', 'instances');
       studyGroup.series = Object.values(seriesGrouped);
 
       return studyGroup;

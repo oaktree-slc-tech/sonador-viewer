@@ -1,12 +1,8 @@
+import { ImageMatchingRule, ProtocolMatchingRule, SeriesMatchingRule } from '../classes';
 import Protocol from '../classes/Protocol';
-import ViewportStructure from '../classes/ViewportStructure';
-import Viewport from '../classes/Viewport';
 import Stage from '../classes/Stage';
-import {
-  ImageMatchingRule,
-  ProtocolMatchingRule,
-  SeriesMatchingRule,
-} from '../classes';
+import Viewport from '../classes/Viewport';
+import ViewportStructure from '../classes/ViewportStructure';
 
 function getMRTwoByTwoTest() {
   var proto = new Protocol('MR_TwoByTwo');

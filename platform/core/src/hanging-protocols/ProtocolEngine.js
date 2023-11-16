@@ -1,14 +1,14 @@
-import OHIFError from '../classes/OHIFError.js';
 import metadata from '../classes/metadata/';
+import OHIFError from '../classes/OHIFError.js';
 import { StudyMetadataSource } from '../classes/StudyMetadataSource.js';
-import { isImage } from '../utils/isImage.js';
-import { HPMatcher } from './HPMatcher.js';
-import { sortByScore } from './lib/sortByScore';
 import log from '../log.js';
+import { isImage } from '../utils/isImage.js';
 import sortBy from '../utils/sortBy.js';
-import { CustomViewportSettings } from './customViewportSettings';
+
 import Protocol from './classes/Protocol';
-import { ProtocolStore } from './protocolStore/classes';
+import { sortByScore } from './lib/sortByScore';
+import { CustomViewportSettings } from './customViewportSettings';
+import { HPMatcher } from './HPMatcher.js';
 
 /**
  * Import Constants
@@ -30,25 +30,14 @@ export default class ProtocolEngine {
    * @param  {Object} studyMetadataSource Instance of StudyMetadataSource (ohif-viewerbase) Object to get study metadata
    * @param  {Object} options
    */
-  constructor(
-    protocolStore,
-    studies,
-    priorStudies,
-    studyMetadataSource,
-    options = {}
-  ) {
+  constructor(protocolStore, studies, priorStudies, studyMetadataSource, options = {}) {
     // -----------
     // Type Validations
     if (!(studyMetadataSource instanceof StudyMetadataSource)) {
-      throw new OHIFError(
-        'ProtocolEngine::constructor studyMetadataSource is not an instance of StudyMetadataSource'
-      );
+      throw new OHIFError('ProtocolEngine::constructor studyMetadataSource is not an instance of StudyMetadataSource');
     }
 
-    if (
-      !(studies instanceof Array) &&
-      !studies.every(study => study instanceof StudyMetadata)
-    ) {
+    if (!(studies instanceof Array) && !studies.every((study) => study instanceof StudyMetadata)) {
       throw new OHIFError(
         "ProtocolEngine::constructor studies is not an array or it's items are not instances of StudyMetadata"
       );
@@ -103,11 +92,9 @@ export default class ProtocolEngine {
     const studyInstance = study.getFirstInstance();
 
     // Set custom attribute for study metadata
-    const numberOfAvailablePriors = this.getNumberOfAvailablePriors(
-      study.getObjectID()
-    );
+    const numberOfAvailablePriors = this.getNumberOfAvailablePriors(study.getObjectID());
 
-    this.protocolStore.getProtocol().forEach(protocol => {
+    this.protocolStore.getProtocol().forEach((protocol) => {
       // Clone the protocol's protocolMatchingRules array
       // We clone it so that we don't accidentally add the
       // numberOfPriorsReferenced rule to the Protocol itself.
@@ -169,11 +156,11 @@ export default class ProtocolEngine {
     this._clearMatchedProtocols();
 
     // For each study, find the matching protocols
-    this.studies.forEach(study => {
+    this.studies.forEach((study) => {
       const matched = this.findMatchByStudy(study);
 
       // For each matched protocol, check if it is already in MatchedProtocols
-      matched.forEach(matchedDetail => {
+      matched.forEach((matchedDetail) => {
         const protocol = matchedDetail.protocol;
         if (!protocol) {
           return;
@@ -181,10 +168,7 @@ export default class ProtocolEngine {
 
         // If it is not already in the MatchedProtocols Collection, insert it with its score
         if (!this.matchedProtocols.has(protocol.id)) {
-          log.trace(
-            'ProtocolEngine::updateProtocolMatches inserting protocol match',
-            matchedDetail
-          );
+          log.trace('ProtocolEngine::updateProtocolMatches inserting protocol match', matchedDetail);
           this.matchedProtocols.set(protocol.id, protocol);
           this.matchedProtocolScores[protocol.id] = matchedDetail.score;
         }
@@ -200,9 +184,7 @@ export default class ProtocolEngine {
     if (!Object.keys(this.matchedProtocolScores).length) {
       return this.protocolStore.getProtocol('defaultProtocol');
     }
-    const highestScoringProtocolId = this._largestKeyByValue(
-      this.matchedProtocolScores
-    );
+    const highestScoringProtocolId = this._largestKeyByValue(this.matchedProtocolScores);
     return this.matchedProtocols.get(highestScoringProtocolId);
   }
 
@@ -248,11 +230,7 @@ export default class ProtocolEngine {
   matchImages(viewport, viewportIndex) {
     log.trace('ProtocolEngine::matchImages');
 
-    const {
-      studyMatchingRules,
-      seriesMatchingRules,
-      imageMatchingRules: instanceMatchingRules,
-    } = viewport;
+    const { studyMatchingRules, seriesMatchingRules, imageMatchingRules: instanceMatchingRules } = viewport;
 
     const matchingScores = [];
     const currentStudy = this.studies[0]; // @TODO: Should this be: this.studies[this.currentStudy] ???
@@ -270,7 +248,7 @@ export default class ProtocolEngine {
     // Only used if study matching rules has abstract prior values defined...
     let priorStudies;
 
-    studyMatchingRules.forEach(rule => {
+    studyMatchingRules.forEach((rule) => {
       if (rule.attribute === ABSTRACT_PRIOR_VALUE) {
         const validatorType = Object.keys(rule.constraint)[0];
         const validator = Object.keys(rule.constraint[validatorType])[0];
@@ -281,9 +259,7 @@ export default class ProtocolEngine {
 
         // No need to call it more than once...
         if (!priorStudies) {
-          priorStudies = this.getAvailableStudyPriors(
-            currentStudy.getObjectID()
-          );
+          priorStudies = this.getAvailableStudyPriors(currentStudy.getObjectID());
         }
 
         // TODO: Revisit this later: What about two studies with the same
@@ -298,35 +274,27 @@ export default class ProtocolEngine {
         }
 
         // Invalid data
-        if (!priorStudy instanceof StudyMetadata) {
+        if (!(priorStudy instanceof StudyMetadata)) {
           return;
         }
 
         const priorStudyObjectID = priorStudy.getObjectID();
 
         // Check if study metadata is already in studies list
-        if (
-          this.studies.find(study => study.getObjectID() === priorStudyObjectID)
-        ) {
+        if (this.studies.find((study) => study.getObjectID() === priorStudyObjectID)) {
           return;
         }
 
         // Get study metadata if necessary and load study in the viewer (each viewer should provide it's own load study method)
         this.studyMetadataSource.loadStudy(priorStudy).then(
-          studyMetadata => {
+          (studyMetadata) => {
             // Set the custom attribute abstractPriorValue for the study metadata
-            studyMetadata.setCustomAttribute(
-              ABSTRACT_PRIOR_VALUE,
-              abstractPriorValue
-            );
+            studyMetadata.setCustomAttribute(ABSTRACT_PRIOR_VALUE, abstractPriorValue);
 
             // Also add custom attribute
             const firstInstance = studyMetadata.getFirstInstance();
             if (firstInstance instanceof InstanceMetadata) {
-              firstInstance.setCustomAttribute(
-                ABSTRACT_PRIOR_VALUE,
-                abstractPriorValue
-              );
+              firstInstance.setCustomAttribute(ABSTRACT_PRIOR_VALUE, abstractPriorValue);
             }
 
             // Insert the new study metadata
@@ -335,7 +303,7 @@ export default class ProtocolEngine {
             // Update the viewport to refresh layout manager with new study
             this.updateViewports(viewportIndex);
           },
-          error => {
+          (error) => {
             log.warn(error);
             throw new OHIFError(
               `ProtocolEngine::matchImages could not get study metadata for the Study with the following ObjectID: ${priorStudyObjectID}`
@@ -346,33 +314,21 @@ export default class ProtocolEngine {
       // TODO: Add relative Date / time
     });
 
-    this.studies.forEach(study => {
-      const studyMatchDetails = HPMatcher.match(
-        study.getFirstInstance(),
-        studyMatchingRules
-      );
+    this.studies.forEach((study) => {
+      const studyMatchDetails = HPMatcher.match(study.getFirstInstance(), studyMatchingRules);
 
       // Prevent bestMatch from being updated if the matchDetails' required attribute check has failed
-      if (
-        studyMatchDetails.requiredFailed === true ||
-        studyMatchDetails.score < highestStudyMatchingScore
-      ) {
+      if (studyMatchDetails.requiredFailed === true || studyMatchDetails.score < highestStudyMatchingScore) {
         return;
       }
 
       highestStudyMatchingScore = studyMatchDetails.score;
 
-      study.forEachSeries(series => {
-        const seriesMatchDetails = HPMatcher.match(
-          series.getFirstInstance(),
-          seriesMatchingRules
-        );
+      study.forEachSeries((series) => {
+        const seriesMatchDetails = HPMatcher.match(series.getFirstInstance(), seriesMatchingRules);
 
         // Prevent bestMatch from being updated if the matchDetails' required attribute check has failed
-        if (
-          seriesMatchDetails.requiredFailed === true ||
-          seriesMatchDetails.score < highestSeriesMatchingScore
-        ) {
+        if (seriesMatchDetails.requiredFailed === true || seriesMatchDetails.score < highestSeriesMatchingScore) {
           return;
         }
 
@@ -382,17 +338,11 @@ export default class ProtocolEngine {
           // This tests to make sure there is actually image data in this instance
           // TODO: Change this when we add PDF and MPEG support
           // See https://ohiforg.atlassian.net/browse/LT-227
-          if (
-            !isImage(instance.getTagValue('SOPClassUID')) &&
-            !instance.getTagValue('Rows')
-          ) {
+          if (!isImage(instance.getTagValue('SOPClassUID')) && !instance.getTagValue('Rows')) {
             return;
           }
 
-          const instanceMatchDetails = HPMatcher.match(
-            instance,
-            instanceMatchingRules
-          );
+          const instanceMatchDetails = HPMatcher.match(instance, instanceMatchingRules);
 
           // Prevent bestMatch from being updated if the matchDetails' required attribute check has failed
           if (instanceMatchDetails.requiredFailed === true) {
@@ -404,30 +354,15 @@ export default class ProtocolEngine {
             failed: [],
           };
 
-          matchDetails.passed = matchDetails.passed.concat(
-            instanceMatchDetails.details.passed
-          );
-          matchDetails.passed = matchDetails.passed.concat(
-            seriesMatchDetails.details.passed
-          );
-          matchDetails.passed = matchDetails.passed.concat(
-            studyMatchDetails.details.passed
-          );
+          matchDetails.passed = matchDetails.passed.concat(instanceMatchDetails.details.passed);
+          matchDetails.passed = matchDetails.passed.concat(seriesMatchDetails.details.passed);
+          matchDetails.passed = matchDetails.passed.concat(studyMatchDetails.details.passed);
 
-          matchDetails.failed = matchDetails.failed.concat(
-            instanceMatchDetails.details.failed
-          );
-          matchDetails.failed = matchDetails.failed.concat(
-            seriesMatchDetails.details.failed
-          );
-          matchDetails.failed = matchDetails.failed.concat(
-            studyMatchDetails.details.failed
-          );
+          matchDetails.failed = matchDetails.failed.concat(instanceMatchDetails.details.failed);
+          matchDetails.failed = matchDetails.failed.concat(seriesMatchDetails.details.failed);
+          matchDetails.failed = matchDetails.failed.concat(studyMatchDetails.details.failed);
 
-          const totalMatchScore =
-            instanceMatchDetails.score +
-            seriesMatchDetails.score +
-            studyMatchDetails.score;
+          const totalMatchScore = instanceMatchDetails.score + seriesMatchDetails.score + studyMatchDetails.score;
           const currentSOPInstanceUID = instance.getSOPInstanceUID();
 
           const imageDetails = {
@@ -439,19 +374,15 @@ export default class ProtocolEngine {
             matchDetails: matchDetails,
             sortingInfo: {
               score: totalMatchScore,
-              study:
-                instance.getTagValue('StudyDate') +
-                instance.getTagValue('StudyTime'),
+              study: instance.getTagValue('StudyDate') + instance.getTagValue('StudyTime'),
               series: parseInt(instance.getTagValue('SeriesNumber')), // TODO: change for seriesDateTime
               instance: parseInt(instance.getTagValue('InstanceNumber')), // TODO: change for acquisitionTime
             },
           };
 
           // Find the displaySet
-          const displaySet = study.findDisplaySet(displaySet =>
-            displaySet.images.find(
-              image => image.getSOPInstanceUID() === currentSOPInstanceUID
-            )
+          const displaySet = study.findDisplaySet((displaySet) =>
+            displaySet.images.find((image) => image.getSOPInstanceUID() === currentSOPInstanceUID)
           );
 
           // If the instance was found, set the displaySet ID
@@ -482,9 +413,7 @@ export default class ProtocolEngine {
         name: 'series',
       }
     );
-    matchingScores.sort((a, b) =>
-      sortingFunction(a.sortingInfo, b.sortingInfo)
-    );
+    matchingScores.sort((a, b) => sortingFunction(a.sortingInfo, b.sortingInfo));
 
     const bestMatch = matchingScores[0];
 
@@ -533,9 +462,7 @@ export default class ProtocolEngine {
    * @param viewportIndex
    */
   updateViewports(viewportIndex) {
-    log.trace(
-      `ProtocolEngine::updateViewports viewportIndex: ${viewportIndex}`
-    );
+    log.trace(`ProtocolEngine::updateViewports viewportIndex: ${viewportIndex}`);
 
     // Make sure we have an active protocol with a non-empty array of display sets
     if (!this.getNumProtocolStages()) {
@@ -547,12 +474,7 @@ export default class ProtocolEngine {
 
     // If the current stage does not fulfill the requirements to be displayed,
     // stop here.
-    if (
-      !stageModel ||
-      !stageModel.viewportStructure ||
-      !stageModel.viewports ||
-      !stageModel.viewports.length
-    ) {
+    if (!stageModel || !stageModel.viewportStructure || !stageModel.viewports || !stageModel.viewports.length) {
       return;
     }
 
@@ -590,7 +512,7 @@ export default class ProtocolEngine {
       // Cache viewportSettings keys
       const viewportSettingsKeys = Object.keys(viewport.viewportSettings);
 
-      viewportSettingsKeys.forEach(key => {
+      viewportSettingsKeys.forEach((key) => {
         let value = viewport.viewportSettings[key];
         if (value === 'YES') {
           value = true;
@@ -610,7 +532,7 @@ export default class ProtocolEngine {
       };
 
       const customSettings = [];
-      viewportSettingsKeys.forEach(id => {
+      viewportSettingsKeys.forEach((id) => {
         const setting = CustomViewportSettings[id];
         if (!setting) {
           return;
@@ -622,15 +544,12 @@ export default class ProtocolEngine {
         });
       });
 
-      currentViewportData.renderedCallback = element => {
-        //console.log('renderedCallback for ' + element.id);
-        customSettings.forEach(customSetting => {
+      currentViewportData.renderedCallback = (element) => {
+        customSettings.forEach((customSetting) => {
           log.trace(
             `ProtocolEngine::currentViewportData.renderedCallback Applying custom setting: ${customSetting.id}`
           );
-          log.trace(
-            `ProtocolEngine::currentViewportData.renderedCallback with value: ${customSetting.value}`
-          );
+          log.trace(`ProtocolEngine::currentViewportData.renderedCallback with value: ${customSetting.value}`);
 
           const setting = CustomViewportSettings[customSetting.id];
           setting.callback(element, customSetting.value);
@@ -640,10 +559,7 @@ export default class ProtocolEngine {
       let currentMatch = details.bestMatch;
       let currentPosition = 1;
       const scoresLength = details.matchingScores.length;
-      while (
-        currentPosition < scoresLength &&
-        viewportData.find(a => a.imageId === currentMatch.imageId)
-      ) {
+      while (currentPosition < scoresLength && viewportData.find((a) => a.imageId === currentMatch.imageId)) {
         currentMatch = details.matchingScores[currentPosition];
         currentPosition++;
       }
@@ -652,10 +568,8 @@ export default class ProtocolEngine {
         currentViewportData.StudyInstanceUID = currentMatch.StudyInstanceUID;
         currentViewportData.SeriesInstanceUID = currentMatch.SeriesInstanceUID;
         currentViewportData.SOPInstanceUID = currentMatch.SOPInstanceUID;
-        currentViewportData.currentImageIdIndex =
-          currentMatch.currentImageIdIndex;
-        currentViewportData.displaySetInstanceUID =
-          currentMatch.displaySetInstanceUID;
+        currentViewportData.currentImageIdIndex = currentMatch.currentImageIdIndex;
+        currentViewportData.displaySetInstanceUID = currentMatch.displaySetInstanceUID;
         currentViewportData.imageId = currentMatch.imageId;
       }
 
@@ -670,27 +584,19 @@ export default class ProtocolEngine {
     this.setLayout(layoutProps.Rows, layoutProps.Columns);
 
     if (typeof this.options.setViewportSpecificData !== 'function') {
-      log.error(
-        'Hanging Protocol Engine setViewportSpecificData callback is not defined'
-      );
+      log.error('Hanging Protocol Engine setViewportSpecificData callback is not defined');
       return;
     }
 
     // If viewportIndex is defined, then update only that viewport
     if (viewportIndex !== undefined && viewportData[viewportIndex]) {
-      this.options.setViewportSpecificData(
-        viewportIndex,
-        viewportData[viewportIndex]
-      );
+      this.options.setViewportSpecificData(viewportIndex, viewportData[viewportIndex]);
       return;
     }
 
     // Update all viewports
-    viewportData.forEach(viewportSpecificData => {
-      this.options.setViewportSpecificData(
-        viewportSpecificData.viewportIndex,
-        viewportSpecificData
-      );
+    viewportData.forEach((viewportSpecificData) => {
+      this.options.setViewportSpecificData(viewportSpecificData.viewportIndex, viewportSpecificData);
     });
   }
 
@@ -703,9 +609,7 @@ export default class ProtocolEngine {
    */
   setHangingProtocol(newProtocol, updateViewports = true) {
     log.trace('ProtocolEngine::setHangingProtocol newProtocol', newProtocol);
-    log.trace(
-      `ProtocolEngine::setHangingProtocol updateViewports = ${updateViewports}`
-    );
+    log.trace(`ProtocolEngine::setHangingProtocol updateViewports = ${updateViewports}`);
 
     // Reset the array of newStageIds
     this.newStageIds = [];
@@ -777,11 +681,7 @@ export default class ProtocolEngine {
    * undefined if no protocol or stages are set
    */
   getNumProtocolStages() {
-    if (
-      !this.protocol ||
-      !this.protocol.stages ||
-      !this.protocol.stages.length
-    ) {
+    if (!this.protocol || !this.protocol.stages || !this.protocol.stages.length) {
       return;
     }
 

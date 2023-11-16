@@ -49,11 +49,7 @@ module.exports = (env, argv, { SRC_DIR, DIST_DIR }) => {
       warnings: true,
     },
     module: {
-      rules: [
-        transpileJavaScriptRule(mode),
-        loadWebWorkersRule,
-        loadShadersRule,
-      ],
+      rules: [transpileJavaScriptRule(mode), loadWebWorkersRule, loadShadersRule],
     },
     resolve: {
       // Which directories to search when resolving modules
@@ -63,6 +59,7 @@ module.exports = (env, argv, { SRC_DIR, DIST_DIR }) => {
         // Hoisted Yarn Workspace Modules
         path.resolve(__dirname, '../../../node_modules'),
         SRC_DIR,
+        'node_modules',
       ],
       // Attempt to resolve these extensions in order.
       extensions: ['.js', '.jsx', '.json', '*'],

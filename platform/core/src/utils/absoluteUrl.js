@@ -1,4 +1,4 @@
-const absoluteUrl = path => {
+const absoluteUrl = (path) => {
   let absolutePath = '/';
 
   if (!path) return absolutePath;

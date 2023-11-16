@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.broadcastUpdate = (function(
+this.workbox.broadcastUpdate = (function (
   exports,
   assert_js,
   timeout_js,
@@ -35,22 +35,13 @@ this.workbox.broadcastUpdate = (function(
 
   const responsesAreSame = (firstResponse, secondResponse, headersToCheck) => {
     {
-      if (
-        !(
-          firstResponse instanceof Response &&
-          secondResponse instanceof Response
-        )
-      ) {
-        throw new WorkboxError_js.WorkboxError(
-          'invalid-responses-are-same-args'
-        );
+      if (!(firstResponse instanceof Response && secondResponse instanceof Response)) {
+        throw new WorkboxError_js.WorkboxError('invalid-responses-are-same-args');
       }
     }
 
-    const atLeastOneHeaderAvailable = headersToCheck.some(header => {
-      return (
-        firstResponse.headers.has(header) && secondResponse.headers.has(header)
-      );
+    const atLeastOneHeaderAvailable = headersToCheck.some((header) => {
+      return firstResponse.headers.has(header) && secondResponse.headers.has(header);
     });
 
     if (!atLeastOneHeaderAvailable) {
@@ -59,25 +50,16 @@ this.workbox.broadcastUpdate = (function(
           `Unable to determine where the response has been updated ` +
             `because none of the headers that would be checked are present.`
         );
-        logger_js.logger.debug(
-          `Attempting to compare the following: `,
-          firstResponse,
-          secondResponse,
-          headersToCheck
-        );
+        logger_js.logger.debug(`Attempting to compare the following: `, firstResponse, secondResponse, headersToCheck);
       } // Just return true, indicating the that responses are the same, since we
       // can't determine otherwise.
 
       return true;
     }
 
-    return headersToCheck.every(header => {
-      const headerStateComparison =
-        firstResponse.headers.has(header) ===
-        secondResponse.headers.has(header);
-      const headerValueComparison =
-        firstResponse.headers.get(header) ===
-        secondResponse.headers.get(header);
+    return headersToCheck.every((header) => {
+      const headerStateComparison = firstResponse.headers.has(header) === secondResponse.headers.has(header);
+      const headerValueComparison = firstResponse.headers.get(header) === secondResponse.headers.get(header);
       return headerStateComparison && headerValueComparison;
     });
   };
@@ -203,18 +185,9 @@ this.workbox.broadcastUpdate = (function(
         return;
       }
 
-      if (
-        !responsesAreSame(
-          options.oldResponse,
-          options.newResponse,
-          this._headersToCheck
-        )
-      ) {
+      if (!responsesAreSame(options.oldResponse, options.newResponse, this._headersToCheck)) {
         {
-          logger_js.logger.log(
-            `Newer response found (and cached) for:`,
-            options.request.url
-          );
+          logger_js.logger.log(`Newer response found (and cached) for:`, options.request.url);
         }
 
         const messageData = {
@@ -231,9 +204,7 @@ this.workbox.broadcastUpdate = (function(
             resultingClientId = options.event.resultingClientId;
           }
 
-          const resultingWin = await resultingClientExists_js.resultingClientExists(
-            resultingClientId
-          ); // Safari does not currently implement postMessage buffering and
+          const resultingWin = await resultingClientExists_js.resultingClientExists(resultingClientId); // Safari does not currently implement postMessage buffering and
           // there's no good way to feature detect that, so to increase the
           // chances of the message being delivered in Safari, we add a timeout.
           // We also do this if `resultingClientExists()` didn't return a client,
@@ -301,10 +272,8 @@ this.workbox.broadcastUpdate = (function(
        * @param {Request} options.request The request that triggered the update.
        * @param {Request} [options.event] The event that triggered the update.
        */
-      this.cacheDidUpdate = async options => {
-        dontWaitFor_js.dontWaitFor(
-          this._broadcastUpdate.notifyIfUpdated(options)
-        );
+      this.cacheDidUpdate = async (options) => {
+        dontWaitFor_js.dontWaitFor(this._broadcastUpdate.notifyIfUpdated(options));
       };
 
       this._broadcastUpdate = new BroadcastCacheUpdate(options);

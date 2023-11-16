@@ -1,16 +1,11 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import DicomUploader from './DicomUploader';
+import React, { Fragment } from 'react';
 import { withTranslation } from 'react-i18next';
-import { servicesManager } from './../App.js';
+import PropTypes from 'prop-types';
 
-function DicomFileUploaderModal({
-  isOpen = false,
-  onClose,
-  url,
-  retrieveAuthHeaderFunction,
-  t,
-}) {
+import { servicesManager } from '../App';
+import DicomUploader from './DicomUploader';
+
+function DicomFileUploaderModal({ isOpen = false, onClose, url, retrieveAuthHeaderFunction, t }) {
   const { UIModalService } = servicesManager.services;
 
   const showDicomStorePickerModal = () => {
@@ -29,9 +24,7 @@ function DicomFileUploaderModal({
     });
   };
 
-  return (
-    <React.Fragment>{isOpen && showDicomStorePickerModal()}</React.Fragment>
-  );
+  return <Fragment>{isOpen && showDicomStorePickerModal()}</Fragment>;
 }
 
 DicomFileUploaderModal.propTypes = {

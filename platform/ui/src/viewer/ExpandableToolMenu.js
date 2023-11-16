@@ -1,10 +1,12 @@
-import './ExpandableToolMenu.styl';
+import React from 'react';
+import PropTypes from 'prop-types';
 
 import { OverlayTrigger } from '../components/overlayTrigger';
-import PropTypes from 'prop-types';
-import React from 'react';
-import ToolbarButton from './ToolbarButton.js';
 import { Tooltip } from '../components/tooltip';
+
+import ToolbarButton from './ToolbarButton.js';
+
+import './ExpandableToolMenu.styl';
 
 class ExpandableToolMenu extends React.Component {
   static propTypes = {
@@ -47,31 +49,21 @@ class ExpandableToolMenu extends React.Component {
   }
 
   toolbarMenuOverlay = () => (
-    <Tooltip
-      placement="bottom"
-      className="tooltip-toolbar-overlay"
-      id={`${Math.random()}_tooltip-toolbar-overlay}`}
-    >
+    <Tooltip placement="bottom" className="tooltip-toolbar-overlay" id={`${Math.random()}_tooltip-toolbar-overlay}`}>
       {this.getButtons()}
     </Tooltip>
   );
 
   getButtons = () => {
     return this.props.buttons.map((button, index) => {
-      return (
-        <ToolbarButton
-          key={index}
-          {...button}
-          isActive={button.id === this.props.activeCommand}
-        />
-      );
+      return <ToolbarButton key={index} {...button} isActive={button.id === this.props.activeCommand} />;
     });
   };
 
   isActive = () => {
     let isActive = false;
     if (this.props.activeCommand) {
-      this.props.buttons.forEach(button => {
+      this.props.buttons.forEach((button) => {
         if (this.props.activeCommand === button.id) {
           isActive = true;
         }
@@ -83,10 +75,7 @@ class ExpandableToolMenu extends React.Component {
 
   activeIcon = () => {
     if (this.props.activeCommand) {
-      return (
-        this.props.buttons.find(btn => this.props.activeCommand === btn.id)
-          .icon || this.props.icon
-      );
+      return this.props.buttons.find((btn) => this.props.activeCommand === btn.id).icon || this.props.icon;
     }
 
     return this.props.icon;

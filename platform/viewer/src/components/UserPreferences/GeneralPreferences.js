@@ -1,10 +1,9 @@
-import React, { useState, useSelector } from 'react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import i18n from '@ohif/i18n';
-
-import { TabFooter, LanguageSwitcher, useSnackbarContext } from '@ohif/ui';
-import { useTranslation } from 'react-i18next';
+import { LanguageSwitcher, TabFooter, useSnackbarContext } from '@ohif/ui';
 
 import './GeneralPreferences.styl';
 
@@ -47,11 +46,7 @@ function GeneralPreferences({ onClose }) {
           <label htmlFor="language-select" className="languageLabel">
             Language
           </label>
-          <LanguageSwitcher
-            language={language}
-            onLanguageChange={setLanguage}
-            languages={availableLanguages}
-          />
+          <LanguageSwitcher language={language} onLanguageChange={setLanguage} languages={availableLanguages} />
         </div>
       </div>
       <TabFooter

@@ -1,24 +1,21 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import { Line } from 'rc-progress';
+import React, { Component, createElement } from 'react';
 import { withTranslation } from 'react-i18next';
-
-import { formatFileSize } from './utils/helpers';
-import CancellationToken from './utils/CancellationToken';
-import dicomUploader from './api/DicomUploadService';
-
 // Icons
 import {
-  ChevronRightIcon,
-  ChevronDownIcon,
   CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   ShieldExclamationIcon,
   XCircleIcon,
 } from '@heroicons/react/24/solid';
+import PropTypes from 'prop-types';
 
+import dicomUploader from './api/DicomUploadService';
 // Upload button SVG files
 import buttonFile from './icons/button-file.svg';
 import buttonFolder from './icons/button-folder.svg';
+import CancellationToken from './utils/CancellationToken';
+import { formatFileSize } from './utils/helpers';
 
 // General and uploader styling
 import '../styles/global-viewer.css';
@@ -60,12 +57,7 @@ class DicomUploader extends Component {
   filesLeft() {
     // Number of files left in the transfer queue
     // @returns str
-    return (
-      this.state.uploadedList.length +
-      this.props.t(' of ') +
-      this.state.totalCount +
-      this.props.t(' files')
-    );
+    return this.state.uploadedList.length + this.props.t(' of ') + this.state.totalCount + this.props.t(' files');
   }
 
   volumeLeft() {
@@ -78,10 +70,7 @@ class DicomUploader extends Component {
   percentsFloat() {
     // Progress of uploads
     // @returns float
-    return (
-      (100 * this.state.uploadedList.length) /
-      Object.keys(this.state.files).length
-    );
+    return (100 * this.state.uploadedList.length) / Object.keys(this.state.files).length;
   }
 
   percents() {
@@ -93,22 +82,15 @@ class DicomUploader extends Component {
   isFinished() {
     // Has the active upload finished processing
 
-    return (
-      this.state.isCancelled ||
-      Object.keys(this.state.files).length === this.state.uploadedList.length
-    );
+    return this.state.isCancelled || Object.keys(this.state.files).length === this.state.uploadedList.length;
   }
 
   errorsMessage() {
     const errors = this.state.errorsCount === 1 ? ' error' : ' errors';
-    return (
-      this.state.errorsCount +
-      errors +
-      this.props.t(' while uploading, click for more info')
-    );
+    return this.state.errorsCount + errors + this.props.t(' while uploading, click for more info');
   }
 
-  uploadFiles = files => {
+  uploadFiles = (files) => {
     // Upload files to DICOMweb server
 
     // Index files by their position in the upload iterable
@@ -128,7 +110,7 @@ class DicomUploader extends Component {
       filesDict[i] = fileDesc;
       file.fileId = i;
     });
-    const wholeVolume = filesArray.map(f => f.size).reduce((a, b) => a + b);
+    const wholeVolume = filesArray.map((f) => f.size).reduce((a, b) => a + b);
     const uploadContext = Math.random();
 
     // Set initial state properties in preparation for uploading files to the server.
@@ -147,19 +129,11 @@ class DicomUploader extends Component {
     // Create state token that allows for the user to terminate uploads early.
     const cancellationToken = new CancellationToken();
     const uploadCallback = (fileId, error, filesArray) =>
-      uploadContext === this.state.uploadContext &&
-      this.uploadCallback.call(this, fileId, error, filesArray);
+      uploadContext === this.state.uploadContext && this.uploadCallback.call(this, fileId, error, filesArray);
 
     // Configure DICOM upload service and begin upload of files
-    dicomUploader.setRetrieveAuthHeaderFunction(
-      this.props.retrieveAuthHeaderFunction
-    );
-    dicomUploader.smartUpload(
-      files.target.files,
-      this.props.url,
-      uploadCallback,
-      cancellationToken
-    );
+    dicomUploader.setRetrieveAuthHeaderFunction(this.props.retrieveAuthHeaderFunction);
+    dicomUploader.smartUpload(files.target.files, this.props.url, uploadCallback, cancellationToken);
   };
 
   uploadCallback(fileId, error, filesArray) {
@@ -185,10 +159,7 @@ class DicomUploader extends Component {
 
       file.error = error;
 
-      if (
-        (file.retry || 0) < retryLimit &&
-        !(error || '').includes(notValidDicomFileError)
-      ) {
+      if ((file.retry || 0) < retryLimit && !(error || '').includes(notValidDicomFileError)) {
         // Retry limit not yet exceeded, re-queue for transfer. Files which failed because
         // they are not valid DICOM files are skipped.
 
@@ -212,7 +183,7 @@ class DicomUploader extends Component {
     this.setState({ uploadedList });
   }
 
-  renderTableRow = file => {
+  renderTableRow = (file) => {
     // Render completion of a single file transfer. Notify user that file has been processed.
     // Show warnings and errors that happened during transfer.
 
@@ -229,9 +200,7 @@ class DicomUploader extends Component {
     } else if (file.error !== null && (file.retry || 0) < retryLimit) {
       // File experienced upload error, but has been requeued for retry
 
-      sicon = (
-        <ShieldExclamationIcon className="warning icon-size-16 spacer-left-1rem" />
-      );
+      sicon = <ShieldExclamationIcon className="warning icon-size-16 spacer-left-1rem" />;
     } else {
       // File uploaded failed
 
@@ -243,13 +212,9 @@ class DicomUploader extends Component {
       // File experienced an upload error, but has been re-queued for retry
 
       message = (
-        <span className="warning spacer-left-3rem vertical-top font-light">
-          {this.props.t('Error & Retry')}
-        </span>
+        <span className="warning spacer-left-3rem vertical-top font-light">{this.props.t('Error & Retry')}</span>
       );
-      error = (
-        <span className="spacer-left-05rem vertical-top">{file.error}</span>
-      );
+      error = <span className="spacer-left-05rem vertical-top">{file.error}</span>;
       if (file.retry) {
         rmessage = (
           <span className="spacer-left-2rem vertical-top">
@@ -260,14 +225,8 @@ class DicomUploader extends Component {
     } else if (file.error !== null) {
       // File upload failed
 
-      message = (
-        <span className="error spacer-left-3rem vertical-top font-light">
-          {this.props.t('Error/Failed')}
-        </span>
-      );
-      error = (
-        <span className="spacer-left-3rem vertical-top">{file.error}</span>
-      );
+      message = <span className="error spacer-left-3rem vertical-top font-light">{this.props.t('Error/Failed')}</span>;
+      error = <span className="spacer-left-3rem vertical-top">{file.error}</span>;
       if (file.retry) {
         rmessage = (
           <span className="error spacer-left-2rem vertical-top">
@@ -278,11 +237,7 @@ class DicomUploader extends Component {
     } else {
       // File transfer successful
 
-      message = (
-        <span className="spacer-left-3rem font-light vertical-top">
-          {this.props.t('Successful')}
-        </span>
-      );
+      message = <span className="spacer-left-3rem font-light vertical-top">{this.props.t('Successful')}</span>;
     }
 
     return (
@@ -306,18 +261,12 @@ class DicomUploader extends Component {
       return (
         <div className="dicom-uploader">
           <div className="button">
-            <label htmlFor="file">{React.createElement(buttonFile)}</label>
-            <input
-              id="file"
-              className="invisible-input"
-              type="file"
-              onChange={this.uploadFiles}
-              multiple
-            />
+            <label htmlFor="file">{createElement(buttonFile)}</label>
+            <input id="file" className="invisible-input" type="file" onChange={this.uploadFiles} multiple />
           </div>
 
           <div className="button">
-            <label htmlFor="folder">{React.createElement(buttonFolder)}</label>
+            <label htmlFor="folder">{createElement(buttonFolder)}</label>
             <input
               id="folder"
               className="invisible-input"
@@ -341,28 +290,22 @@ class DicomUploader extends Component {
             {this.state.successCount ? (
               <div className="success-count">
                 <span className="success">{this.state.successCount}</span>
-                <span className="success font-light spacer-left-025rem">
-                  {t('Uploaded Successfully')}
-                </span>
+                <span className="success font-light spacer-left-025rem">{t('Uploaded Successfully')}</span>
               </div>
             ) : null}
             {this.state.errorsCount ? (
               <div className="error-count">
                 <span className="error">{this.state.errorsCount}</span>
-                <span className="error font-light spacer-left-025rem">
-                  {t('Errors')}
-                </span>
+                <span className="error font-light spacer-left-025rem">{t('Errors')}</span>
               </div>
             ) : null}
           </div>
         ) : null}
 
         {/* Progress Bar */}
-        <Line
-          percent={this.percentsFloat()}
-          strokeWidth={4}
-          strokeColor="#0BBDE2"
-        />
+        <div className="progressBarContainer">
+          <div className="progressBar" style={{ width: `${this.percentsFloat()}%` }} />
+        </div>
 
         {/* Progress Summary */}
         <div className="upload-progress columns">
@@ -372,9 +315,7 @@ class DicomUploader extends Component {
               onClick={() => this.setState({ uploadDetailsVisible: false })}
             >
               <ChevronDownIcon className="icon-size-20" />
-              <span className="font-light vertical-top spacer-left-025rem">
-                {t('Hide Details')}
-              </span>
+              <span className="font-light vertical-top spacer-left-025rem">{t('Hide Details')}</span>
             </div>
           ) : (
             <div
@@ -382,23 +323,17 @@ class DicomUploader extends Component {
               onClick={() => this.setState({ uploadDetailsVisible: true })}
             >
               <ChevronRightIcon className="icon-size-20" />
-              <span className="font-light vertical-top spacer-left-025rem">
-                {t('Show Details')}
-              </span>
+              <span className="font-light vertical-top spacer-left-025rem">{t('Show Details')}</span>
             </div>
           )}
-          <div className="files-remaining push-right font-light">
-            {this.filesLeft()}
-          </div>
+          <div className="files-remaining push-right font-light">{this.filesLeft()}</div>
           <div className="progress no-spacer-right">{this.percents()}%</div>
         </div>
 
         {/* File Transfer List */}
         {this.state.uploadDetailsVisible ? (
           <table id="tblProjectList" className="noselect upload-file-list">
-            <tbody id="ProjectList">
-              {this.state.uploadedList.map(this.renderTableRow)}
-            </tbody>
+            <tbody id="ProjectList">{this.state.uploadedList.map(this.renderTableRow)}</tbody>
           </table>
         ) : null}
       </>

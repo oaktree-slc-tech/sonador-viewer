@@ -1,4 +1,4 @@
-const displayFunction = data => {
+const displayFunction = (data) => {
   return data.text || '';
 };
 

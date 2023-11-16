@@ -1,16 +1,12 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+
 import { Thumbnail } from './Thumbnail.js';
+
 import './StudyBrowser.styl';
 
 function StudyBrowser(props) {
-  const {
-    studies,
-    onThumbnailClick,
-    onThumbnailDoubleClick,
-    supportsDrag,
-    showThumbnailProgressBar,
-  } = props;
+  const { studies, onThumbnailClick, onThumbnailDoubleClick, supportsDrag, showThumbnailProgressBar } = props;
 
   return (
     <div className="study-browser">
@@ -34,11 +30,7 @@ function StudyBrowser(props) {
               } = thumb;
 
               return (
-                <div
-                  key={thumb.displaySetInstanceUID}
-                  className="thumbnail-container"
-                  data-cy="thumbnail-list"
-                >
+                <div key={thumb.displaySetInstanceUID} className="thumbnail-container" data-cy="thumbnail-list">
                   <Thumbnail
                     active={active}
                     supportsDrag={supportsDrag}
@@ -57,10 +49,7 @@ function StudyBrowser(props) {
                     hasWarnings={hasWarnings}
                     hasDerivedDisplaySets={hasDerivedDisplaySets}
                     // Events
-                    onClick={onThumbnailClick.bind(
-                      undefined,
-                      displaySetInstanceUID
-                    )}
+                    onClick={onThumbnailClick.bind(undefined, displaySetInstanceUID)}
                     onDoubleClick={onThumbnailDoubleClick}
                     showProgressBar={showThumbnailProgressBar}
                   />

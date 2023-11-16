@@ -1,8 +1,9 @@
-import dcmjs from 'dcmjs';
 import cornerstone from 'cornerstone-core';
+import dcmjs from 'dcmjs';
 
 import log from '../log';
 import measurements from '../measurements';
+
 import isToolSupported from './utils/isToolSupported';
 
 /**
@@ -11,17 +12,17 @@ import isToolSupported from './utils/isToolSupported';
  * @param {Object} measurementsData - OHIF measurementData object
  * @returns {Object} Dataset: measurement report from dcmjs
  */
-const parseMeasurementsData = measurementsData => {
+const parseMeasurementsData = (measurementsData) => {
   const { MeasurementReport } = dcmjs.adapters.Cornerstone;
   const { getImageIdForImagePath } = measurements;
 
   const toolState = {};
   const unsupportedTools = [];
 
-  Object.keys(measurementsData).forEach(measurementType => {
+  Object.keys(measurementsData).forEach((measurementType) => {
     const annotations = measurementsData[measurementType];
 
-    annotations.forEach(annotation => {
+    annotations.forEach((annotation) => {
       const { toolType, imagePath } = annotation;
 
       if (isToolSupported(toolType)) {
@@ -39,15 +40,10 @@ const parseMeasurementsData = measurementsData => {
   });
 
   if (unsupportedTools.length > 0) {
-    log.warn(
-      `[DICOMSR] Tooltypes not supported: ${unsupportedTools.join(', ')}`
-    );
+    log.warn(`[DICOMSR] Tooltypes not supported: ${unsupportedTools.join(', ')}`);
   }
 
-  const report = MeasurementReport.generateReport(
-    toolState,
-    cornerstone.metaData
-  );
+  const report = MeasurementReport.generateReport(toolState, cornerstone.metaData);
 
   return {
     dataset: report.dataset,

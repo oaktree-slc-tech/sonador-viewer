@@ -1,12 +1,12 @@
 import { allTools } from './toolGroups/allTools';
 import {
-  retrieveMeasurements,
-  storeMeasurements,
-  retrieveTimepoints,
-  storeTimepoints,
-  removeTimepoint,
-  updateTimepoint,
   disassociateStudy,
+  removeTimepoint,
+  retrieveMeasurements,
+  retrieveTimepoints,
+  storeMeasurements,
+  storeTimepoints,
+  updateTimepoint,
 } from './dataExchange';
 
 const measurementApiDefaultConfig = {

@@ -1,7 +1,8 @@
 import cornerstone from 'cornerstone-core';
-import { MeasurementApi } from '../classes';
+
 import log from '../../log';
 import user from '../../user';
+import { MeasurementApi } from '../classes';
 import getImageAttributes from '../lib/getImageAttributes';
 import getLabel from '../lib/getLabel';
 import refreshCornerstoneViewports from '../lib/refreshCornerstoneViewports';

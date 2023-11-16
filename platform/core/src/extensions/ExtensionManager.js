@@ -1,5 +1,5 @@
-import MODULE_TYPES from './MODULE_TYPES.js';
 import log from './../log.js';
+import MODULE_TYPES from './MODULE_TYPES.js';
 
 export default class ExtensionManager {
   constructor({ commandsManager, servicesManager, api, appConfig = {} }) {
@@ -13,7 +13,7 @@ export default class ExtensionManager {
     this._appConfig = appConfig;
     this._api = api;
 
-    this.moduleTypeNames.forEach(moduleType => {
+    this.moduleTypeNames.forEach((moduleType) => {
       this.modules[moduleType] = [];
     });
   }
@@ -25,7 +25,7 @@ export default class ExtensionManager {
    * @param {Object[]} extensions - Array of extensions
    */
   registerExtensions(extensions) {
-    extensions.forEach(extension => {
+    extensions.forEach((extension) => {
       const hasConfiguration = Array.isArray(extension);
 
       if (hasConfiguration) {
@@ -45,9 +45,7 @@ export default class ExtensionManager {
    */
   registerExtension(extension, configuration = {}) {
     if (!extension) {
-      log.warn(
-        'Attempting to register a null/undefined extension. Exiting early.'
-      );
+      log.warn('Attempting to register a null/undefined extension. Exiting early.');
       return;
     }
 
@@ -55,17 +53,13 @@ export default class ExtensionManager {
     const version = extension.version;
 
     if (!extensionId) {
-      extensionId = Math.random()
-        .toString(36)
-        .substr(2, 5);
+      extensionId = Math.random().toString(36).substr(2, 5);
 
       log.warn(`Extension ID not set. Using random string ID: ${extensionId}`);
     }
 
     if (this.registeredExtensionIds.includes(extensionId)) {
-      log.warn(
-        `Extension ID ${extensionId} has already been registered. Exiting before duplicating modules.`
-      );
+      log.warn(`Extension ID ${extensionId} has already been registered. Exiting before duplicating modules.`);
       return;
     }
 
@@ -80,13 +74,8 @@ export default class ExtensionManager {
     }
 
     // Register Modules
-    this.moduleTypeNames.forEach(moduleType => {
-      const extensionModule = this._getExtensionModule(
-        moduleType,
-        extension,
-        extensionId,
-        configuration
-      );
+    this.moduleTypeNames.forEach((moduleType) => {
+      const extensionModule = this._getExtensionModule(moduleType, extension, extensionId, configuration);
 
       if (extensionModule) {
         this._initSpecialModuleTypes(moduleType, extensionModule);
@@ -136,9 +125,7 @@ export default class ExtensionManager {
 
       return extensionModule;
     } catch (ex) {
-      log.error(
-        `Exception thrown while trying to call ${getModuleFnName} for the ${extensionId} extension`
-      );
+      log.error(`Exception thrown while trying to call ${getModuleFnName} for the ${extensionId} extension`);
     }
   }
 
@@ -168,11 +155,10 @@ export default class ExtensionManager {
       this._commandsManager.createContext(defaultContext);
     }
 
-    Object.keys(commandDefinitions).forEach(commandName => {
+    Object.keys(commandDefinitions).forEach((commandName) => {
       const commandDefinition = commandDefinitions[commandName];
       const commandHasContextThatDoesNotExist =
-        commandDefinition.context &&
-        !this._commandsManager.getContext(commandDefinition.context);
+        commandDefinition.context && !this._commandsManager.getContext(commandDefinition.context);
 
       if (commandHasContextThatDoesNotExist) {
         this._commandsManager.createContext(commandDefinition.context);

@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.googleAnalytics = (function(
+this.workbox.googleAnalytics = (function (
   exports,
   BackgroundSyncPlugin_js,
   cacheNames_js,
@@ -56,7 +56,7 @@ this.workbox.googleAnalytics = (function(
    * @private
    */
 
-  const createOnSyncCallback = config => {
+  const createOnSyncCallback = (config) => {
     return async ({ queue }) => {
       let entry;
 
@@ -68,9 +68,7 @@ this.workbox.googleAnalytics = (function(
           // Measurement protocol requests can set their payload parameters in
           // either the URL query string (for GET requests) or the POST body.
           const params =
-            request.method === 'POST'
-              ? new URLSearchParams(await request.clone().text())
-              : url.searchParams; // Calculate the qt param, accounting for the fact that an existing
+            request.method === 'POST' ? new URLSearchParams(await request.clone().text()) : url.searchParams; // Calculate the qt param, accounting for the fact that an existing
           // qt param may be present and should be updated rather than replaced.
 
           const originalHitTime = timestamp - (Number(params.get('qt')) || 0);
@@ -103,10 +101,7 @@ this.workbox.googleAnalytics = (function(
           );
 
           if ('dev' !== 'production') {
-            logger_js.logger.log(
-              `Request for '${getFriendlyURL_js.getFriendlyURL(url.href)}'` +
-                `has been replayed`
-            );
+            logger_js.logger.log(`Request for '${getFriendlyURL_js.getFriendlyURL(url.href)}'` + `has been replayed`);
           }
         } catch (err) {
           await queue.unshiftRequest(entry);
@@ -123,10 +118,7 @@ this.workbox.googleAnalytics = (function(
       }
 
       {
-        logger_js.logger.log(
-          `All Google Analytics request successfully replayed; ` +
-            `the queue is now empty!`
-        );
+        logger_js.logger.log(`All Google Analytics request successfully replayed; ` + `the queue is now empty!`);
       }
     };
   };
@@ -139,18 +131,13 @@ this.workbox.googleAnalytics = (function(
    * @private
    */
 
-  const createCollectRoutes = bgSyncPlugin => {
-    const match = ({ url }) =>
-      url.hostname === GOOGLE_ANALYTICS_HOST &&
-      COLLECT_PATHS_REGEX.test(url.pathname);
+  const createCollectRoutes = (bgSyncPlugin) => {
+    const match = ({ url }) => url.hostname === GOOGLE_ANALYTICS_HOST && COLLECT_PATHS_REGEX.test(url.pathname);
 
     const handler = new NetworkOnly_js.NetworkOnly({
       plugins: [bgSyncPlugin],
     });
-    return [
-      new Route_js.Route(match, handler, 'GET'),
-      new Route_js.Route(match, handler, 'POST'),
-    ];
+    return [new Route_js.Route(match, handler, 'GET'), new Route_js.Route(match, handler, 'POST')];
   };
   /**
    * Creates a route with a network first strategy for the analytics.js script.
@@ -161,10 +148,8 @@ this.workbox.googleAnalytics = (function(
    * @private
    */
 
-  const createAnalyticsJsRoute = cacheName => {
-    const match = ({ url }) =>
-      url.hostname === GOOGLE_ANALYTICS_HOST &&
-      url.pathname === ANALYTICS_JS_PATH;
+  const createAnalyticsJsRoute = (cacheName) => {
+    const match = ({ url }) => url.hostname === GOOGLE_ANALYTICS_HOST && url.pathname === ANALYTICS_JS_PATH;
 
     const handler = new NetworkFirst_js.NetworkFirst({
       cacheName,
@@ -180,9 +165,8 @@ this.workbox.googleAnalytics = (function(
    * @private
    */
 
-  const createGtagJsRoute = cacheName => {
-    const match = ({ url }) =>
-      url.hostname === GTM_HOST && url.pathname === GTAG_JS_PATH;
+  const createGtagJsRoute = (cacheName) => {
+    const match = ({ url }) => url.hostname === GTM_HOST && url.pathname === GTAG_JS_PATH;
 
     const handler = new NetworkFirst_js.NetworkFirst({
       cacheName,
@@ -198,9 +182,8 @@ this.workbox.googleAnalytics = (function(
    * @private
    */
 
-  const createGtmJsRoute = cacheName => {
-    const match = ({ url }) =>
-      url.hostname === GTM_HOST && url.pathname === GTM_JS_PATH;
+  const createGtmJsRoute = (cacheName) => {
+    const match = ({ url }) => url.hostname === GTM_HOST && url.pathname === GTM_JS_PATH;
 
     const handler = new NetworkFirst_js.NetworkFirst({
       cacheName,
@@ -225,16 +208,11 @@ this.workbox.googleAnalytics = (function(
    */
 
   const initialize = (options = {}) => {
-    const cacheName = cacheNames_js.cacheNames.getGoogleAnalyticsName(
-      options.cacheName
-    );
-    const bgSyncPlugin = new BackgroundSyncPlugin_js.BackgroundSyncPlugin(
-      QUEUE_NAME,
-      {
-        maxRetentionTime: MAX_RETENTION_TIME,
-        onSync: createOnSyncCallback(options),
-      }
-    );
+    const cacheName = cacheNames_js.cacheNames.getGoogleAnalyticsName(options.cacheName);
+    const bgSyncPlugin = new BackgroundSyncPlugin_js.BackgroundSyncPlugin(QUEUE_NAME, {
+      maxRetentionTime: MAX_RETENTION_TIME,
+      onSync: createOnSyncCallback(options),
+    });
     const routes = [
       createGtmJsRoute(cacheName),
       createAnalyticsJsRoute(cacheName),

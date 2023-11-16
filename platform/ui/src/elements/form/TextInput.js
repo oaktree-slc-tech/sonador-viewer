@@ -9,10 +9,7 @@ class TextInput extends React.Component {
   }
 
   static propTypes = {
-    value: PropTypes.oneOfType([
-      PropTypes.string,
-      PropTypes.number
-    ]),
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     id: PropTypes.string,
     label: PropTypes.string,
     type: PropTypes.string,
@@ -29,14 +26,11 @@ class TextInput extends React.Component {
     return (
       <div className="input-ohif-container">
         {this.props.label && (
-          <label className="input-ohif-label" htmlFor={this.props.id}>{this.props.label}</label>
+          <label className="input-ohif-label" htmlFor={this.props.id}>
+            {this.props.label}
+          </label>
         )}
-        <input
-          type={this.props.type}
-          id={this.props.id}
-          className="form-control input-ohif"
-          {...this.props}
-        />
+        <input type={this.props.type} id={this.props.id} className="form-control input-ohif" {...this.props} />
       </div>
     );
   }

@@ -5,29 +5,29 @@ const directoryPath = path.join(__dirname, 'src', 'locales');
 const { lstatSync, readdirSync } = require('fs');
 const { join } = require('path');
 
-const isDirectory = source => lstatSync(source).isDirectory();
-const getDirectories = source =>
+const isDirectory = (source) => lstatSync(source).isDirectory();
+const getDirectories = (source) =>
   readdirSync(source)
-    .map(name => join(source, name))
+    .map((name) => join(source, name))
     .filter(isDirectory);
 
-const getJSONFiles = source =>
+const getJSONFiles = (source) =>
   readdirSync(source)
-    .filter(name => name.includes('.json'))
-    .map(name => join(source, name))
-    .filter(a => !isDirectory(a));
+    .filter((name) => name.includes('.json'))
+    .map((name) => join(source, name))
+    .filter((a) => !isDirectory(a));
 
 const directories = getDirectories(directoryPath);
 
 function writeFile(filepath, name, content) {
-  fs.writeFile(path.join(filepath, name), content, err => {
+  fs.writeFile(path.join(filepath, name), content, (err) => {
     if (err) throw err;
   });
 }
 
 // For each language directory
 const languages = [];
-directories.forEach(directory => {
+directories.forEach((directory) => {
   const language = path.basename(directory);
   languages.push(language);
   const name = 'index.js';
@@ -37,9 +37,9 @@ directories.forEach(directory => {
   let content = '';
 
   const files = getJSONFiles(directory);
-  const namespaces = files.map(file => path.basename(file, '.json'));
+  const namespaces = files.map((file) => path.basename(file, '.json'));
 
-  files.forEach(file => {
+  files.forEach((file) => {
     const filename = path.basename(file);
     const namespace = path.basename(file, '.json');
 
@@ -48,7 +48,7 @@ directories.forEach(directory => {
 
   content += '\n';
   let exportLines = `export default { \n  '${language}': {\n`;
-  namespaces.forEach(namespace => {
+  namespaces.forEach((namespace) => {
     exportLines += `    ${namespace},\n`;
   });
   exportLines += '  }\n};\n';
@@ -65,7 +65,7 @@ directories.forEach(directory => {
 });
 
 let fileContent = '';
-const languageVariables = languages.map(language => {
+const languageVariables = languages.map((language) => {
   const languageVariable = language.replace('-', '_');
 
   fileContent += `import ${languageVariable} from './${language}/';\n`;
@@ -76,7 +76,7 @@ const languageVariables = languages.map(language => {
 fileContent += '\n';
 
 fileContent += 'export default {\n';
-languageVariables.forEach(language => {
+languageVariables.forEach((language) => {
   fileContent += `  ...${language},\n`;
 });
 

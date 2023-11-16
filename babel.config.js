@@ -1,29 +1,21 @@
-const aliases = require('./aliases.config');
-const path = require('path');
-
 // https://babeljs.io/docs/en/options#babelrcroots
 module.exports = {
   babelrcRoots: ['./platform/*', './extensions/*'],
-  plugins: ['inline-react-svg', '@babel/plugin-proposal-class-properties'],
+  plugins: ['inline-react-svg', '@babel/transform-class-properties'],
   env: {
     test: {
       presets: [
         [
-          // TODO: https://babeljs.io/blog/2019/03/19/7.4.0#migration-from-core-js-2
           '@babel/preset-env',
           {
             modules: 'commonjs',
             debug: false,
+            corejs: '3.33.2',
           },
         ],
         '@babel/preset-react',
       ],
-      plugins: [
-        '@babel/plugin-proposal-object-rest-spread',
-        '@babel/plugin-syntax-dynamic-import',
-        '@babel/plugin-transform-regenerator',
-        '@babel/plugin-transform-runtime',
-      ],
+      plugins: ['@babel/plugin-transform-runtime'],
     },
     production: {
       presets: [

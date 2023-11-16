@@ -4,10 +4,10 @@
  * @param {Object} studies - List of studies loaded into the viewer
  * @returns {Object} List of DisplaySets
  */
-const getAllDisplaySets = studies => {
+const getAllDisplaySets = (studies) => {
   let allDisplaySets = [];
 
-  studies.forEach(study => {
+  studies.forEach((study) => {
     if (study.getDisplaySets) {
       allDisplaySets = allDisplaySets.concat(study.getDisplaySets());
     }

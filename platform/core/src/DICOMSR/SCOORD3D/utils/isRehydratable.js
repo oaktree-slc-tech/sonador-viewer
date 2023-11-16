@@ -14,18 +14,16 @@ export default function isRehydratable(displaySet, mappings) {
     return false;
   }
 
-  const mappingDefinitions = mappings.map(m => m.definition);
+  const mappingDefinitions = mappings.map((m) => m.definition);
   const { measurements } = displaySet;
 
   const adapterKeys = Object.keys(cornerstoneAdapters).filter(
-    adapterKey =>
-      typeof cornerstoneAdapters[adapterKey]
-        .isValidCornerstoneTrackingIdentifier === 'function'
+    (adapterKey) => typeof cornerstoneAdapters[adapterKey].isValidCornerstoneTrackingIdentifier === 'function'
   );
 
   const adapters = [];
 
-  adapterKeys.forEach(key => {
+  adapterKeys.forEach((key) => {
     if (mappingDefinitions.includes(key)) {
       // Must have both a dcmjs adapter and a MeasurementService
       // Definition in order to be a candidate for import.
@@ -35,9 +33,7 @@ export default function isRehydratable(displaySet, mappings) {
 
   for (let i = 0; i < measurements.length; i++) {
     const TrackingIdentifier = measurements[i].TrackingIdentifier;
-    const hydratable = adapters.some(adapter =>
-      adapter.isValidCornerstoneTrackingIdentifier(TrackingIdentifier)
-    );
+    const hydratable = adapters.some((adapter) => adapter.isValidCornerstoneTrackingIdentifier(TrackingIdentifier));
 
     if (hydratable) {
       return true;

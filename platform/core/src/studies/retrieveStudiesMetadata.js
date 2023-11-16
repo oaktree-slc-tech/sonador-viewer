@@ -1,4 +1,5 @@
 import log from '../log.js';
+
 import { retrieveStudyMetadata } from './retrieveStudyMetadata';
 
 /**
@@ -25,14 +26,9 @@ export default function retrieveStudiesMetadata(
   const promises = [];
 
   // Loop through the array of studyInstanceUIDs
-  studyInstanceUIDs.forEach(function(StudyInstanceUID) {
+  studyInstanceUIDs.forEach(function (StudyInstanceUID) {
     // Send the call and resolve or reject the related promise based on its outcome
-    const promise = retrieveStudyMetadata(
-      server,
-      StudyInstanceUID,
-      filters,
-      separateSeriesInstanceUIDFilters
-    );
+    const promise = retrieveStudyMetadata(server, StudyInstanceUID, filters, separateSeriesInstanceUIDFilters);
 
     // Add the current promise to the array of promises
     promises.push(promise);
@@ -42,7 +38,7 @@ export default function retrieveStudiesMetadata(
   const promise = Promise.all(promises);
 
   // Warn the error on console if some retrieval failed
-  promise.catch(error => log.warn(error));
+  promise.catch((error) => log.warn(error));
 
   return promise;
 }

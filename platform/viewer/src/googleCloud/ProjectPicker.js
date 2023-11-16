@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import api from './api/GoogleCloudApi';
 import ProjectsList from './ProjectsList';
+
 import './googleCloud.css';
 
 export default class ProjectPicker extends Component {
@@ -44,15 +46,9 @@ export default class ProjectPicker extends Component {
           className="form-control gcp-input"
           type="text"
           value={filterStr}
-          onChange={e => this.setState({ filterStr: e.target.value })}
+          onChange={(e) => this.setState({ filterStr: e.target.value })}
         />
-        <ProjectsList
-          projects={projects}
-          loading={loading}
-          filter={filterStr}
-          error={error}
-          onSelect={onSelect}
-        />
+        <ProjectsList projects={projects} loading={loading} filter={filterStr} error={error} onSelect={onSelect} />
       </div>
     );
   }

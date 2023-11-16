@@ -1,0 +1,150 @@
+.singleDatePickerNG {
+  .SingleDatePickerInput {
+    background-color: transparent;
+  }
+
+  .DateInput > .DateInput_input {
+    font-size: 16px;
+    height: auto;
+    font-weight: 400;
+    color: #60646d;
+  }
+
+  .DayPickerNavigation_button {
+    width: fit-content;
+    position: absolute;
+    top: 60px;
+  }
+
+  .DayPickerNavigation_button:first-of-type {
+    left: 20px;
+  }
+
+  .DayPickerNavigation_button:last-of-type {
+    right: 20px;
+  }
+
+  .nav-prev-date,
+  .nav-next-date {
+    width: 14px;
+    height: 10px;
+  }
+
+  .nav-prev-date {
+    rotate: 90deg;
+  }
+
+  .nav-next-date {
+    rotate: -90deg;
+  }
+
+  .DayPicker__horizontal,
+  .CalendarMonthGrid,
+  .CalendarMonth {
+    background-color: #000000;
+  }
+
+  .CalendarMonth {
+    padding: 0 !important;
+  }
+
+  .close-calendar-icon {
+    cursor: pointer;
+  }
+
+  .CalendarMonth {
+    padding: 0 !important;
+  }
+
+  .calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    padding: 0 20px;
+  }
+
+  .calendar-header-title {
+    margin: 0;
+    text-align: left;
+    color: #ffffff;
+  }
+
+  .calendar-month-year-title {
+    color: #ffffff;
+  }
+
+  .DateInput_fang {
+    display: none;
+  }
+
+  .SingleDatePicker_picker,
+  .DayPicker {
+    border-radius: 10px;
+  }
+
+  .DayPicker,
+  .DayPicker_transitionContainer {
+    width: 356px !important;
+  }
+
+  .DayPicker_weekHeaders {
+    display: none;
+  }
+
+  .DayPicker_transitionContainer {
+    height: 330px !important;
+  }
+
+  .CalendarDay__default,
+  .CalendarDay__default:hover {
+    color: #ffffff;
+    border: none;
+    height: 28px !important;
+    border-radius: 50%;
+    background-color: #000000;
+  }
+
+  .CalendarDay__selected,
+  .CalendarDay__selected:hover,
+  .CalendarDay__selected_span,
+  .CalendarDay__selected_span:hover {
+    background-color: #2e46e9;
+  }
+
+  .CalendarDay__blocked_out_of_range {
+    color: #d3d3d3;
+  }
+
+  .CalendarMonth_table {
+    border-collapse: separate;
+    border-spacing: 20px 10px;
+  }
+
+  .CalendarMonthGrid__horizontal {
+    left: 0;
+  }
+
+  .DayPicker > div > div:first-of-type {
+    width: 356px !important;
+  }
+
+  .CalendarMonth_caption {
+    padding-top: 20px;
+    padding-bottom: 5px;
+  }
+
+  .date-range-picker-reset-container {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 20px 20px 0;
+
+    .date-range-picker-reset {
+      border: none;
+      background: transparent;
+      color: #d3d3d3;
+      padding: 0;
+      cursor: pointer;
+    }
+  }
+}

@@ -6,28 +6,14 @@ import ReactTooltip from 'react-tooltip';
 import './SegmentItem.css';
 
 const ColoredCircle = ({ color }) => {
-  return (
-    <div
-      className="segment-color"
-      style={{ backgroundColor: `rgba(${color.join(',')})` }}
-    ></div>
-  );
+  return <div className="segment-color" style={{ backgroundColor: `rgba(${color.join(',')})` }}></div>;
 };
 
 ColoredCircle.propTypes = {
   color: PropTypes.array.isRequired,
 };
 
-const SegmentItem = ({
-  index,
-  label,
-  onClick,
-  itemClass,
-  color,
-  labelmap3D,
-  visible,
-  onVisibilityChange,
-}) => {
+const SegmentItem = ({ index, label, onClick, itemClass, color, labelmap3D, visible, onVisibilityChange }) => {
   const [isVisible, setIsVisible] = useState(visible);
 
   useEffect(() => {
@@ -36,7 +22,7 @@ const SegmentItem = ({
 
   const onClickHandler = () => onClick(index);
 
-  const onVisibilityChangeHandler = event => {
+  const onVisibilityChangeHandler = (event) => {
     event.stopPropagation();
     const newVisibility = !isVisible;
     setIsVisible(newVisibility);
@@ -59,13 +45,7 @@ const SegmentItem = ({
             <a data-tip data-for={`SegmentHover${index}`}>
               <span>{label}</span>
             </a>
-            <ReactTooltip
-              id={`SegmentHover${index}`}
-              delayShow={250}
-              place="right"
-              border={true}
-              type="light"
-            >
+            <ReactTooltip id={`SegmentHover${index}`} delayShow={250} place="right" border={true} type="light">
               <span>{label}</span>
             </ReactTooltip>
             <Icon
@@ -76,29 +56,29 @@ const SegmentItem = ({
               onClick={onVisibilityChangeHandler}
             />
           </div>
-          {false && <div className="segment-info">{'...'}</div>}
-          {false && (
-            <div className="segment-actions">
-              <button
-                className="btnAction"
-                onClick={() => console.log('Relabelling...')}
-              >
-                <span style={{ marginRight: '4px' }}>
-                  <Icon name="edit" width="14px" height="14px" />
-                </span>
-                Relabel
-              </button>
-              <button
-                className="btnAction"
-                onClick={() => console.log('Editing description...')}
-              >
-                <span style={{ marginRight: '4px' }}>
-                  <Icon name="edit" width="14px" height="14px" />
-                </span>
-                Description
-              </button>
-            </div>
-          )}
+          {/*{false && <div className="segment-info">{'...'}</div>}*/}
+          {/*{false && (*/}
+          {/*  <div className="segment-actions">*/}
+          {/*    <button*/}
+          {/*      className="btnAction"*/}
+          {/*      onClick={() => console.log('Relabelling...')}*/}
+          {/*    >*/}
+          {/*      <span style={{ marginRight: '4px' }}>*/}
+          {/*        <Icon name="edit" width="14px" height="14px" />*/}
+          {/*      </span>*/}
+          {/*      Relabel*/}
+          {/*    </button>*/}
+          {/*    <button*/}
+          {/*      className="btnAction"*/}
+          {/*      onClick={() => console.log('Editing description...')}*/}
+          {/*    >*/}
+          {/*      <span style={{ marginRight: '4px' }}>*/}
+          {/*        <Icon name="edit" width="14px" height="14px" />*/}
+          {/*      </span>*/}
+          {/*      Description*/}
+          {/*    </button>*/}
+          {/*  </div>*/}
+          {/*)}*/}
         </div>
       </TableListItem>
     </div>

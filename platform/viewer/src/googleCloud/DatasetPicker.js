@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import api from './api/GoogleCloudApi';
 import DatasetsList from './DatasetsList';
+
 import './googleCloud.css';
 
 export default class DatasetPicker extends Component {
@@ -22,10 +24,7 @@ export default class DatasetPicker extends Component {
   async componentDidMount() {
     api.setAccessToken(this.props.accessToken);
 
-    const response = await api.loadDatasets(
-      this.props.project.projectId,
-      this.props.location.locationId
-    );
+    const response = await api.loadDatasets(this.props.project.projectId, this.props.location.locationId);
 
     if (response.isError) {
       this.setState({
@@ -50,15 +49,9 @@ export default class DatasetPicker extends Component {
           className="form-control gcp-input"
           type="text"
           value={filterStr}
-          onChange={e => this.setState({ filterStr: e.target.value })}
+          onChange={(e) => this.setState({ filterStr: e.target.value })}
         />
-        <DatasetsList
-          datasets={datasets}
-          loading={loading}
-          error={error}
-          filter={filterStr}
-          onSelect={onSelect}
-        />
+        <DatasetsList datasets={datasets} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
       </div>
     );
   }

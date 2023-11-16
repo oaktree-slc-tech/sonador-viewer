@@ -51,10 +51,10 @@ export class ModalityCriterion extends BaseCriterion {
     const invalidModalities = new Set();
     let message;
 
-    measurementTypes.forEach(measurementType => {
+    measurementTypes.forEach((measurementType) => {
       const items = data[measurementType];
 
-      items.forEach(item => {
+      items.forEach((item) => {
         const { measurement, metadata } = item;
         const Modality = metadata.getTagValue('Modality') || '';
 
@@ -71,8 +71,7 @@ export class ModalityCriterion extends BaseCriterion {
     if (measurements.length) {
       const uniqueModalities = Array.from(invalidModalities);
       const uniqueModalitiesText = uniqueModalities.join(', ');
-      const modalityText =
-        uniqueModalities.length > 1 ? 'modalities' : 'Modality';
+      const modalityText = uniqueModalities.length > 1 ? 'modalities' : 'Modality';
 
       message = `The ${modalityText} ${uniqueModalitiesText} should not be used as a method of measurement`;
     }

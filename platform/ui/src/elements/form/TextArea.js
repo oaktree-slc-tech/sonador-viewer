@@ -1,7 +1,7 @@
-import './TextArea.css';
-
 import React from 'react';
 import PropTypes from 'prop-types';
+
+import './TextArea.css';
 
 class TextArea extends React.Component {
   constructor(props) {
@@ -9,7 +9,7 @@ class TextArea extends React.Component {
     this.state = { value: this.props.value };
   }
 
-  handleChange = event => {
+  handleChange = (event) => {
     this.setState({ value: event.target.value });
     if (this.props.onChange) this.props.onChange();
   };

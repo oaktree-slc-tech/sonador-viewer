@@ -17,7 +17,7 @@ describe('progressTrackingUtils', () => {
 
     // Mock for download
     function fakeRequest(callback) {
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         let progress = 0.0;
         setTimeout(function step() {
           if (progress < 1.0) {
@@ -40,12 +40,8 @@ describe('progressTrackingUtils', () => {
 
     it('should call observer twice for each task', () => {
       const { list, observer } = context;
-      const promises = [
-        Promise.resolve('A'),
-        Promise.resolve('B'),
-        Promise.resolve('C'),
-      ];
-      promises.forEach(promise => void utils.waitOn(list, promise));
+      const promises = [Promise.resolve('A'), Promise.resolve('B'), Promise.resolve('C')];
+      promises.forEach((promise) => void utils.waitOn(list, promise));
       return Promise.all(promises).then(() => {
         expect(observer).toBeCalledTimes(6);
         [
@@ -101,15 +97,13 @@ describe('progressTrackingUtils', () => {
     it('should support tasks with internal progress updates', () => {
       const { list, observer } = context;
       const download = utils.addDeferred(list);
-      const processing = download.deferred.promise.then(result => result);
-      const update = jest.fn(p => void utils.update(download.task, p));
+      const processing = download.deferred.promise.then((result) => result);
+      const update = jest.fn((p) => void utils.update(download.task, p));
       download.deferred.resolve(fakeRequest(update));
       utils.waitOn(list, processing);
       return processing.then(() => {
         expect(update).toBeCalledTimes(4);
-        [0.25, 0.5, 0.75, 1.0].forEach(
-          (value, i) => void expect(update).nthCalledWith(i + 1, value)
-        );
+        [0.25, 0.5, 0.75, 1.0].forEach((value, i) => void expect(update).nthCalledWith(i + 1, value));
         expect(observer).toBeCalledTimes(7);
         [
           {

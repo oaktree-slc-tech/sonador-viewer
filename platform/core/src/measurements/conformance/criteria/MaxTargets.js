@@ -13,8 +13,7 @@ export const MaxTargetsSchema = {
       type: 'boolean',
     },
     locationIn: {
-      label:
-        'Filter to evaluate only measurements with the specified locations',
+      label: 'Filter to evaluate only measurements with the specified locations',
       type: 'array',
       items: {
         type: 'string',
@@ -23,8 +22,7 @@ export const MaxTargetsSchema = {
       uniqueItems: true,
     },
     locationNotIn: {
-      label:
-        'Filter to evaluate only measurements without the specified locations',
+      label: 'Filter to evaluate only measurements without the specified locations',
       type: 'array',
       items: {
         type: 'string',
@@ -34,12 +32,12 @@ export const MaxTargetsSchema = {
     },
     isNodal: {
       label: 'Filter to evaluate only nodal or extranodal measurements',
-      type: 'boolean'
+      type: 'boolean',
     },
     message: {
       label: 'Message to be displayed in case of nonconformity',
       type: 'string',
-    }
+    },
   },
   required: ['limit'],
 };
@@ -64,23 +62,18 @@ export class MaxTargetsCriterion extends BaseCriterion {
 
     const newTargetNumbers = this.getNewTargetNumbers(data);
     const measurementNumbers = [];
-    data.targets.forEach(target => {
+    data.targets.forEach((target) => {
       const { location, measurementNumber, isSplitLesion, isNodal } = target.measurement;
 
-      if (isSplitLesion)
-        return;
+      if (isSplitLesion) return;
 
-      if (typeof isNodal === 'boolean' && typeof options.isNodal === 'boolean' && options.isNodal !== isNodal)
-        return;
+      if (typeof isNodal === 'boolean' && typeof options.isNodal === 'boolean' && options.isNodal !== isNodal) return;
 
-      if (options.newTarget && !newTargetNumbers.has(measurementNumber))
-        return;
+      if (options.newTarget && !newTargetNumbers.has(measurementNumber)) return;
 
-      if (options.locationIn && options.locationIn.indexOf(location) === -1)
-        return;
+      if (options.locationIn && options.locationIn.indexOf(location) === -1) return;
 
-      if (options.locationNotIn && options.locationNotIn.indexOf(location) > -1)
-        return;
+      if (options.locationNotIn && options.locationNotIn.indexOf(location) > -1) return;
 
       measurementNumbers.push(measurementNumber);
     });
@@ -95,9 +88,7 @@ export class MaxTargetsCriterion extends BaseCriterion {
       const increment = options.newTarget ? 'new ' : '';
       const plural = options.limit === 1 ? '' : 's';
       const amount = options.limit === 0 ? '' : `more than ${options.limit}`;
-      message =
-        options.message ||
-        `The study should not have ${amount} ${increment}${lesionType}target${plural}.`;
+      message = options.message || `The study should not have ${amount} ${increment}${lesionType}target${plural}.`;
     }
 
     return this.generateResponse(message);

@@ -59,20 +59,14 @@ describe('addServers', () => {
   });
 
   test('should throw an error if servers list is not defined', () => {
-    expect(() => addServers(undefined, store)).toThrowError(
-      new Error('The servers and store must be defined')
-    );
+    expect(() => addServers(undefined, store)).toThrowError(new Error('The servers and store must be defined'));
   });
 
   test('should throw an error if store is not defined', () => {
-    expect(() => addServers(servers, undefined)).toThrowError(
-      new Error('The servers and store must be defined')
-    );
+    expect(() => addServers(servers, undefined)).toThrowError(new Error('The servers and store must be defined'));
   });
 
   test('should throw an error when both server and store are not defined', () => {
-    expect(() => addServers(undefined, undefined)).toThrowError(
-      new Error('The servers and store must be defined')
-    );
+    expect(() => addServers(undefined, undefined)).toThrowError(new Error('The servers and store must be defined'));
   });
 });

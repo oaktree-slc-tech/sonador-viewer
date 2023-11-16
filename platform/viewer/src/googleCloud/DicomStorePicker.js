@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import api from './api/GoogleCloudApi';
 import DicomStoreList from './DicomStoreList';
+
 import './googleCloud.css';
 
 export default class DicomStorePicker extends Component {
@@ -48,15 +50,9 @@ export default class DicomStorePicker extends Component {
           className="form-control gcp-input"
           type="text"
           value={filterStr}
-          onChange={e => this.setState({ filterStr: e.target.value })}
+          onChange={(e) => this.setState({ filterStr: e.target.value })}
         />
-        <DicomStoreList
-          stores={stores}
-          loading={loading}
-          error={error}
-          filter={filterStr}
-          onSelect={onSelect}
-        />
+        <DicomStoreList stores={stores} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
       </div>
     );
   }

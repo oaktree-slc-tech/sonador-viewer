@@ -44,8 +44,8 @@
 
 .gcp-table > tbody tr td {
   padding: 8px;
-  height: $body-cell-height;
-  line-height: $body-cell-height;
+  height: 40px;
+  line-height: 40px;
   color: var(--table-text-primary-color);
   font-weight: 300;
   border-top: 1px solid var(--ui-gray-lighter);
@@ -137,12 +137,12 @@
 .gcp-picker--path {
   color: #ffffff;
   font-size: 16px;
-  font-weight: 28px;
+  font-weight: 400;
   text-align: left;
   margin: 20px auto;
 }
 
-.gcp-input{
+.gcp-input {
   height: 40px;
   margin: 0 5px 20px 5px;
   padding: 0 20px;

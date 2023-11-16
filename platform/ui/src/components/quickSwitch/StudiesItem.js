@@ -11,25 +11,14 @@ export class StudiesItem extends Component {
   };
 
   render() {
-    const {
-      StudyDate,
-      StudyDescription,
-      modalities,
-      studyAvailable,
-    } = this.props.studyData;
+    const { StudyDate, StudyDescription, modalities, studyAvailable } = this.props.studyData;
     const activeClass = this.props.active ? ' active' : '';
     const hasDescriptionAndDate = StudyDate && StudyDescription;
     return (
-      <div
-        className={`studyBrowseItem${activeClass}`}
-        onClick={this.props.onClick}
-      >
+      <div className={`studyBrowseItem${activeClass}`} onClick={this.props.onClick}>
         <div className="studyItemBox">
           <div className="studyModality">
-            <div
-              className="studyModalityText"
-              style={this.getModalitiesStyle()}
-            >
+            <div className="studyModalityText" style={this.getModalitiesStyle()}>
               {modalities}
             </div>
           </div>
@@ -41,11 +30,7 @@ export class StudiesItem extends Component {
               </React.Fragment>
             ) : (
               <div className="studyAvailability">
-                {studyAvailable ? (
-                  <React.Fragment>N/A</React.Fragment>
-                ) : (
-                  <React.Fragment>Click to load</React.Fragment>
-                )}
+                {studyAvailable ? <React.Fragment>N/A</React.Fragment> : <React.Fragment>Click to load</React.Fragment>}
               </div>
             )}
           </div>

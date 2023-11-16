@@ -1,8 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import SimpleToolbarButton from './SimpleToolbarButton';
-import PlayClipButton from './PlayClipButton';
+
 import { LayoutButton } from './../components/layoutButton';
+import PlayClipButton from './PlayClipButton';
+import SimpleToolbarButton from './SimpleToolbarButton';
 
 // TODO: This should not be built in the `@ohif/ui` component
 function getDefaultButtonData() {

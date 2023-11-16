@@ -1,9 +1,10 @@
 import { api } from 'dicomweb-client';
-import StaticWadoClient from './StaticWadoClient';
-import DICOMWeb from '../../../DICOMWeb/';
 
+import DICOMWeb from '../../../DICOMWeb/';
 import errorHandler from '../../../errorHandler';
 import getXHRRetryRequestHook from '../../../utils/xhrRetryRequestHook';
+
+import StaticWadoClient from './StaticWadoClient';
 
 /**
  * Creates a QIDO date string for a date range query
@@ -39,21 +40,17 @@ function getQIDOQueryParams(filter, serverSupportsQIDOIncludeField) {
   ].join(',');
 
   const parameters = {
-    PatientName: filter.PatientName,
-    PatientID: filter.PatientID,
-    AccessionNumber: filter.AccessionNumber,
-    StudyDescription: filter.StudyDescription,
-    ModalitiesInStudy: filter.ModalitiesInStudy,
-    limit: filter.limit,
-    offset: filter.offset,
-    fuzzymatching: filter.fuzzymatching,
+    ...filter,
     includefield: serverSupportsQIDOIncludeField ? commaSeparatedFields : 'all',
   };
 
+  delete parameters.studyDateFrom;
+  delete parameters.studyDateTo;
+
   // build the StudyDate range parameter
   if (filter.studyDateFrom || filter.studyDateTo) {
-    const dateFrom = dateToString(new Date(filter.studyDateFrom));
-    const dateTo = dateToString(new Date(filter.studyDateTo));
+    const dateFrom = dateToString(new Date(filter.studyDateFrom || null));
+    const dateTo = dateToString(new Date(filter.studyDateTo || null));
     parameters.StudyDate = `${dateFrom}-${dateTo}`;
   }
 
@@ -67,7 +64,7 @@ function getQIDOQueryParams(filter, serverSupportsQIDOIncludeField) {
 
   // Clean query params of undefined values.
   const params = {};
-  Object.keys(parameters).forEach(key => {
+  Object.keys(parameters).forEach((key) => {
     if (parameters[key] !== undefined && parameters[key] !== '') {
       params[key] = parameters[key];
     }
@@ -87,7 +84,7 @@ function resultDataToStudies(resultData) {
 
   if (!resultData || !resultData.length) return;
 
-  resultData.forEach(study =>
+  resultData.forEach((study) =>
     studies.push({
       StudyInstanceUID: DICOMWeb.getString(study['0020000D']),
       // 00080005 = SpecificCharacterSet
@@ -106,16 +103,14 @@ function resultDataToStudies(resultData) {
       StudyDescription: DICOMWeb.getString(study['00081030']),
       // Modality: DICOMWeb.getString(study['00080060']),
       // ModalitiesInStudy: DICOMWeb.getString(study['00080061']),
-      modalities: DICOMWeb.getString(
-        DICOMWeb.getModalities(study['00080060'], study['00080061'])
-      ),
+      modalities: DICOMWeb.getString(DICOMWeb.getModalities(study['00080060'], study['00080061'])),
     })
   );
 
   return studies;
 }
 
-export default function Studies(server, filter) {
+export default function Studies(server, filter, shouldReturnRow) {
   const { staticWado } = server;
   const config = {
     ...server,
@@ -125,20 +120,14 @@ export default function Studies(server, filter) {
     requestHooks: [getXHRRetryRequestHook()],
   };
 
-  const dicomWeb = staticWado
-    ? new StaticWadoClient(config)
-    : new api.DICOMwebClient(config);
+  const dicomWeb = staticWado ? new StaticWadoClient(config) : new api.DICOMwebClient(config);
   server.qidoSupportsIncludeField =
-    server.qidoSupportsIncludeField === undefined
-      ? true
-      : server.qidoSupportsIncludeField;
-  const queryParams = getQIDOQueryParams(
-    filter,
-    server.qidoSupportsIncludeField
-  );
+    server.qidoSupportsIncludeField === undefined ? true : server.qidoSupportsIncludeField;
+
+  const queryParams = getQIDOQueryParams(filter, server.qidoSupportsIncludeField);
   const options = {
     queryParams,
   };
 
-  return dicomWeb.searchForStudies(options).then(resultDataToStudies);
+  return dicomWeb.searchForStudies(options).then((res) => (shouldReturnRow ? res : resultDataToStudies(res)));
 }

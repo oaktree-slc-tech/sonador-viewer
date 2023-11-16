@@ -1,11 +1,10 @@
 import React, { PureComponent } from 'react';
-import PropTypes from 'prop-types';
 import { useSearchParams } from 'react-router-dom';
+import PropTypes from 'prop-types';
 
 import { withTranslation } from '../../contextProviders';
 
 import './PaginationArea.styl';
-
 
 class TablePagination extends PureComponent {
   static defaultProps = {
@@ -33,7 +32,7 @@ class TablePagination extends PureComponent {
     this.props.prevPageFunc(this.props.currentPage);
   };
 
-  onRowsPerPageChange = event => {
+  onRowsPerPageChange = (event) => {
     this.props.onRowsPerPageChange(parseInt(event.target.value));
   };
 
@@ -44,21 +43,14 @@ class TablePagination extends PureComponent {
           <React.Fragment>
             <ul className="pagination-control no-margins">
               <li className="page-item prev">
-                <button
-                  onClick={this.prevPage}
-                  disabled={this.props.currentPage === 0}
-                  className="btn page-link"
-                >
+                <button onClick={this.prevPage} disabled={this.props.currentPage === 0} className="btn page-link">
                   {this.props.t('Previous')}
                 </button>
               </li>
               <li className="page-item next">
                 <button
                   onClick={this.nextPage}
-                  disabled={
-                    this.props.recordCount === 0 ||
-                    this.props.rowsPerPage > this.props.recordCount
-                  }
+                  disabled={this.props.recordCount === 0 || this.props.rowsPerPage > this.props.recordCount}
                   className="btn page-link"
                 >
                   {this.props.t('Next')}
@@ -75,11 +67,8 @@ class TablePagination extends PureComponent {
     return (
       <div className="form-inline form-group rows-per-page">
         <span>{this.props.t('Show')}</span>
-        <select
-          onChange={this.onRowsPerPageChange}
-          defaultValue={this.props.rowsPerPage}
-        >
-          {this.props.pageOptions.map(pageNumber => {
+        <select onChange={this.onRowsPerPageChange} defaultValue={this.props.rowsPerPage}>
+          {this.props.pageOptions.map((pageNumber) => {
             return (
               <option key={pageNumber} value={pageNumber}>
                 {pageNumber}
@@ -97,9 +86,7 @@ class TablePagination extends PureComponent {
       <div className="pagination-area">
         <div className="rows-dropdown">{this.renderRowsPerPageDropdown()}</div>
         <div className="pagination-buttons">
-          <div className="form-inline form-group page-number pull-right">
-            {this.renderPaginationButtons()}
-          </div>
+          <div className="form-inline form-group page-number pull-right">{this.renderPaginationButtons()}</div>
         </div>
       </div>
     );

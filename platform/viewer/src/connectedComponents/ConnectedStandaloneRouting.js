@@ -1,9 +1,10 @@
 import { connect } from 'react-redux';
+
 import StandaloneRouting from '../routes/StandaloneRouting';
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
-    activateServer: server => {
+    activateServer: (server) => {
       const action = {
         type: 'ACTIVATE_SERVER',
         server,
@@ -13,9 +14,6 @@ const mapDispatchToProps = dispatch => {
   };
 };
 
-const ConnectedStandaloneRouting = connect(
-  null,
-  mapDispatchToProps
-)(StandaloneRouting);
+const ConnectedStandaloneRouting = connect(null, mapDispatchToProps)(StandaloneRouting);
 
 export default ConnectedStandaloneRouting;

@@ -14,11 +14,7 @@ export default function setMultiPanelLayout(
     const numViewports = numRows * numColumns;
 
     if (viewportPropsArray && viewportPropsArray.length !== numViewports) {
-      reject(
-        new Error(
-          'viewportProps is supplied but its length is not equal to numViewports'
-        )
-      );
+      reject(new Error('viewportProps is supplied but its length is not equal to numViewports'));
     }
 
     const viewportSpecificData = {};
@@ -49,11 +45,7 @@ export default function setMultiPanelLayout(
       };
 
       // Viewport properties
-      viewports[index] = Object.assign(
-        {},
-        viewports[index],
-        nestedViewportProps
-      );
+      viewports[index] = Object.assign({}, viewports[index], nestedViewportProps);
     });
 
     setLayoutAndViewportData(

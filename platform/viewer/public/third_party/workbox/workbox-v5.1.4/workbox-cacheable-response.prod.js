@@ -1,5 +1,5 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.cacheableResponse = (function(s) {
+  (this.workbox.cacheableResponse = (function (s) {
     'use strict';
     try {
       self['workbox:cacheable-response:5.1.4'] && _();
@@ -12,9 +12,7 @@
         let t = !0;
         return (
           this.s && (t = this.s.includes(s.status)),
-          this.t &&
-            t &&
-            (t = Object.keys(this.t).some(t => s.headers.get(t) === this.t[t])),
+          this.t && t && (t = Object.keys(this.t).some((t) => s.headers.get(t) === this.t[t])),
           t
         );
       }
@@ -23,8 +21,7 @@
       (s.CacheableResponse = t),
       (s.CacheableResponsePlugin = class {
         constructor(s) {
-          (this.cacheWillUpdate = async ({ response: s }) =>
-            this.i.isResponseCacheable(s) ? s : null),
+          (this.cacheWillUpdate = async ({ response: s }) => (this.i.isResponseCacheable(s) ? s : null)),
             (this.i = new t(s));
         }
       }),

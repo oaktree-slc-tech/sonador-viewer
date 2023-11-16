@@ -1,10 +1,11 @@
-import { length, ellipticalRoi } from '../tools';
 import * as _ from 'lodash';
+
+import { ellipticalRoi, length } from '../tools';
 
 const childTools = _.cloneDeep([length, ellipticalRoi]);
 
 // Exclude temp tools from case progress
-childTools.forEach(childTool => {
+childTools.forEach((childTool) => {
   childTool.options = Object.assign({}, childTool.options, {
     caseProgress: {
       include: false,

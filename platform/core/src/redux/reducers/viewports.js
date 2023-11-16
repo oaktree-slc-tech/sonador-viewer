@@ -1,5 +1,5 @@
+import { produce, setAutoFreeze } from 'immer';
 import * as _ from 'lodash';
-import produce, { setAutoFreeze } from 'immer';
 
 import {
   CLEAR_VIEWPORT,
@@ -9,7 +9,7 @@ import {
   SET_VIEWPORT_ACTIVE,
   SET_VIEWPORT_LAYOUT,
   SET_VIEWPORT_LAYOUT_AND_DATA,
-} from './../constants/ActionTypes.js';
+} from './../constants/ActionTypes';
 
 setAutoFreeze(false);
 
@@ -32,16 +32,12 @@ export const DEFAULT_STATE = {
  * @param {Object} currentViewportSpecificData
  * @returns
  */
-const findActiveViewportSpecificData = (
-  numRows,
-  numColumns,
-  currentViewportSpecificData = {}
-) => {
+const findActiveViewportSpecificData = (numRows, numColumns, currentViewportSpecificData = {}) => {
   const numberOfViewports = numRows * numColumns;
   const viewportSpecificData = _.cloneDeep(currentViewportSpecificData);
 
   if (numberOfViewports < Object.keys(viewportSpecificData).length) {
-    Object.keys(viewportSpecificData).forEach(key => {
+    Object.keys(viewportSpecificData).forEach((key) => {
       if (key > numberOfViewports - 1) {
         delete viewportSpecificData[key];
       }
@@ -58,11 +54,7 @@ const findActiveViewportSpecificData = (
  * @param {Number} currentActiveViewportIndex
  * @returns
  */
-const getActiveViewportIndex = (
-  numRows,
-  numColumns,
-  currentActiveViewportIndex
-) => {
+const getActiveViewportIndex = (numRows, numColumns, currentActiveViewportIndex) => {
   const numberOfViewports = numRows * numColumns;
 
   return currentActiveViewportIndex > numberOfViewports - 1
@@ -95,7 +87,7 @@ const viewports = (state = DEFAULT_STATE, action) => {
      * @return {Object} New state.
      */
     case SET_VIEWPORT_ACTIVE: {
-      return produce(state, draftState => {
+      return produce(state, (draftState) => {
         draftState.activeViewportIndex = getActiveViewportIndex(
           draftState.numRows,
           draftState.numColumns,
@@ -111,16 +103,8 @@ const viewports = (state = DEFAULT_STATE, action) => {
      */
     case SET_VIEWPORT_LAYOUT: {
       const { numRows, numColumns } = action;
-      const viewportSpecificData = findActiveViewportSpecificData(
-        numRows,
-        numColumns,
-        state.viewportSpecificData
-      );
-      const activeViewportIndex = getActiveViewportIndex(
-        numRows,
-        numColumns,
-        state.activeViewportIndex
-      );
+      const viewportSpecificData = findActiveViewportSpecificData(numRows, numColumns, state.viewportSpecificData);
+      const activeViewportIndex = getActiveViewportIndex(numRows, numColumns, state.activeViewportIndex);
 
       return {
         ...state,
@@ -139,16 +123,8 @@ const viewports = (state = DEFAULT_STATE, action) => {
      */
     case SET_VIEWPORT_LAYOUT_AND_DATA: {
       const { numRows, numColumns } = action;
-      const viewportSpecificData = findActiveViewportSpecificData(
-        numRows,
-        numColumns,
-        action.viewportSpecificData
-      );
-      const activeViewportIndex = getActiveViewportIndex(
-        numRows,
-        numColumns,
-        state.activeViewportIndex
-      );
+      const viewportSpecificData = findActiveViewportSpecificData(numRows, numColumns, action.viewportSpecificData);
+      const activeViewportIndex = getActiveViewportIndex(numRows, numColumns, state.activeViewportIndex);
 
       return {
         ...state,
@@ -166,18 +142,16 @@ const viewports = (state = DEFAULT_STATE, action) => {
      * @return {Object} New state.
      */
     case SET_VIEWPORT: {
-      return produce(state, draftState => {
+      return produce(state, (draftState) => {
         draftState.viewportSpecificData[action.viewportIndex] =
           draftState.viewportSpecificData[action.viewportIndex] || {};
 
-        Object.keys(action.viewportSpecificData).forEach(key => {
-          draftState.viewportSpecificData[action.viewportIndex][key] =
-            action.viewportSpecificData[key];
+        Object.keys(action.viewportSpecificData).forEach((key) => {
+          draftState.viewportSpecificData[action.viewportIndex][key] = action.viewportSpecificData[key];
         });
 
         if (action.viewportSpecificData && action.viewportSpecificData.plugin) {
-          draftState.layout.viewports[action.viewportIndex].plugin =
-            action.viewportSpecificData.plugin;
+          draftState.layout.viewports[action.viewportIndex].plugin = action.viewportSpecificData.plugin;
         }
       });
     }
@@ -193,9 +167,7 @@ const viewports = (state = DEFAULT_STATE, action) => {
     // eslint-disable-next-line
     case SET_SPECIFIC_DATA: {
       const layout = _.cloneDeep(state.layout);
-      const viewportIndex = useActiveViewport
-        ? state.activeViewportIndex
-        : action.viewportIndex;
+      const viewportIndex = useActiveViewport ? state.activeViewportIndex : action.viewportIndex;
 
       let viewportSpecificData = _.cloneDeep(state.viewportSpecificData);
       viewportSpecificData[viewportIndex] = {
@@ -203,8 +175,7 @@ const viewports = (state = DEFAULT_STATE, action) => {
       };
 
       if (action.viewportSpecificData && action.viewportSpecificData.plugin) {
-        layout.viewports[viewportIndex].plugin =
-          action.viewportSpecificData.plugin;
+        layout.viewports[viewportIndex].plugin = action.viewportSpecificData.plugin;
       }
 
       return { ...state, layout, viewportSpecificData };

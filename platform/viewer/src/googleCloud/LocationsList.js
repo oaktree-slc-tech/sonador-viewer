@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import './googleCloud.css';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
+
 import { Icon } from '@ohif/ui';
+
+import './googleCloud.css';
 
 class LocationsList extends Component {
   state = {
@@ -20,15 +22,11 @@ class LocationsList extends Component {
     loading: true,
   };
 
-  renderTableRow = location => {
+  renderTableRow = (location) => {
     return (
       <tr
         key={location.locationId}
-        className={
-          this.state.highlightedItem === location.locationId
-            ? 'noselect active'
-            : 'noselect'
-        }
+        className={this.state.highlightedItem === location.locationId ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
           this.onHighlightItem(location.locationId);
         }}
@@ -52,9 +50,7 @@ class LocationsList extends Component {
       return <p>{error}</p>;
     }
 
-    const loadingIcon = (
-      <Icon name="circle-notch" className="loading-icon-spin loading-icon" />
-    );
+    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
     if (loading) {
       return loadingIcon;
@@ -64,11 +60,7 @@ class LocationsList extends Component {
       <tbody id="LocationList">
         {locations
           .filter(
-            location =>
-              location.name
-                .split('/')[3]
-                .toLowerCase()
-                .includes(filter.toLowerCase()) || filter == ''
+            (location) => location.name.split('/')[3].toLowerCase().includes(filter.toLowerCase()) || filter == ''
           )
           .map(this.renderTableRow)}
       </tbody>

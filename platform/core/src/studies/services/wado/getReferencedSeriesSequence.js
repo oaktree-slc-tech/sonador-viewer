@@ -7,29 +7,23 @@ import DICOMWeb from '../../../DICOMWeb';
  * @param {Object} instance The sop instance
  * @returns {Promise} Referenced series sequence
  */
-const getReferencedSeriesSequence = instance => {
+const getReferencedSeriesSequence = (instance) => {
   const referencedSeriesSequenceRaw = instance['00081115'];
 
   const referencedSeriesSequence = [];
 
   if (referencedSeriesSequenceRaw && referencedSeriesSequenceRaw.Value) {
-    referencedSeriesSequenceRaw.Value.forEach(referencedSeries => {
-      const referencedSeriesInstanceUID = DICOMWeb.getString(
-        referencedSeries['0020000E']
-      );
+    referencedSeriesSequenceRaw.Value.forEach((referencedSeries) => {
+      const referencedSeriesInstanceUID = DICOMWeb.getString(referencedSeries['0020000E']);
 
       const referencedInstanceSequenceRaw = referencedSeries['0008114A'];
       const referencedInstanceSequence = [];
 
       if (referencedInstanceSequenceRaw) {
-        referencedInstanceSequenceRaw.Value.forEach(referencedInstance => {
+        referencedInstanceSequenceRaw.Value.forEach((referencedInstance) => {
           referencedInstanceSequence.push({
-            referencedSOPClassUID: DICOMWeb.getString(
-              referencedInstance['00081150']
-            ),
-            referencedSOPInstanceUID: DICOMWeb.getString(
-              referencedInstance['00081155']
-            ),
+            referencedSOPClassUID: DICOMWeb.getString(referencedInstance['00081150']),
+            referencedSOPInstanceUID: DICOMWeb.getString(referencedInstance['00081155']),
           });
         });
       }

@@ -1,10 +1,10 @@
 const attributeCache = Object.create(null);
 const REGEXP = /^\([x0-9a-f]+\)/;
 
-const humanize = text => {
+const humanize = (text) => {
   let humanized = text.replace(/([A-Z])/g, ' $1'); // insert a space before all caps
 
-  humanized = humanized.replace(/^./, str => {
+  humanized = humanized.replace(/^./, (str) => {
     // uppercase the first character
     return str.toUpperCase();
   });
@@ -25,7 +25,7 @@ const getAttributeText = (attributeId, attributes) => {
   }
 
   // Find the attribute with given attributeId
-  const attribute = attributes.find(attribute => attribute.id === attributeId);
+  const attribute = attributes.find((attribute) => attribute.id === attributeId);
 
   let attributeText;
 
@@ -64,8 +64,7 @@ function displayConstraint(attributeId, constraint, attributes) {
   }
 
   const attributeText = getAttributeText(attributeId, attributes);
-  const constraintText =
-    attributeText + ' ' + humanize(comparator).toLowerCase() + ' ' + value;
+  const constraintText = attributeText + ' ' + humanize(comparator).toLowerCase() + ' ' + value;
 
   return constraintText;
 }

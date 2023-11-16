@@ -59,7 +59,7 @@ workbox.routing.registerRoute(
 );
 
 // MESSAGE HANDLER
-self.addEventListener('message', event => {
+self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     switch (event.data.type) {
       case 'SKIP_WAITING':

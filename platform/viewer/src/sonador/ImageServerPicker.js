@@ -21,9 +21,8 @@ export default class ImageServerPicker extends Component {
 
     // Event handlers
     const closeModal = () => this.setState({ activeModalId: null });
-    const openModal = () =>
-      this.setState({ activeModalId: 'SonadorImageServerPicker' });
-    const onServerChange = token => this.props.onServerChange(token);
+    const openModal = () => this.setState({ activeModalId: 'SonadorImageServerPicker' });
+    const onServerChange = (token) => this.props.onServerChange(token);
 
     return (
       <>

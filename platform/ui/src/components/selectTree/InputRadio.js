@@ -15,10 +15,7 @@ export default class InputRadio extends Component {
   render() {
     const labelClass = this.props.labelClass ? this.props.labelClass : '';
     return (
-      <label
-        className={'wrapperLabel radioLabel ' + labelClass}
-        htmlFor={this.props.id}
-      >
+      <label className={'wrapperLabel radioLabel ' + labelClass} htmlFor={this.props.id}>
         <input
           type="radio"
           id={this.props.id}
@@ -31,7 +28,7 @@ export default class InputRadio extends Component {
     );
   }
 
-  onSelected = evt => {
+  onSelected = (evt) => {
     this.props.onSelected(evt, this.props.itemData);
   };
 }

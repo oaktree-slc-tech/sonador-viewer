@@ -65,25 +65,22 @@ but the PR title must comply with it, as it will be used as the commit message
 after the commits are squashed.
 -->
 
-- [] My Pull Request title is descriptive, accurate and follows the
-  semantic-release format and guidelines.
+- [] My Pull Request title is descriptive, accurate and follows the semantic-release format and guidelines.
 
 #### Code
 
-- [] My code has been well-documented (function documentation, inline comments,
-  etc.)
+- [] My code has been well-documented (function documentation, inline comments, etc.)
 
 #### Public Documentation Updates
 
 <!-- https://v3-docs.ohif.org/ -->
 
-- [] The documentation page has been updated as necessary for any public API
-  additions or removals.
+- [] The documentation page has been updated as necessary for any public API additions or removals.
 
 #### Tested Environment
 
 - [] "OS: <!--[e.g. Windows 10, macOS 10.15.4]"-->
-- [] "Node version: <!--[e.g. 16.14.0]"-->
+- [] "Node version: <!--[e.g. 18.12.0]"-->
 - [] "Browser:
   <!--[e.g. Chrome 83.0.4103.116, Firefox 77.0.1, Safari 13.1.1]"-->
 

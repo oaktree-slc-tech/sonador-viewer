@@ -31,7 +31,7 @@ class DicomMicroscopyViewport extends Component {
 
     dicomWebClient
       .searchForInstances(searchInstanceOptions)
-      .then(instances => {
+      .then((instances) => {
         const promises = [];
         for (let i = 0; i < instances.length; i++) {
           const sopInstanceUID = instances[i]['00080018']['Value'][0];
@@ -42,24 +42,20 @@ class DicomMicroscopyViewport extends Component {
             sopInstanceUID,
           };
 
-          const promise = dicomWebClient
-            .retrieveInstanceMetadata(retrieveInstanceOptions)
-            .then(metadata => {
-              const ImageType = metadata[0]['00080008']['Value'];
-              if (ImageType[2] === 'VOLUME') {
-                return metadata[0];
-              }
-            });
+          const promise = dicomWebClient.retrieveInstanceMetadata(retrieveInstanceOptions).then((metadata) => {
+            const ImageType = metadata[0]['00080008']['Value'];
+            if (ImageType[2] === 'VOLUME') {
+              return metadata[0];
+            }
+          });
           promises.push(promise);
         }
         return Promise.all(promises);
       })
-      .then(async metadata => {
-        metadata = metadata.filter(m => m);
+      .then(async (metadata) => {
+        metadata = metadata.filter((m) => m);
 
-        const { api } = await import(
-          /* webpackChunkName: "dicom-microscopy-viewer" */ 'dicom-microscopy-viewer'
-        );
+        const { api } = await import(/* webpackChunkName: "dicom-microscopy-viewer" */ 'dicom-microscopy-viewer');
         const microscopyViewer = api.VLWholeSlideMicroscopyImageViewer;
 
         try {
@@ -70,13 +66,9 @@ class DicomMicroscopyViewport extends Component {
           });
         } catch (error) {
           console.error('[Microscopy Viewer] Failed to load:', error);
-          const {
-            UINotificationService,
-            LoggerService,
-          } = this.props.servicesManager.services;
+          const { UINotificationService, LoggerService } = this.props.servicesManager.services;
           if (UINotificationService) {
-            const message =
-              'Failed to load viewport. Please check that you have hardware acceleration enabled.';
+            const message = 'Failed to load viewport. Please check that you have hardware acceleration enabled.';
             LoggerService.error({ error, message });
             UINotificationService.show({
               autoClose: false,
@@ -101,18 +93,8 @@ class DicomMicroscopyViewport extends Component {
     const style = { width: '100%', height: '100%' };
     return (
       <div className={'DicomMicroscopyViewer'} style={style}>
-        {ReactResizeDetector && (
-          <ReactResizeDetector
-            handleWidth
-            handleHeight
-            onResize={this.onWindowResize}
-          />
-        )}
-        {this.state.error ? (
-          <h2>{JSON.stringify(this.state.error)}</h2>
-        ) : (
-          <div style={style} ref={this.container} />
-        )}
+        {ReactResizeDetector && <ReactResizeDetector handleWidth handleHeight onResize={this.onWindowResize} />}
+        {this.state.error ? <h2>{JSON.stringify(this.state.error)}</h2> : <div style={style} ref={this.container} />}
       </div>
     );
   }

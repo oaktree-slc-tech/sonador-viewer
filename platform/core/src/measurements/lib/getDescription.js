@@ -1,3 +1,3 @@
-export default function(measurement) {
+export default function (measurement) {
   return measurement.description;
 }

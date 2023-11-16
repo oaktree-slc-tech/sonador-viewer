@@ -5,7 +5,7 @@ export const targetCR = {
   cornerstoneToolType: 'TargetCR',
   options: {
     measurementTable: {
-      displayFunction: data => data.response,
+      displayFunction: (data) => data.response,
     },
     caseProgress: {
       include: true,

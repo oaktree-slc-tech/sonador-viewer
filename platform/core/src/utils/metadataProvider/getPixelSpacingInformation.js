@@ -49,11 +49,7 @@ export default function getPixelSpacingInformation(instance) {
       type: TYPES.UNKNOWN,
       isProjection,
     };
-  } else if (
-    PixelSpacing &&
-    ImagerPixelSpacing &&
-    PixelSpacing === ImagerPixelSpacing
-  ) {
+  } else if (PixelSpacing && ImagerPixelSpacing && PixelSpacing === ImagerPixelSpacing) {
     // If Imager Pixel Spacing and Pixel Spacing are present and they have the same values,
     // then the user should be informed that the measurements are at the detector plane
     return {
@@ -61,11 +57,7 @@ export default function getPixelSpacingInformation(instance) {
       type: TYPES.DETECTOR,
       isProjection,
     };
-  } else if (
-    PixelSpacing &&
-    ImagerPixelSpacing &&
-    PixelSpacing !== ImagerPixelSpacing
-  ) {
+  } else if (PixelSpacing && ImagerPixelSpacing && PixelSpacing !== ImagerPixelSpacing) {
     // If Imager Pixel Spacing and Pixel Spacing are present and they have different values,
     // then the user should be informed that these are "calibrated"
     // (in some unknown manner if Pixel Spacing Calibration Type and/or
@@ -84,22 +76,17 @@ export default function getPixelSpacingInformation(instance) {
       // Estimated Radiographic Magnification Factor and the user informed of that.
       // TODO: should this correction be done before all of this logic?
       CorrectedImagerPixelSpacing = ImagerPixelSpacing.map(
-        pixelSpacing => pixelSpacing / EstimatedRadiographicMagnificationFactor
+        (pixelSpacing) => pixelSpacing / EstimatedRadiographicMagnificationFactor
       );
     } else {
-      log.info(
-        'EstimatedRadiographicMagnificationFactor was not present. Unable to correct ImagerPixelSpacing.'
-      );
+      log.info('EstimatedRadiographicMagnificationFactor was not present. Unable to correct ImagerPixelSpacing.');
     }
 
     return {
       PixelSpacing: CorrectedImagerPixelSpacing,
       isProjection,
     };
-  } else if (
-    SequenceOfUltrasoundRegions &&
-    typeof SequenceOfUltrasoundRegions === 'object'
-  ) {
+  } else if (SequenceOfUltrasoundRegions && typeof SequenceOfUltrasoundRegions === 'object') {
     const { PhysicalDeltaX, PhysicalDeltaY } = SequenceOfUltrasoundRegions;
     const USPixelSpacing = [PhysicalDeltaX * 10, PhysicalDeltaY * 10];
 
@@ -124,7 +111,5 @@ export default function getPixelSpacingInformation(instance) {
     };
   }
 
-    log.info(
-    'Unknown combination of PixelSpacing and ImagerPixelSpacing identified. Unable to determine spacing.'
-  );
+  log.info('Unknown combination of PixelSpacing and ImagerPixelSpacing identified. Unable to determine spacing.');
 }

@@ -1,17 +1,15 @@
 import { ImageSet } from '../../classes';
+
+import addMeasurement from './utils/addMeasurement';
 import getMeasurements from './utils/getMeasurements';
 import isRehydratable from './utils/isRehydratable';
-import addMeasurement from './utils/addMeasurement';
 
 const parseSCOORD3D = ({ servicesManager, displaySets }) => {
   const { MeasurementService } = servicesManager.services;
 
   const srDisplaySets = displaySets.filter((ds) => ds.Modality === 'SR');
   const imageDisplaySets = displaySets.filter(
-    (ds) =>
-      ds.Modality !== 'SR' &&
-      ds.Modality !== 'SEG' &&
-      ds.Modality !== 'RTSTRUCT'
+    (ds) => ds.Modality !== 'SR' && ds.Modality !== 'SEG' && ds.Modality !== 'RTSTRUCT'
   );
 
   imageDisplaySets.forEach((imageDisplaySet) => {
@@ -27,10 +25,7 @@ const parseSCOORD3D = ({ servicesManager, displaySets }) => {
     const { ContentSequence } = firstInstance;
 
     srDisplaySet.measurements = getMeasurements(ContentSequence);
-    const mappings = MeasurementService.getSourceMappings(
-      'CornerstoneTools',
-      '4'
-    );
+    const mappings = MeasurementService.getSourceMappings('CornerstoneTools', '4');
 
     srDisplaySet.isHydrated = false;
     srDisplaySet.isRehydratable = isRehydratable(srDisplaySet, mappings);
@@ -43,10 +38,7 @@ const parseSCOORD3D = ({ servicesManager, displaySets }) => {
   });
 };
 
-const checkIfCanAddMeasurementsToDisplaySet = (
-  srDisplaySet,
-  imageDisplaySet
-) => {
+const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) => {
   let measurements = srDisplaySet.measurements;
 
   /**
@@ -73,26 +65,19 @@ const checkIfCanAddMeasurementsToDisplaySet = (
          */
         for (let i = 0; i < images.length; ++i) {
           const imageMetadata = images[i].getData().metadata;
-          if (
-            imageMetadata.FrameOfReferenceUID !==
-            coord.ReferencedFrameOfReferenceSequence
-          ) {
+          if (imageMetadata.FrameOfReferenceUID !== coord.ReferencedFrameOfReferenceSequence) {
             continue;
           }
 
           let sliceNormal = [0, 0, 0];
           const orientation = imageMetadata.ImageOrientationPatient;
-          sliceNormal[0] =
-            orientation[1] * orientation[5] - orientation[2] * orientation[4];
-          sliceNormal[1] =
-            orientation[2] * orientation[3] - orientation[0] * orientation[5];
-          sliceNormal[2] =
-            orientation[0] * orientation[4] - orientation[1] * orientation[3];
+          sliceNormal[0] = orientation[1] * orientation[5] - orientation[2] * orientation[4];
+          sliceNormal[1] = orientation[2] * orientation[3] - orientation[0] * orientation[5];
+          sliceNormal[2] = orientation[0] * orientation[4] - orientation[1] * orientation[3];
 
           let distanceAlongNormal = 0;
           for (let j = 0; j < 3; ++j) {
-            distanceAlongNormal +=
-              sliceNormal[j] * imageMetadata.ImagePositionPatient[j];
+            distanceAlongNormal += sliceNormal[j] * imageMetadata.ImagePositionPatient[j];
           }
 
           // assuming 1 mm tolerance
@@ -113,9 +98,7 @@ const checkIfCanAddMeasurementsToDisplaySet = (
         }
       }
 
-      return sopClassUIDs.includes(
-        coord.ReferencedSOPSequence.ReferencedSOPClassUID
-      );
+      return sopClassUIDs.includes(coord.ReferencedSOPSequence.ReferencedSOPClassUID);
     });
   });
 
@@ -135,9 +118,7 @@ const checkIfCanAddMeasurementsToDisplaySet = (
     coords.forEach((coord, index) => {
       if (coord.ReferencedSOPSequence !== undefined) {
         const imageIndex = SOPInstanceUIDs.findIndex(
-          (SOPInstanceUID) =>
-            SOPInstanceUID ===
-            coord.ReferencedSOPSequence.ReferencedSOPInstanceUID
+          (SOPInstanceUID) => SOPInstanceUID === coord.ReferencedSOPSequence.ReferencedSOPInstanceUID
         );
         if (imageIndex > -1) {
           if (!srDisplaySet.referencedDisplaySets.includes(imageDisplaySet)) {
@@ -148,13 +129,11 @@ const checkIfCanAddMeasurementsToDisplaySet = (
           const imageMetadata = images[imageIndex].getData().metadata;
 
           if (coord.GraphicType === 'TEXT') {
-            const key =
-              measurement.labels[index].label + measurement.labels[index].value;
+            const key = measurement.labels[index].label + measurement.labels[index].value;
             let color = colors.get(key);
             if (!color) {
               // random dark color
-              color =
-                'hsla(' + Math.floor(Math.random() * 360) + ', 70%, 30%, 1)';
+              color = 'hsla(' + Math.floor(Math.random() * 360) + ', 70%, 30%, 1)';
               colors.set(key, color);
             }
 
@@ -163,26 +142,15 @@ const checkIfCanAddMeasurementsToDisplaySet = (
             measurement.labels[index].visible = true;
 
             imageDisplaySet.SRLabels.push({
-              ReferencedSOPInstanceUID:
-                coord.ReferencedSOPSequence.ReferencedSOPInstanceUID,
+              ReferencedSOPInstanceUID: coord.ReferencedSOPSequence.ReferencedSOPInstanceUID,
               labels: measurement.labels[index],
             });
 
             if (index === 0) {
-              addMeasurement(
-                measurement,
-                imageId,
-                imageMetadata,
-                imageDisplaySet.displaySetInstanceUID
-              );
+              addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
             }
           } else {
-            addMeasurement(
-              measurement,
-              imageId,
-              imageMetadata,
-              imageDisplaySet.displaySetInstanceUID
-            );
+            addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
           }
         }
       }

@@ -1,16 +1,14 @@
-import StaticWadoClient from '../qido/StaticWadoClient';
 import dcmjs from 'dcmjs';
-import DICOMWeb from '../../../DICOMWeb/';
-import RetrieveMetadataLoader from './retrieveMetadataLoader';
-import { sortStudySeries, sortingCriteria } from '../../sortStudy';
-import getSeriesInfo from '../../getSeriesInfo';
-import {
-  createStudyFromSOPInstanceList,
-  addInstancesToStudy,
-} from './studyInstanceHelpers';
 
+import DICOMWeb from '../../../DICOMWeb/';
 import errorHandler from '../../../errorHandler';
 import { getXHRRetryRequestHook } from '../../../utils/xhrRetryRequestHook';
+import getSeriesInfo from '../../getSeriesInfo';
+import { sortingCriteria, sortStudySeries } from '../../sortStudy';
+import StaticWadoClient from '../qido/StaticWadoClient';
+
+import RetrieveMetadataLoader from './retrieveMetadataLoader';
+import { addInstancesToStudy, createStudyFromSOPInstanceList } from './studyInstanceHelpers';
 
 const { naturalizeDataset } = dcmjs.data.DicomMetaDictionary;
 
@@ -20,7 +18,7 @@ const { naturalizeDataset } = dcmjs.data.DicomMetaDictionary;
  * @returns {Arrays} A list of Series Instance UIDs
  */
 function mapStudySeries(series) {
-  return series.map(series => getSeriesInfo(series).SeriesInstanceUID);
+  return series.map((series) => getSeriesInfo(series).SeriesInstanceUID);
 }
 
 function attachSeriesLoader(server, study, seriesLoader) {
@@ -43,11 +41,7 @@ function attachSeriesLoader(server, study, seriesLoader) {
  * @param {Array} seriesInstanceUIDList A list of Series Instance UIDs
  * @returns {Object} Returns an object which supports loading of instances from each of given Series Instance UID
  */
-function makeSeriesAsyncLoader(
-  dicomWebClient,
-  studyInstanceUID,
-  seriesInstanceUIDList
-) {
+function makeSeriesAsyncLoader(dicomWebClient, studyInstanceUID, seriesInstanceUIDList) {
   return Object.freeze({
     hasNext() {
       return seriesInstanceUIDList.length > 0;
@@ -89,11 +83,7 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
    */
   *getPreLoaders() {
     const preLoaders = [];
-    const {
-      studyInstanceUID,
-      filters: { seriesInstanceUID } = {},
-      client,
-    } = this;
+    const { studyInstanceUID, filters: { seriesInstanceUID } = {}, client } = this;
 
     if (seriesInstanceUID) {
       const options = {
@@ -115,10 +105,7 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
     // It's an array of Objects containing DICOM Tag values at the Series level
     const seriesData = await this.runLoaders(preLoaders);
 
-    const seriesSorted = sortStudySeries(
-      seriesData,
-      sortingCriteria.seriesSortCriteria.seriesInfoSortingCriteria
-    );
+    const seriesSorted = sortStudySeries(seriesData, sortingCriteria.seriesSortCriteria.seriesInfoSortingCriteria);
     const seriesInstanceUIDsMap = mapStudySeries(seriesSorted);
 
     return {
@@ -130,11 +117,7 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
   async load(preLoadData) {
     const { client, studyInstanceUID } = this;
 
-    const seriesAsyncLoader = makeSeriesAsyncLoader(
-      client,
-      studyInstanceUID,
-      preLoadData.seriesInstanceUIDsMap
-    );
+    const seriesAsyncLoader = makeSeriesAsyncLoader(client, studyInstanceUID, preLoadData.seriesInstanceUIDsMap);
 
     const firstSeries = await seriesAsyncLoader.next();
 
@@ -165,10 +148,7 @@ export default class RetrieveMetadataLoaderAsync extends RetrieveMetadataLoader 
       };
 
       if (study.series[idx]) {
-        study.series[idx] = Object.assign(
-          seriesDataFromQIDO,
-          study.series[idx]
-        );
+        study.series[idx] = Object.assign(seriesDataFromQIDO, study.series[idx]);
       } else {
         study.series[idx] = seriesDataFromQIDO;
       }

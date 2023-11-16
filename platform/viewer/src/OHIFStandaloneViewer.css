@@ -9,8 +9,8 @@ body,
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-family: Roboto, OpenSans, HelveticaNeue-Light, Helvetica Neue Light,
-    Helvetica Neue, Helvetica, Arial, Lucida Grande, sans-serif;
+  font-family: Roboto, OpenSans, HelveticaNeue-Light, Helvetica Neue Light, Helvetica Neue, Helvetica, Arial,
+    Lucida Grande, sans-serif;
 }
 
 body {
@@ -34,4 +34,9 @@ body {
 #root .fade-exit-active {
   opacity: 0;
   transition: opacity 200ms;
+}
+
+body.disabledScroll {
+  overflow-y: hidden;
+  height: 100dvh;
 }

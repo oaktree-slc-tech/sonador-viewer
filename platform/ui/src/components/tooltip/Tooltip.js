@@ -1,8 +1,8 @@
-import './Tooltip.styl';
-
-import classNames from 'classnames';
 import React from 'react';
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
+
+import './Tooltip.styl';
 
 const propTypes = {
   /** Sets the direction the Tooltip is positioned towards. */
@@ -25,16 +25,8 @@ const defaultProps = {
 
 class Tooltip extends React.Component {
   render() {
-    const {
-      placement,
-      positionTop,
-      positionLeft,
-      arrowOffsetTop,
-      arrowOffsetLeft,
-      className,
-      style,
-      children,
-    } = this.props;
+    const { placement, positionTop, positionLeft, arrowOffsetTop, arrowOffsetLeft, className, style, children } =
+      this.props;
 
     const outerStyle = {
       top: positionTop,
@@ -48,11 +40,7 @@ class Tooltip extends React.Component {
     };
 
     return (
-      <div
-        role="tooltip"
-        className={classNames(className, 'tooltip', placement)}
-        style={outerStyle}
-      >
+      <div role="tooltip" className={classNames(className, 'tooltip', placement)} style={outerStyle}>
         <div className="tooltip-arrow" style={arrowStyle} />
         <div className="tooltip-inner">{children}</div>
       </div>

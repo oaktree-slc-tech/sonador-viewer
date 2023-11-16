@@ -1,9 +1,10 @@
-import './Icon.styl';
-
 import PropTypes from 'prop-types';
+
 import getIcon from './getIcon.js';
 
-const Icon = props => {
+import './Icon.styl';
+
+const Icon = (props) => {
   return getIcon(props.name, props);
 };
 

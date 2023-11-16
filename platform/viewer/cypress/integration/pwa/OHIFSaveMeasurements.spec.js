@@ -1,8 +1,6 @@
-describe('OHIF Save Measurements', function() {
+describe('OHIF Save Measurements', function () {
   before(() => {
-    cy.checkStudyRouteInViewer(
-      '1.2.840.113619.2.5.1762583153.215519.978957063.78'
-    );
+    cy.checkStudyRouteInViewer('1.2.840.113619.2.5.1762583153.215519.978957063.78');
     cy.expectMinimumThumbnails(3);
   });
 
@@ -13,15 +11,13 @@ describe('OHIF Save Measurements', function() {
     cy.initCommonElementsAliases();
   });
 
-  it('saves new measurement annotation', function() {
+  it('saves new measurement annotation', function () {
     // Add measurement in the viewport
     cy.addLengthMeasurement();
 
     // Verify if measurement annotation was added into the measurements panel
     cy.get('@measurementsBtn').click();
-    cy.get('.measurementItem')
-      .its('length')
-      .should('be.at.least', 1);
+    cy.get('.measurementItem').its('length').should('be.at.least', 1);
 
     // TODO: Don't save until we're using in-memory data store
     // Save new measurement

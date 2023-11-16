@@ -2,11 +2,12 @@ import dcmjs from 'dcmjs';
 import { api } from 'dicomweb-client';
 
 import DICOMWeb from '../DICOMWeb';
-import parseDicomStructuredReport from './parseDicomStructuredReport';
-import parseMeasurementsData from './parseMeasurementsData';
-import getAllDisplaySets from './utils/getAllDisplaySets';
 import errorHandler from '../errorHandler';
 import getXHRRetryRequestHook from '../utils/xhrRetryRequestHook';
+
+import getAllDisplaySets from './utils/getAllDisplaySets';
+import parseDicomStructuredReport from './parseDicomStructuredReport';
+import parseMeasurementsData from './parseMeasurementsData';
 
 const VERSION_NAME = 'dcmjs-0.0';
 const TRANSFER_SYNTAX_UID = '1.2.840.10008.1.2.1';
@@ -20,12 +21,7 @@ const TRANSFER_SYNTAX_UID = '1.2.840.10008.1.2.1';
  * @param {object} external
  * @returns {Object} MeasurementData
  */
-const retrieveMeasurementFromSR = async (
-  series,
-  studies,
-  serverUrl,
-  external
-) => {
+const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) => {
   const config = {
     url: serverUrl,
     headers: DICOMWeb.getAuthorizationHeader(),
@@ -44,11 +40,7 @@ const retrieveMeasurementFromSR = async (
 
   const part10SRArrayBuffer = await dicomWeb.retrieveInstance(options);
   const displaySets = getAllDisplaySets(studies);
-  const measurementsData = parseDicomStructuredReport(
-    part10SRArrayBuffer,
-    displaySets,
-    external
-  );
+  const measurementsData = parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external);
 
   return measurementsData;
 };

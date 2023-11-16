@@ -1,0 +1,66 @@
+@import '../../styles/breakpoints';
+@import '../../styles/variables';
+
+.contentContainer {
+  margin-left: $sidebarWidth;
+  height: fit-content;
+  min-height: 100dvh;
+
+  @include lg {
+    margin: 0;
+  }
+
+  .wrapper {
+    padding-top: 30px;
+
+    @include lg {
+      padding-top: 0;
+    }
+
+    .content {
+      background-color: #1e1f23;
+      border-radius: 40px 0 0 40px;
+      padding: 50px 0 100px;
+      color: #fff;
+      min-height: calc(100dvh - 30px);
+
+      @include lg {
+        padding: 35px 0 100px;
+        border-radius: 10px 10px 0 0;
+      }
+
+      @include xs {
+        padding: 25px 0;
+      }
+
+      &.contentPadding {
+        padding-left: 75px;
+        padding-right: 75px;
+
+        @include lg {
+          padding-left: 50px;
+          padding-right: 50px;
+        }
+
+        @include xs {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+      }
+
+      &.settingsPadding {
+        @include xs {
+          padding: 25px 15px;
+        }
+      }
+    }
+  }
+}
+
+.logoWrapper {
+  display: inline-block;
+  padding: 10px 10px 7px;
+  background-color: #1e1f23;
+  border-radius: 5px;
+  margin-bottom: 15px;
+}

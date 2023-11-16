@@ -1,9 +1,10 @@
 import { connect } from 'react-redux';
+
 import DicomStorePickerModal from './DicomStorePickerModal.js';
 
-const isActive = a => a.active === true;
+const isActive = (a) => a.active === true;
 
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   const activeServer = state.servers.servers.find(isActive);
 
   return {
@@ -12,9 +13,9 @@ const mapStateToProps = state => {
   };
 };
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
-    setServers: servers => {
+    setServers: (servers) => {
       const action = {
         type: 'SET_SERVERS',
         servers,
@@ -24,9 +25,6 @@ const mapDispatchToProps = dispatch => {
   };
 };
 
-const ConnectedDicomStorePicker = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(DicomStorePickerModal);
+const ConnectedDicomStorePicker = connect(mapStateToProps, mapDispatchToProps)(DicomStorePickerModal);
 
 export default ConnectedDicomStorePicker;

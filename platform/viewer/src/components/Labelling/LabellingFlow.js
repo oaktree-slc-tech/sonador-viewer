@@ -1,11 +1,13 @@
-import { Icon, SelectTree } from '@ohif/ui';
-import React, { useState, useEffect, useRef } from 'react';
-import PropTypes from 'prop-types';
+import React, { useEffect, useRef, useState } from 'react';
 import * as _ from 'lodash';
+import PropTypes from 'prop-types';
 
+import { Icon, SelectTree } from '@ohif/ui';
+
+import EditDescriptionDialog from './../EditDescriptionDialog/EditDescriptionDialog.js';
 import LabellingTransition from './LabellingTransition.js';
 import OHIFLabellingData from './OHIFLabellingData.js';
-import EditDescriptionDialog from './../EditDescriptionDialog/EditDescriptionDialog.js';
+
 import './LabellingFlow.css';
 
 const LabellingFlow = ({
@@ -43,7 +45,7 @@ const LabellingFlow = ({
       newEditLocation = true;
     }
 
-    setState(state => ({
+    setState((state) => ({
       ...state,
       editLocation: newEditLocation,
       measurementData: newMeasurementData,
@@ -56,21 +58,20 @@ const LabellingFlow = ({
     }
   }, [state]);
 
-  const relabel = event =>
-    setState(state => ({ ...state, editLocation: true }));
+  const relabel = (event) => setState((state) => ({ ...state, editLocation: true }));
 
   const setDescriptionUpdateMode = () => {
     descriptionInput.current.focus();
-    setState(state => ({ ...state, editDescription: true }));
+    setState((state) => ({ ...state, editDescription: true }));
   };
 
   const descriptionCancel = () => {
     const { description = '' } = _.cloneDeep(state);
     descriptionInput.current.value = description;
-    setState(state => ({ ...state, editDescription: false }));
+    setState((state) => ({ ...state, editDescription: false }));
   };
 
-  const handleKeyPress = event => {
+  const handleKeyPress = (event) => {
     if (event.key === 'Enter') {
       descriptionSave();
     }
@@ -80,7 +81,7 @@ const LabellingFlow = ({
     const description = descriptionInput.current.value;
     updateLabelling({ description });
 
-    setState(state => ({
+    setState((state) => ({
       ...state,
       description,
       editDescription: false,
@@ -92,7 +93,7 @@ const LabellingFlow = ({
     const locationLabel = itemSelected.label;
     updateLabelling({ location });
 
-    setState(state => ({
+    setState((state) => ({
       ...state,
       editLocation: false,
       measurementData: {
@@ -104,7 +105,7 @@ const LabellingFlow = ({
   };
 
   const showLabelling = () => {
-    setState(state => ({
+    setState((state) => ({
       ...state,
       skipAddLabelButton: true,
       editLocation: false,
@@ -115,8 +116,7 @@ const LabellingFlow = ({
    * Waits for 1 sec to dismiss the labelling component.
    *
    */
-  const fadeOutAndLeave = () =>
-    setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, 1000));
+  const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, 1000));
 
   const fadeOutAndLeaveFast = () => setShowComponent(false);
 
@@ -127,7 +127,7 @@ const LabellingFlow = ({
     }
   };
 
-  const descriptionDialogUpdate = description => {
+  const descriptionDialogUpdate = (description) => {
     updateLabelling({ description });
     labellingDoneCallback();
   };
@@ -138,11 +138,7 @@ const LabellingFlow = ({
 
     if (!skipAddLabelButton) {
       return (
-        <button
-          type="button"
-          className="addLabelButton"
-          onClick={showLabelling}
-        >
+        <button type="button" className="addLabelButton" onClick={showLabelling}>
           {location ? 'Edit' : 'Add'} Label
         </button>
       );
@@ -175,35 +171,19 @@ const LabellingFlow = ({
               </div>
             </div>
             <div className="commonButtons">
-              <button
-                type="button"
-                className="commonButton left"
-                onClick={relabel}
-              >
+              <button type="button" className="commonButton left" onClick={relabel}>
                 Relabel
               </button>
-              <button
-                type="button"
-                className="commonButton right"
-                onClick={setDescriptionUpdateMode}
-              >
+              <button type="button" className="commonButton right" onClick={setDescriptionUpdateMode}>
                 {description ? 'Edit ' : 'Add '}
                 Description
               </button>
             </div>
             <div className="editDescriptionButtons">
-              <button
-                type="button"
-                className="commonButton left"
-                onClick={descriptionCancel}
-              >
+              <button type="button" className="commonButton left" onClick={descriptionCancel}>
                 Cancel
               </button>
-              <button
-                type="button"
-                className="commonButton right"
-                onClick={descriptionSave}
-              >
+              <button type="button" className="commonButton right" onClick={descriptionSave}>
                 Save
               </button>
             </div>
@@ -224,14 +204,10 @@ const LabellingFlow = ({
   }
 
   return (
-    <LabellingTransition
-      displayComponent={showComponent}
-      onTransitionExit={labellingDoneCallback}
-    >
+    <LabellingTransition displayComponent={showComponent} onTransitionExit={labellingDoneCallback}>
       <>
         <div
-          className={`labellingComponent ${state.editDescription &&
-            'editDescription'}`}
+          className={`labellingComponent ${state.editDescription && 'editDescription'}`}
           onMouseLeave={fadeOutAndLeave}
           onMouseEnter={clearFadeOutTimer}
         >

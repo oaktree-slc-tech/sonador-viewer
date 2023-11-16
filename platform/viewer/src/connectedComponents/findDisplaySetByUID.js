@@ -3,10 +3,7 @@
  * @param {Array} studyMetadata
  * @param {string} displaySetInstanceUID
  */
-export default function findDisplaySetByUID(
-  studyMetadata,
-  displaySetInstanceUID
-) {
+export default function findDisplaySetByUID(studyMetadata, displaySetInstanceUID) {
   if (!Array.isArray(studyMetadata)) return null;
 
   const allDisplaySets = studyMetadata.reduce((all, current) => {
@@ -17,8 +14,7 @@ export default function findDisplaySetByUID(
     return all.concat(currentDisplaySet);
   }, []);
 
-  const bySetInstanceUID = ds =>
-    ds.displaySetInstanceUID === displaySetInstanceUID;
+  const bySetInstanceUID = (ds) => ds.displaySetInstanceUID === displaySetInstanceUID;
 
   const displaySet = allDisplaySets.find(bySetInstanceUID);
   return displaySet || null;

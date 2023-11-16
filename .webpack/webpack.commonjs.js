@@ -2,6 +2,7 @@ const { merge } = require('webpack-merge');
 const webpackBase = require('./webpack.base.js');
 const cssToJavaScriptRule = require('./rules/cssToJavaScript.js');
 const stylusToJavaScriptRule = require('./rules/stylusToJavaScript.js');
+const scssToCSS = require('./rules/scssToCSS.js');
 
 /**
  * WebPack configuration for CommonJS Bundles. Extends rules of BaseConfig by making
@@ -13,7 +14,7 @@ module.exports = (env, argv, { SRC_DIR, DIST_DIR }) => {
 
   return merge(baseConfig, {
     module: {
-      rules: [cssToJavaScriptRule, stylusToJavaScriptRule],
+      rules: [cssToJavaScriptRule, scssToCSS, stylusToJavaScriptRule],
     },
   });
 };

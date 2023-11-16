@@ -1,5 +1,5 @@
-import hotkeys from './../utils/hotkeys';
 import log from './../log.js';
+import hotkeys from './../utils/hotkeys';
 
 /**
  *
@@ -61,12 +61,9 @@ export class HotkeysManager {
     try {
       const definitions = this._getValidDefinitions(hotkeyDefinitions);
 
-      definitions.forEach(definition => this.registerHotkeys(definition));
+      definitions.forEach((definition) => this.registerHotkeys(definition));
     } catch (error) {
-      const {
-        UINotificationService,
-        LoggerService,
-      } = this._servicesManager.services;
+      const { UINotificationService, LoggerService } = this._servicesManager.services;
       const message = 'Error while setting hotkeys';
       LoggerService.error({ error, message });
       UINotificationService.show({
@@ -113,9 +110,7 @@ export class HotkeysManager {
    */
   _parseToArrayLike(hotkeyDefinitionsObj = {}) {
     const copy = { ...hotkeyDefinitionsObj };
-    return Object.entries(copy).map(entryValue =>
-      this._parseToHotKeyObj(entryValue[0], entryValue[1])
-    );
+    return Object.entries(copy).map((entryValue) => this._parseToHotKeyObj(entryValue[0], entryValue[1]));
   }
 
   /**
@@ -206,7 +201,7 @@ export class HotkeysManager {
     const isKeyArray = keys instanceof Array;
     const combinedKeys = isKeyArray ? keys.join('+') : keys;
 
-    hotkeys.bind(combinedKeys, evt => {
+    hotkeys.bind(combinedKeys, (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
       this._commandsManager.runCommand(commandName, { evt });

@@ -26,35 +26,28 @@
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
 
-> ATTENTION: If you are looking for Version 1 (the Meteor Version) of this
-> repository, it lives on
+> ATTENTION: If you are looking for Version 1 (the Meteor Version) of this repository, it lives on
 > [the `v1.x` branch](https://github.com/OHIF/Viewers/tree/v1.x)
 
 ## Why?
 
-Building a web based medical imaging viewer from scratch is time intensive, hard
-to get right, and expensive. Instead of re-inventing the wheel, you can use the
-OHIF Viewer as a rock solid platform to build on top of. The Viewer is a
-[React][react-url] [Progressive Web Application][pwa-url] that can be embedded
-in existing applications via it's [packaged source
-(ohif-viewer)][ohif-viewer-url] or hosted stand-alone. The Viewer exposes
-[configuration][configuration-url] and [extensions][extensions-url] to support
-workflow customization and advanced functionality at common integration points.
+Building a web based medical imaging viewer from scratch is time intensive, hard to get right, and expensive. Instead of
+re-inventing the wheel, you can use the OHIF Viewer as a rock solid platform to build on top of. The Viewer is a
+[React][react-url] [Progressive Web Application][pwa-url] that can be embedded in existing applications via it's
+[packaged source (ohif-viewer)][ohif-viewer-url] or hosted stand-alone. The Viewer exposes
+[configuration][configuration-url] and [extensions][extensions-url] to support workflow customization and advanced
+functionality at common integration points.
 
-If you're interested in using the OHIF Viewer, but you're not sure it supports
-your use case [check out our docs](https://docs.ohif.org/). Still not sure, or
-you would like to propose new features? Don't hesitate to
-[create an issue](https://github.com/OHIF/Viewers/issues) or open a pull
-request.
+If you're interested in using the OHIF Viewer, but you're not sure it supports your use case
+[check out our docs](https://docs.ohif.org/). Still not sure, or you would like to propose new features? Don't hesitate
+to [create an issue](https://github.com/OHIF/Viewers/issues) or open a pull request.
 
 ## Getting Started
 
-This readme is specific to testing and developing locally. If you're more
-interested in production deployment strategies,
-[you can check out our documentation on publishing](https://docs.ohif.org/).
+This readme is specific to testing and developing locally. If you're more interested in production deployment
+strategies, [you can check out our documentation on publishing](https://docs.ohif.org/).
 
-Want to play around before you dig in?
-[Check out our LIVE Demo](https://viewer.ohif.org/)
+Want to play around before you dig in? [Check out our LIVE Demo](https://viewer.ohif.org/)
 
 ### Setup
 
@@ -87,21 +80,18 @@ yarn install
 yarn start
 ```
 
-For more advanced local development scenarios, like using your own locally
-hosted PACS and test data,
-[check out our Essential: Getting Started](https://docs.ohif.org/getting-started.html)
-guide.
+For more advanced local development scenarios, like using your own locally hosted PACS and test data,
+[check out our Essential: Getting Started](https://docs.ohif.org/getting-started.html) guide.
 
 ### E2E Tests
 
-Using [Cypress](https://www.cypress.io/) to create End-to-End tests and check
-whether the application flow is performing correctly, ensuring that the
-integrated components are working as expected.
+Using [Cypress](https://www.cypress.io/) to create End-to-End tests and check whether the application flow is performing
+correctly, ensuring that the integrated components are working as expected.
 
 #### Why Cypress?
 
-Cypress is a next generation front end testing tool built for the modern web.
-With Cypress is easy to set up, write, run and debug tests
+Cypress is a next generation front end testing tool built for the modern web. With Cypress is easy to set up, write, run
+and debug tests
 
 It allow us to write different types of tests:
 
@@ -126,16 +116,13 @@ yarn run test:e2e:ci
 
 ### Contributing
 
-> Large portions of the Viewer's functionality are maintained in other
-> repositories. To get a better understanding of the Viewer's architecture and
-> "where things live", read
+> Large portions of the Viewer's functionality are maintained in other repositories. To get a better understanding of
+> the Viewer's architecture and "where things live", read
 > [our docs on the Viewer's architecture](https://docs.ohif.org/architecture/index.html#overview)
 
-It is notoriously difficult to setup multiple dependent repositories for
-end-to-end testing and development. That's why we recommend writing and running
-unit tests when adding and modifying features. This allows us to program in
-isolation without a complex setup, and has the added benefit of producing
-well-tested business logic.
+It is notoriously difficult to setup multiple dependent repositories for end-to-end testing and development. That's why
+we recommend writing and running unit tests when adding and modifying features. This allows us to program in isolation
+without a complex setup, and has the added benefit of producing well-tested business logic.
 
 1. Clone this repository
 2. Navigate to the project directory, and `yarn install`
@@ -153,15 +140,13 @@ index.js;
 index.test.js;
 ```
 
-As you add and modify code, `jest` will watch for uncommitted changes and run
-your tests, reporting the results to your terminal. Make a pull request with
-your changes to `master`, and a core team member will review your work. If you
-have any questions, please don't hesitate to reach out via a GitHub issue.
+As you add and modify code, `jest` will watch for uncommitted changes and run your tests, reporting the results to your
+terminal. Make a pull request with your changes to `master`, and a core team member will review your work. If you have
+any questions, please don't hesitate to reach out via a GitHub issue.
 
 ## Contributors
 
-Thanks goes to these wonderful people
-([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
@@ -169,9 +154,8 @@ Thanks goes to these wonderful people
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
-This project follows the
-[all-contributors](https://github.com/all-contributors/all-contributors)
-specification. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
+Contributions of any kind welcome!
 
 ## License
 

@@ -1,13 +1,12 @@
-import OHIF from '@ohif/core';
-import ViewerMain from './ViewerMain';
 import { connect } from 'react-redux';
 
-const {
-  setViewportSpecificData,
-  clearViewportSpecificData,
-} = OHIF.redux.actions;
+import OHIF from '@ohif/core';
 
-const mapStateToProps = state => {
+import ViewerMain from './ViewerMain';
+
+const { setViewportSpecificData, clearViewportSpecificData } = OHIF.redux.actions;
+
+const mapStateToProps = (state) => {
   const { activeViewportIndex, layout, viewportSpecificData } = state.viewports;
 
   return {
@@ -18,7 +17,7 @@ const mapStateToProps = state => {
   };
 };
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
     setViewportSpecificData: (viewportIndex, data) => {
       dispatch(setViewportSpecificData(viewportIndex, data));
@@ -29,9 +28,6 @@ const mapDispatchToProps = dispatch => {
   };
 };
 
-const ConnectedViewerMain = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(ViewerMain);
+const ConnectedViewerMain = connect(mapStateToProps, mapDispatchToProps)(ViewerMain);
 
 export default ConnectedViewerMain;

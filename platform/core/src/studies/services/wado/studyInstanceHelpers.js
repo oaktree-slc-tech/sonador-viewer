@@ -1,7 +1,9 @@
-import DICOMWeb from '../../../DICOMWeb';
-import metadataProvider from '../../../classes/MetadataProvider';
-import getWADORSImageId from '../../../utils/getWADORSImageId';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+
+import metadataProvider from '../../../classes/MetadataProvider';
+import DICOMWeb from '../../../DICOMWeb';
+import getWADORSImageId from '../../../utils/getWADORSImageId';
+
 import getReferencedSeriesSequence from './getReferencedSeriesSequence';
 
 /**
@@ -43,12 +45,7 @@ function createStudy(server, aSopInstance) {
  * @param SOPInstanceUID
  * @returns  {string}
  */
-function buildInstanceWadoUrl(
-  server,
-  StudyInstanceUID,
-  SeriesInstanceUID,
-  SOPInstanceUID
-) {
+function buildInstanceWadoUrl(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
   // TODO: This can be removed, since DICOMWebClient has the same function. Not urgent, though
   const params = [];
 
@@ -64,28 +61,12 @@ function buildInstanceWadoUrl(
   return `${server.wadoUriRoot}?${paramString}`;
 }
 
-function buildInstanceWadoRsUri(
-  server,
-  StudyInstanceUID,
-  SeriesInstanceUID,
-  SOPInstanceUID
-) {
+function buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
   return `${server.wadoRoot}/studies/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}`;
 }
 
-function buildInstanceFrameWadoRsUri(
-  server,
-  StudyInstanceUID,
-  SeriesInstanceUID,
-  SOPInstanceUID,
-  frame
-) {
-  const baseWadoRsUri = buildInstanceWadoRsUri(
-    server,
-    StudyInstanceUID,
-    SeriesInstanceUID,
-    SOPInstanceUID
-  );
+function buildInstanceFrameWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frame) {
+  const baseWadoRsUri = buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
   frame = frame != null || 1;
 
   return `${baseWadoRsUri}/frames/${frame}`;
@@ -96,13 +77,9 @@ async function makeSOPInstance(server, study, instance) {
     server,
   });
 
-  const {
-    StudyInstanceUID,
-    SeriesInstanceUID,
-    SOPInstanceUID,
-  } = naturalizedInstance;
+  const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = naturalizedInstance;
 
-  const validate = string => {
+  const validate = (string) => {
     let rgx = /[^.0-9]+/g;
     return string.match(rgx);
   };
@@ -146,30 +123,13 @@ async function makeSOPInstance(server, study, instance) {
     study.seriesMap[SeriesInstanceUID] = series;
     study.series.push(series);
   } else {
-    if (series.SeriesDate === undefined)
-      series.SeriesDate = naturalizedInstance.SeriesDate;
-    if (series.SeriesTime === undefined)
-      series.SeriesTime = naturalizedInstance.SeriesTime;
+    if (series.SeriesDate === undefined) series.SeriesDate = naturalizedInstance.SeriesDate;
+    if (series.SeriesTime === undefined) series.SeriesTime = naturalizedInstance.SeriesTime;
   }
 
-  const wadouri = buildInstanceWadoUrl(
-    server,
-    StudyInstanceUID,
-    SeriesInstanceUID,
-    SOPInstanceUID
-  );
-  const baseWadoRsUri = buildInstanceWadoRsUri(
-    server,
-    StudyInstanceUID,
-    SeriesInstanceUID,
-    SOPInstanceUID
-  );
-  const wadorsuri = buildInstanceFrameWadoRsUri(
-    server,
-    StudyInstanceUID,
-    SeriesInstanceUID,
-    SOPInstanceUID
-  );
+  const wadouri = buildInstanceWadoUrl(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
+  const baseWadoRsUri = buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
+  const wadorsuri = buildInstanceFrameWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
 
   const sopInstance = {
     metadata: naturalizedInstance,
@@ -183,10 +143,7 @@ async function makeSOPInstance(server, study, instance) {
 
   series.instances.push(sopInstance);
 
-  if (
-    sopInstance.thumbnailRendering === 'wadors' ||
-    sopInstance.imageRendering === 'wadors'
-  ) {
+  if (sopInstance.thumbnailRendering === 'wadors' || sopInstance.imageRendering === 'wadors') {
     // If using WADO-RS for either images or thumbnails,
     // Need to add this to cornerstoneWADOImageLoader's provider
     // (it won't be hit on cornerstone.metaData.get, but cornerstoneWADOImageLoader
@@ -200,18 +157,12 @@ async function makeSOPInstance(server, study, instance) {
       for (let i = 0; i < NumberOfFrames; i++) {
         const wadorsImageId = getWADORSImageId(sopInstance, i);
 
-        cornerstoneWADOImageLoader.wadors.metaDataManager.add(
-          wadorsImageId,
-          wadoRSMetadata
-        );
+        cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
       }
     } else {
       const wadorsImageId = getWADORSImageId(sopInstance);
 
-      cornerstoneWADOImageLoader.wadors.metaDataManager.add(
-        wadorsImageId,
-        wadoRSMetadata
-      );
+      cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
     }
   }
 
@@ -226,7 +177,7 @@ async function makeSOPInstance(server, study, instance) {
  */
 async function addInstancesToStudy(server, study, sopInstanceList) {
   return Promise.all(
-    sopInstanceList.map(function(sopInstance) {
+    sopInstanceList.map(function (sopInstance) {
       return makeSOPInstance(server, study, sopInstance);
     })
   );

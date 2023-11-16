@@ -32,9 +32,4 @@ class SeriesMatchingRule extends Rule {}
  */
 class ImageMatchingRule extends Rule {}
 
-export {
-  ProtocolMatchingRule,
-  StudyMatchingRule,
-  SeriesMatchingRule,
-  ImageMatchingRule,
-};
+export { ProtocolMatchingRule, StudyMatchingRule, SeriesMatchingRule, ImageMatchingRule };

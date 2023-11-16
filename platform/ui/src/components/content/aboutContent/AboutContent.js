@@ -1,15 +1,16 @@
 import React from 'react';
-import detect from 'browser-detect';
 import { useTranslation } from 'react-i18next';
 
+import { parseUserAgent } from '../../../utils/userAgentParser';
+
 import './AboutContent.styl';
+
+const capitalize = (s) => s.substr(0, 1).toUpperCase() + s.substr(1).toLowerCase();
 
 const AboutContent = () => {
   const { t } = useTranslation('AboutContent');
 
-  const { os, version, name } = detect();
-  const capitalize = s =>
-    s.substr(0, 1).toUpperCase() + s.substr(1).toLowerCase();
+  const { osName, browserName, browserVersion, osVersion } = parseUserAgent();
 
   const itemsPreset = () => {
     return [
@@ -33,11 +34,11 @@ const AboutContent = () => {
       },
       {
         name: t('Browser'),
-        value: `${capitalize(name)} ${version}`,
+        value: `${capitalize(browserName)} ${browserVersion}`,
       },
       {
         name: t('OS'),
-        value: os,
+        value: `${osName} ${osVersion}`,
       },
     ];
   };
@@ -78,12 +79,7 @@ const AboutContent = () => {
           {t('Report an issue')}
         </a>
         {` `}
-        <a
-          className="btn btn-default"
-          target="_blank"
-          rel="noopener noreferrer"
-          href="http://ohif.org"
-        >
+        <a className="btn btn-default" target="_blank" rel="noopener noreferrer" href="http://ohif.org">
           {t('More details')}
         </a>
       </div>
@@ -96,7 +92,7 @@ const AboutContent = () => {
               <th>{t('Value')}</th>
             </tr>
           </thead>
-          <tbody>{itemsPreset().map(item => renderTableRow(item))}</tbody>
+          <tbody>{itemsPreset().map((item) => renderTableRow(item))}</tbody>
         </table>
       </div>
     </div>

@@ -1,45 +1,32 @@
-import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
-import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
-import { CodeNameCodeSequenceValues, CodingSchemeDesignators } from '../enums';
 import SCOORD_TYPES from '../constants/scoordTypes';
+import { CodeNameCodeSequenceValues, CodingSchemeDesignators } from '../enums';
+
+import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
+import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
 
 const CORNERSTONE_FREETEXT_CODE_VALUE = 'CORNERSTONEFREETEXT';
 
-const processNonGeometricallyDefinedMeasurement = contentSequence => {
-  const NUMContentItems = contentSequence.filter(
-    group => group.ValueType === 'NUM'
-  );
+const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
+  const NUMContentItems = contentSequence.filter((group) => group.ValueType === 'NUM');
 
-  const CODEContentItems = contentSequence.filter(
-    group => group.ValueType === 'CODE'
-  );
+  const CODEContentItems = contentSequence.filter((group) => group.ValueType === 'CODE');
 
-  const UIDREFContentItem = contentSequence.find(
-    group => group.ValueType === 'UIDREF'
-  );
+  const UIDREFContentItem = contentSequence.find((group) => group.ValueType === 'UIDREF');
 
-  const IMAGEContentItem = contentSequence.find(
-    group => group.ValueType === 'IMAGE'
-  );
+  const IMAGEContentItem = contentSequence.find((group) => group.ValueType === 'IMAGE');
 
   const TrackingIdentifierContentItem = contentSequence.find(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.TrackingIdentifier
+    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
   const Finding = contentSequence.find(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.Finding
+    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.Finding
   );
 
   const FindingSites = contentSequence.filter(
-    item =>
-      item.ConceptNameCodeSequence.CodingSchemeDesignator ===
-        CodingSchemeDesignators.SRT &&
-      item.ConceptNameCodeSequence.CodeValue ===
-        CodeNameCodeSequenceValues.FindingSite
+    (item) =>
+      item.ConceptNameCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.SRT &&
+      item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.FindingSite
   );
 
   const measurement = {
@@ -52,10 +39,8 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
 
   if (
     Finding &&
-    Finding.ConceptCodeSequence.CodingSchemeDesignator ===
-      CodingSchemeDesignators.cornerstoneTools4 &&
-    Finding.ConceptCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.CornerstoneFreeText
+    Finding.ConceptCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
+    Finding.ConceptCodeSequence.CodeValue === CodeNameCodeSequenceValues.CornerstoneFreeText
   ) {
     measurement.labels.push({
       label: CORNERSTONE_FREETEXT_CODE_VALUE,
@@ -66,11 +51,9 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
   // TODO -> Eventually hopefully support SNOMED or some proper code library, just free text for now.
   if (FindingSites.length) {
     const cornerstoneFreeTextFindingSite = FindingSites.find(
-      FindingSite =>
-        FindingSite.ConceptCodeSequence.CodingSchemeDesignator ===
-          CodingSchemeDesignators.cornerstoneTools4 &&
-        FindingSite.ConceptCodeSequence.CodeValue ===
-          CodeNameCodeSequenceValues.CornerstoneFreeText
+      (FindingSite) =>
+        FindingSite.ConceptCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
+        FindingSite.ConceptCodeSequence.CodeValue === CodeNameCodeSequenceValues.CornerstoneFreeText
     );
 
     if (cornerstoneFreeTextFindingSite) {
@@ -81,12 +64,8 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
     }
   }
 
-  NUMContentItems.forEach(item => {
-    const {
-      ConceptNameCodeSequence,
-      ContentSequence,
-      MeasuredValueSequence,
-    } = item;
+  NUMContentItems.forEach((item) => {
+    const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
     if (!ContentSequence) {
       console.warn(`Graphic ${ContentSequence} missing, skipping annotation.`);
@@ -97,9 +76,7 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
     const { ValueType } = ContentSequence;
 
     if (!ValueType === 'SCOORD' && !ValueType === 'SCOORD3D') {
-      console.warn(
-        `Graphic ${ValueType} not currently supported, skipping annotation.`
-      );
+      console.warn(`Graphic ${ValueType} not currently supported, skipping annotation.`);
 
       return;
     }
@@ -111,17 +88,12 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
     }
 
     if (MeasuredValueSequence) {
-      measurement.labels.push(
-        getLabelFromMeasuredValueSequence(
-          ConceptNameCodeSequence,
-          MeasuredValueSequence
-        )
-      );
+      measurement.labels.push(getLabelFromMeasuredValueSequence(ConceptNameCodeSequence, MeasuredValueSequence));
     }
   });
 
   if (NUMContentItems.length === 0 && IMAGEContentItem) {
-    CODEContentItems.forEach(item => {
+    CODEContentItems.forEach((item) => {
       const { ConceptCodeSequence, ConceptNameCodeSequence } = item;
 
       if (!ConceptCodeSequence || !ConceptNameCodeSequence) {
@@ -143,8 +115,7 @@ const processNonGeometricallyDefinedMeasurement = contentSequence => {
       measurement.coords.push(coord);
       measurement.labels.push({
         label: ConceptNameCodeSequence.CodeMeaning,
-        labelCodingSchemeDesignator:
-          ConceptNameCodeSequence.CodingSchemeDesignator,
+        labelCodingSchemeDesignator: ConceptNameCodeSequence.CodingSchemeDesignator,
         value: ConceptCodeSequence.CodeMeaning,
         valueCodingSchemeDesignator: ConceptCodeSequence.CodingSchemeDesignator,
       });

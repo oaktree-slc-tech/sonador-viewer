@@ -21,8 +21,7 @@
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
 
-This set of "Medical Imaging Viewer" React components are maintained separately
-to:
+This set of "Medical Imaging Viewer" React components are maintained separately to:
 
 - Decouple presentation from business logic
 - Test and develop components in isolation
@@ -31,9 +30,8 @@ to:
 
 ## Install
 
-> This component library is pre- v1.0. All realeases until a v1.0 have the
-> possibility of introducing breaking changes. Please depend on an "exact"
-> version in your projects to prevent issues caused by loose versioning.
+> This component library is pre- v1.0. All realeases until a v1.0 have the possibility of introducing breaking changes.
+> Please depend on an "exact" version in your projects to prevent issues caused by loose versioning.
 
 For full installation instructions, be sure to check out our
 [getting started](https://react.ohif.org/getting-started#installation) guide.
@@ -67,10 +65,7 @@ class Example extends Component {
 
   render() {
     return (
-      <LayoutButton
-        selectedCell={this.state.selectedCell}
-        onChange={cell => this.setState({ selectedCell: cell })}
-      />
+      <LayoutButton selectedCell={this.state.selectedCell} onChange={(cell) => this.setState({ selectedCell: cell })} />
     );
   }
 }
@@ -94,8 +89,7 @@ yarn run dev
 
 ## Contributors ✨
 
-Thanks goes to these wonderful people
-([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
@@ -103,9 +97,8 @@ Thanks goes to these wonderful people
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
-This project follows the
-[all-contributors](https://github.com/all-contributors/all-contributors)
-specification. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
+Contributions of any kind welcome!
 
 ## License
 

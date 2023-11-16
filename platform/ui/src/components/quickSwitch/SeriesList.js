@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 
 import { Thumbnail } from './../studyBrowser';
+
 import './SeriesList.styl';
 
 export class SeriesList extends Component {
@@ -28,10 +29,7 @@ export class SeriesList extends Component {
           key={seriesData.displaySetInstanceUID}
           id={`series_thumb_${index}`}
           {...seriesData}
-          active={
-            seriesData.displaySetInstanceUID ===
-            this.props.activeDisplaySetInstanceUID
-          }
+          active={seriesData.displaySetInstanceUID === this.props.activeDisplaySetInstanceUID}
           onClick={() => this.props.onClick(seriesData)}
         />
       );

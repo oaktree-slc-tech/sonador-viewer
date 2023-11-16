@@ -77,10 +77,7 @@ function _hide() {
  *   show: showImplementation,
  * }
  */
-function setServiceImplementation({
-  hide: hideImplementation,
-  show: showImplementation,
-}) {
+function setServiceImplementation({ hide: hideImplementation, show: showImplementation }) {
   if (hideImplementation) {
     serviceImplementation._hide = hideImplementation;
   }

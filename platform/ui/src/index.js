@@ -1,12 +1,27 @@
+import { ScrollableArea } from './ScrollableArea/ScrollableArea.js';
+import { asyncComponent, retryImport } from './utils/asyncComponent';
+import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
+import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
+import { viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from './utils/viewerbaseDisplaySet.js';
+import ViewerbaseDragDropContext from './utils/viewerbaseDragDropContext.js';
+// Alias this for now as not all dependents are using strict versioning
+import ExpandableToolMenu from './viewer/ExpandableToolMenu.js';
+import PlayClipButton from './viewer/PlayClipButton.js';
+import Toolbar from './viewer/Toolbar.js';
+import ToolbarButton from './viewer/ToolbarButton.js';
 import {
-  ContextMenu,
+  AboutContent,
   Checkbox,
   CineDialog,
-  ViewportDownloadForm,
+  ContextMenu,
+  ErrorPage,
+  HotkeyField,
+  LanguageSwitcher,
   LayoutButton,
   LayoutChooser,
   MeasurementTable,
   MeasurementTableItem,
+  OHIFModal,
   Overlay,
   OverlayTrigger,
   PageToolbar,
@@ -16,66 +31,45 @@ import {
   SimpleDialog,
   StudyBrowser,
   StudyList,
-  TableList,
-  TableListItem,
-  Thumbnail,
   TabComponents,
   TabFooter,
-  HotkeyField,
-  LanguageSwitcher,
-  TableSearchFilter,
+  TableList,
+  TableListItem,
   TablePagination,
+  TableSearchFilter,
+  Thumbnail,
   ToolbarSection,
   Tooltip,
-  AboutContent,
-  OHIFModal,
-  ErrorBoundary,
-  ErrorPage,
+  ViewportDownloadForm,
 } from './components';
-import { useDebounce, useMedia } from './hooks';
-
+import {
+  DialogProvider,
+  LoggerProvider,
+  ModalConsumer,
+  ModalProvider,
+  SnackbarProvider,
+  useDialog,
+  useLogger,
+  useModal,
+  useSnackbarContext,
+  withDialog,
+  withLogger,
+  withModal,
+  withSnackbar,
+} from './contextProviders';
 // Elements
 import {
-  ICONS,
-  Icon,
   DropdownMenu as Dropdown,
-  Select,
-  OldSelect,
+  Icon,
+  ICONS,
   Label,
+  OldSelect,
   Range,
+  Select,
   TextArea,
   TextInput,
 } from './elements';
-
-// Alias this for now as not all dependents are using strict versioning
-import ExpandableToolMenu from './viewer/ExpandableToolMenu.js';
-import PlayClipButton from './viewer/PlayClipButton.js';
-import { ScrollableArea } from './ScrollableArea/ScrollableArea.js';
-import Toolbar from './viewer/Toolbar.js';
-import ToolbarButton from './viewer/ToolbarButton.js';
-import ViewerbaseDragDropContext from './utils/viewerbaseDragDropContext.js';
-import {
-  viewerbaseGetDisplaySet,
-  viewerbaseDisplaySetReconstructable,
-} from './utils/viewerbaseDisplaySet.js';
-import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
-import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
-import { asyncComponent, retryImport } from './utils/asyncComponent';
-import {
-  SnackbarProvider,
-  useSnackbarContext,
-  withSnackbar,
-  DialogProvider,
-  useDialog,
-  withDialog,
-  ModalProvider,
-  ModalConsumer,
-  useModal,
-  withModal,
-  LoggerProvider,
-  withLogger,
-  useLogger,
-} from './contextProviders';
+import { useDebounce, useMedia } from './hooks';
 
 const eventTypes = {
   sidebar: {
@@ -153,7 +147,6 @@ export {
   DialogProvider,
   withDialog,
   useDialog,
-  ErrorBoundary,
   ErrorPage,
   LoggerProvider,
   withLogger,

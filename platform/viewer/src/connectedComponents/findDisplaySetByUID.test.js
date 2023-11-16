@@ -30,10 +30,7 @@ describe('findDisplaySetByUID', () => {
     const studyMetadata = [
       { displaySets: [{ displaySetInstanceUID: '0011-2239' }] },
       {
-        displaySets: [
-          { displaySetInstanceUID: '0392-2211' },
-          { displaySetInstanceUID: expected },
-        ],
+        displaySets: [{ displaySetInstanceUID: '0392-2211' }, { displaySetInstanceUID: expected }],
       },
       { displaySets: [{ displaySetInstanceUID: '3384-9933' }] },
     ];

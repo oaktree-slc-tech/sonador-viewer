@@ -1,4 +1,5 @@
 import log from '../../log';
+
 import { timepointApiDefaultConfig } from './../configuration.js';
 
 const configuration = {
@@ -54,16 +55,12 @@ export default class TimepointApi {
       return tp1.visitDate > tp2.visitDate ? 1 : -1;
     });
     const filteredTimepoints = sortedTimepoints.find(
-      tp =>
-        tp.PatientID === timepoint.PatientID &&
-        tp.timepointType === timepoint.timepointType
+      (tp) => tp.PatientID === timepoint.PatientID && tp.timepointType === timepoint.timepointType
     );
 
     // Create an array of just timepointIds, so we can use indexOf
     // on it to find the current timepoint's relative position
-    const timepointIds = filteredTimepoints.map(
-      timepoint => timepoint.timepointId
-    );
+    const timepointIds = filteredTimepoints.map((timepoint) => timepoint.timepointId);
 
     // Calculate the index of the current timepoint in the array of all
     // relevant follow-up timepoints
@@ -71,9 +68,7 @@ export default class TimepointApi {
 
     // If visitNumber is 0, it means that the current timepoint was not in the list
     if (!visitNumber) {
-      throw new Error(
-        'Current timepoint was not in the list of relevant timepoints?'
-      );
+      throw new Error('Current timepoint was not in the list of relevant timepoints?');
     }
 
     return visitNumber;
@@ -88,13 +83,11 @@ export default class TimepointApi {
 
     return new Promise((resolve, reject) => {
       retrievalFn(filter)
-        .then(timepointData => {
+        .then((timepointData) => {
           log.info('Timepoint data retrieval');
 
-          timepointData.forEach(timepoint => {
-            const timepointIndex = this.timepoints.findIndex(
-              tp => tp.timepointId === timepoint.timepointId
-            );
+          timepointData.forEach((timepoint) => {
+            const timepointIndex = this.timepoints.findIndex((tp) => tp.timepointId === timepoint.timepointId);
             if (timepointIndex < 0) {
               this.timepoints.push(timepoint);
             } else {
@@ -107,7 +100,7 @@ export default class TimepointApi {
 
           resolve();
         })
-        .catch(reason => {
+        .catch((reason) => {
           log.error(`Timepoint retrieval function failed: ${reason}`);
           reject(reason);
         });
@@ -124,9 +117,7 @@ export default class TimepointApi {
     log.info('Preparing to store timepoints');
     log.info(JSON.stringify(this.timepoints, null, 2));
 
-    storeFn(this.timepoints).then(() =>
-      log.info('Timepoint storage completed')
-    );
+    storeFn(this.timepoints).then(() => log.info('Timepoint storage completed'));
   }
 
   disassociateStudy(timepointIds, StudyInstanceUID) {
@@ -161,9 +152,7 @@ export default class TimepointApi {
     removeFn(timepointData).then(() => {
       log.info('Timepoint removal completed');
 
-      const tpIndex = this.timepoints.findIndex(
-        tp => tp.timepointId === timepointId
-      );
+      const tpIndex = this.timepoints.findIndex((tp) => tp.timepointId === timepointId);
       if (tpIndex > -1) {
         this.timepoints.splice(tpIndex, 1);
       }
@@ -191,15 +180,9 @@ export default class TimepointApi {
     updateFn(timepointData, query).then(() => {
       log.info('Timepoint updated completed');
 
-      const tpIndex = this.timepoints.findIndex(
-        tp => tp.timepointId === timepointId
-      );
+      const tpIndex = this.timepoints.findIndex((tp) => tp.timepointId === timepointId);
       if (tpIndex > -1) {
-        this.timepoints[tpIndex] = Object.assign(
-          {},
-          this.timepoints[tpIndex],
-          query
-        );
+        this.timepoints[tpIndex] = Object.assign({}, this.timepoints[tpIndex], query);
       }
 
       // Let others know that the timepoints are updated
@@ -223,15 +206,11 @@ export default class TimepointApi {
 
   // Return only the current timepoint
   current() {
-    return this.timepoints.find(
-      tp => tp.timepointId === this.currentTimepointId
-    );
+    return this.timepoints.find((tp) => tp.timepointId === this.currentTimepointId);
   }
 
   lock() {
-    const tpIndex = this.timepoints.findIndex(
-      tp => tp.timepointId === this.currentTimepointId
-    );
+    const tpIndex = this.timepoints.findIndex((tp) => tp.timepointId === this.currentTimepointId);
     if (tpIndex < 0) {
       return;
     }
@@ -248,7 +227,7 @@ export default class TimepointApi {
       return;
     }
 
-    return this.all().find(tp => tp.visitDate < current.visitDate);
+    return this.all().find((tp) => tp.visitDate < current.visitDate);
   }
 
   // Return only the current and prior timepoints
@@ -274,10 +253,7 @@ export default class TimepointApi {
     const comparisonTimepoint = this.comparison(comparisonTimepointKey);
     const timepoints = [current];
 
-    if (
-      comparisonTimepoint &&
-      !timepoints.find(tp => tp.timepointId === comparisonTimepoint.timepointId)
-    ) {
+    if (comparisonTimepoint && !timepoints.find((tp) => tp.timepointId === comparisonTimepoint.timepointId)) {
       timepoints.push(comparisonTimepoint);
     }
 
@@ -289,15 +265,13 @@ export default class TimepointApi {
    * @returns {boolean}
    */
   isRebaseline(timepointId) {
-    const current = timepointId
-      ? this.timepoints.find(tp => tp.timepointId === timepointId)
-      : this.current();
+    const current = timepointId ? this.timepoints.find((tp) => tp.timepointId === timepointId) : this.current();
     if (!current) {
       return false;
     }
 
     const baselines = this.timepoints.filter(
-      tp => tp.timepointType === 'baseline' && tp.visitDate <= current.visitDate
+      (tp) => tp.timepointType === 'baseline' && tp.visitDate <= current.visitDate
     );
     return baselines.length > 1;
   }
@@ -313,9 +287,7 @@ export default class TimepointApi {
     const sortedTimepoints = this.timepoints.sort((tp1, tp2) => {
       return tp1.visitDate > tp2.visitDate ? 1 : -1;
     });
-    return sortedTimepoints.find(
-      tp => tp.visitDate > current.visitDate && tp.timepointType === 'baseline'
-    );
+    return sortedTimepoints.find((tp) => tp.visitDate > current.visitDate && tp.timepointType === 'baseline');
   }
 
   /**
@@ -394,13 +366,9 @@ export default class TimepointApi {
     const sortedTimepoints = this.timepoints.sort((tp1, tp2) => {
       return tp1.visitDate > tp2.visitDate ? 1 : -1;
     });
-    const allNextTimepoints = sortedTimepoints.filter(
-      tp => tp.visitDate > currentTimepoint.visitDate
-    );
+    const allNextTimepoints = sortedTimepoints.filter((tp) => tp.visitDate > currentTimepoint.visitDate);
 
-    const nextFollowupIndex = allNextTimepoints.findIndex(
-      tp => tp.timepointType === 'followup'
-    );
+    const nextFollowupIndex = allNextTimepoints.findIndex((tp) => tp.timepointType === 'followup');
     const latestInitialBeforeNextFUIndex = nextFollowupIndex - 1;
 
     if (latestInitialBeforeNextFUIndex < 0) {
@@ -421,33 +389,19 @@ export default class TimepointApi {
 
     //  If the current timepoint is PBL or BL, then get the recent PBL/BL of the current timepoint by its first FU
     //      If it does not exist, then there is no newer initial timepoint, so the current timepoint is used to determine initial timepoint ids
-    if (
-      timepointToCheck.timepointType === 'prebaseline' ||
-      timepointToCheck.timepointType === 'baseline'
-    ) {
-      timepointToCheck =
-        this.latestInitialTimepointAfterCurrent() || timepointToCheck;
+    if (timepointToCheck.timepointType === 'prebaseline' || timepointToCheck.timepointType === 'baseline') {
+      timepointToCheck = this.latestInitialTimepointAfterCurrent() || timepointToCheck;
     }
 
     const visitDateToCheck = timepointToCheck.visitDate;
 
     const preBaselineTimepoints =
-      this.timepoints.filter(
-        tp =>
-          tp.timepointType === 'prebaseline' && tp.visitDate <= visitDateToCheck
-      ) || [];
-    const preBaselineTimepointIds = preBaselineTimepoints.map(
-      timepoint => timepoint.timepointId
-    );
+      this.timepoints.filter((tp) => tp.timepointType === 'prebaseline' && tp.visitDate <= visitDateToCheck) || [];
+    const preBaselineTimepointIds = preBaselineTimepoints.map((timepoint) => timepoint.timepointId);
 
     const baselineTimepoints =
-      this.timepoints.filter(
-        tp =>
-          tp.timepointType === 'baseline' && tp.visitDate <= visitDateToCheck
-      ) || [];
-    const baselineTimepointIds = baselineTimepoints.map(
-      timepoint => timepoint.timepointId
-    );
+      this.timepoints.filter((tp) => tp.timepointType === 'baseline' && tp.visitDate <= visitDateToCheck) || [];
+    const baselineTimepointIds = baselineTimepoints.map((timepoint) => timepoint.timepointId);
 
     return preBaselineTimepointIds.concat(baselineTimepointIds);
   }
@@ -455,9 +409,7 @@ export default class TimepointApi {
   // Return only the baseline timepoint
   baseline() {
     const currentVisitDate = this.current().visitDate;
-    return this.all().find(
-      tp => tp.timepointType === 'baseline' && tp.visitDate <= currentVisitDate
-    );
+    return this.all().find((tp) => tp.timepointType === 'baseline' && tp.visitDate <= currentVisitDate);
   }
 
   /**
@@ -467,10 +419,7 @@ export default class TimepointApi {
   nadir() {
     const current = this.current();
     const nadir = this.all().find(
-      tp =>
-        tp.timepointId !== current.timepointId &&
-        tp.timepointKey === 'nadir' &&
-        tp.visitDate <= current.visitDate
+      (tp) => tp.timepointId !== current.timepointId && tp.timepointKey === 'nadir' && tp.visitDate <= current.visitDate
     );
 
     // If we have found a nadir, return that
@@ -491,8 +440,7 @@ export default class TimepointApi {
     const nadir = this.nadir();
     const baseline = this.baseline();
 
-    const resultIncludes = timepoint =>
-      !!result.find(x => x.timepointId === timepoint.timepointId);
+    const resultIncludes = (timepoint) => !!result.find((x) => x.timepointId === timepoint.timepointId);
 
     if (prior && resultIncludes(prior) === false) {
       result.push(prior);
@@ -511,9 +459,7 @@ export default class TimepointApi {
 
   // Return only the timepoints for the given study
   study(StudyInstanceUID) {
-    return this.all().filter(timepoint =>
-      timepoint.studyInstanceUIDs.includes(StudyInstanceUID)
-    );
+    return this.all().filter((timepoint) => timepoint.studyInstanceUIDs.includes(StudyInstanceUID));
   }
 
   // Return the timepoint's name

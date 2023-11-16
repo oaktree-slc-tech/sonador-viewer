@@ -1,21 +1,15 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import classNames from 'classnames';
+import PropTypes from 'prop-types';
+
+import { StudyListLoadingText } from './StudyListLoadingText.js';
+import TableSearchFilter from './TableSearchFilter.js';
+
 import './StudyList.styl';
 
-import React from 'react';
-import classNames from 'classnames';
-import TableSearchFilter from './TableSearchFilter.js';
-import PropTypes from 'prop-types';
-import { StudyListLoadingText } from './StudyListLoadingText.js';
-import { useTranslation } from 'react-i18next';
-
-const getContentFromUseMediaValue = (
-  displaySize,
-  contentArrayMap,
-  defaultContent
-) => {
-  const content =
-    displaySize in contentArrayMap
-      ? contentArrayMap[displaySize]
-      : defaultContent;
+const getContentFromUseMediaValue = (displaySize, contentArrayMap, defaultContent) => {
+  const content = displaySize in contentArrayMap ? contentArrayMap[displaySize] : defaultContent;
 
   return content;
 };
@@ -115,9 +109,7 @@ function StudyList(props) {
     smallTableMeta
   );
 
-  const totalSize = tableMeta
-    .map(field => field.size)
-    .reduce((prev, next) => prev + next);
+  const totalSize = tableMeta.map((field) => field.size).reduce((prev, next) => prev + next);
 
   return translationsAreReady ? (
     <table className="table table--striped table--hoverable">
@@ -161,9 +153,7 @@ function StudyList(props) {
         {!isLoading && hasError && (
           <tr className="no-hover">
             <td colSpan={tableMeta.length}>
-              <div className="notFound">
-                {t('There was an error fetching studies')}
-              </div>
+              <div className="notFound">{t('There was an error fetching studies')}</div>
             </td>
           </tr>
         )}
@@ -179,7 +169,7 @@ function StudyList(props) {
           studies.map((study, index) => (
             <TableRow
               key={`${study.StudyInstanceUID}-${index}`}
-              onClick={StudyInstanceUID => handleSelectItem(StudyInstanceUID)}
+              onClick={(StudyInstanceUID) => handleSelectItem(StudyInstanceUID)}
               AccessionNumber={study.AccessionNumber || ''}
               modalities={study.modalities}
               PatientID={study.PatientID || ''}
@@ -244,28 +234,18 @@ function TableRow(props) {
   const { t } = useTranslation('StudyList');
 
   const largeRowTemplate = (
-    <tr
-      onClick={() => handleClick(StudyInstanceUID)}
-      className={classNames({ active: isHighlighted })}
-    >
-      <td className={classNames({ 'empty-value': !PatientName })}>
-        {PatientName || `(${t('Empty')})`}
-      </td>
+    <tr onClick={() => handleClick(StudyInstanceUID)} className={classNames({ active: isHighlighted })}>
+      <td className={classNames({ 'empty-value': !PatientName })}>{PatientName || `(${t('Empty')})`}</td>
       <td>{PatientID}</td>
       <td>{AccessionNumber}</td>
       <td>{StudyDate}</td>
-      <td className={classNames({ 'empty-value': !modalities })}>
-        {modalities || `(${t('Empty')})`}
-      </td>
+      <td className={classNames({ 'empty-value': !modalities })}>{modalities || `(${t('Empty')})`}</td>
       <td>{StudyDescription}</td>
     </tr>
   );
 
   const mediumRowTemplate = (
-    <tr
-      onClick={() => handleClick(StudyInstanceUID)}
-      className={classNames({ active: isHighlighted })}
-    >
+    <tr onClick={() => handleClick(StudyInstanceUID)} className={classNames({ active: isHighlighted })}>
       <td className={classNames({ 'empty-value': !PatientName })}>
         {PatientName || `(${t('Empty')})`}
         <div style={{ color: '#60656f' }}>{PatientID}</div>
@@ -322,20 +302,12 @@ function TableRow(props) {
   );
 
   const smallRowTemplate = (
-    <tr
-      onClick={() => handleClick(StudyInstanceUID)}
-      className={classNames({ active: isHighlighted })}
-    >
+    <tr onClick={() => handleClick(StudyInstanceUID)} className={classNames({ active: isHighlighted })}>
       <td style={{ position: 'relative', overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           {/* NAME AND ID */}
-          <div
-            className={classNames({ 'empty-value': !PatientName })}
-            style={{ width: '150px', minWidth: '150px' }}
-          >
-            <div style={{ fontWeight: 500, paddingTop: '3px' }}>
-              {PatientName || `(${t('Empty')})`}
-            </div>
+          <div className={classNames({ 'empty-value': !PatientName })} style={{ width: '150px', minWidth: '150px' }}>
+            <div style={{ fontWeight: 500, paddingTop: '3px' }}>{PatientName || `(${t('Empty')})`}</div>
             <div style={{ color: '#60656f' }}>{PatientID}</div>
           </div>
 

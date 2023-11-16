@@ -147,10 +147,10 @@ function waitOn(list, thenable) {
   const task = increaseList(list);
   if (isTask(task)) {
     task.awaiting = Promise.resolve(thenable).then(
-      function() {
+      function () {
         finish(task);
       },
-      function() {
+      function () {
         task.failed = true;
         finish(task);
       }
@@ -183,12 +183,7 @@ function addDeferred(list) {
  * @returns {boolean} Returns true on success, false otherwise
  */
 function setTaskName(list, task, name) {
-  if (
-    contains(list, task) &&
-    list.named !== null &&
-    typeof list.named === 'object' &&
-    typeof name === 'string'
-  ) {
+  if (contains(list, task) && list.named !== null && typeof list.named === 'object' && typeof name === 'string') {
     list.named[name] = task;
     return true;
   }
@@ -202,12 +197,7 @@ function setTaskName(list, task, name) {
  * @returns {Object} The Task instance or null if not found
  */
 function getTaskByName(list, name) {
-  if (
-    isList(list) &&
-    list.named !== null &&
-    typeof list.named === 'object' &&
-    typeof name === 'string'
-  ) {
+  if (isList(list) && list.named !== null && typeof list.named === 'object' && typeof name === 'string') {
     const task = list.named[name];
     if (isTask(task)) {
       return task;
@@ -224,11 +214,7 @@ function getTaskByName(list, name) {
  * @returns {boolean} Returns true on success and false otherewise
  */
 function addObserver(list, observer) {
-  if (
-    isList(list) &&
-    Array.isArray(list.observers) &&
-    typeof observer === 'function'
-  ) {
+  if (isList(list) && Array.isArray(list.observers) && typeof observer === 'function') {
     list.observers.push(observer);
     return true;
   }
@@ -242,11 +228,7 @@ function addObserver(list, observer) {
  * @returns {boolean} Returns true on success and false otherewise
  */
 function removeObserver(list, observer) {
-  if (
-    isList(list) &&
-    Array.isArray(list.observers) &&
-    list.observers.length > 0
-  ) {
+  if (isList(list) && Array.isArray(list.observers) && list.observers.length > 0) {
     const index = list.observers.indexOf(observer);
     if (index >= 0) {
       list.observers.splice(index, 1);
@@ -274,9 +256,7 @@ function objectWithType(type, object) {
 }
 
 function isOfType(type, subject) {
-  return (
-    subject !== null && typeof subject === 'object' && subject[TYPE] === type
-  );
+  return subject !== null && typeof subject === 'object' && subject[TYPE] === type;
 }
 
 function isValidProgress(value) {
@@ -297,12 +277,8 @@ function contains(list, task) {
 }
 
 function notify(list, data) {
-  if (
-    isList(list) &&
-    Array.isArray(list.observers) &&
-    list.observers.length > 0
-  ) {
-    list.observers.slice().forEach(function(observer) {
+  if (isList(list) && Array.isArray(list.observers) && list.observers.length > 0) {
+    list.observers.slice().forEach(function (observer) {
       if (typeof observer === 'function') {
         try {
           observer(data, list);

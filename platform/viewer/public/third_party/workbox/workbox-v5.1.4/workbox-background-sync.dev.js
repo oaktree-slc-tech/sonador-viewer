@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.backgroundSync = (function(
+this.workbox.backgroundSync = (function (
   exports,
   WorkboxError_js,
   logger_js,
@@ -373,7 +373,7 @@ this.workbox.backgroundSync = (function(
    * @private
    */
 
-  const convertEntry = queueStoreEntry => {
+  const convertEntry = (queueStoreEntry) => {
     const queueEntry = {
       request: new StorableRequest(queueStoreEntry.requestData).toRequest(),
       timestamp: queueStoreEntry.timestamp,
@@ -568,13 +568,8 @@ this.workbox.backgroundSync = (function(
      * @private
      */
 
-    async _addRequest(
-      { request, metadata, timestamp = Date.now() },
-      operation
-    ) {
-      const storableRequest = await StorableRequest.fromRequest(
-        request.clone()
-      );
+    async _addRequest({ request, metadata, timestamp = Date.now() }, operation) {
+      const storableRequest = await StorableRequest.fromRequest(request.clone());
       const entry = {
         requestData: storableRequest.toObject(),
         timestamp,
@@ -588,9 +583,8 @@ this.workbox.backgroundSync = (function(
 
       {
         logger_js.logger.log(
-          `Request for '${getFriendlyURL_js.getFriendlyURL(
-            request.url
-          )}' has ` + `been added to background sync queue '${this._name}'.`
+          `Request for '${getFriendlyURL_js.getFriendlyURL(request.url)}' has ` +
+            `been added to background sync queue '${this._name}'.`
         );
       } // Don't register for a sync if we're in the middle of a sync. Instead,
       // we wait until the sync is complete and call register if
@@ -644,9 +638,8 @@ this.workbox.backgroundSync = (function(
 
           if ('dev' !== 'production') {
             logger_js.logger.log(
-              `Request for '${getFriendlyURL_js.getFriendlyURL(
-                entry.request.url
-              )}'` + `has been replayed in queue '${this._name}'`
+              `Request for '${getFriendlyURL_js.getFriendlyURL(entry.request.url)}'` +
+                `has been replayed in queue '${this._name}'`
             );
           }
         } catch (error) {
@@ -654,9 +647,7 @@ this.workbox.backgroundSync = (function(
 
           {
             logger_js.logger.log(
-              `Request for '${getFriendlyURL_js.getFriendlyURL(
-                entry.request.url
-              )}'` +
+              `Request for '${getFriendlyURL_js.getFriendlyURL(entry.request.url)}'` +
                 `failed to replay, putting it back in queue '${this._name}'`
             );
           }
@@ -669,8 +660,7 @@ this.workbox.backgroundSync = (function(
 
       {
         logger_js.logger.log(
-          `All requests in queue '${this.name}' have successfully ` +
-            `replayed; the queue is now empty!`
+          `All requests in queue '${this.name}' have successfully ` + `replayed; the queue is now empty!`
         );
       }
     }
@@ -686,10 +676,7 @@ this.workbox.backgroundSync = (function(
           // This means the registration failed for some reason, possibly due to
           // the user disabling it.
           {
-            logger_js.logger.warn(
-              `Unable to register sync event for '${this._name}'.`,
-              err
-            );
+            logger_js.logger.warn(`Unable to register sync event for '${this._name}'.`, err);
           }
         }
       }
@@ -704,12 +691,10 @@ this.workbox.backgroundSync = (function(
 
     _addSyncListener() {
       if ('sync' in self.registration) {
-        self.addEventListener('sync', event => {
+        self.addEventListener('sync', (event) => {
           if (event.tag === `${TAG_PREFIX}:${this._name}`) {
             {
-              logger_js.logger.log(
-                `Background sync for tag '${event.tag}'` + `has been received`
-              );
+              logger_js.logger.log(`Background sync for tag '${event.tag}'` + `has been received`);
             }
 
             const syncComplete = async () => {
@@ -731,10 +716,7 @@ this.workbox.backgroundSync = (function(
                 // Unless there was an error during the sync, in which
                 // case the browser will automatically retry later, as long
                 // as `event.lastChance` is not true.
-                if (
-                  this._requestsAddedDuringSync &&
-                  !(syncError && !event.lastChance)
-                ) {
+                if (this._requestsAddedDuringSync && !(syncError && !event.lastChance)) {
                   await this.registerSync();
                 }
 
@@ -748,9 +730,7 @@ this.workbox.backgroundSync = (function(
         });
       } else {
         {
-          logger_js.logger.log(
-            `Background sync replaying without background sync event`
-          );
+          logger_js.logger.log(`Background sync replaying without background sync event`);
         } // If the browser doesn't support background sync, retry
         // every time the service worker starts up as a fallback.
 

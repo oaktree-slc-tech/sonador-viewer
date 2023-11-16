@@ -1,0 +1,88 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+@import '@ohif/viewer/src/styles/variables';
+
+.ngSidebar {
+  color: #fff;
+  padding: 50px 30px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: fixed;
+  overflow: auto;
+  width: $sidebarWidth;
+
+  @include lg {
+    position: static;
+    min-height: 100dvh;
+    padding: 20px;
+    width: 200px;
+    background-color: #1E1F23;
+  }
+
+  .logoWrapper {
+    display: inline-block;
+    padding: 10px 10px 7px;
+    background-color: #1e1f23;
+    border-radius: 5px;
+    margin-bottom: 15px;
+
+    @include xs {
+      padding: 0;
+    }
+  }
+
+  .menuItem {
+    display: flex;
+    align-items: center;
+    column-gap: 15px;
+    margin-top: 30px;
+    color: #60646d;
+    text-decoration: none;
+
+    @include lg {
+      &:first-of-type {
+        margin-top: 0;
+      }
+    }
+
+    @include xs {
+      &:first-of-type {
+        margin-top: 30px;
+      }
+    }
+
+    .name {
+      font-size: 18px;
+    }
+  }
+
+  .navigation {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    flex-grow: 1;
+
+    .bottom {
+      margin-top: auto;
+    }
+  }
+
+  .menuSubItem {
+    padding: 0 20px;
+    color: #60646d;
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 20px;
+
+    .count {
+      background-color: #1e1f23;
+      border-radius: 5px;
+      padding: 2px;
+    }
+  }
+
+  .active {
+    color: #fff;
+  }
+}

@@ -1,14 +1,9 @@
-const getLabelFromMeasuredValueSequence = (
-  ConceptNameCodeSequence,
-  MeasuredValueSequence
-) => {
+const getLabelFromMeasuredValueSequence = (ConceptNameCodeSequence, MeasuredValueSequence) => {
   const { CodeMeaning } = ConceptNameCodeSequence;
   const { NumericValue, MeasurementUnitsCodeSequence } = MeasuredValueSequence;
   const { CodeValue } = MeasurementUnitsCodeSequence;
 
-  const formatedNumericValue = NumericValue
-    ? Number(NumericValue).toFixed(1)
-    : '';
+  const formatedNumericValue = NumericValue ? Number(NumericValue).toFixed(1) : '';
 
   return {
     label: CodeMeaning,

@@ -1,22 +1,17 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
 
 import { MODULE_TYPES } from '@ohif/core';
-import {
-  ExpandableToolMenu,
-  RoundedButtonGroup,
-  ToolbarButton,
-  withModal,
-  withDialog,
-} from '@ohif/ui';
+import { ExpandableToolMenu, RoundedButtonGroup, ToolbarButton, withDialog, withModal } from '@ohif/ui';
 
-import './ToolbarRow.css';
-import { commandsManager, extensionManager } from './../App.js';
+import { withAppContext } from '../context/AppContext';
 
+import { commandsManager, extensionManager } from '../App';
 import ConnectedCineDialog from './ConnectedCineDialog';
 import ConnectedLayoutButton from './ConnectedLayoutButton';
-import { withAppContext } from '../context/AppContext';
+
+import './ToolbarRow.css';
 
 class ToolbarRow extends Component {
   // TODO: Simplify these? isOpen can be computed if we say "any" value for selected,
@@ -59,9 +54,7 @@ class ToolbarRow extends Component {
     this.seriesPerStudyCount = [];
 
     this._handleBuiltIn = _handleBuiltIn.bind(this);
-    this._onDerivedDisplaySetsLoadedAndCached = this._onDerivedDisplaySetsLoadedAndCached.bind(
-      this
-    );
+    this._onDerivedDisplaySetsLoadedAndCached = this._onDerivedDisplaySetsLoadedAndCached.bind(this);
 
     this.updateButtonGroups();
   }
@@ -75,15 +68,13 @@ class ToolbarRow extends Component {
     };
 
     // ~ FIND MENU OPTIONS
-    panelModules.forEach(panelExtension => {
+    panelModules.forEach((panelExtension) => {
       const panelModule = panelExtension.module;
       const defaultContexts = Array.from(panelModule.defaultContext);
 
-      panelModule.menuOptions.forEach(menuOption => {
+      panelModule.menuOptions.forEach((menuOption) => {
         const contexts = Array.from(menuOption.context || defaultContexts);
-        const hasActiveContext = this.props.activeContexts.some(actx =>
-          contexts.includes(actx)
-        );
+        const hasActiveContext = this.props.activeContexts.some((actx) => contexts.includes(actx));
 
         // It's a bit beefy to pass studies; probably only need to be reactive on `studyInstanceUIDs` and activeViewport?
         // Note: This does not cleanly handle `studies` prop updating with panel open
@@ -120,17 +111,11 @@ class ToolbarRow extends Component {
      * that depends on derived display sets to be loaded.
      * (Implement pubsub for better tracking of derived display sets)
      */
-    document.addEventListener(
-      'deriveddisplaysetsloadedandcached',
-      this._onDerivedDisplaySetsLoadedAndCached
-    );
+    document.addEventListener('deriveddisplaysetsloadedandcached', this._onDerivedDisplaySetsLoadedAndCached);
   }
 
   componentWillUnmount() {
-    document.removeEventListener(
-      'deriveddisplaysetsloadedandcached',
-      this._onDerivedDisplaySetsLoadedAndCached
-    );
+    document.removeEventListener('deriveddisplaysetsloadedandcached', this._onDerivedDisplaySetsLoadedAndCached);
   }
 
   _onDerivedDisplaySetsLoadedAndCached() {
@@ -141,8 +126,7 @@ class ToolbarRow extends Component {
   }
 
   componentDidUpdate(prevProps) {
-    const activeContextsChanged =
-      prevProps.activeContexts !== this.props.activeContexts;
+    const activeContextsChanged = prevProps.activeContexts !== this.props.activeContexts;
 
     const prevStudies = prevProps.studies;
     const prevActiveViewport = prevProps.activeViewport;
@@ -152,10 +136,7 @@ class ToolbarRow extends Component {
 
     let shouldUpdate = false;
 
-    if (
-      prevStudies.length !== studies.length ||
-      prevActiveViewport !== activeViewport
-    ) {
+    if (prevStudies.length !== studies.length || prevActiveViewport !== activeViewport) {
       shouldUpdate = true;
     } else {
       for (let i = 0; i < studies.length; i++) {
@@ -186,25 +167,17 @@ class ToolbarRow extends Component {
     const { dialog } = this.props;
     let { dialogId, activeButtons, toolbarButtons } = this.state;
     if (dialogId) {
-      const cineButtonPresent = toolbarButtons.find(
-        button => button.options && button.options.behavior === 'CINE'
-      );
+      const cineButtonPresent = toolbarButtons.find((button) => button.options && button.options.behavior === 'CINE');
       if (!cineButtonPresent) {
         dialog.dismiss({ id: dialogId });
-        activeButtons = activeButtons.filter(
-          button => button.options && button.options.behavior !== 'CINE'
-        );
+        activeButtons = activeButtons.filter((button) => button.options && button.options.behavior !== 'CINE');
         this.setState({ dialogId: null, activeButtons });
       }
     }
   };
 
   render() {
-    const buttonComponents = _getButtonComponents.call(
-      this,
-      this.state.toolbarButtons,
-      this.state.activeButtons
-    );
+    const buttonComponents = _getButtonComponents.call(this, this.state.toolbarButtons, this.state.activeButtons);
 
     const onPress = (side, value) => {
       this.props.handleSidePanelChange(side, value);
@@ -224,10 +197,7 @@ class ToolbarRow extends Component {
           </div>
           {buttonComponents}
           <ConnectedLayoutButton />
-          <div
-            className="pull-right m-t-1 rm-x-1"
-            style={{ marginLeft: 'auto' }}
-          >
+          <div className="pull-right m-t-1 rm-x-1" style={{ marginLeft: 'auto' }}>
             {this.buttonGroups.right.length && (
               <RoundedButtonGroup
                 options={this.buttonGroups.right}
@@ -249,7 +219,7 @@ function _getCustomButtonComponent(button, activeButtons) {
   // Check if its a valid customComponent. Later on an CustomToolbarComponent interface could be implemented.
   if (isValidComponent) {
     const parentContext = this;
-    const activeButtonsIds = activeButtons.map(button => button.id);
+    const activeButtonsIds = activeButtons.map((button) => button.id);
     const isActive = activeButtonsIds.includes(button.id);
 
     return (
@@ -268,10 +238,10 @@ function _getCustomButtonComponent(button, activeButtons) {
 function _getExpandableButtonComponent(button, activeButtons) {
   // Iterate over button definitions and update `onClick` behavior
   let activeCommand;
-  const childButtons = button.buttons.map(childButton => {
+  const childButtons = button.buttons.map((childButton) => {
     childButton.onClick = _handleToolbarButtonClick.bind(this, childButton);
 
-    if (activeButtons.map(button => button.id).indexOf(childButton.id) > -1) {
+    if (activeButtons.map((button) => button.id).indexOf(childButton.id) > -1) {
       activeCommand = childButton.id;
     }
 
@@ -296,7 +266,7 @@ function _getDefaultButtonComponent(button, activeButtons) {
       label={button.label}
       icon={button.icon}
       onClick={_handleToolbarButtonClick.bind(this, button)}
-      isActive={activeButtons.map(button => button.id).includes(button.id)}
+      isActive={activeButtons.map((button) => button.id).includes(button.id)}
     />
   );
 }
@@ -306,7 +276,7 @@ function _getDefaultButtonComponent(button, activeButtons) {
  */
 function _getButtonComponents(toolbarButtons, activeButtons) {
   const _this = this;
-  return toolbarButtons.map(button => {
+  return toolbarButtons.map((button) => {
     const hasCustomComponent = button.CustomComponent;
     const hasNestedButtonDefinitions = button.buttons && button.buttons.length;
 
@@ -334,7 +304,7 @@ function _getButtonComponents(toolbarButtons, activeButtons) {
  * @param {*} evt
  * @param {*} props
  */
-function _handleToolbarButtonClick(button, evt, props) {
+function _handleToolbarButtonClick(button, evt) {
   const { activeButtons } = this.state;
 
   if (button.commandName) {
@@ -346,9 +316,7 @@ function _handleToolbarButtonClick(button, evt, props) {
   // TODO: We can update this to be a `getter` on the extension to query
   //       For the active tools after we apply our updates?
   if (button.type === 'setToolActive') {
-    const toggables = activeButtons.filter(
-      ({ options }) => options && !options.togglable
-    );
+    const toggables = activeButtons.filter(({ options }) => options && !options.togglable);
     this.setState({ activeButtons: [...toggables, button] });
   } else if (button.type === 'builtIn') {
     this._handleBuiltIn(button);
@@ -362,9 +330,9 @@ function _getVisibleToolbarButtons() {
   const toolbarModules = extensionManager.modules[MODULE_TYPES.TOOLBAR];
   const toolbarButtonDefinitions = [];
 
-  toolbarModules.forEach(extension => {
+  toolbarModules.forEach((extension) => {
     const { definitions, defaultContext } = extension.module;
-    definitions.forEach(definition => {
+    definitions.forEach((definition) => {
       const context = definition.context || defaultContext;
 
       if (this.props.activeContexts.includes(context)) {
@@ -385,17 +353,13 @@ function _handleBuiltIn(button) {
   if (options.behavior === 'CINE') {
     if (dialogId) {
       dialog.dismiss({ id: dialogId });
-      this.setState(state => ({
+      this.setState((state) => ({
         dialogId: null,
-        activeButtons: [
-          ...state.activeButtons.filter(button => button.id !== id),
-        ],
+        activeButtons: [...state.activeButtons.filter((button) => button.id !== id)],
       }));
     } else {
       const spacing = 20;
-      const { x, y } = document
-        .querySelector(`.ViewerMain`)
-        .getBoundingClientRect();
+      const { x, y } = document.querySelector(`.ViewerMain`).getBoundingClientRect();
       const newDialogId = dialog.create({
         content: ConnectedCineDialog,
         defaultPosition: {
@@ -403,7 +367,7 @@ function _handleBuiltIn(button) {
           y: y + spacing || 0,
         },
       });
-      this.setState(state => ({
+      this.setState((state) => ({
         dialogId: newDialogId,
         activeButtons: [...state.activeButtons, button],
       }));
@@ -417,6 +381,4 @@ function _handleBuiltIn(button) {
   }
 }
 
-export default withTranslation(['Common', 'ViewportDownloadForm'])(
-  withModal(withDialog(withAppContext(ToolbarRow)))
-);
+export default withTranslation(['Common', 'ViewportDownloadForm'])(withModal(withDialog(withAppContext(ToolbarRow))));

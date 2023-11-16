@@ -24,8 +24,7 @@ export const MeasurementsLengthSchema = {
       minimum: 0,
     },
     modalityIn: {
-      label:
-        'Filter to evaluate only measurements with the specified modalities',
+      label: 'Filter to evaluate only measurements with the specified modalities',
       type: 'array',
       items: {
         type: 'string',
@@ -34,8 +33,7 @@ export const MeasurementsLengthSchema = {
       uniqueItems: true,
     },
     modalityNotIn: {
-      label:
-        'Filter to evaluate only measurements without the specified modalities',
+      label: 'Filter to evaluate only measurements without the specified modalities',
       type: 'array',
       items: {
         type: 'string',
@@ -44,8 +42,7 @@ export const MeasurementsLengthSchema = {
       uniqueItems: true,
     },
     locationIn: {
-      label:
-        'Filter to evaluate only measurements with the specified locations',
+      label: 'Filter to evaluate only measurements with the specified locations',
       type: 'array',
       items: {
         type: 'string',
@@ -54,8 +51,7 @@ export const MeasurementsLengthSchema = {
       uniqueItems: true,
     },
     locationNotIn: {
-      label:
-        'Filter to evaluate only measurements without the specified locations',
+      label: 'Filter to evaluate only measurements without the specified locations',
       type: 'array',
       items: {
         type: 'string',
@@ -108,7 +104,7 @@ export class MeasurementsLengthCriterion extends BaseCriterion {
     const longMultiplier = options.longAxisSliceThicknessMultiplier;
     const shortMultiplier = options.shortAxisSliceThicknessMultiplier;
 
-    data.targets.forEach(item => {
+    data.targets.forEach((item) => {
       const { metadata, measurement } = item;
       const { location } = measurement;
 
@@ -124,31 +120,18 @@ export class MeasurementsLengthCriterion extends BaseCriterion {
       const Modality = metadata.getTagValue('Modality') || '';
 
       // Stop here if the measurement does not match the Modality and location filters
-      if (
-        typeof isNodal === 'boolean' &&
-        typeof options.isNodal === 'boolean' &&
-        options.isNodal !== isNodal
-      )
-        return;
-      if (options.locationIn && options.locationIn.indexOf(location) === -1)
-        return;
-      if (options.modalityIn && options.modalityIn.indexOf(Modality) === -1)
-        return;
-      if (options.locationNotIn && options.locationNotIn.indexOf(location) > -1)
-        return;
-      if (options.modalityNotIn && options.modalityNotIn.indexOf(Modality) > -1)
-        return;
+      if (typeof isNodal === 'boolean' && typeof options.isNodal === 'boolean' && options.isNodal !== isNodal) return;
+      if (options.locationIn && options.locationIn.indexOf(location) === -1) return;
+      if (options.modalityIn && options.modalityIn.indexOf(Modality) === -1) return;
+      if (options.locationNotIn && options.locationNotIn.indexOf(location) > -1) return;
+      if (options.modalityNotIn && options.modalityNotIn.indexOf(Modality) > -1) return;
 
       // Check the measurement length
       const failed =
         (options.longAxis && longestDiameter < options.longAxis) ||
         (options.shortAxis && shortestDiameter < options.shortAxis) ||
-        (longMultiplier &&
-          !isNaN(SliceThickness) &&
-          longestDiameter < longMultiplier * SliceThickness) ||
-        (shortMultiplier &&
-          !isNaN(SliceThickness) &&
-          shortestDiameter < shortMultiplier * SliceThickness);
+        (longMultiplier && !isNaN(SliceThickness) && longestDiameter < longMultiplier * SliceThickness) ||
+        (shortMultiplier && !isNaN(SliceThickness) && shortestDiameter < shortMultiplier * SliceThickness);
 
       // Mark this measurement as invalid if some of the checks have failed
       if (failed) {

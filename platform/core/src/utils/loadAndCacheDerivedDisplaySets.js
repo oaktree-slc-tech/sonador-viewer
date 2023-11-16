@@ -49,12 +49,7 @@ import studyMetadataManager from './studyMetadataManager';
  * @param {object} snackbar
  * @returns void
  */
-async function loadAndCacheDerivedDisplaySets(
-  referencedDisplaySet,
-  studies,
-  logger,
-  snackbar
-) {
+async function loadAndCacheDerivedDisplaySets(referencedDisplaySet, studies, logger, snackbar) {
   const { StudyInstanceUID, SeriesInstanceUID } = referencedDisplaySet;
   const promises = [];
   const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
@@ -103,9 +98,7 @@ async function loadAndCacheDerivedDisplaySets(
       let recentDisplaySet = displaySets[0];
 
       displaySets.forEach((displaySet) => {
-        const dateTime = Number(
-          `${displaySet.SeriesDate}${displaySet.SeriesTime}`
-        );
+        const dateTime = Number(`${displaySet.SeriesDate}${displaySet.SeriesTime}`);
         if (dateTime > recentDateTime) {
           recentDateTime = dateTime;
           recentDisplaySet = displaySet;
@@ -120,8 +113,7 @@ async function loadAndCacheDerivedDisplaySets(
           if (recentDisplaySet.Modality === 'SEG' && logger) {
             const onDisplaySetLoadFailureHandler = (error) => {
               const message =
-                error.message.includes('orthogonal') ||
-                error.message.includes('oblique')
+                error.message.includes('orthogonal') || error.message.includes('oblique')
                   ? 'The segmentation has been detected as non coplanar,\
                     If you really think it is coplanar,\
                     please adjust the tolerance in the segmentation panel settings (at your own peril!)'
@@ -138,30 +130,22 @@ async function loadAndCacheDerivedDisplaySets(
 
             let activatedLabelmapIndex = -1;
             while (activatedLabelmapIndex == -1) {
-              const { referencedDisplaySet, activatedLabelmapPromise } =
-                await recentDisplaySet.getSourceDisplaySet(
-                  studies,
-                  true,
-                  onDisplaySetLoadFailureHandler
-                );
+              const { referencedDisplaySet, activatedLabelmapPromise } = await recentDisplaySet.getSourceDisplaySet(
+                studies,
+                true,
+                onDisplaySetLoadFailureHandler
+              );
 
               activatedLabelmapIndex = await activatedLabelmapPromise;
-              const selectionFired = new CustomEvent(
-                'extensiondicomsegmentationsegselected',
-                {
-                  detail: { activatedLabelmapIndex: activatedLabelmapIndex },
-                }
-              );
+              const selectionFired = new CustomEvent('extensiondicomsegmentationsegselected', {
+                detail: { activatedLabelmapIndex: activatedLabelmapIndex },
+              });
               document.dispatchEvent(selectionFired);
 
-              const lastDateTime = Number(
-                `${recentDisplaySet.SeriesDate}${recentDisplaySet.SeriesTime}`
-              );
+              const lastDateTime = Number(`${recentDisplaySet.SeriesDate}${recentDisplaySet.SeriesTime}`);
               recentDateTime = 0;
               displaySets.forEach((displaySet) => {
-                const dateTime = Number(
-                  `${displaySet.SeriesDate}${displaySet.SeriesTime}`
-                );
+                const dateTime = Number(`${displaySet.SeriesDate}${displaySet.SeriesTime}`);
                 if (dateTime > recentDateTime && dateTime < lastDateTime) {
                   recentDateTime = dateTime;
                   recentDisplaySet = displaySet;

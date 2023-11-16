@@ -52,10 +52,7 @@ export class Metadata {
   getDataProperty(propertyName) {
     let propertyValue;
     const _data = this._data;
-    if (
-      _data instanceof Object ||
-      (typeof _data === OBJECT && _data !== null)
-    ) {
+    if (_data instanceof Object || (typeof _data === OBJECT && _data !== null)) {
       propertyValue = _data[propertyName];
     }
     return propertyValue;

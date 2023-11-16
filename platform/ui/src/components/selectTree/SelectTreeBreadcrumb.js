@@ -1,6 +1,7 @@
 import { Component } from 'react';
 import React from 'react';
 import PropTypes from 'prop-types';
+
 import { Icon } from './../../elements/Icon';
 
 export default class SelectTreeBreadcrumb extends Component {
@@ -13,10 +14,7 @@ export default class SelectTreeBreadcrumb extends Component {
   render() {
     return (
       <div className="selectTreeBreadcrumb">
-        <label
-          className="wrapperLabel radioLabel"
-          htmlFor="selectTreeBreadcrumb"
-        >
+        <label className="wrapperLabel radioLabel" htmlFor="selectTreeBreadcrumb">
           <input
             type="radio"
             id="selectTreeBreadcrumb"

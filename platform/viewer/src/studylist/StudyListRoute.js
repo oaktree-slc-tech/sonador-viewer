@@ -1,41 +1,30 @@
-import * as _ from 'lodash';
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import PropTypes from 'prop-types';
-import moment from 'moment';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { withRouter } from 'react-router-dom';
+// Icons
+import { ArrowPathIcon } from '@heroicons/react/24/solid';
+import * as _ from 'lodash';
+import moment from 'moment';
+import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import {
-  StudyList,
-  PageToolbar,
-  TablePagination,
-  useDebounce,
-  useMedia,
-} from '@ohif/ui';
+import { PageToolbar, StudyList, TablePagination, useDebounce, useMedia } from '@ohif/ui';
+
 import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
-import * as RoutesUtil from '../routes/routesUtil';
-
-// Google Health API
-import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
-import filesToStudies from '../lib/filesToStudies.js';
-
-// Sonador integration tools
-import ImageServerPicker from '../sonador/ImageServerPicker.js';
-
+import AppContext from '../context/AppContext';
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
-import AppContext from '../context/AppContext';
-
-// Icons
-import { ArrowPathIcon } from '@heroicons/react/24/solid';
+// Google Health API
+import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
+import filesToStudies from '../lib/filesToStudies.js';
+import * as RoutesUtil from '../routes/routesUtil';
+// Sonador integration tools
+import ImageServerPicker from '../sonador/ImageServerPicker.js';
 
 // Studylist styling
 import '../styles/global-viewer.css';
 import './styles/studylist.css';
-
-const { urlUtil: UrlUtil } = OHIF.utils;
 
 function getStudyUrlParams() {
   // Retrieve the currently active query parameters
@@ -56,12 +45,13 @@ function StudyListRoute(props) {
 
   const updateServerUrl = (token) => {
     // Update history to point at the most recent
-    if (!(window.location.pathname || '').includes(token))
+    if (!(window.location.pathname || '').includes(token)) {
       history.push(
         RoutesUtil.parseStudyListPath(appConfig, server, {
           token: token,
         })
       );
+    }
   };
 
   // Study list table controls
@@ -72,46 +62,25 @@ function StudyListRoute(props) {
   // Study list filter values
   const [filterValues, setFilterValues] = useState({
     // Study start/end dates
-    studyDateTo: dcmfilters.studyDateTo
-      ? decodeURIComponent(dcmfilters.studyDateTo)
-      : '',
-    studyDateFrom: dcmfilters.studyDateFrom
-      ? decodeURIComponent(dcmfilters.studyDateFrom)
-      : '',
+    studyDateTo: dcmfilters.studyDateTo ? decodeURIComponent(dcmfilters.studyDateTo) : '',
+    studyDateFrom: dcmfilters.studyDateFrom ? decodeURIComponent(dcmfilters.studyDateFrom) : '',
 
     // DICOM tags
-    PatientName: dcmfilters.PatientName
-      ? decodeURIComponent(dcmfilters.PatientName)
-      : '',
-    PatientID: dcmfilters.PatientID
-      ? decodeURIComponent(filters.PatientID)
-      : '',
-    AccessionNumber: dcmfilters.AccessionNumber
-      ? decodeURIComponent(dcmfilters.AccessionNumber)
-      : '',
-    StudyDate: dcmfilters.StudyDate
-      ? decodeURIComponent(dcmfilters.StudyDate)
-      : '',
-    modalities: dcmfilters.modalitiesInStudy
-      ? dcmfilters.modalitiesInStudy
-      : '',
-    StudyDescription: dcmfilters.StudyDescription
-      ? decodeURIComponent(dcmfilters.StudyDescription)
-      : '',
+    PatientName: dcmfilters.PatientName ? decodeURIComponent(dcmfilters.PatientName) : '',
+    PatientID: dcmfilters.PatientID ? decodeURIComponent(filters.PatientID) : '',
+    AccessionNumber: dcmfilters.AccessionNumber ? decodeURIComponent(dcmfilters.AccessionNumber) : '',
+    StudyDate: dcmfilters.StudyDate ? decodeURIComponent(dcmfilters.StudyDate) : '',
+    modalities: dcmfilters.modalitiesInStudy ? dcmfilters.modalitiesInStudy : '',
+    StudyDescription: dcmfilters.StudyDescription ? decodeURIComponent(dcmfilters.StudyDescription) : '',
 
     // patient and study (search multiple tags)
-    patientNameOrId: dcmfilters.patientNameOrId
-      ? decodeURIComponent(dcmfilters.patientNameOrId)
+    patientNameOrId: dcmfilters.patientNameOrId ? decodeURIComponent(dcmfilters.patientNameOrId) : '',
+    accessionOrModalityOrDescription: dcmfilters.accessionOrModalityOrDescription
+      ? decodeURIComponent(dcmfilters.accessionOrModalityOrDescription)
       : '',
-    accessionOrModalityOrDescription:
-      dcmfilters.accessionOrModalityOrDescription
-        ? decodeURIComponent(dcmfilters.accessionOrModalityOrDescription)
-        : '',
 
     // search all tags
-    allFields: dcmfilters.allFields
-      ? decodeURIComponent(dcmfilters.allFields)
-      : '',
+    allFields: dcmfilters.allFields ? decodeURIComponent(dcmfilters.allFields) : '',
   });
 
   // Set study list
@@ -125,12 +94,8 @@ function StudyListRoute(props) {
   });
 
   // Manage pagination
-  const [rowsPerPage, setRowsPerPage] = useState(
-    (dcmfilters || {}).items ? parseInt(filters.items) : 25
-  );
-  const [pageNumber, setPageNumber] = useState(
-    (dcmfilters || {}).page ? parseInt(filters.page) - 1 : 0
-  );
+  const [rowsPerPage, setRowsPerPage] = useState((dcmfilters || {}).items ? parseInt(filters.items) : 25);
+  const [pageNumber, setPageNumber] = useState((dcmfilters || {}).page ? parseInt(filters.page) - 1 : 0);
 
   const updateRowsPerPage = (rows) => {
     // Update the number of rows per page, synchronize state and URL
@@ -155,11 +120,7 @@ function StudyListRoute(props) {
 
   // ~~ RESPONSIVE
   const displaySize = useMedia(
-    [
-      '(min-width: 1750px)',
-      '(min-width: 1000px) and (max-width: 1749px)',
-      '(max-width: 999px)',
-    ],
+    ['(min-width: 1750px)', '(min-width: 1000px) and (max-width: 1749px)', '(max-width: 999px)'],
     ['large', 'medium', 'small'],
     'small'
   );
@@ -193,15 +154,7 @@ function StudyListRoute(props) {
         setSearchStatus({ error: true, isFetching: false });
       }
     },
-    [
-      server,
-      debouncedSort,
-      rowsPerPage,
-      pageNumber,
-      displaySize,
-      history,
-      debouncedFilters,
-    ]
+    [server, debouncedSort, rowsPerPage, pageNumber, displaySize, history, debouncedFilters]
   );
 
   useEffect(
@@ -297,13 +250,8 @@ function StudyListRoute(props) {
         {(whiteLabeling) => (
           <UserManagerContext.Consumer>
             {(userManager) => (
-              <ConnectedHeader
-                useLargeLogo={true}
-                user={user}
-                userManager={userManager}
-              >
-                {whiteLabeling?.createLogoComponentFn &&
-                  whiteLabeling.createLogoComponentFn(React)}
+              <ConnectedHeader useLargeLogo={true} user={user} userManager={userManager}>
+                {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
               </ConnectedHeader>
             )}
           </UserManagerContext.Consumer>
@@ -321,18 +269,12 @@ function StudyListRoute(props) {
                 paddingTop: '0.25rem',
               }}
             >
-              <ImageServerPicker
-                activeServer={server}
-                user={user}
-                onServerChange={updateServerUrl}
-              />
+              <ImageServerPicker activeServer={server} user={user} onServerChange={updateServerUrl} />
 
               {/* Study list: requires "query permission" */}
               {server.perms?.query ? (
                 <span className="sonador-studylistt-title">
-                  <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">
-                    /
-                  </span>
+                  <span className="sonador-gold spacer-left-05rem spacer-right-05rem hide-xs">/</span>
                   <span className="hide-xs">{t('Study List')}</span>
                 </span>
               ) : null}
@@ -354,9 +296,7 @@ function StudyListRoute(props) {
 
             {/* DICOM Upload Button: requires "upload" permission */}
             {studyListFunctionsEnabled && server?.perms?.upload && (
-              <PageToolbar
-                onImport={() => setActiveModalId('DicomFilesUploader')}
-              />
+              <PageToolbar onImport={() => setActiveModalId('DicomFilesUploader')} />
             )}
 
             {/* DICOM Query Results: requires "query" permission */}
@@ -416,9 +356,7 @@ function StudyListRoute(props) {
           <div className="study-list-header">
             <div className="header">
               <h1 className="state-message-large">{t('Welcome!')}</h1>
-              <p className="state-message-large">
-                {window.sonador.home.message}
-              </p>
+              <p className="state-message-large">{window.sonador.home.message}</p>
             </div>
           </div>
         </div>
@@ -470,18 +408,9 @@ function updateURL(isModalOpen, appConfig, server, history) {
  * @param {string} displaySize - small, medium, large
  * @returns
  */
-async function getStudyList(
-  server,
-  filters,
-  sort,
-  rowsPerPage,
-  pageNumber,
-  displaySize,
-  history,
-  isForce
-) {
-  const { allFields, patientNameOrId, accessionOrModalityOrDescription } =
-    filters;
+async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, displaySize, history, isForce) {
+  const { allFields, patientNameOrId, accessionOrModalityOrDescription } = filters;
+
   const sortFieldName = sort.fieldName || 'PatientName';
   const sortDirection = sort.direction || 'desc';
 
@@ -505,20 +434,10 @@ async function getStudyList(
   let params = getStudyUrlParams();
 
   // Add mapped DICOM fields
-  _.each(
-    _.omit(
-      mappedFilters,
-      'studyDateFrom',
-      'studyDateTo',
-      'limit',
-      'offset',
-      'fuzzymatching'
-    ),
-    (v, k) => {
-      if (_.isEmpty(v)) params.delete(k);
-      else params.set(encodeURIComponent(k), encodeURIComponent(v));
-    }
-  );
+  _.each(_.omit(mappedFilters, 'studyDateFrom', 'studyDateTo', 'limit', 'offset', 'fuzzymatching'), (v, k) => {
+    if (_.isEmpty(v)) params.delete(k);
+    else params.set(encodeURIComponent(k), encodeURIComponent(v));
+  });
 
   // Add compound fields
   _.each(
@@ -548,8 +467,7 @@ async function getStudyList(
 
   // Only the fields we use
   const mappedStudies = studies.map((study) => {
-    const PatientName =
-      typeof study.PatientName === 'string' ? study.PatientName : undefined;
+    const PatientName = typeof study.PatientName === 'string' ? study.PatientName : undefined;
 
     return {
       AccessionNumber: study.AccessionNumber, // "1"
@@ -576,20 +494,14 @@ async function getStudyList(
     patientNameOrId: 'PatientName',
     accessionOrModalityOrDescription: 'modalities',
   };
-  const mappedSortFieldName =
-    sortFieldNameMapping[sortFieldName] || sortFieldName;
+  const mappedSortFieldName = sortFieldNameMapping[sortFieldName] || sortFieldName;
 
-  const sortedStudies = _sortStudies(
-    mappedStudies,
-    mappedSortFieldName,
-    sortDirection
-  );
+  const sortedStudies = _sortStudies(mappedStudies, mappedSortFieldName, sortDirection);
 
   // Because we've merged multiple requests, we may have more than
   // our Rows per page. Let's `take` that number from our sorted array.
   // This "might" cause paging issues.
-  const numToTake =
-    sortedStudies.length < rowsPerPage ? sortedStudies.length : rowsPerPage;
+  const numToTake = sortedStudies.length < rowsPerPage ? sortedStudies.length : rowsPerPage;
   const result = sortedStudies.slice(0, numToTake);
 
   return result;
@@ -608,9 +520,7 @@ function _sortStudies(studies, field, order) {
   // Make sure our StudyDate is in a valid format and create copy of studies array
   const sortedStudies = studies.map((study) => {
     if (!moment(study.StudyDate, 'MMM DD, YYYY', true).isValid()) {
-      study.StudyDate = moment(study.StudyDate, 'YYYYMMDD').format(
-        'MMM DD, YYYY'
-      );
+      study.StudyDate = moment(study.StudyDate, 'YYYYMMDD').format('MMM DD, YYYY');
     }
     return study;
   });
@@ -670,13 +580,7 @@ async function _fetchStudies(
   if (displaySize === 'small') {
     const firstSet = _getQueryFiltersForValue(
       filters,
-      [
-        'PatientID',
-        'PatientName',
-        'AccessionNumber',
-        'StudyDescription',
-        'ModalitiesInStudy',
-      ],
+      ['PatientID', 'PatientName', 'AccessionNumber', 'StudyDescription', 'ModalitiesInStudy'],
       allFields
     );
 
@@ -684,11 +588,7 @@ async function _fetchStudies(
       queryFiltersArray = firstSet;
     }
   } else if (displaySize === 'medium') {
-    const firstSet = _getQueryFiltersForValue(
-      filters,
-      ['PatientID', 'PatientName'],
-      patientNameOrId
-    );
+    const firstSet = _getQueryFiltersForValue(filters, ['PatientID', 'PatientName'], patientNameOrId);
 
     const secondSet = _getQueryFiltersForValue(
       filters,
@@ -704,11 +604,7 @@ async function _fetchStudies(
   const queryPromises = [];
 
   queryFiltersArray.forEach((filter) => {
-    const searchStudiesPromise = OHIF.studies.searchStudies(
-      server,
-      filter,
-      isForce
-    );
+    const searchStudiesPromise = OHIF.studies.searchStudies(server, filter, isForce);
     queryPromises.push(searchStudiesPromise);
   });
 
@@ -719,9 +615,7 @@ async function _fetchStudies(
   lotsOfStudies.forEach((arrayOfStudies) => {
     if (arrayOfStudies) {
       arrayOfStudies.forEach((study) => {
-        if (
-          !studies.some((s) => s.StudyInstanceUID === study.StudyInstanceUID)
-        ) {
+        if (!studies.some((s) => s.StudyInstanceUID === study.StudyInstanceUID)) {
           studies.push(study);
         }
       });

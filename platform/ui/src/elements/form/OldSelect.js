@@ -1,6 +1,7 @@
-import './Select.css';
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
+import './Select.css';
 
 class Select extends Component {
   constructor(props) {
@@ -10,7 +11,7 @@ class Select extends Component {
     };
   }
 
-  handleChange = event => {
+  handleChange = (event) => {
     const value = event.target.value;
     this.setState({ value });
     if (this.props.onChange) this.props.onChange(value);
@@ -18,11 +19,7 @@ class Select extends Component {
 
   render() {
     return (
-      <select
-        className="select-ohif"
-        value={this.state.selected}
-        onChange={this.handleChange}
-      >
+      <select className="select-ohif" value={this.state.selected} onChange={this.handleChange}>
         {this.props.options.map(({ key, value }) => {
           return (
             <option key={key} value={value}>

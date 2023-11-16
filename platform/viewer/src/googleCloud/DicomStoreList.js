@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import './googleCloud.css';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
+
 import { Icon } from '@ohif/ui';
+
+import './googleCloud.css';
 
 class DicomStoreList extends Component {
   state = {
@@ -20,15 +22,11 @@ class DicomStoreList extends Component {
     loading: true,
   };
 
-  renderTableRow = store => {
+  renderTableRow = (store) => {
     return (
       <tr
         key={store.name}
-        className={
-          this.state.highlightedItem === store.name
-            ? 'noselect active'
-            : 'noselect'
-        }
+        className={this.state.highlightedItem === store.name ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
           this.onHighlightItem(store.name);
         }}
@@ -52,9 +50,7 @@ class DicomStoreList extends Component {
       return <p>{error}</p>;
     }
 
-    const loadingIcon = (
-      <Icon name="circle-notch" className="loading-icon-spin loading-icon" />
-    );
+    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
     if (loading) {
       return loadingIcon;
@@ -63,13 +59,7 @@ class DicomStoreList extends Component {
     const body = (
       <tbody id="StoreList">
         {stores
-          .filter(
-            store =>
-              store.name
-                .split('/')[7]
-                .toLowerCase()
-                .includes(filter.toLowerCase()) || filter == ''
-          )
+          .filter((store) => store.name.split('/')[7].toLowerCase().includes(filter.toLowerCase()) || filter == '')
           .map(this.renderTableRow)}
       </tbody>
     );

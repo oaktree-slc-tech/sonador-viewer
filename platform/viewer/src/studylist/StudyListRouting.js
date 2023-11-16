@@ -1,14 +1,16 @@
-import * as _ from 'lodash';
 import React, { useContext } from 'react';
-import PropTypes from 'prop-types';
-import { withRouter } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { withRouter } from 'react-router-dom';
+import * as _ from 'lodash';
+import PropTypes from 'prop-types';
 
-import { OHIF, DICOMWeb } from '@ohif/core';
-import ConnectedStudyList from './ConnectedStudyList';
+import { DICOMWeb, OHIF } from '@ohif/core';
+
+import AppContext from '../context/AppContext';
 import useServer from '../customHooks/useServer';
 import NotFound from '../routes/NotFound.js';
-import AppContext from '../context/AppContext';
+
+import ConnectedStudyList from './ConnectedStudyList';
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
@@ -20,7 +22,7 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
   const { project, location, dataset, dicomStore, token } = routeMatch.params;
 
   // Determine which server to use: if unable to find active server, return 404
-  const servers = useSelector(state => state && state.servers);
+  const servers = useSelector((state) => state && state.servers);
   const server = useServer({ project, location, dataset, dicomStore, token });
 
   // Server list is defined, but there is no active server: return 404.
@@ -33,10 +35,7 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
   }
 
   // Parse query string parameters
-  const filters = UrlUtil.queryString.getQueryFilters(
-    routeLocation,
-    DICOMWeb.dcmStudyTags
-  );
+  const filters = UrlUtil.queryString.getQueryFilters(routeLocation, DICOMWeb.dcmStudyTags);
 
   // Turn on/off study list functions
   let studyListFunctionsEnabled = false;
@@ -45,12 +44,7 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
   }
 
   // Return study list: handles both empty state and study list for the active server
-  return (
-    <ConnectedStudyList
-      filters={filters}
-      studyListFunctionsEnabled={studyListFunctionsEnabled}
-    />
-  );
+  return <ConnectedStudyList filters={filters} studyListFunctionsEnabled={studyListFunctionsEnabled} />;
 }
 
 StudyListRouting.propTypes = {

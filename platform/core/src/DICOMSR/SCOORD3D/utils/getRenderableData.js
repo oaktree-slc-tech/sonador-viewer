@@ -1,41 +1,20 @@
 import csMath from 'cornerstone-math';
-import SCOORD_TYPES from '../constants/scoordTypes';
 import { inv } from 'mathjs';
 
-const getRenderableData = (
-  GraphicType,
-  GraphicData,
-  ValueType,
-  imageMetadata
-) => {
+import SCOORD_TYPES from '../constants/scoordTypes';
+
+const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) => {
   let renderableData;
 
   const orientation = imageMetadata.ImageOrientationPatient;
   const position = imageMetadata.ImagePositionPatient;
   const pixelSpacing = imageMetadata.PixelSpacing;
-  const sliceSpacing = imageMetadata.SliceThickness
-    ? imageMetadata.SliceThickness
-    : 1;
+  const sliceSpacing = imageMetadata.SliceThickness ? imageMetadata.SliceThickness : 1;
   //  https://nipy.org/nibabel/dicom/dicom_orientation.html
   const M = [
-    [
-      orientation[0] * pixelSpacing[0],
-      orientation[3] * pixelSpacing[1],
-      sliceSpacing,
-      position[0],
-    ],
-    [
-      orientation[1] * pixelSpacing[0],
-      orientation[4] * pixelSpacing[1],
-      sliceSpacing,
-      position[1],
-    ],
-    [
-      orientation[2] * pixelSpacing[0],
-      orientation[5] * pixelSpacing[1],
-      sliceSpacing,
-      position[2],
-    ],
+    [orientation[0] * pixelSpacing[0], orientation[3] * pixelSpacing[1], sliceSpacing, position[0]],
+    [orientation[1] * pixelSpacing[0], orientation[4] * pixelSpacing[1], sliceSpacing, position[1]],
+    [orientation[2] * pixelSpacing[0], orientation[5] * pixelSpacing[1], sliceSpacing, position[2]],
     [0, 0, 0, 1],
   ];
 
@@ -45,12 +24,9 @@ const getRenderableData = (
 
   const worldToIJK = (point, M1) => {
     const worldPoint = {
-      x:
-        M1[0][0] * point.x + M1[0][1] * point.y + M1[0][2] * point.z + M1[0][3],
-      y:
-        M1[1][0] * point.x + M1[1][1] * point.y + M1[1][2] * point.z + M1[1][3],
-      z:
-        M1[2][0] * point.x + M1[2][1] * point.y + M1[2][2] * point.z + M1[2][3],
+      x: M1[0][0] * point.x + M1[0][1] * point.y + M1[0][2] * point.z + M1[0][3],
+      y: M1[1][0] * point.x + M1[1][1] * point.y + M1[1][2] * point.z + M1[1][3],
+      z: M1[2][0] * point.x + M1[2][1] * point.y + M1[2][2] * point.z + M1[2][3],
     };
     return worldPoint;
   };

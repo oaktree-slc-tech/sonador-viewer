@@ -39,9 +39,7 @@ const servers = (state = defaultState, action) => {
 
     case 'SWITCH_SERVER':
       const allServers = state.servers;
-      allServers.forEach((s) =>
-        s.token === action.token ? (s.active = true) : (s.active = false)
-      );
+      allServers.forEach((s) => (s.token === action.token ? (s.active = true) : (s.active = false)));
       return {
         ...state,
         servers: allServers,

@@ -1,13 +1,15 @@
-import { eventTypes as uiEvents } from '@ohif/ui';
-
-import './ViewerMain.css';
-import { servicesManager } from './../App.js';
 import { Component } from 'react';
-import { ConnectedViewportGrid } from './../components/ViewportGrid/index.js';
-import PropTypes from 'prop-types';
 import React from 'react';
 import memoize from 'lodash/memoize';
 import _values from 'lodash/values';
+import PropTypes from 'prop-types';
+
+import { eventTypes as uiEvents } from '@ohif/ui';
+
+import { servicesManager } from '../App';
+import { ConnectedViewportGrid } from './../components/ViewportGrid/index.js';
+
+import './ViewerMain.css';
 
 var values = memoize(_values);
 
@@ -73,10 +75,7 @@ class ViewerMain extends Component {
     const viewportAmount = this.props.layout.viewports.length;
     const isVtk = this.props.layout.viewports.some((vp) => !!vp.vtk);
 
-    if (
-      this.props.studies !== prevProps.studies ||
-      (viewportAmount !== prevViewportAmount && !isVtk)
-    ) {
+    if (this.props.studies !== prevProps.studies || (viewportAmount !== prevViewportAmount && !isVtk)) {
       const displaySets = this.getDisplaySets(this.props.studies);
       this.setState({ displaySets }, this.fillEmptyViewportPanes);
     }
@@ -94,10 +93,7 @@ class ViewerMain extends Component {
 
     for (let i = 0; i < layout.viewports.length; i++) {
       const viewportPane = viewportSpecificData[i];
-      const isNonEmptyViewport =
-        viewportPane &&
-        viewportPane.StudyInstanceUID &&
-        viewportPane.displaySetInstanceUID;
+      const isNonEmptyViewport = viewportPane && viewportPane.StudyInstanceUID && viewportPane.displaySetInstanceUID;
 
       if (isNonEmptyViewport) {
         dirtyViewportPanes.push({
@@ -110,10 +106,7 @@ class ViewerMain extends Component {
 
       const foundDisplaySet =
         displaySets.find(
-          (ds) =>
-            !dirtyViewportPanes.some(
-              (v) => v.displaySetInstanceUID === ds.displaySetInstanceUID
-            )
+          (ds) => !dirtyViewportPanes.some((v) => v.displaySetInstanceUID === ds.displaySetInstanceUID)
         ) || displaySets[displaySets.length - 1];
 
       dirtyViewportPanes.push(foundDisplaySet);
@@ -130,16 +123,8 @@ class ViewerMain extends Component {
     });
   };
 
-  setViewportData = ({
-    viewportIndex,
-    StudyInstanceUID,
-    displaySetInstanceUID,
-  }) => {
-    let displaySet = this.findDisplaySet(
-      this.props.studies,
-      StudyInstanceUID,
-      displaySetInstanceUID
-    );
+  setViewportData = ({ viewportIndex, StudyInstanceUID, displaySetInstanceUID }) => {
+    let displaySet = this.findDisplaySet(this.props.studies, StudyInstanceUID, displaySetInstanceUID);
 
     const { LoggerService, UINotificationService } = servicesManager.services;
 
@@ -148,8 +133,7 @@ class ViewerMain extends Component {
       if (Modality === 'SEG' && servicesManager) {
         const onDisplaySetLoadFailureHandler = (error) => {
           const message =
-            error.message.includes('orthogonal') ||
-            error.message.includes('oblique')
+            error.message.includes('orthogonal') || error.message.includes('oblique')
               ? 'The segmentation has been detected as non coplanar,\
               If you really think it is coplanar,\
               please adjust the tolerance in the segmentation panel settings (at your own peril!)'
@@ -163,21 +147,17 @@ class ViewerMain extends Component {
           });
         };
 
-        const { referencedDisplaySet, activatedLabelmapPromise } =
-          displaySet.getSourceDisplaySet(
-            this.props.studies,
-            true,
-            onDisplaySetLoadFailureHandler
-          );
+        const { referencedDisplaySet, activatedLabelmapPromise } = displaySet.getSourceDisplaySet(
+          this.props.studies,
+          true,
+          onDisplaySetLoadFailureHandler
+        );
         displaySet = referencedDisplaySet;
 
         activatedLabelmapPromise.then((activatedLabelmapIndex) => {
-          const selectionFired = new CustomEvent(
-            'extensiondicomsegmentationsegselected',
-            {
-              detail: { activatedLabelmapIndex: activatedLabelmapIndex },
-            }
-          );
+          const selectionFired = new CustomEvent('extensiondicomsegmentationsegselected', {
+            detail: { activatedLabelmapIndex: activatedLabelmapIndex },
+          });
           document.dispatchEvent(selectionFired);
         });
       } else if (Modality !== 'SR') {

@@ -17,7 +17,7 @@ export class NonTargetResponseCriterion extends BaseCriterion {
     const measurements = [];
     let message;
 
-    items.forEach(item => {
+    items.forEach((item) => {
       const measurement = item.measurement;
       const response = (measurement.response || '').toLowerCase();
 

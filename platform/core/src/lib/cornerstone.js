@@ -17,7 +17,7 @@ function getBoundingBox(context, textLines, x, y, options) {
   // Find the longest text width in the array of text data
   let maxWidth = 0;
 
-  textLines.forEach(text => {
+  textLines.forEach((text) => {
     // Get the text width in the current font
     const width = context.measureText(text).width;
 
@@ -218,7 +218,7 @@ function repositionTextBox(eventData, measurementData, config) {
   bounds.x = textBox.boundingBox.width;
   bounds.y = textBox.boundingBox.height;
 
-  const getHandlePosition = key => {
+  const getHandlePosition = (key) => {
     const { x, y } = handles[key];
 
     return { x, y };
@@ -236,11 +236,7 @@ function repositionTextBox(eventData, measurementData, config) {
 
   let { directions, cornerAxis } = getRenderingInformation(limits, tool);
 
-  const availableAreas = getAvailableBlankAreas(
-    enabledElement,
-    bounds.x,
-    bounds.y
-  );
+  const availableAreas = getAvailableBlankAreas(enabledElement, bounds.x, bounds.y);
   const tempDirections = Object.assign({}, directions);
   let tempCornerAxis = cornerAxis;
   let foundPlace = false;
@@ -269,10 +265,7 @@ function repositionTextBox(eventData, measurementData, config) {
     limits = Object.assign({}, limits, canvasDimensions);
 
     const toolPositionOnCanvas = cornerstone.pixelToCanvas(element, tool);
-    const renderingInformation = getRenderingInformation(
-      limits,
-      toolPositionOnCanvas
-    );
+    const renderingInformation = getRenderingInformation(limits, toolPositionOnCanvas);
     directions = renderingInformation.directions;
     cornerAxis = renderingInformation.cornerAxis;
 
@@ -281,11 +274,7 @@ function repositionTextBox(eventData, measurementData, config) {
       y: directions.y < 0 ? offset.top : offset.top + canvasHeight,
     };
 
-    const pixelPosition = cornerstone.pageToPixel(
-      element,
-      position.x,
-      position.y
-    );
+    const pixelPosition = cornerstone.pageToPixel(element, position.x, position.y);
     cornerAxisPosition = pixelPosition[cornerAxis];
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as _ from 'lodash';
 /**
  * Get display size value for matched mediaQueryList
@@ -6,39 +6,30 @@ import * as _ from 'lodash';
  * @param {Array} mediaTypesAliases - Array of strings representing each mediaQueryAlias.
  * @param {string} defaultDisplaySize - default display size value. Fallback value.
  */
-const getDisplaySize = (
-  mediaQueryMap,
-  mediaTypesAliases,
-  defaultDisplaySize
-) => {
+const getDisplaySize = (mediaQueryMap, mediaTypesAliases, defaultDisplaySize) => {
   if ((!mediaTypesAliases && !defaultDisplaySize) || !mediaQueryMap) {
     return;
   }
 
   // Get index of first media query that matches
-  const index = mediaQueryMap.findIndex(mql => mql.matches);
+  const index = mediaQueryMap.findIndex((mql) => mql.matches);
 
   // Return related value or defaultDisplaySize if none
-  return index >= 0 && typeof mediaTypesAliases[index] !== 'undefined'
-    ? mediaTypesAliases[index]
-    : defaultDisplaySize;
+  return index >= 0 && typeof mediaTypesAliases[index] !== 'undefined' ? mediaTypesAliases[index] : defaultDisplaySize;
 };
 /**
  * Map each window MediaQueryLists
  * @param {Array} mediaQueriesStringList - array of string media queries to be parsed
  */
-const getMediaQueryMap = mediaQueriesStringList => {
-  return (
-    mediaQueriesStringList &&
-    mediaQueriesStringList.map(q => window.matchMedia(q))
-  );
+const getMediaQueryMap = (mediaQueriesStringList) => {
+  return mediaQueriesStringList && mediaQueriesStringList.map((q) => window.matchMedia(q));
 };
 
 const getMediaTypeAlias = (mediaQuery, state) => {
   const { media } = mediaQuery;
   const { mediaQueriesStringList, mediaTypesAliases } = state;
 
-  const index = mediaQueriesStringList.findIndex(originalMediaQuery => {
+  const index = mediaQueriesStringList.findIndex((originalMediaQuery) => {
     const { media: toCompareMedia } = window.matchMedia(originalMediaQuery);
     return toCompareMedia === media;
   });
@@ -70,19 +61,11 @@ const getMediaTypeAlias = (mediaQuery, state) => {
  *  const currentDisplaySize = useMedia();
  *
  */
-const useMedia = (
-  mediaQueriesStringList,
-  mediaTypesAliases,
-  defaultMediaType
-) => {
+const useMedia = (mediaQueriesStringList, mediaTypesAliases, defaultMediaType) => {
   // MediaQuery.state is the source of truth. This hook will be dependent on it.
   const [state, setState] = useState(() => {
     const _mediaQueryMap = getMediaQueryMap(mediaQueriesStringList);
-    const _displaySize = getDisplaySize(
-      _mediaQueryMap,
-      mediaTypesAliases,
-      defaultMediaType
-    );
+    const _displaySize = getDisplaySize(_mediaQueryMap, mediaTypesAliases, defaultMediaType);
 
     return {
       mediaQueryMap: _mediaQueryMap,
@@ -94,25 +77,17 @@ const useMedia = (
   });
   let mount = useRef(false);
 
-  const updateDisplaySize = displaySize => {
+  const updateDisplaySize = (displaySize) => {
     if (mount.current) {
       setState({ ...state, displaySize });
     }
   };
 
-  const updateState = value => {
-    const {
-      mediaQueriesStringList,
-      mediaTypesAliases,
-      defaultMediaType,
-    } = value;
+  const updateState = (value) => {
+    const { mediaQueriesStringList, mediaTypesAliases, defaultMediaType } = value;
 
     const mediaQueryMap = getMediaQueryMap(mediaQueriesStringList);
-    const displaySize = getDisplaySize(
-      mediaQueryMap,
-      mediaTypesAliases,
-      defaultMediaType
-    );
+    const displaySize = getDisplaySize(mediaQueryMap, mediaTypesAliases, defaultMediaType);
     // immutable state
     // last chance to avoid setState of unmount component
     if (mount.current) {
@@ -126,7 +101,7 @@ const useMedia = (
     }
   };
 
-  const onMediaQueryChange = useCallback(mediaQuery => {
+  const onMediaQueryChange = useCallback((mediaQuery) => {
     if (mediaQuery.matches) {
       const nextDisplaySize = getMediaTypeAlias(mediaQuery, state);
       updateDisplaySize(nextDisplaySize);
@@ -135,13 +110,9 @@ const useMedia = (
 
   // update state of MediaQuery in case mediaQueriesStringList or mediaTypesAliases has changed
   useEffect(() => {
-    const {
-      mediaQueriesStringList: _mediaQueriesStringList,
-      mediaTypesAliases: _mediaTypesAliases,
-    } = state;
+    const { mediaQueriesStringList: _mediaQueriesStringList, mediaTypesAliases: _mediaTypesAliases } = state;
     if (
-      (mediaQueriesStringList &&
-        !_.isEqual(mediaQueriesStringList, _mediaQueriesStringList)) ||
+      (mediaQueriesStringList && !_.isEqual(mediaQueriesStringList, _mediaQueriesStringList)) ||
       (mediaTypesAliases && !_.isEqual(mediaTypesAliases, _mediaTypesAliases))
     ) {
       updateState({
@@ -154,7 +125,7 @@ const useMedia = (
   // re-assign window resizing listeners
   useEffect(() => {
     const { mediaQueryMap } = state;
-    mediaQueryMap.forEach(mql => {
+    mediaQueryMap.forEach((mql) => {
       mql.removeListener(onMediaQueryChange);
       mql.addListener(onMediaQueryChange);
     });
@@ -166,7 +137,7 @@ const useMedia = (
     return () => {
       mount.current = false;
       const { mediaQueryMap } = state;
-      mediaQueryMap.forEach(mql => {
+      mediaQueryMap.forEach((mql) => {
         mql.removeListener(onMediaQueryChange);
       });
     };

@@ -1,4 +1,7 @@
 import React from 'react';
+
+import d3Rotate from './icons/3d-rotate.svg';
+import viewer3d01 from './icons/3d-viewer-alt1.svg';
 import adjust from './icons/adjust.svg';
 // Icons
 import angleDoubleDown from './icons/angle-double-down.svg';
@@ -25,19 +28,19 @@ import createComment from './icons/create-comment.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
-import viewer3d01 from './icons/3d-viewer-alt1.svg';
-import d3Rotate from './icons/3d-rotate.svg';
 import database from './icons/database.svg';
 import dotCircle from './icons/dot-circle.svg';
 import edit from './icons/edit.svg';
 import ellipseCircle from './icons/ellipse-circle.svg';
 import ellipseH from './icons/ellipse-h.svg';
 import ellipseV from './icons/ellipse-v.svg';
+import envelopeSquare from './icons/envelope-square.svg';
 import exclamationCircle from './icons/exclamation-circle.svg';
 import exclamationTriangle from './icons/exclamation-triangle.svg';
+import eye from './icons/eye.svg';
+import eyeClosed from './icons/eye-closed.svg';
 import fastBackward from './icons/fast-backward.svg';
 import fastForward from './icons/fast-forward.svg';
-import stop from './icons/stop.svg';
 import info from './icons/info.svg';
 import inlineEdit from './icons/inline-edit.svg';
 import level from './icons/level.svg';
@@ -78,6 +81,7 @@ import squareO from './icons/square-o.svg';
 import star from './icons/star.svg';
 import stepBackward from './icons/step-backward.svg';
 import stepForward from './icons/step-forward.svg';
+import stop from './icons/stop.svg';
 import sun from './icons/sun.svg';
 import th from './icons/th.svg';
 import thLarge from './icons/th-large.svg';
@@ -87,9 +91,6 @@ import trash from './icons/trash.svg';
 import unlink from './icons/unlink.svg';
 import user from './icons/user.svg';
 import youtube from './icons/youtube.svg';
-import eye from './icons/eye.svg';
-import eyeClosed from './icons/eye-closed.svg';
-import envelopeSquare from './icons/envelope-square.svg';
 
 const ICONS = {
   eye,

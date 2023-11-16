@@ -1,9 +1,5 @@
 import metadataProvider from './classes/MetadataProvider';
-import {
-  getBoundingBox,
-  pixelToPage,
-  repositionTextBox,
-} from './lib/cornerstone.js';
+import { getBoundingBox, pixelToPage, repositionTextBox } from './lib/cornerstone.js';
 
 const cornerstone = {
   metadataProvider,

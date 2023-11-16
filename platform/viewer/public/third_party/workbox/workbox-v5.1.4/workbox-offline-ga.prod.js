@@ -1,42 +1,35 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.googleAnalytics = (function(t, o, e, n, a, c, r, w, s) {
+  (this.workbox.googleAnalytics = (function (t, o, e, n, a, c, r, w, s) {
     'use strict';
     try {
       self['workbox:google-analytics:5.1.4'] && _();
     } catch (t) {}
     const i = /^\/(\w+\/)?collect/,
-      l = t => {
-        const o = ({ url: t }) =>
-            'www.google-analytics.com' === t.hostname && i.test(t.pathname),
+      l = (t) => {
+        const o = ({ url: t }) => 'www.google-analytics.com' === t.hostname && i.test(t.pathname),
           e = new s.NetworkOnly({ plugins: [t] });
         return [new c.Route(o, e, 'GET'), new c.Route(o, e, 'POST')];
       },
-      g = t => {
+      g = (t) => {
         const o = new w.NetworkFirst({ cacheName: t });
         return new c.Route(
-          ({ url: t }) =>
-            'www.google-analytics.com' === t.hostname &&
-            '/analytics.js' === t.pathname,
+          ({ url: t }) => 'www.google-analytics.com' === t.hostname && '/analytics.js' === t.pathname,
           o,
           'GET'
         );
       },
-      m = t => {
+      m = (t) => {
         const o = new w.NetworkFirst({ cacheName: t });
         return new c.Route(
-          ({ url: t }) =>
-            'www.googletagmanager.com' === t.hostname &&
-            '/gtag/js' === t.pathname,
+          ({ url: t }) => 'www.googletagmanager.com' === t.hostname && '/gtag/js' === t.pathname,
           o,
           'GET'
         );
       },
-      u = t => {
+      u = (t) => {
         const o = new w.NetworkFirst({ cacheName: t });
         return new c.Route(
-          ({ url: t }) =>
-            'www.googletagmanager.com' === t.hostname &&
-            '/gtm.js' === t.pathname,
+          ({ url: t }) => 'www.googletagmanager.com' === t.hostname && '/gtm.js' === t.pathname,
           o,
           'GET'
         );
@@ -54,10 +47,7 @@
                   const { request: e, timestamp: n } = o,
                     a = new URL(e.url);
                   try {
-                    const t =
-                        'POST' === e.method
-                          ? new URLSearchParams(await e.clone().text())
-                          : a.searchParams,
+                    const t = 'POST' === e.method ? new URLSearchParams(await e.clone().text()) : a.searchParams,
                       o = n - (Number(t.get('qt')) || 0),
                       r = Date.now() - o;
                     if ((t.set('qt', String(r)), c.parameterOverrides))
@@ -65,8 +55,7 @@
                         const e = c.parameterOverrides[o];
                         t.set(o, e);
                       }
-                    'function' == typeof c.hitFilter &&
-                      c.hitFilter.call(null, t),
+                    'function' == typeof c.hitFilter && c.hitFilter.call(null, t),
                       await fetch(
                         new Request(a.origin + a.pathname, {
                           body: t.toString(),

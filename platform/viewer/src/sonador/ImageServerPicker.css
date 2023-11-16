@@ -1,14 +1,14 @@
 a.control-link {
-	color: white;
-	cursor: pointer;
-	padding-left: 0.5rem;
+  color: white;
+  cursor: pointer;
+  padding-left: 0.5rem;
 }
-
 
 @media only screen and (max-width: 768px) {
-	a.control-link { margin-left: 0; }
+  a.control-link {
+    margin-left: 0;
+  }
 }
-
 
 .caret-down {
   display: inline-block;

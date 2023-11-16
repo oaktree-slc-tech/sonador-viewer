@@ -1,7 +1,5 @@
 // 3D File Viewer: STL and GLB
-import React from 'react';
 
-import OHIF from '@ohif/core';
 import { asyncComponent, retryImport } from '@ohif/ui';
 
 import { version } from '../package.json';
@@ -18,9 +16,7 @@ const ConnectedOHIFDicomM3DViewport = asyncComponent(() =>
 export default {
   id: 'viewerm3d',
   version,
-  preRegistration({ servicesManager, commandsManager, appConfig }) {
-    console.log('Hello world! I am a 3D viewer: ', appConfig);
-  },
+  preRegistration({ servicesManager, commandsManager, appConfig }) {},
   getSopClassHandlerModule({ servicesManager }) {
     return OHIFDicom3DSopClassHandler;
   },

@@ -1,4 +1,5 @@
 import cornerstone from 'cornerstone-core';
+
 import getImageId from '../utils/getImageId.js';
 
 const noop = () => {};
@@ -23,10 +24,7 @@ export class StudyPrefetcher {
       this.options.requestType = 'prefetch';
     }
 
-    cornerstone.events.addEventListener(
-      'cornerstoneimagecachefull.StudyPrefetcher',
-      this.cacheFullHandler
-    );
+    cornerstone.events.addEventListener('cornerstoneimagecachefull.StudyPrefetcher', this.cacheFullHandler);
   }
 
   /**
@@ -34,10 +32,7 @@ export class StudyPrefetcher {
    */
   destroy() {
     this.stopPrefetching();
-    cornerstone.events.removeEventListener(
-      'cornerstoneimagecachefull.StudyPrefetcher',
-      this.cacheFullHandler
-    );
+    cornerstone.events.removeEventListener('cornerstoneimagecachefull.StudyPrefetcher', this.cacheFullHandler);
   }
 
   /**
@@ -136,9 +131,7 @@ export class StudyPrefetcher {
    * @param {string} displaySetInstanceUID the display set instance uid
    */
   prefetchDisplaySets(displaySetInstanceUID) {
-    const displaySetsToPrefetch = this.getDisplaySetsToPrefetch(
-      displaySetInstanceUID
-    );
+    const displaySetsToPrefetch = this.getDisplaySetsToPrefetch(displaySetInstanceUID);
     const imageIds = this.getImageIdsFromDisplaySets(displaySetsToPrefetch);
     this.prefetchImageIds(imageIds);
   }
@@ -159,19 +152,15 @@ export class StudyPrefetcher {
 
     let requestFn;
     if (this.options.preventCache) {
-      requestFn = id => cornerstone.loadImage(id);
+      requestFn = (id) => cornerstone.loadImage(id);
     } else {
-      requestFn = id => cornerstone.loadAndCacheImage(id);
+      requestFn = (id) => cornerstone.loadAndCacheImage(id);
     }
 
-    nonCachedImageIds.forEach(imageId => {
-      imageLoadPoolManager.addRequest(
-        requestFn.bind(this, imageId),
-        this.options.requestType,
-        {
-          imageId,
-        }
-      );
+    nonCachedImageIds.forEach((imageId) => {
+      imageLoadPoolManager.addRequest(requestFn.bind(this, imageId), this.options.requestType, {
+        imageId,
+      });
     });
   }
 
@@ -182,14 +171,9 @@ export class StudyPrefetcher {
    * @returns
    */
   getStudy(image) {
-    const StudyInstanceUID = cornerstone.metaData.get(
-      'StudyInstanceUID',
-      image.imageId
-    );
+    const StudyInstanceUID = cornerstone.metaData.get('StudyInstanceUID', image.imageId);
     const studies = this.studies;
-    return studies.find(
-      study => study.getData().StudyInstanceUID === StudyInstanceUID
-    );
+    return studies.find((study) => study.getData().StudyInstanceUID === StudyInstanceUID);
   }
 
   /**
@@ -200,10 +184,7 @@ export class StudyPrefetcher {
    * @returns
    */
   getSeries(study, image) {
-    const SeriesInstanceUID = cornerstone.metaData.get(
-      'SeriesInstanceUID',
-      image.imageId
-    );
+    const SeriesInstanceUID = cornerstone.metaData.get('SeriesInstanceUID', image.imageId);
     return study.getSeriesByUID(SeriesInstanceUID);
   }
 
@@ -215,10 +196,7 @@ export class StudyPrefetcher {
    * @returns
    */
   getInstance(series, image) {
-    const instanceMetadata = cornerstone.metaData.get(
-      'instance',
-      image.imageId
-    );
+    const instanceMetadata = cornerstone.metaData.get('instance', image.imageId);
     return series.getInstanceByUID(instanceMetadata.SOPInstanceUID);
   }
 
@@ -230,10 +208,8 @@ export class StudyPrefetcher {
    */
   getDisplaySetByUID(displaySetInstanceUID) {
     let displaySet;
-    this.studies.forEach(study => {
-      const ds = study.displaySets.find(
-        ds => ds.displaySetInstanceUID === displaySetInstanceUID
-      );
+    this.studies.forEach((study) => {
+      const ds = study.displaySets.find((ds) => ds.displaySetInstanceUID === displaySetInstanceUID);
       if (ds) {
         displaySet = ds;
       }
@@ -249,8 +225,8 @@ export class StudyPrefetcher {
    * @returns
    */
   getDisplaySetBySOPInstanceUID(displaySets, instance) {
-    return displaySets.find(displaySet => {
-      return displaySet.images.some(displaySetImage => {
+    return displaySets.find((displaySet) => {
+      return displaySet.images.some((displaySetImage) => {
         return displaySetImage.SOPInstanceUID === instance.SOPInstanceUID;
       });
     });
@@ -327,12 +303,7 @@ export class StudyPrefetcher {
    * @param {boolean} includeActiveDisplaySet
    * @returns
    */
-  getAllDisplaySets(
-    displaySets,
-    activeDisplaySet,
-    displaySetCount,
-    includeActiveDisplaySet
-  ) {
+  getAllDisplaySets(displaySets, activeDisplaySet, displaySetCount, includeActiveDisplaySet) {
     const length = displaySets.length;
     const selectedDisplaySets = [];
 
@@ -353,12 +324,7 @@ export class StudyPrefetcher {
    * @param {boolean} includeActiveDisplaySet
    * @returns
    */
-  getFirstDisplaySets(
-    displaySets,
-    activeDisplaySet,
-    displaySetCount,
-    includeActiveDisplaySet
-  ) {
+  getFirstDisplaySets(displaySets, activeDisplaySet, displaySetCount, includeActiveDisplaySet) {
     const length = displaySets.length;
     const selectedDisplaySets = [];
 
@@ -383,16 +349,9 @@ export class StudyPrefetcher {
    * @param {boolean} includeActiveDisplaySet
    * @returns
    */
-  getPreviousDisplaySets(
-    displaySets,
-    activeDisplaySet,
-    displaySetCount,
-    includeActiveDisplaySet
-  ) {
+  getPreviousDisplaySets(displaySets, activeDisplaySet, displaySetCount, includeActiveDisplaySet) {
     const activeDisplaySetIndex = displaySets.indexOf(activeDisplaySet);
-    const end = includeActiveDisplaySet
-      ? activeDisplaySetIndex + 1
-      : activeDisplaySetIndex;
+    const end = includeActiveDisplaySet ? activeDisplaySetIndex + 1 : activeDisplaySetIndex;
     const previousDisplaySets = displaySets.slice(0, end);
     return previousDisplaySets.reverse().slice(0, displaySetCount);
   }
@@ -406,16 +365,9 @@ export class StudyPrefetcher {
    * @param {boolean} includeActiveDisplaySet
    * @returns
    */
-  getNextDisplaySets(
-    displaySets,
-    activeDisplaySet,
-    displaySetCount,
-    includeActiveDisplaySet
-  ) {
+  getNextDisplaySets(displaySets, activeDisplaySet, displaySetCount, includeActiveDisplaySet) {
     const activeDisplaySetIndex = displaySets.indexOf(activeDisplaySet);
-    const begin = includeActiveDisplaySet
-      ? activeDisplaySetIndex
-      : activeDisplaySetIndex + 1;
+    const begin = includeActiveDisplaySet ? activeDisplaySetIndex : activeDisplaySetIndex + 1;
     const end = Math.min(begin + displaySetCount, displaySets.length);
     return displaySets.slice(begin, end);
   }
@@ -429,12 +381,7 @@ export class StudyPrefetcher {
    * @param {boolean} includeActiveDisplaySet
    * @returns
    */
-  getClosestDisplaySets(
-    displaySets,
-    activeDisplaySet,
-    displaySetCount,
-    includeActiveDisplaySet
-  ) {
+  getClosestDisplaySets(displaySets, activeDisplaySet, displaySetCount, includeActiveDisplaySet) {
     const activeDisplaySetIndex = displaySets.indexOf(activeDisplaySet);
     const length = displaySets.length;
     const selectedDisplaySets = [];
@@ -472,7 +419,7 @@ export class StudyPrefetcher {
   getImageIdsFromDisplaySets(displaySets) {
     let imageIds = [];
 
-    displaySets.forEach(displaySet => {
+    displaySets.forEach((displaySet) => {
       imageIds = imageIds.concat(this.getImageIdsFromDisplaySet(displaySet));
     });
 
@@ -493,7 +440,7 @@ export class StudyPrefetcher {
     }
 
     // TODO: This duplicates work done by the stack manager
-    displaySet.images.forEach(image => {
+    displaySet.images.forEach((image) => {
       const numFrames = image.numFrames;
       if (numFrames > 1) {
         for (let i = 0; i < numFrames; i++) {
@@ -516,7 +463,7 @@ export class StudyPrefetcher {
    * @returns {array} images not cached
    */
   filterCachedImageIds(imageIds) {
-    return imageIds.filter(imageId => !this.isImageCached(imageId));
+    return imageIds.filter((imageId) => !this.isImageCached(imageId));
   }
 
   /**

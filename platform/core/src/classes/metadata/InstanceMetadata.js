@@ -1,5 +1,6 @@
-import { Metadata } from './Metadata';
 import OHIFError from '../OHIFError.js';
+
+import { Metadata } from './Metadata';
 
 /**
  * ATTENTION! This class should never depend on StudyMetadata or SeriesMetadata classes as this could
@@ -45,7 +46,7 @@ export class InstanceMetadata extends Metadata {
     Object.defineProperty(this, 'SOPInstanceUID', {
       configurable: false,
       enumerable: false,
-      get: function() {
+      get: function () {
         return this.getSOPInstanceUID();
       },
     });
@@ -140,8 +141,7 @@ export class InstanceMetadata extends Metadata {
     const self = this;
     return (
       instance === self ||
-      (instance instanceof InstanceMetadata &&
-        instance.getSOPInstanceUID() === self.getSOPInstanceUID())
+      (instance instanceof InstanceMetadata && instance.getSOPInstanceUID() === self.getSOPInstanceUID())
     );
   }
 

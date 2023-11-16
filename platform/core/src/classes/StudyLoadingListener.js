@@ -3,6 +3,7 @@ import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import debounce from 'lodash.debounce';
 
 import StackManager from '../utils/StackManager';
+
 import { StudyPrefetcher } from './StudyPrefetcher';
 
 class BaseLoadingListener {
@@ -51,8 +52,7 @@ class BaseLoadingListener {
     // elements and recalculate the speed (bytes/s or frames/s)
     if (items.length > 1) {
       const oldestItem = items[0];
-      stats.elapsedTime =
-        (newItem.date.getTime() - oldestItem.date.getTime()) / 1000;
+      stats.elapsedTime = (newItem.date.getTime() - oldestItem.date.getTime()) / 1000;
       stats.speed = (stats.total - oldestItem.value) / stats.elapsedTime;
     }
   }
@@ -84,10 +84,7 @@ class BaseLoadingListener {
   }
 
   static getNewId() {
-    const timeSlice = new Date()
-      .getTime()
-      .toString()
-      .slice(-8);
+    const timeSlice = new Date().getTime().toString().slice(-8);
     const randomNumber = parseInt(Math.random() * 1000000000);
 
     return timeSlice.toString() + randomNumber.toString();
@@ -98,9 +95,7 @@ class DICOMFileLoadingListener extends BaseLoadingListener {
   constructor(stack, options) {
     super(stack, options);
 
-    this.imageLoadProgressEventHandler = this._imageLoadProgressEventHandler.bind(
-      this
-    );
+    this.imageLoadProgressEventHandler = this._imageLoadProgressEventHandler.bind(this);
 
     this._dataSetUrl = this._getDataSetUrl(stack);
     this._lastLoaded = 0;
@@ -112,9 +107,7 @@ class DICOMFileLoadingListener extends BaseLoadingListener {
   }
 
   _checkCachedData() {
-    const dataSet = cornerstoneWADOImageLoader.wadouri.dataSetCacheManager.get(
-      this._dataSetUrl
-    );
+    const dataSet = cornerstoneWADOImageLoader.wadouri.dataSetCacheManager.get(this._dataSetUrl);
 
     if (dataSet) {
       const dataSetLength = dataSet.byteArray.length;
@@ -137,21 +130,15 @@ class DICOMFileLoadingListener extends BaseLoadingListener {
 
     this.stopListening();
 
-    cornerstone.events.addEventListener(
-      imageLoadProgressEventName,
-      this.imageLoadProgressEventHandle
-    );
+    cornerstone.events.addEventListener(imageLoadProgressEventName, this.imageLoadProgressEventHandle);
   }
 
   stopListening() {
     const imageLoadProgressEventName = this._getImageLoadProgressEventName();
-    cornerstone.events.removeEventListener(
-      imageLoadProgressEventName,
-      this.imageLoadProgressEventHandle
-    );
+    cornerstone.events.removeEventListener(imageLoadProgressEventName, this.imageLoadProgressEventHandle);
   }
 
-  _imageLoadProgressEventHandler = e => {
+  _imageLoadProgressEventHandler = (e) => {
     const eventData = e.detail;
     const dataSetUrl = this._convertImageIdToDataSetUrl(eventData.imageId);
     const bytesDiff = eventData.loaded - this._lastLoaded;
@@ -235,9 +222,7 @@ class StackLoadingListener extends BaseLoadingListener {
     super(stack, options);
 
     this.imageLoadedEventHandler = this._imageLoadedEventHandler.bind(this);
-    this.imageCachePromiseRemovedEventHandler = this._imageCachePromiseRemovedEventHandler.bind(
-      this
-    );
+    this.imageCachePromiseRemovedEventHandler = this._imageCachePromiseRemovedEventHandler.bind(this);
 
     this.imageDataMap = this._convertImageIdsArrayToMap(stack.imageIds);
     this.framesStatus = this._createArray(stack.imageIds.length, false);
@@ -306,7 +291,7 @@ class StackLoadingListener extends BaseLoadingListener {
       }
 
       if (imageObject && imageObject.promise) {
-        promiseState(imageObject.promise, state => {
+        promiseState(imageObject.promise, (state) => {
           if (state === 'fulfilled') {
             this._updateFrameStatus(imageId, true, debounced);
           }
@@ -337,24 +322,15 @@ class StackLoadingListener extends BaseLoadingListener {
 
     this.stopListening();
 
-    cornerstone.events.addEventListener(
-      imageLoadedEventName,
-      this.imageLoadedEventHandler
-    );
-    cornerstone.events.addEventListener(
-      imageCachePromiseRemovedEventName,
-      this.imageCachePromiseRemovedEventHandler
-    );
+    cornerstone.events.addEventListener(imageLoadedEventName, this.imageLoadedEventHandler);
+    cornerstone.events.addEventListener(imageCachePromiseRemovedEventName, this.imageCachePromiseRemovedEventHandler);
   }
 
   stopListening() {
     const imageLoadedEventName = this._getImageLoadedEventName();
     const imageCachePromiseRemovedEventName = this._getImageCachePromiseRemoveEventName();
 
-    cornerstone.events.removeEventListener(
-      imageLoadedEventName,
-      this.imageLoadedEventHandler
-    );
+    cornerstone.events.removeEventListener(imageLoadedEventName, this.imageLoadedEventHandler);
     cornerstone.events.removeEventListener(
       imageCachePromiseRemovedEventName,
       this.imageCachePromiseRemovedEventHandler
@@ -386,24 +362,18 @@ class StackLoadingListener extends BaseLoadingListener {
     // the 'options' variable on instantiation, but this is really ugly.
     // We could consider making the StudyLoadingListener a higher-order
     // component which would set this stuff itself.
-    throw new Error(
-      "The _setProgressData function must be provided in StudyLoadingListener's options"
-    );
+    throw new Error("The _setProgressData function must be provided in StudyLoadingListener's options");
   }
 
   _clearProgressById(progressId) {
-    throw new Error(
-      "The _clearProgressById function must be provided in StudyLoadingListener's options"
-    );
+    throw new Error("The _clearProgressById function must be provided in StudyLoadingListener's options");
   }
 
   _updateProgress(debounced) {
     const totalFramesCount = this.stack.imageIds.length;
     const loadedFramesCount = this.loadedCount;
     const loadingFramesCount = totalFramesCount - loadedFramesCount;
-    const percentComplete = Math.ceil(
-      (loadedFramesCount / totalFramesCount) * 100
-    );
+    const percentComplete = Math.ceil((loadedFramesCount / totalFramesCount) * 100);
     const progressId = this._getProgressId();
     const progressData = {
       multiFrame: true,
@@ -449,7 +419,6 @@ class StudyLoadingListener {
   addStack(stack, stackMetaData) {
     // TODO: Make this work for plugins
     if (!stack) {
-      //console.log('Skipping adding stack to StudyLoadingListener');
       return;
     }
 
@@ -464,7 +433,7 @@ class StudyLoadingListener {
   }
 
   addStudy(study) {
-    study.displaySets.forEach(displaySet => {
+    study.displaySets.forEach((displaySet) => {
       const stack = StackManager.findOrCreateStack(study, displaySet);
 
       // TODO: Make this work for plugins
@@ -485,7 +454,7 @@ class StudyLoadingListener {
       return;
     }
 
-    studies.forEach(study => this.addStudy(study));
+    studies.forEach((study) => this.addStudy(study));
   }
 
   clear() {
@@ -537,7 +506,7 @@ class StudyLoadingListener {
         });
         document.dispatchEvent(event);
       },
-      _clearProgressById: progressId => {
+      _clearProgressById: (progressId) => {
         const event = new CustomEvent(StudyLoadingListenerEvents.OnProgress, {
           detail: { progressId, percentComplete: 0 },
         });
@@ -546,9 +515,7 @@ class StudyLoadingListener {
     };
 
     if (!StudyLoadingListener._instance) {
-      StudyLoadingListener._instance = new StudyLoadingListener(
-        options || DEFAULT_OPTIONS
-      );
+      StudyLoadingListener._instance = new StudyLoadingListener(options || DEFAULT_OPTIONS);
     }
 
     return StudyLoadingListener._instance;

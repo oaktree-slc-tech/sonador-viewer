@@ -1,5 +1,4 @@
 import * as types from './constants/ActionTypes.js';
-
 import actions from './actions.js';
 
 describe('actions', () => {
@@ -30,16 +29,14 @@ describe('actions', () => {
         displaySetInstanceUID: 'ef859a23-4631-93ab-d26b-7940a822c699',
         SeriesDate: '20151026',
         SeriesTime: '082611.370000',
-        SeriesInstanceUID:
-          '1.3.6.1.4.1.25403.345050719074.3824.20170126085406.5',
+        SeriesInstanceUID: '1.3.6.1.4.1.25403.345050719074.3824.20170126085406.5',
         SeriesNumber: 2,
         SeriesDescription: 'Chest 3x3 Soft',
         numImageFrames: 126,
         Modality: 'CT',
         isMultiFrame: false,
         InstanceNumber: 1,
-        StudyInstanceUID:
-          '1.3.6.1.4.1.25403.345050719074.3824.20170126085406.1',
+        StudyInstanceUID: '1.3.6.1.4.1.25403.345050719074.3824.20170126085406.1',
         sopClassUIDs: ['1.2.840.10008.5.1.4.1.1.2'],
         plugin: 'cornerstone',
         viewport: {
@@ -66,9 +63,7 @@ describe('actions', () => {
         viewportSpecificData,
       };
 
-      expect(
-        actions.setActiveViewportSpecificData(viewportSpecificData)
-      ).toEqual(expectedAction);
+      expect(actions.setActiveViewportSpecificData(viewportSpecificData)).toEqual(expectedAction);
     });
 
     it('should create an action to clear clearViewportSpecificData', () => {
@@ -77,9 +72,7 @@ describe('actions', () => {
         type: types.CLEAR_VIEWPORT,
         viewportIndex,
       };
-      expect(actions.clearViewportSpecificData(viewportIndex)).toEqual(
-        expectedAction
-      );
+      expect(actions.clearViewportSpecificData(viewportIndex)).toEqual(expectedAction);
     });
 
     it('should create an action to set the active viewport', () => {
@@ -103,9 +96,7 @@ describe('actions', () => {
         viewports,
       };
 
-      expect(actions.setLayout({ numRows, numColumns, viewports })).toEqual(
-        expectedAction
-      );
+      expect(actions.setLayout({ numRows, numColumns, viewports })).toEqual(expectedAction);
     });
   });
 });

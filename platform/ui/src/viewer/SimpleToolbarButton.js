@@ -1,7 +1,8 @@
-import { Icon } from './../elements/Icon';
-import PropTypes from 'prop-types';
 import React from 'react';
 import classnames from 'classnames';
+import PropTypes from 'prop-types';
+
+import { Icon } from './../elements/Icon';
 
 export function SimpleToolbarButton(props) {
   const className = classnames(props.className, 'btn btn-sm btn-default');

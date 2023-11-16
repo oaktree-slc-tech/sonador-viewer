@@ -5,12 +5,10 @@ export const dicomSRDisplayTool = {
   cornerstoneToolType: 'DICOMSRDisplayTool',
   options: {
     measurementTable: {
-      displayFunction: data => {
-        return `(SR) ${data.TrackingIdentifier ||
-          data.lesionNamingNumber ||
-          data.measurementNumber ||
-          data.text ||
-          ''}`;
+      displayFunction: (data) => {
+        return `(SR) ${
+          data.TrackingIdentifier || data.lesionNamingNumber || data.measurementNumber || data.text || ''
+        }`;
       },
     },
     caseProgress: {

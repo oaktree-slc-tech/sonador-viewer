@@ -33,32 +33,27 @@
 
 ## About
 
-The OHIF Medical Imaging Viewer is for viewing medical images. It can retrieve
-and load images from most sources and formats; render sets in 2D, 3D, and
-reconstructed representations; allows for the manipulation, annotation, and
-serialization of observations; supports internationalization, OpenID Connect,
-offline use, hotkeys, and many more features.
+The OHIF Medical Imaging Viewer is for viewing medical images. It can retrieve and load images from most sources and
+formats; render sets in 2D, 3D, and reconstructed representations; allows for the manipulation, annotation, and
+serialization of observations; supports internationalization, OpenID Connect, offline use, hotkeys, and many more
+features.
 
-Almost everything offers some degree of customization and configuration. If it
-doesn't support something you need, we accept pull requests and have an ever
-improving Extension System.
+Almost everything offers some degree of customization and configuration. If it doesn't support something you need, we
+accept pull requests and have an ever improving Extension System.
 
 ## Why Choose Us
 
 ### Community & Experience
 
-The OHIF Viewer is a collaborative effort that has served as the basis for many
-active, production, and FDA Cleared medical imaging viewers. It benefits from
-our extensive community's collective experience, and from the sponsored
+The OHIF Viewer is a collaborative effort that has served as the basis for many active, production, and FDA Cleared
+medical imaging viewers. It benefits from our extensive community's collective experience, and from the sponsored
 contributions of individuals, research groups, and commercial organizations.
 
 ### Built to Adapt
 
-After more than 5-years of integrating with many companies and organizations,
-The OHIF Viewer has been rebuilt from the ground up to better address the
-varying workflow and configuration needs of its many users. All of the Viewer's
-core features are built using it's own extension system. The same extensibility
-that allows us to offer:
+After more than 5-years of integrating with many companies and organizations, The OHIF Viewer has been rebuilt from the
+ground up to better address the varying workflow and configuration needs of its many users. All of the Viewer's core
+features are built using it's own extension system. The same extensibility that allows us to offer:
 
 - 2D and 3D medical image viewing
 - Multiplanar Reconstruction (MPR)
@@ -69,32 +64,28 @@ that allows us to offer:
 - Context specific toolbar and side panel content
 - and many others
 
-Can be leveraged by you to customize the viewer for your workflow, and to add
-any new functionality you may need (and wish to maintain privately without
-forking).
+Can be leveraged by you to customize the viewer for your workflow, and to add any new functionality you may need (and
+wish to maintain privately without forking).
 
 ### Support
 
-We offer support through
-[GitHub Issues](https://github.com/OHIF/Viewers/issues/new/choose). You can:
+We offer support through [GitHub Issues](https://github.com/OHIF/Viewers/issues/new/choose). You can:
 
 - [Report a Bug 🐛](https://github.com/OHIF/Viewers/issues/new?assignees=&labels=Community%3A+Report+%3Abug%3A&template=---bug-report.md)
 - [Request a Feature 🚀](https://github.com/OHIF/Viewers/issues/new?assignees=&labels=Community%3A+Request+%3Ahand%3A&template=---feature-request.md)
 - [Ask a Question 🤗](https://github.com/OHIF/Viewers/issues/new?assignees=&labels=Community%3A+Question+%3Aquestion%3A&template=---support-question.md)
 
-For commercial support, academic collaberations, and answers to common
-questions; please read our
+For commercial support, academic collaberations, and answers to common questions; please read our
 [documented FAQ](https://docs.ohif.org/faq/index.html#does-ohif-offer-commercial-support).
 
 ## Quick Start Deployment
 
-> This is only one of many ways to configure and deploy the OHIF Viewer. To
-> learn more about your options, and how to choose the best one for your
-> requirements, check out
+> This is only one of many ways to configure and deploy the OHIF Viewer. To learn more about your options, and how to
+> choose the best one for your requirements, check out
 > [our deployment recipes and documentation](https://docs.ohif.org/deployment/).
 
-The fastest and easiest way to get started is to include the OHIF Viewer with a
-script tag. In practice, this is as simple as:
+The fastest and easiest way to get started is to include the OHIF Viewer with a script tag. In practice, this is as
+simple as:
 
 - Including the following dependencies with script tags:
   - [React](https://unpkg.com/react@16/umd/react.production.min.js)
@@ -123,17 +114,15 @@ window.config = {
 
 - Install the viewer: `window.OHIFViewer.installViewer(window.config);`
 
-This exact setup is demonstrated in this
-[CodeSandbox](https://codesandbox.io/s/viewer-script-tag-tprch) and in our
-[Embedding The Viewer](https://docs.ohif.org/deployment/recipes/embedded-viewer.html)
-deployment recipe.
+This exact setup is demonstrated in this [CodeSandbox](https://codesandbox.io/s/viewer-script-tag-tprch) and in our
+[Embedding The Viewer](https://docs.ohif.org/deployment/recipes/embedded-viewer.html) deployment recipe.
 
 ## Developing
 
 ### Requirements
 
-- [Yarn 1.17.3+](https://yarnpkg.com/en/docs/install)
-- [Node 10+](https://nodejs.org/en/)
+- [Yarn 1.22.0+](https://yarnpkg.com/en/docs/install)
+- [Node 18+](https://nodejs.org/en/)
 - Yarn Workspaces should be enabled on your machine:
   - `yarn config set workspaces-experimental true`
 
@@ -149,7 +138,7 @@ deployment recipe.
 
 ### Sonador Setup Instructions WIP
 
-Node version 16.18.0+
+Node version 18.12.0+
 
 ```bash
 git submodule update --init --recursive
@@ -162,10 +151,9 @@ yarn install
 
 OHIF_HOST
 
-- dns name of your development machine. if working against production install;
-  it has to be subdomain of that instance.
-- e.g. imaging.gke.oak-tree.tech for gcp instance of OHIF. value is
-  subdomain.gke.oak-tree.tech example: OHIF_HOST=viewer.gke.oak-tree.tech
+- dns name of your development machine. if working against production install; it has to be subdomain of that instance.
+- e.g. imaging.gke.oak-tree.tech for gcp instance of OHIF. value is subdomain.gke.oak-tree.tech example:
+  OHIF_HOST=viewer.gke.oak-tree.tech
 - add subdomain to etc hosts 127.0.0.1 viewer.gke.oak-tree.tech
 
 APP_CONFIG
@@ -178,9 +166,8 @@ ENTRY_TARGET
 
 - Always `ENTRY_TARGET=sonador.index.js`
 
-Example export commands for GKE env export OHIF_HOST=viewer.gke.oak-tree.tech
-export APP_CONFIG=config/sonador.imaging-gke.js export
-ENTRY_TARGET=sonador.index.js
+Example export commands for GKE env export OHIF_HOST=viewer.gke.oak-tree.tech export
+APP_CONFIG=config/sonador.imaging-gke.js export ENTRY_TARGET=sonador.index.js
 
 Start `yarn run dev`
 
@@ -200,9 +187,8 @@ yarn install
 
 ## Commands
 
-These commands are available from the root directory. Each project directory
-also supports a number of commands that can be found in their respective
-`README.md` and `project.json` files.
+These commands are available from the root directory. Each project directory also supports a number of commands that can
+be found in their respective `README.md` and `project.json` files.
 
 | Yarn Commands                | Description                                                   |
 | ---------------------------- | ------------------------------------------------------------- |
@@ -215,15 +201,13 @@ also supports a number of commands that can be found in their respective
 | `build:package`\*            | Builds production `commonjs` output for our Viewer            |
 | `build:package-all`\*        | Builds commonjs bundles for all projects                      |
 
-\* - For more information on our different builds, check out our [Deploy
-Docs][deployment-docs]
+\* - For more information on our different builds, check out our [Deploy Docs][deployment-docs]
 
 ## Projects
 
-The OHIF Medical Image Viewing Platform is maintained as a
-[`monorepo`][monorepo]. This means that this repository, instead of containing a
-single project, contains many projects. If you explore our project structure,
-you'll see the following:
+The OHIF Medical Image Viewing Platform is maintained as a [`monorepo`][monorepo]. This means that this repository,
+instead of containing a single project, contains many projects. If you explore our project structure, you'll see the
+following:
 
 ```bash
 .
@@ -247,8 +231,8 @@ you'll see the following:
 └── README.md               # This file
 ```
 
-Want to better understand why and how we've structured this repository? Read
-more about it in our [Architecture Documentation][ohif-architecture].
+Want to better understand why and how we've structured this repository? Read more about it in our [Architecture
+Documentation][ohif-architecture].
 
 ### Platform
 
@@ -263,9 +247,8 @@ These projects comprise the
 
 ### Extensions
 
-This is a list of Extensions maintained by the OHIF Core team. It's possible to
-customize and configure these extensions, and you can even create your own. You
-can [read more about extensions here][ohif-extensions].
+This is a list of Extensions maintained by the OHIF Core team. It's possible to customize and configure these
+extensions, and you can even create your own. You can [read more about extensions here][ohif-extensions].
 
 | Name                                                           | Description                                             | Links                  |
 | -------------------------------------------------------------- | ------------------------------------------------------- | ---------------------- |
@@ -279,52 +262,43 @@ can [read more about extensions here][ohif-extensions].
 
 To acknowledge the OHIF Viewer in an academic publication, please cite
 
-> _LesionTracker: Extensible Open-Source Zero-Footprint Web Viewer for Cancer
-> Imaging Research and Clinical Trials_
+> _LesionTracker: Extensible Open-Source Zero-Footprint Web Viewer for Cancer Imaging Research and Clinical Trials_
 >
-> Trinity Urban, Erik Ziegler, Rob Lewis, Chris Hafey, Cheryl Sadow, Annick D.
-> Van den Abbeele and Gordon J. Harris
+> Trinity Urban, Erik Ziegler, Rob Lewis, Chris Hafey, Cheryl Sadow, Annick D. Van den Abbeele and Gordon J. Harris
 >
 > _Cancer Research_, November 1 2017 (77) (21) e119-e122 DOI:
 > [10.1158/0008-5472.CAN-17-0334](https://www.doi.org/10.1158/0008-5472.CAN-17-0334)
 
-**Note:** If you use or find this repository helpful, please take the time to
-star this repository on Github. This is an easy way for us to assess adoption
-and it can help us obtain future funding for the project.
+**Note:** If you use or find this repository helpful, please take the time to star this repository on Github. This is an
+easy way for us to assess adoption and it can help us obtain future funding for the project.
 
-This work is supported primarily by the National Institutes of Health, National
-Cancer Institute, Informatics Technology for Cancer Research (ITCR) program,
-under a
+This work is supported primarily by the National Institutes of Health, National Cancer Institute, Informatics Technology
+for Cancer Research (ITCR) program, under a
 [grant to Dr. Gordon Harris at Massachusetts General Hospital (U24 CA199460)](https://projectreporter.nih.gov/project_info_description.cfm?aid=8971104).
 
 ## Projects that contributed to OHIF Viewer
 
-The following is a (partial) list of projects that contributed resources towards
-development of OHIF Viewer:
+The following is a (partial) list of projects that contributed resources towards development of OHIF Viewer:
 
-- [NCI Imaging Data Commons (IDC) project](https://imaging.datacommons.cancer.gov/)
-  supported development of new features and bug fixes marked with
+- [NCI Imaging Data Commons (IDC) project](https://imaging.datacommons.cancer.gov/) supported development of new
+  features and bug fixes marked with
   ["IDC:priority"](https://github.com/OHIF/Viewers/issues?q=is%3Aissue+is%3Aopen+label%3AIDC%3Apriority),
-  ["IDC:candidate"](https://github.com/OHIF/Viewers/issues?q=is%3Aissue+is%3Aopen+label%3AIDC%3Acandidate)
-  or
-  ["IDC:collaboration"](https://github.com/OHIF/Viewers/issues?q=is%3Aissue+is%3Aopen+label%3AIDC%3Acollaboration).
-  NCI Imaging Data Commons is supported by the contract number 19X037Q from
-  Leidos Biomedical Research under Task Order HHSN26100071 from NCI.
-  [IDC Viewer](https://learn.canceridc.dev/portal/visualization) is a customized
-  version of the OHIF Viewer.
+  ["IDC:candidate"](https://github.com/OHIF/Viewers/issues?q=is%3Aissue+is%3Aopen+label%3AIDC%3Acandidate) or
+  ["IDC:collaboration"](https://github.com/OHIF/Viewers/issues?q=is%3Aissue+is%3Aopen+label%3AIDC%3Acollaboration). NCI
+  Imaging Data Commons is supported by the contract number 19X037Q from Leidos Biomedical Research under Task Order
+  HHSN26100071 from NCI. [IDC Viewer](https://learn.canceridc.dev/portal/visualization) is a customized version of the
+  OHIF Viewer.
 
 ### Research notice
 
-Please note that this repository is participating in a study into sustainability
-of open source projects. Data will be gathered about this repository for
-approximately the next 12 months, starting from June 2021.
+Please note that this repository is participating in a study into sustainability of open source projects. Data will be
+gathered about this repository for approximately the next 12 months, starting from June 2021.
 
-Data collected will include number of contributors, number of PRs, time taken to
-close/merge these PRs, and issues closed.
+Data collected will include number of contributors, number of PRs, time taken to close/merge these PRs, and issues
+closed.
 
-For more information, please visit
-[our informational page](https://sustainable-open-science-and-software.github.io/)
-or download our
+For more information, please visit [our informational page](https://sustainable-open-science-and-software.github.io/) or
+download our
 [participant information sheet](https://sustainable-open-science-and-software.github.io/assets/PIS_sustainable_software.pdf).
 
 ## License

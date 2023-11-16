@@ -1,0 +1,99 @@
+@import "@ohif/viewer/src/styles/breakpoints";
+
+.contentComments {
+  flex: 1;
+
+  .commentItem {
+    margin-bottom: 20px;
+
+    .commentItemHeader {
+      display: flex;
+      align-items: center;
+      column-gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .commentItemAvatar {
+      width: 30px;
+      height: 30px;
+      background-color: #d9d9d9;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .commentItemAuthor {
+      margin: 0 15px 0 0;
+      color: #ffffff;
+      font-size: 16px;
+      line-height: 18.75px;
+      font-weight: 600;
+    }
+
+    .commentItemDate {
+      margin: 0;
+      font-size: 14px;
+      line-height: 16.41px;
+      color: #60646d;
+    }
+
+    .commentItemText {
+      margin: 0 0 0 40px;
+      font-size: 16px;
+      line-height: 18.75px;
+      color: #d3d3d3;
+    }
+  }
+
+  .commentsNewCommentForm {
+    display: flex;
+    align-items: center;
+    column-gap: 10px;
+
+    @include lg {
+      flex-direction: column;
+      row-gap: 10px;
+    }
+
+    .commentsNewCommentAvatar {
+      width: 50px;
+      height: 50px;
+      background-color: #d9d9d9;
+      border-radius: 50%;
+      min-width: 50px;
+    }
+
+    .commentsNewCommentTextarea {
+      background-color: #000000;
+      font-size: 16px;
+      line-height: 18.75px;
+      color: #d3d3d3;
+      border: none;
+      padding: 20px;
+      border-radius: 10px;
+      flex-grow: 1;
+      outline: none;
+
+      @include lg {
+        width: 100%;
+        min-height: 90px;
+      }
+    }
+
+    .commentsNewCommentSubmit {
+      background-color: #2e46e9;
+      padding: 15px 20px;
+      color: #ffffff;
+      font-size: 16px;
+      line-height: 18.75px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      border-radius: 10px;
+      border: none;
+
+      @include lg {
+        width: 100%;
+      }
+    }
+  }
+}

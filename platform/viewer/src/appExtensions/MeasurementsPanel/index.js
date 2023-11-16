@@ -1,8 +1,9 @@
 import React from 'react';
-import ConnectedMeasurementTable from './ConnectedMeasurementTable.js';
-import init from './init.js';
 
 import LabellingFlow from '../../components/Labelling/LabellingFlow';
+
+import ConnectedMeasurementTable from './ConnectedMeasurementTable.js';
+import init from './init.js';
 
 export default {
   /**
@@ -35,17 +36,13 @@ export default {
         content: LabellingFlow,
         contentProps: {
           measurementData,
-          labellingDoneCallback: () =>
-            UIDialogService.dismiss({ id: 'labelling' }),
+          labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
           updateLabelling: ({ location, description, response }) => {
             measurementData.location = location || measurementData.location;
             measurementData.description = description || '';
             measurementData.response = response || measurementData.response;
 
-            commandsManager.runCommand(
-              'updateTableWithNewMeasurementData',
-              measurementData
-            );
+            commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
           },
           ...props,
         },
@@ -54,16 +51,9 @@ export default {
 
     const ExtendedConnectedMeasurementTable = () => (
       <ConnectedMeasurementTable
-        onRelabel={tool =>
-          showLabellingDialog(
-            { editLocation: true, skipAddLabelButton: true },
-            tool
-          )
-        }
-        onEditDescription={tool =>
-          showLabellingDialog({ editDescriptionOnDialog: true }, tool)
-        }
-        onSaveComplete={message => {
+        onRelabel={(tool) => showLabellingDialog({ editLocation: true, skipAddLabelButton: true }, tool)}
+        onEditDescription={(tool) => showLabellingDialog({ editDescriptionOnDialog: true }, tool)}
+        onSaveComplete={(message) => {
           if (UINotificationService) {
             UINotificationService.show(message);
           }

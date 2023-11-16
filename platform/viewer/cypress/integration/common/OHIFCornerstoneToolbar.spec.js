@@ -1,8 +1,6 @@
 describe('OHIF Cornerstone Toolbar', () => {
   before(() => {
-    cy.checkStudyRouteInViewer(
-      '1.2.840.113619.2.5.1762583153.215519.978957063.78'
-    );
+    cy.checkStudyRouteInViewer('1.2.840.113619.2.5.1762583153.215519.978957063.78');
     cy.expectMinimumThumbnails(3);
   });
 
@@ -19,46 +17,24 @@ describe('OHIF Cornerstone Toolbar', () => {
   });
 
   it('checks if all primary buttons are being displayed', () => {
-    cy.get('@stackScrollBtn')
-      .should('be.visible')
-      .contains('Stack Scroll');
-    cy.get('@zoomBtn')
-      .should('be.visible')
-      .contains('Zoom');
-    cy.get('@levelsBtn')
-      .should('be.visible')
-      .contains('Levels');
-    cy.get('@panBtn')
-      .should('be.visible')
-      .contains('Pan');
-    cy.get('@lengthBtn')
-      .should('be.visible')
-      .contains('Length');
-    cy.get('@annotateBtn')
-      .should('be.visible')
-      .contains('Annotate');
-    cy.get('@angleBtn')
-      .should('be.visible')
-      .contains('Angle');
-    cy.get('@resetBtn')
-      .should('be.visible')
-      .contains('Reset');
-    cy.get('@cineBtn')
-      .should('be.visible')
-      .contains('CINE');
-    cy.get('@moreBtn')
-      .should('be.visible')
-      .contains('More');
-    cy.get('@layoutBtn')
-      .should('be.visible')
-      .contains('Layout');
+    cy.get('@stackScrollBtn').should('be.visible').contains('Stack Scroll');
+    cy.get('@zoomBtn').should('be.visible').contains('Zoom');
+    cy.get('@levelsBtn').should('be.visible').contains('Levels');
+    cy.get('@panBtn').should('be.visible').contains('Pan');
+    cy.get('@lengthBtn').should('be.visible').contains('Length');
+    cy.get('@annotateBtn').should('be.visible').contains('Annotate');
+    cy.get('@angleBtn').should('be.visible').contains('Angle');
+    cy.get('@resetBtn').should('be.visible').contains('Reset');
+    cy.get('@cineBtn').should('be.visible').contains('CINE');
+    cy.get('@moreBtn').should('be.visible').contains('More');
+    cy.get('@layoutBtn').should('be.visible').contains('Layout');
   });
 
   it('checks if Stack Scroll tool will navigate across all series in the viewport', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@stackScrollBtn')
       .click()
-      .then($stackScrollBtn => {
+      .then(($stackScrollBtn) => {
         cy.wrap($stackScrollBtn).should('have.class', 'active');
       });
 
@@ -67,8 +43,7 @@ describe('OHIF Cornerstone Toolbar', () => {
       .trigger('mousedown', 'center', { which: 1 })
       .trigger('mousemove', 'top', { which: 1 })
       .trigger('mouseup');
-    const expectedText =
-      'Ser: 1Img: 1 1/26256 x 256Loc: -30.00 mm Thick: 5.00 mm';
+    const expectedText = 'Ser: 1Img: 1 1/26256 x 256Loc: -30.00 mm Thick: 5.00 mm';
     cy.get('@viewportInfoBottomLeft').should('have.text', expectedText);
   });
 
@@ -76,7 +51,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@zoomBtn')
       .click()
-      .then($zoomBtn => {
+      .then(($zoomBtn) => {
         cy.wrap($zoomBtn).should('have.class', 'active');
       });
 
@@ -94,7 +69,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@levelsBtn')
       .click()
-      .then($levelsBtn => {
+      .then(($levelsBtn) => {
         cy.wrap($levelsBtn).should('have.class', 'active');
       });
 
@@ -115,7 +90,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@panBtn')
       .click()
-      .then($panBtn => {
+      .then(($panBtn) => {
         cy.wrap($panBtn).should('have.class', 'active');
       });
 
@@ -129,7 +104,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@lengthBtn')
       .click()
-      .then($lengthbtn => {
+      .then(($lengthbtn) => {
         cy.wrap($lengthbtn).should('have.class', 'active');
       });
 
@@ -141,12 +116,10 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Verify if measurement annotation was added into the measurements panel
     cy.get('@measurementsBtn')
       .click()
-      .then($measurementsBtn => {
+      .then(($measurementsBtn) => {
         cy.get('@measurementsPanel').should('be.visible');
 
-        cy.get('.measurementItem')
-          .its('length')
-          .should('be.at.least', 1);
+        cy.get('.measurementItem').its('length').should('be.at.least', 1);
 
         cy.wrap($measurementsBtn).click();
       });
@@ -156,7 +129,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Click on button and verify if icon is active on toolbar
     cy.get('@angleBtn')
       .click()
-      .then($angleBtn => {
+      .then(($angleBtn) => {
         cy.wrap($angleBtn).should('have.class', 'active');
       });
 
@@ -169,12 +142,10 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Verify if measurement annotation was added into the measurements panel
     cy.get('@measurementsBtn')
       .click()
-      .then($measurementsBtn => {
+      .then(($measurementsBtn) => {
         cy.get('@measurementsPanel').should('be.visible');
 
-        cy.get('.measurementItem')
-          .its('length')
-          .should('be.at.least', 1);
+        cy.get('.measurementItem').its('length').should('be.at.least', 1);
 
         cy.wrap($measurementsBtn).click();
       });
@@ -200,61 +171,36 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.get('@cineBtn').click();
 
     // Verify if cine control overlay is being displayed
-    cy.get('.cine-controls')
-      .as('cineControls')
-      .should('be.visible');
+    cy.get('.cine-controls').as('cineControls').should('be.visible');
 
     //Test PLAY button
-    cy.get('[title="Play / Stop"]').then($btn => {
+    cy.get('[title="Play / Stop"]').then(($btn) => {
       $btn.click();
       cy.wait(100);
       $btn.click();
     });
 
     let expectedText = 'Img: 1 1/26';
-    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should(
-      'not.have.text',
-      expectedText
-    );
+    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should('not.have.text', expectedText);
 
     //Test SKIP TO FIRST IMAGE button
-    cy.get('[title="Skip to first Image"]')
-      .click()
-      .wait(1000);
-    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should(
-      'contain.text',
-      expectedText
-    );
+    cy.get('[title="Skip to first Image"]').click().wait(1000);
+    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should('contain.text', expectedText);
 
     //Test NEXT IMAGE button
-    cy.get('[title="Next Image"]')
-      .click()
-      .wait(1000);
+    cy.get('[title="Next Image"]').click().wait(1000);
     expectedText = 'Img: 2 2/26';
-    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should(
-      'contain.text',
-      expectedText
-    );
+    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should('contain.text', expectedText);
 
     //Test SKIP TO LAST IMAGE button
-    cy.get('[title="Skip to last Image"]')
-      .click()
-      .wait(2000);
+    cy.get('[title="Skip to last Image"]').click().wait(2000);
     expectedText = 'Img: 27 26/26';
-    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should(
-      'contain.text',
-      expectedText
-    );
+    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should('contain.text', expectedText);
 
     //Test PREVIOUS IMAGE button
-    cy.get('[title="Previous Image"]')
-      .click()
-      .wait(1000);
+    cy.get('[title="Previous Image"]').click().wait(1000);
     expectedText = 'Img: 26 25/26';
-    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should(
-      'contain.text',
-      expectedText
-    );
+    cy.get('@viewportInfoBottomLeft', { timeout: 15000 }).should('contain.text', expectedText);
 
     //Click on Cine button
     cy.get('@cineBtn')
@@ -270,19 +216,17 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.get('@moreBtn').click();
 
     //Verify if overlay is displayed
-    cy.get('.tooltip-toolbar-overlay')
-      .as('toolbarOverlay')
-      .should('be.visible');
+    cy.get('.tooltip-toolbar-overlay').as('toolbarOverlay').should('be.visible');
 
     let iconName;
     //Click on one of the secondary tools from the overlay
     cy.get('[data-cy="magnify"]')
       .click()
-      .then($magnifyBtn => {
+      .then(($magnifyBtn) => {
         cy.wrap($magnifyBtn)
           .should('have.class', 'active')
           .find('svg')
-          .then($icon => {
+          .then(($icon) => {
             iconName = $icon.text();
           });
       });
@@ -290,10 +234,8 @@ describe('OHIF Cornerstone Toolbar', () => {
     //Check if More button is active and if it has same icon as the secondary tool selected
     cy.get('@moreBtn')
       .click()
-      .then($moreBtn => {
-        cy.wrap($moreBtn)
-          .should('have.class', 'active')
-          .contains(iconName);
+      .then(($moreBtn) => {
+        cy.wrap($moreBtn).should('have.class', 'active').contains(iconName);
       });
 
     //Verify if overlay is hidden
@@ -305,83 +247,60 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.get('@layoutBtn')
       .click()
       .then(() => {
-        cy.get('.layoutChooser')
-          .as('layoutChooser')
-          .should('be.visible')
-          .find('td')
-          .its('length')
-          .should('be.eq', 9);
+        cy.get('.layoutChooser').as('layoutChooser').should('be.visible').find('td').its('length').should('be.eq', 9);
         cy.get('@layoutBtn').click();
       });
 
     //verify if layout has changed to 2 viewports
     cy.setLayout(1, 2);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 2);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 2);
     });
 
     cy.setLayout(2, 1);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 2);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 2);
     });
 
     //verify if layout has changed to 3 viewports
     cy.setLayout(1, 3);
-    cy.get('.viewport-container').then($viewport => {
+    cy.get('.viewport-container').then(($viewport) => {
       cy.wait(1000);
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 3);
+      cy.wrap($viewport).its('length').should('be.eq', 3);
     });
 
     cy.setLayout(3, 1);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 3);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 3);
     });
 
     //verify if layout has changed to 4 viewports
     cy.setLayout(2, 2);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 4);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 4);
     });
 
     //verify if layout has changed to 6 viewports
     cy.setLayout(2, 3);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 6);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 6);
     });
 
     cy.setLayout(3, 2);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 6);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 6);
     });
 
     //verify if layout has changed to 9 viewports
     cy.setLayout(3, 3);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 9);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 9);
     });
 
     //verify if layout has changed to 1 viewport
     cy.setLayout(1, 1);
-    cy.get('.viewport-container').then($viewport => {
-      cy.wrap($viewport)
-        .its('length')
-        .should('be.eq', 1);
+    cy.get('.viewport-container').then(($viewport) => {
+      cy.wrap($viewport).its('length').should('be.eq', 1);
     });
   });
 
@@ -389,9 +308,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.setLayout(3, 3);
 
     // activate the ninth viewport
-    cy.get('[data-cy=viewport-container-8]')
-      .click()
-      .should('have.class', 'active');
+    cy.get('[data-cy=viewport-container-8]').click().should('have.class', 'active');
 
     cy.setLayout(1, 1);
 
@@ -406,16 +323,12 @@ describe('OHIF Cornerstone Toolbar', () => {
 
     //Verify if measurement annotation was added into the measurements panel
     cy.get('@measurementsBtn').click();
-    cy.get('.measurementItem')
-      .its('length')
-      .should('be.at.least', 2);
+    cy.get('.measurementItem').its('length').should('be.at.least', 2);
 
     //Click on More button
     cy.get('@moreBtn').click();
     //Verify if overlay is displayed
-    cy.get('.tooltip-toolbar-overlay')
-      .as('toolbarOverlay')
-      .should('be.visible');
+    cy.get('.tooltip-toolbar-overlay').as('toolbarOverlay').should('be.visible');
     //Click on Clear button
     cy.get('[data-cy="clear"]').click();
 
@@ -430,7 +343,7 @@ describe('OHIF Cornerstone Toolbar', () => {
     cy.get('@moreBtn').click();
 
     //Close the measurements panel
-    cy.get('@measurementsBtn').then($btn => {
+    cy.get('@measurementsBtn').then(($btn) => {
       $btn.click();
       cy.get('@measurementsPanel').should('not.be.enabled');
     });

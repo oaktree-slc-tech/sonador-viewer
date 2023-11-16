@@ -15,9 +15,7 @@ class GoogleCloudApi {
   }
 
   get urlBase() {
-    return (
-      this.healthcareApiEndpoint || 'https://healthcare.googleapis.com/v1beta1'
-    );
+    return this.healthcareApiEndpoint || 'https://healthcare.googleapis.com/v1beta1';
   }
 
   set urlBase(url) {
@@ -30,8 +28,7 @@ class GoogleCloudApi {
 
   getUrlBaseDicomWeb(project, location, dataset, dicomStore) {
     return (
-      this.urlBase +
-      `/projects/${project}/locations/${location}/datasets/${dataset}/dicomStores/${dicomStore}/dicomWeb`
+      this.urlBase + `/projects/${project}/locations/${location}/datasets/${dataset}/dicomStores/${dicomStore}/dicomWeb`
     );
   }
 
@@ -68,8 +65,7 @@ class GoogleCloudApi {
         return {
           isError: true,
           status: response.status,
-          message:
-            (data && data.error && data.error.message) || 'Unknown error',
+          message: (data && data.error && data.error.message) || 'Unknown error',
         };
       }
     } catch (err) {
@@ -88,9 +84,7 @@ class GoogleCloudApi {
   }
 
   async loadProjects() {
-    return this.doRequest(
-      'https://cloudresourcemanager.googleapis.com/v1/projects'
-    );
+    return this.doRequest('https://cloudresourcemanager.googleapis.com/v1/projects');
   }
 
   async loadLocations(projectId) {
@@ -98,9 +92,7 @@ class GoogleCloudApi {
   }
 
   async loadDatasets(projectId, locationId) {
-    return this.doRequest(
-      `${this.urlBaseProject}/${projectId}/locations/${locationId}/datasets`
-    );
+    return this.doRequest(`${this.urlBaseProject}/${projectId}/locations/${locationId}/datasets`);
   }
 
   async loadDicomStores(dataset) {

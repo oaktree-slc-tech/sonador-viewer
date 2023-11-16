@@ -1,24 +1,56 @@
 {
   "extends": [
-    "react-app",
     "eslint:recommended",
+    "plugin:jsx-a11y/recommended",
     "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
     "plugin:prettier/recommended"
   ],
-  "parser": "babel-eslint",
+  "parser": "@babel/eslint-parser",
   "env": {
-    "jest": true
+    "jest": true,
+    "node": true,
+    "es6": true,
+    "browser": true
   },
   "settings": {
     "react": {
       "version": "detect"
     }
   },
+  "plugins": ["simple-import-sort"],
+  "overrides": [
+    {
+      "files": ["*.js", "*.jsx"],
+      "rules": {
+        "simple-import-sort/imports": [
+          "warn",
+          {
+            "groups": [
+              ["^react", "^@?\\w"],
+              ["^(@ohif)(/.*|$)"],
+              ["^(@|assets|api|customHooks|components|configs|constants|hooks|pages|routes|styles|types|context|utils|lib|layouts|sonador|studylist|googleCloud|connectedComponents|appExtensions|design|elements|contextProviders|ScrollableArea|viewer|locales|redux|measurements|services|studies|ui|extensions|hanging-protocols|DICOMWeb|DISOMSR|classes|__mocks__)(/.*|$)"],
+              ["^\\u0000"],
+              ["^\\.\\.(?!/?$)", "^\\.\\./?$"],
+              ["^\\./(?=.*/)(?!/?$)", "^\\.(?!/?$)", "^\\./?$"],
+              ["^.+\\.?(css|styl)$"]
+            ]
+          }
+        ]
+      }
+    }
+  ],
   "globals": {
     "cy": true,
     "before": true,
     "context": true,
     "Cypress": true,
     "assert": true
+  },
+  "rules": {
+    "react-hooks/exhaustive-deps": "off",
+    "react/display-name": "off",
+    "react/prop-types": "warn",
+    "no-console": ["error", { "allow": ["warn", "error"] }]
   }
 }

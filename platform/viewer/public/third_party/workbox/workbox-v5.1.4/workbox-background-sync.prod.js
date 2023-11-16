@@ -1,5 +1,5 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.backgroundSync = (function(t, e, s, i, n) {
+  (this.workbox.backgroundSync = (function (t, e, s, i, n) {
     'use strict';
     try {
       self['workbox:background-sync:5.1.4'] && _();
@@ -16,9 +16,7 @@
       }
       async unshiftEntry(t) {
         const [e] = await this.s.getAllMatching('requests', { count: 1 });
-        e ? (t.id = e.id - 1) : delete t.id,
-          (t.queueName = this.t),
-          await this.s.add('requests', t);
+        e ? (t.id = e.id - 1) : delete t.id, (t.queueName = this.t), await this.s.add('requests', t);
       }
       async popEntry() {
         return this.h({ direction: 'prev' });
@@ -80,11 +78,7 @@
       }
       toObject() {
         const t = Object.assign({}, this.u);
-        return (
-          (t.headers = Object.assign({}, this.u.headers)),
-          t.body && (t.body = t.body.slice(0)),
-          t
-        );
+        return (t.headers = Object.assign({}, this.u.headers)), t.body && (t.body = t.body.slice(0)), t;
       }
       toRequest() {
         return new Request(this.u.url, this.u);
@@ -94,7 +88,7 @@
       }
     }
     const h = new Set(),
-      u = t => {
+      u = (t) => {
         const e = {
           request: new c(t.requestData).toRequest(),
           timestamp: t.timestamp,
@@ -103,8 +97,7 @@
       };
     class o {
       constructor(t, { onSync: s, maxRetentionTime: i } = {}) {
-        if (((this.o = !1), (this.q = !1), h.has(t)))
-          throw new e.WorkboxError('duplicate-queue-name', { name: t });
+        if (((this.o = !1), (this.q = !1), h.has(t))) throw new e.WorkboxError('duplicate-queue-name', { name: t });
         h.add(t),
           (this.l = t),
           (this.m = s || this.replayRequests),
@@ -142,9 +135,7 @@
           requestData: (await c.fromRequest(t.clone())).toObject(),
           timestamp: s,
         };
-        e && (n.metadata = e),
-          await this.g[i + 'Entry'](n),
-          this.o ? (this.q = !0) : await this.registerSync();
+        e && (n.metadata = e), await this.g[i + 'Entry'](n), this.o ? (this.q = !0) : await this.registerSync();
       }
       async D(t) {
         const e = Date.now(),
@@ -160,21 +151,18 @@
           try {
             await fetch(t.request.clone());
           } catch (s) {
-            throw (await this.unshiftRequest(t),
-            new e.WorkboxError('queue-replay-failed', { name: this.l }));
+            throw (await this.unshiftRequest(t), new e.WorkboxError('queue-replay-failed', { name: this.l }));
           }
       }
       async registerSync() {
         if ('sync' in self.registration)
           try {
-            await self.registration.sync.register(
-              'workbox-background-sync:' + this.l
-            );
+            await self.registration.sync.register('workbox-background-sync:' + this.l);
           } catch (t) {}
       }
       R() {
         'sync' in self.registration
-          ? self.addEventListener('sync', t => {
+          ? self.addEventListener('sync', (t) => {
               if (t.tag === 'workbox-background-sync:' + this.l) {
                 const e = async () => {
                   let e;
@@ -184,11 +172,7 @@
                   } catch (t) {
                     throw ((e = t), e);
                   } finally {
-                    !this.q ||
-                      (e && !t.lastChance) ||
-                      (await this.registerSync()),
-                      (this.o = !1),
-                      (this.q = !1);
+                    !this.q || (e && !t.lastChance) || (await this.registerSync()), (this.o = !1), (this.q = !1);
                   }
                 };
                 t.waitUntil(e());
@@ -212,11 +196,5 @@
       (t.Queue = o),
       t
     );
-  })(
-    {},
-    workbox.core._private,
-    workbox.core._private,
-    workbox.core._private,
-    workbox.core._private
-  ));
+  })({}, workbox.core._private, workbox.core._private, workbox.core._private, workbox.core._private));
 //# sourceMappingURL=workbox-background-sync.prod.js.map

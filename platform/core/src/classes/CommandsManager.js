@@ -23,9 +23,7 @@ export class CommandsManager {
     this.contexts = {};
 
     if (!getAppState || !getActiveContexts) {
-      log.warn(
-        'CommandsManager was instantiated without getAppState() or getActiveContexts()'
-      );
+      log.warn('CommandsManager was instantiated without getAppState() or getActiveContexts()');
     }
 
     this._getAppState = getAppState;
@@ -125,7 +123,7 @@ export class CommandsManager {
       }
     } else {
       const activeContexts = this._getActiveContexts();
-      activeContexts.forEach(activeContext => {
+      activeContexts.forEach((activeContext) => {
         const context = this.getContext(activeContext);
         if (context) {
           contexts.push(context);
@@ -138,7 +136,7 @@ export class CommandsManager {
     }
 
     let foundCommand;
-    contexts.forEach(context => {
+    contexts.forEach((context) => {
       if (context[commandName]) {
         foundCommand = context[commandName];
       }
@@ -166,7 +164,7 @@ export class CommandsManager {
 
     let commandParams = {};
     const appState = this._getAppState();
-    storeContexts.forEach(context => {
+    storeContexts.forEach((context) => {
       commandParams[context] = appState[context];
     });
 

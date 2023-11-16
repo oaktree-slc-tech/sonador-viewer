@@ -1,5 +1,6 @@
-import { InstanceMetadata } from './InstanceMetadata';
 import getImageId from '../../utils/getImageId.js';
+
+import { InstanceMetadata } from './InstanceMetadata';
 
 export class OHIFInstanceMetadata extends InstanceMetadata {
   /**
@@ -78,11 +79,7 @@ export class OHIFInstanceMetadata extends InstanceMetadata {
 
   // Override
   tagExists(tagOrProperty) {
-    return (
-      tagOrProperty in this._instance.metadata ||
-      tagOrProperty in this._series ||
-      tagOrProperty in this._study
-    );
+    return tagOrProperty in this._instance.metadata || tagOrProperty in this._series || tagOrProperty in this._study;
   }
 
   // Override

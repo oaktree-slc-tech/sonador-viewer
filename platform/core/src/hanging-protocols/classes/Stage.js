@@ -1,6 +1,7 @@
-import ViewportStructure from './ViewportStructure';
-import Viewport from './Viewport';
 import guid from '../../utils/guid';
+
+import Viewport from './Viewport';
+import ViewportStructure from './ViewportStructure';
 
 /**
  * A Stage is one step in the Display Set Sequence for a Hanging Protocol
@@ -72,7 +73,7 @@ export default class Stage {
 
     // If any viewports are present in the input object
     if (input.viewports) {
-      input.viewports.forEach(viewportObject => {
+      input.viewports.forEach((viewportObject) => {
         // Create a new Viewport with their data
         var viewport = new Viewport();
         viewport.fromObject(viewportObject);

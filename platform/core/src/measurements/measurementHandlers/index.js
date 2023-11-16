@@ -1,12 +1,13 @@
 import { MeasurementApi } from '../classes';
-import handleSingleMeasurementAdded from './handleSingleMeasurementAdded';
-import handleChildMeasurementAdded from './handleChildMeasurementAdded';
-import handleSingleMeasurementModified from './handleSingleMeasurementModified';
-import handleChildMeasurementModified from './handleChildMeasurementModified';
-import handleSingleMeasurementRemoved from './handleSingleMeasurementRemoved';
-import handleChildMeasurementRemoved from './handleChildMeasurementRemoved';
 
-const getEventData = event => {
+import handleChildMeasurementAdded from './handleChildMeasurementAdded';
+import handleChildMeasurementModified from './handleChildMeasurementModified';
+import handleChildMeasurementRemoved from './handleChildMeasurementRemoved';
+import handleSingleMeasurementAdded from './handleSingleMeasurementAdded';
+import handleSingleMeasurementModified from './handleSingleMeasurementModified';
+import handleSingleMeasurementRemoved from './handleSingleMeasurementRemoved';
+
+const getEventData = (event) => {
   const eventData = event.detail;
   if (eventData.toolName) {
     eventData.toolType = eventData.toolName;
@@ -26,11 +27,7 @@ const MeasurementHandlers = {
   onAdded(event) {
     const eventData = getEventData(event);
     const { toolType } = eventData;
-    const {
-      toolGroupId,
-      toolGroup,
-      tool,
-    } = MeasurementApi.getToolConfiguration(toolType);
+    const { toolGroupId, toolGroup, tool } = MeasurementApi.getToolConfiguration(toolType);
     const params = {
       eventData,
       tool,
@@ -50,11 +47,7 @@ const MeasurementHandlers = {
   onModified(event) {
     const eventData = getEventData(event);
     const { toolType } = eventData;
-    const {
-      toolGroupId,
-      toolGroup,
-      tool,
-    } = MeasurementApi.getToolConfiguration(toolType);
+    const { toolGroupId, toolGroup, tool } = MeasurementApi.getToolConfiguration(toolType);
     const params = {
       eventData,
       tool,
@@ -74,11 +67,7 @@ const MeasurementHandlers = {
   onRemoved(event) {
     const eventData = getEventData(event);
     const { toolType } = eventData;
-    const {
-      toolGroupId,
-      toolGroup,
-      tool,
-    } = MeasurementApi.getToolConfiguration(toolType);
+    const { toolGroupId, toolGroup, tool } = MeasurementApi.getToolConfiguration(toolType);
     const params = {
       eventData,
       tool,

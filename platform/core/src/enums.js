@@ -8,4 +8,4 @@ const ReconstructionIssues = {
   MULTIFFRAMES: 'multiframe',
 };
 
-export {ReconstructionIssues};
+export { ReconstructionIssues };

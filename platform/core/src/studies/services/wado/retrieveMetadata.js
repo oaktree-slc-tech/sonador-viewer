@@ -1,5 +1,5 @@
-import RetrieveMetadataLoaderSync from './retrieveMetadataLoaderSync';
 import RetrieveMetadataLoaderAsync from './retrieveMetadataLoaderAsync';
+import RetrieveMetadataLoaderSync from './retrieveMetadataLoaderSync';
 
 /**
  * Retrieve Study metadata from a DICOM server. If the server is configured to use lazy load, only the first series
@@ -13,15 +13,9 @@ import RetrieveMetadataLoaderAsync from './retrieveMetadataLoaderAsync';
  */
 async function RetrieveMetadata(server, StudyInstanceUID, filters = {}) {
   const RetrieveMetadataLoader =
-    server.enableStudyLazyLoad != false
-      ? RetrieveMetadataLoaderAsync
-      : RetrieveMetadataLoaderSync;
+    server.enableStudyLazyLoad != false ? RetrieveMetadataLoaderAsync : RetrieveMetadataLoaderSync;
 
-  const retrieveMetadataLoader = new RetrieveMetadataLoader(
-    server,
-    StudyInstanceUID,
-    filters
-  );
+  const retrieveMetadataLoader = new RetrieveMetadataLoader(server, StudyInstanceUID, filters);
   const studyMetadata = retrieveMetadataLoader.execLoad();
 
   return studyMetadata;

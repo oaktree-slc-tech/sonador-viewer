@@ -3,6 +3,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 
 import SimpleDialog from '../SimpleDialog/SimpleDialog.js';
+
 import './EditDescriptionDialog.css';
 
 export default class EditDescriptionDialog extends Component {
@@ -53,12 +54,12 @@ export default class EditDescriptionDialog extends Component {
     this.props.onCancel();
   };
 
-  onConfirm = e => {
+  onConfirm = (e) => {
     e.preventDefault();
     this.props.onUpdate(this.state.description);
   };
 
-  handleChange = event => {
+  handleChange = (event) => {
     this.setState({ description: event.target.value });
   };
 }

@@ -9,14 +9,14 @@ import { api } from 'dicomweb-client';
  */
 export default class StaticWadoClient extends api.DICOMwebClient {
   static filterKeys = {
-    "StudyInstanceUID": "0020000D",
-    "PatientName": "00100010",
-    "00100020": "mrn",
-    "PatientID": "00100020",
-    "StudyDescription": "00081030",
-    "StudyDate": "00080020",
-    "ModalitiesInStudy": "00080061",
-    AccessionNumber: "00080050",
+    StudyInstanceUID: '0020000D',
+    PatientName: '00100010',
+    '00100020': 'mrn',
+    PatientID: '00100020',
+    StudyDescription: '00081030',
+    StudyDate: '00080020',
+    ModalitiesInStudy: '00080061',
+    AccessionNumber: '00080050',
   };
 
   constructor(qidoConfig) {
@@ -36,7 +36,7 @@ export default class StaticWadoClient extends api.DICOMwebClient {
     let searchResult = await super.searchForStudies(options);
     const { queryParams } = options;
     if (!queryParams) return searchResult;
-    const filtered = searchResult.filter(study => {
+    const filtered = searchResult.filter((study) => {
       for (const key of Object.keys(StaticWadoClient.filterKeys)) {
         if (!this.filterItem(key, queryParams, study)) return false;
       }
@@ -59,19 +59,18 @@ export default class StaticWadoClient extends api.DICOMwebClient {
    */
   compareValues(desired, actual) {
     if (Array.isArray(desired)) {
-      return desired.find(item => this.compareValues(item, actual));
+      return desired.find((item) => this.compareValues(item, actual));
     }
     if (Array.isArray(actual)) {
-      return actual.find(actualItem => this.compareValues(desired, actualItem));
+      return actual.find((actualItem) => this.compareValues(desired, actualItem));
     }
     if (actual && actual.Alphabetic) {
       actual = actual.Alphabetic;
     }
-    if (typeof (actual) == 'string') {
+    if (typeof actual == 'string') {
       if (actual.length === 0) return true;
       if (desired.length === 0 || desired === '*') return true;
       if (desired[0] === '*' && desired[desired.length - 1] === '*') {
-        console.log(`Comparing ${actual} to ${desired.substring(1, desired.length - 1)}`)
         return actual.indexOf(desired.substring(1, desired.length - 1)) != -1;
       } else if (desired[desired.length - 1] === '*') {
         return actual.indexOf(desired.substring(0, desired.length - 1)) != -1;
@@ -89,8 +88,7 @@ export default class StaticWadoClient extends api.DICOMwebClient {
     if (dash === -1) return this.compareValues(range, value);
     const start = range.substring(0, dash);
     const end = range.substring(dash + 1);
-    return (!start || value >= start) &&
-      (!end || value <= end);
+    return (!start || value >= start) && (!end || value <= end);
   }
 
   /**

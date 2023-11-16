@@ -1,5 +1,4 @@
 const excludeNodeModulesExcept = require('./../helpers/excludeNodeModulesExcept.js');
-
 function transpileJavaScript(mode) {
   const exclude =
     mode === 'production'
@@ -8,6 +7,7 @@ function transpileJavaScript(mode) {
           // 'dicomweb-client',
           // https://github.com/react-dnd/react-dnd/blob/master/babel.config.js
           'react-dnd',
+          'pdfjs-dist',
           // https://github.com/dcmjs-org/dcmjs/blob/master/.babelrc
           // https://github.com/react-dnd/react-dnd/issues/1342
           // 'dcmjs', // contains: loglevelnext
@@ -18,7 +18,7 @@ function transpileJavaScript(mode) {
           // https://github.com/openlayers/openlayers#supported-browsers
           // 'ol', --> Should be fine
         ])
-      : excludeNodeModulesExcept([]);
+      : excludeNodeModulesExcept(['pdfjs-dist']);
 
   return {
     test: /\.jsx?$/,

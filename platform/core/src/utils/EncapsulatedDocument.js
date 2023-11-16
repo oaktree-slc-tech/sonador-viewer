@@ -1,10 +1,4 @@
-import _ from 'lodash';
-
-export default function createEncapsulatedDocumentFileUrl(
-  dataSet,
-  byteArray,
-  options
-) {
+export default function createEncapsulatedDocumentFileUrl(dataSet, byteArray, options) {
   // Unpack the encpasulated document data from the provided dataset and byteArray.
   options = options || {};
   let documentByteArray;
@@ -19,8 +13,7 @@ export default function createEncapsulatedDocumentFileUrl(
 
   const blob = new Blob([documentByteArray], {
     // Mimetype of the file: prefer the mimetype specified in the options
-    type:
-      options.mimetype || (dataSet ? dataSet.string('x00420012') : undefined),
+    type: options.mimetype || (dataSet ? dataSet.string('x00420012') : undefined),
   });
   return URL.createObjectURL(blob);
 }

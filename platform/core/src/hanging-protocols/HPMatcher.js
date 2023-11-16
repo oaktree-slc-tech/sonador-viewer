@@ -1,5 +1,6 @@
-import OHIFError from '../classes/OHIFError.js';
 import metadata from '../classes/metadata/';
+import OHIFError from '../classes/OHIFError.js';
+
 import { validate } from './lib/validate.js';
 import { CustomAttributeRetrievalCallbacks } from './customAttributes';
 
@@ -17,9 +18,7 @@ const { InstanceMetadata } = metadata;
 const match = (metadataInstance, rules) => {
   // Make sure the supplied data is valid.
   if (!(metadataInstance instanceof InstanceMetadata)) {
-    throw new OHIFError(
-      'HPMatcher::match metadataInstance must be an instance of InstanceMetadata'
-    );
+    throw new OHIFError('HPMatcher::match metadataInstance must be an instance of InstanceMetadata');
   }
 
   const options = {
@@ -34,16 +33,13 @@ const match = (metadataInstance, rules) => {
   let requiredFailed = false;
   let score = 0;
 
-  rules.forEach(rule => {
+  rules.forEach((rule) => {
     const attribute = rule.attribute;
 
     // Do not use the custom attribute from the metadataInstance since it is subject to change
     if (CustomAttributeRetrievalCallbacks.hasOwnProperty(attribute)) {
       const customAttribute = CustomAttributeRetrievalCallbacks[attribute];
-      metadataInstance.setCustomAttribute(
-        attribute,
-        customAttribute.callback(metadataInstance)
-      );
+      metadataInstance.setCustomAttribute(attribute, customAttribute.callback(metadataInstance));
     }
 
     // Format the constraint as required by Validate.js

@@ -1,0 +1,40 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.selectorExpanderColumn {
+  display: flex;
+  align-items: center;
+  column-gap: 8px;
+
+  .expander {
+    rotate: -90deg;
+    cursor: pointer;
+
+    &.expanded {
+      rotate: 0deg;
+    }
+  }
+
+  .rowEyeIcon {
+    width: 24px;
+    height: 24px;
+    visibility: hidden;
+    margin-left: 18px;
+
+    @include lg {
+      visibility: visible;
+    }
+  }
+}
+
+.dotsIcon {
+  padding: 0 10px;
+  box-sizing: content-box;
+  display: block;
+}
+
+.rowDotsOption {
+  display: flex;
+  align-items: center;
+  column-gap: 10px;
+  color: #d3d3d3;
+}

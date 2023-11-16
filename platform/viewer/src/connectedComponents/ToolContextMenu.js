@@ -1,32 +1,18 @@
-import { ContextMenu } from '@ohif/ui';
-import PropTypes from 'prop-types';
 import React from 'react';
-import { commandsManager } from './../App.js';
+import PropTypes from 'prop-types';
 
-const toolTypes = [
-  'Angle',
-  'Bidirectional',
-  'Length',
-  'FreehandMouse',
-  'EllipticalRoi',
-  'CircleRoi',
-  'RectangleRoi',
-];
+import { ContextMenu } from '@ohif/ui';
 
-const ToolContextMenu = ({
-  onSetLabel,
-  onSetDescription,
-  isTouchEvent,
-  eventData,
-  onClose,
-  onDelete,
-}) => {
+import { commandsManager } from '../App';
+
+const toolTypes = ['Angle', 'Bidirectional', 'Length', 'FreehandMouse', 'EllipticalRoi', 'CircleRoi', 'RectangleRoi'];
+
+const ToolContextMenu = ({ onSetLabel, onSetDescription, isTouchEvent, eventData, onClose, onDelete }) => {
   const defaultDropdownItems = [
     {
       label: 'Delete measurement',
       actionType: 'Delete',
-      action: ({ nearbyToolData, eventData }) =>
-        onDelete(nearbyToolData, eventData),
+      action: ({ nearbyToolData, eventData }) => onDelete(nearbyToolData, eventData),
     },
     {
       label: 'Relabel',
@@ -56,23 +42,17 @@ const ToolContextMenu = ({
      * Annotate tools for touch events already have a press handle to edit it,
      * has a better UX for deleting it.
      */
-    if (
-      isTouchEvent &&
-      nearbyToolData &&
-      nearbyToolData.toolType === 'arrowAnnotate'
-    ) {
+    if (isTouchEvent && nearbyToolData && nearbyToolData.toolType === 'arrowAnnotate') {
       return;
     }
 
     let dropdownItems = [];
     if (nearbyToolData) {
-      defaultDropdownItems.forEach(item => {
+      defaultDropdownItems.forEach((item) => {
         item.params = { eventData, nearbyToolData };
 
         if (item.actionType === 'setDescription') {
-          item.label = `${
-            nearbyToolData.tool.description ? 'Edit' : 'Add'
-          } Description`;
+          item.label = `${nearbyToolData.tool.description ? 'Edit' : 'Add'} Description`;
         }
 
         dropdownItems.push(item);

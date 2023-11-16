@@ -11,9 +11,9 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=10",
-    "npm": ">=6",
-    "yarn": ">=1.16.0"
+    "node": ">=18",
+    "npm": ">=8",
+    "yarn": ">=1.22.0"
   },
   "files": [
     "dist",

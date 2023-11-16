@@ -1,12 +1,13 @@
 import cornerstone from 'cornerstone-core';
-import { MeasurementApi } from '../classes';
+
 import log from '../../log';
 import user from '../../user';
+import { MeasurementApi } from '../classes';
 import getImageAttributes from '../lib/getImageAttributes';
 import getLabel from '../lib/getLabel';
 import refreshCornerstoneViewports from '../lib/refreshCornerstoneViewports';
 
-export default function({ eventData, tool, toolGroupId, toolGroup }) {
+export default function ({ eventData, tool, toolGroupId, toolGroup }) {
   const measurementApi = MeasurementApi.Instance;
   if (!measurementApi) {
     log.warn('Measurement API is not initialized');
@@ -30,17 +31,10 @@ export default function({ eventData, tool, toolGroupId, toolGroup }) {
     userId: user.getUserId(),
   });
 
-  const childMeasurement = Object.assign(
-    {},
-    measurementData,
-    additionalProperties
-  );
+  const childMeasurement = Object.assign({}, measurementData, additionalProperties);
 
   const parentMeasurement = collection.find(
-    t =>
-      t.toolType === tool.parentTool &&
-      t.PatientID === imageAttributes.PatientID &&
-      t[tool.attribute] === null
+    (t) => t.toolType === tool.parentTool && t.PatientID === imageAttributes.PatientID && t[tool.attribute] === null
   );
 
   // Check if a measurement to fit this child tool already exists
@@ -52,8 +46,7 @@ export default function({ eventData, tool, toolGroupId, toolGroup }) {
 
     // Update the parent measurement
     parentMeasurement[key] = childMeasurement;
-    parentMeasurement.childToolsCount =
-      (parentMeasurement.childToolsCount || 0) + 1;
+    parentMeasurement.childToolsCount = (parentMeasurement.childToolsCount || 0) + 1;
     measurementApi.updateMeasurement(tool.parentTool, parentMeasurement);
 
     // Update the measurementData ID and lesionNamingNumber
@@ -68,16 +61,9 @@ export default function({ eventData, tool, toolGroupId, toolGroup }) {
       StudyInstanceUID: imageAttributes.StudyInstanceUID,
     };
 
-    measurement[tool.attribute] = Object.assign(
-      {},
-      measurementData,
-      additionalProperties
-    );
+    measurement[tool.attribute] = Object.assign({}, measurementData, additionalProperties);
 
-    const addedMeasurement = measurementApi.addMeasurement(
-      tool.parentTool,
-      measurement
-    );
+    const addedMeasurement = measurementApi.addMeasurement(tool.parentTool, measurement);
     Object.assign(measurementData, addedMeasurement);
   }
 

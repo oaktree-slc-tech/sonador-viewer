@@ -1,12 +1,12 @@
 //We are keeping the hardcoded results values for the study list tests
 //this is intended to be running in a controled docker environment with test data.
-describe('OHIF Study List', function() {
-  context('Desktop resolution', function() {
-    before(function() {
+describe('OHIF Study List', function () {
+  context('Desktop resolution', function () {
+    before(function () {
       cy.openStudyList();
     });
 
-    beforeEach(function() {
+    beforeEach(function () {
       cy.viewport(1750, 720);
       cy.initStudyListAliasesOnDesktop();
       //Clear all text fields
@@ -17,41 +17,41 @@ describe('OHIF Study List', function() {
       cy.get('@modalities').clear();
     });
 
-    it('searches Patient Name with exact string', function() {
+    it('searches Patient Name with exact string', function () {
       cy.get('@PatientName').type('Juno');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('Juno');
       });
     });
 
-    it('searches MRN with exact string', function() {
+    it('searches MRN with exact string', function () {
       cy.get('@MRN').type('0000003');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('0000003');
       });
     });
 
-    it('searches Accession with exact string', function() {
+    it('searches Accession with exact string', function () {
       cy.get('@AccessionNumber').type('0000155811');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('0000155811');
       });
     });
 
-    it('searches Modality with camel case', function() {
+    it('searches Modality with camel case', function () {
       cy.get('@modalities').type('Ct');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.greaterThan(1);
         expect($list).to.contain('CT');
       });
@@ -71,23 +71,23 @@ describe('OHIF Study List', function() {
     });
      */
 
-    it('changes Rows per page and checks the study count', function() {
+    it('changes Rows per page and checks the study count', function () {
       //Show Rows per page options
       const pageRows = [25, 50, 100];
 
       //Check all options of Rows
-      pageRows.forEach(numRows => {
+      pageRows.forEach((numRows) => {
         cy.get('select').select(numRows.toString()); //Select Rows per page option
         //Wait result list to be displayed
         cy.waitStudyList().then(() => {
           //Compare the search result with the Study Count on the table header
           cy.get('@studyCount')
-            .should($studyCount => {
+            .should(($studyCount) => {
               expect(parseInt($studyCount.text())).to.be.at.most(numRows); //less than or equals to
             })
-            .then($studyCount => {
+            .then(($studyCount) => {
               //Compare to the number of Rows in the search result
-              cy.get('@searchResult').then($searchResult => {
+              cy.get('@searchResult').then(($searchResult) => {
                 let countResults = $searchResult.length;
                 expect($studyCount.text()).to.be.eq(countResults.toString());
               });
@@ -113,12 +113,12 @@ describe('OHIF Study List', function() {
     // });
   });
 
-  context('Tablet resolution', function() {
-    before(function() {
+  context('Tablet resolution', function () {
+    before(function () {
       cy.openStudyList();
     });
 
-    beforeEach(function() {
+    beforeEach(function () {
       cy.viewport(1000, 660);
       cy.initStudyListAliasesOnTablet();
       //Clear all text fields
@@ -126,31 +126,31 @@ describe('OHIF Study List', function() {
       cy.get('@accessionModalityDescription').clear();
     });
 
-    it('searches Patient Name with exact string', function() {
+    it('searches Patient Name with exact string', function () {
       cy.get('@patientNameOrMRN').type('Juno');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('Juno');
       });
     });
 
-    it('searches MRN with with exact string', function() {
+    it('searches MRN with with exact string', function () {
       cy.get('@patientNameOrMRN').type('Juno');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('Juno');
       });
     });
 
-    it('searches Modality with exact string', function() {
+    it('searches Modality with exact string', function () {
       cy.get('@accessionModalityDescription').type('CT');
       //Wait result list to be displayed
       cy.waitStudyList();
-      cy.get('@searchResult').should($list => {
+      cy.get('@searchResult').should(($list) => {
         expect($list.length).to.be.eq(1);
         expect($list).to.contain('CT');
       });
@@ -185,23 +185,23 @@ describe('OHIF Study List', function() {
 
      */
 
-    it('changes Rows per page and checks the study count', function() {
+    it('changes Rows per page and checks the study count', function () {
       //Show Rows per page options
       const pageRows = [25, 50, 100];
 
       //Check all options of Rows
-      pageRows.forEach(numRows => {
+      pageRows.forEach((numRows) => {
         cy.get('select').select(numRows.toString()); //Select Rows per page option
         //Wait result list to be displayed
         cy.waitStudyList().then(() => {
           //Compare the search result with the Study Count on the table header
           cy.get('@studyCount')
-            .should($studyCount => {
+            .should(($studyCount) => {
               expect(parseInt($studyCount.text())).to.be.at.most(numRows); //less than or equals to
             })
-            .then($studyCount => {
+            .then(($studyCount) => {
               //Compare to the number of Rows in the search result
-              cy.get('@searchResult').then($searchResult => {
+              cy.get('@searchResult').then(($searchResult) => {
                 let countResults = $searchResult.length;
                 expect($studyCount.text()).to.be.eq(countResults.toString());
               });

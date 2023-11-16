@@ -1,25 +1,24 @@
 import cornerstone from 'cornerstone-core';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import { api } from 'dicomweb-client';
-import DICOMWeb from '../DICOMWeb';
 
+import DICOMWeb from '../DICOMWeb';
 import errorHandler from '../errorHandler';
+
 import getXHRRetryRequestHook from './xhrRetryRequestHook';
 
-const getImageId = imageObj => {
+const getImageId = (imageObj) => {
   if (!imageObj) {
     return;
   }
 
-  return typeof imageObj.getImageId === 'function'
-    ? imageObj.getImageId()
-    : imageObj.url;
+  return typeof imageObj.getImageId === 'function' ? imageObj.getImageId() : imageObj.url;
 };
 
 const findImageIdOnStudies = (studies, displaySetInstanceUID) => {
-  const study = studies.find(study => {
+  const study = studies.find((study) => {
     const displaySet = study.displaySets.some(
-      displaySet => displaySet.displaySetInstanceUID === displaySetInstanceUID
+      (displaySet) => displaySet.displaySetInstanceUID === displaySetInstanceUID
     );
     return displaySet;
   });
@@ -30,27 +29,27 @@ const findImageIdOnStudies = (studies, displaySetInstanceUID) => {
   return getImageId(instance);
 };
 
-const someInvalidStrings = strings => {
+const someInvalidStrings = (strings) => {
   const stringsArray = Array.isArray(strings) ? strings : [strings];
-  const emptyString = string => !string;
+  const emptyString = (string) => !string;
   let invalid = stringsArray.some(emptyString);
   return invalid;
 };
 
-const getImageInstance = dataset => {
+const getImageInstance = (dataset) => {
   return dataset && dataset.images && dataset.images[0];
 };
 
-const getImageInstanceId = imageInstance => {
+const getImageInstanceId = (imageInstance) => {
   return getImageId(imageInstance);
 };
 
 const fetchIt = (url, headers = DICOMWeb.getAuthorizationHeader()) => {
-  return fetch(url, headers).then(response => response.arrayBuffer());
+  return fetch(url, headers).then((response) => response.arrayBuffer());
 };
 
-const cornerstoneRetriever = imageId => {
-  return cornerstone.loadAndCacheImage(imageId).then(image => {
+const cornerstoneRetriever = (imageId) => {
+  return cornerstone.loadAndCacheImage(imageId).then((image) => {
     return image && image.data && image.data.byteArray.buffer;
   });
 };
@@ -78,17 +77,11 @@ const wadorsRetriever = (
   });
 };
 
-const getImageLoaderType = imageId => {
+const getImageLoaderType = (imageId) => {
   const loaderRegExp = /^\w+\:/;
   const loaderType = loaderRegExp.exec(imageId);
 
-  return (
-    (loaderRegExp.lastIndex === 0 &&
-      loaderType &&
-      loaderType[0] &&
-      loaderType[0].replace(':', '')) ||
-    ''
-  );
+  return (loaderRegExp.lastIndex === 0 && loaderType && loaderType[0] && loaderType[0].replace(':', '')) || '';
 };
 
 class DicomLoaderService {
@@ -126,23 +119,12 @@ class DicomLoaderService {
           const studyInstanceUID = imageInstance.getStudyInstanceUID();
           const seriesInstanceUID = imageInstance.getSeriesInstanceUID();
           const sopInstanceUID = imageInstance.getSOPInstanceUID();
-          const invalidParams = someInvalidStrings([
-            url,
-            studyInstanceUID,
-            seriesInstanceUID,
-            sopInstanceUID,
-          ]);
+          const invalidParams = someInvalidStrings([url, studyInstanceUID, seriesInstanceUID, sopInstanceUID]);
           if (invalidParams) {
             return;
           }
 
-          getDicomDataMethod = wadorsRetriever.bind(
-            this,
-            url,
-            studyInstanceUID,
-            seriesInstanceUID,
-            sopInstanceUID
-          );
+          getDicomDataMethod = wadorsRetriever.bind(this, url, studyInstanceUID, seriesInstanceUID, sopInstanceUID);
           break;
         case 'wadouri':
           // Strip out the image loader specifier
@@ -160,23 +142,10 @@ class DicomLoaderService {
   }
 
   getDataByDatasetType(dataset) {
-    const {
-      StudyInstanceUID,
-      SeriesInstanceUID,
-      SOPInstanceUID,
-      authorizationHeaders,
-      wadoRoot,
-      wadoUri,
-    } = dataset;
+    const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, authorizationHeaders, wadoRoot, wadoUri } = dataset;
     // Retrieve wadors or just try to fetch wadouri
     if (!someInvalidStrings(wadoRoot)) {
-      return wadorsRetriever(
-        wadoRoot,
-        StudyInstanceUID,
-        SeriesInstanceUID,
-        SOPInstanceUID,
-        authorizationHeaders
-      );
+      return wadorsRetriever(wadoRoot, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, authorizationHeaders);
     } else if (!someInvalidStrings(wadoUri)) {
       return fetchIt(wadoUri, { headers: authorizationHeaders });
     }

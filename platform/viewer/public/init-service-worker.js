@@ -16,8 +16,7 @@ import { Workbox } from './third_party/workbox/workbox-v5.1.4/workbox-window.dev
 // import { Workbox } from 'https://storage.googleapis.com/workbox-cdn/releases/5.0.0-beta.1/workbox-window.prod.mjs';
 
 var supportsServiceWorker = 'serviceWorker' in navigator;
-var isNotLocalDevelopment =
-  ['localhost', '127'].indexOf(location.hostname) === -1;
+var isNotLocalDevelopment = ['localhost', '127'].indexOf(location.hostname) === -1;
 
 if (supportsServiceWorker && isNotLocalDevelopment) {
   const swFileLocation = (window.PUBLIC_URL || '/') + 'sw.js';
@@ -26,14 +25,9 @@ if (supportsServiceWorker && isNotLocalDevelopment) {
 
   // Add an event listener to detect when the registered
   // service worker has installed but is waiting to activate.
-  wb.addEventListener('waiting', event => {
+  wb.addEventListener('waiting', (event) => {
     // customize the UI prompt accordingly.
-    const isFirstTimeUpdatedServiceWorkerIsWaiting =
-      event.wasWaitingBeforeRegister === false;
-    console.log(
-      'isFirstTimeUpdatedServiceWorkerIsWaiting',
-      isFirstTimeUpdatedServiceWorkerIsWaiting
-    );
+    const isFirstTimeUpdatedServiceWorkerIsWaiting = event.wasWaitingBeforeRegister === false;
 
     // Assumes your app has some sort of prompt UI element
     // that a user can either accept or reject.
@@ -42,7 +36,7 @@ if (supportsServiceWorker && isNotLocalDevelopment) {
     // Assuming the user accepted the update, set up a listener
     // that will reload the page as soon as the previously waiting
     // service worker has taken control.
-    wb.addEventListener('controlling', event => {
+    wb.addEventListener('controlling', (event) => {
       window.location.reload();
     });
 

@@ -1,8 +1,9 @@
 import cornerstone from 'cornerstone-core';
-import { MeasurementApi } from '../classes';
-import log from '../../log';
 
-export default function({ eventData, tool, toolGroupId, toolGroup }) {
+import log from '../../log';
+import { MeasurementApi } from '../classes';
+
+export default function ({ eventData, tool, toolGroupId, toolGroup }) {
   const measurementApi = MeasurementApi.Instance;
   if (!measurementApi) {
     log.warn('Measurement API is not initialized');
@@ -16,7 +17,7 @@ export default function({ eventData, tool, toolGroupId, toolGroup }) {
   if (!collection) return;
 
   log.info('CornerstoneToolsMeasurementModified');
-  let measurement = collection.find(t => t._id === measurementData._id);
+  let measurement = collection.find((t) => t._id === measurementData._id);
 
   // Stop here if the measurement is already deleted
   if (!measurement) return;
