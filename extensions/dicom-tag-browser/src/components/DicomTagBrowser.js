@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { classes, cornerstone as OHIFCornerstone } from '@ohif/core';
-import { Range } from '@ohif/ui';
+import React, { useEffect, useState } from 'react';
 import dcmjs from 'dcmjs';
-import DicomBrowserSelect from './DicomBrowserSelect';
 import moment from 'moment';
+
+import { classes, cornerstone as OHIFCornerstone } from '@ohif/core';
+import { CustomSelect, Range } from '@ohif/ui';
+
 import './DicomTagBrowser.css';
-import DicomBrowserSelectItem from './DicomBrowserSelectItem';
 
 const { ImageSet } = classes;
 const { DicomMetaDictionary } = dcmjs.data;
@@ -14,8 +14,7 @@ const { nameMap } = DicomMetaDictionary;
 const { metadataProvider } = OHIFCornerstone;
 
 const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
-  const [activeDisplaySetInstanceUID, setActiveDisplaySetInstanceUID] =
-    useState(displaySetInstanceUID);
+  const [activeDisplaySetInstanceUID, setActiveDisplaySetInstanceUID] = useState(displaySetInstanceUID);
   const [activeInstance, setActiveInstance] = useState(1);
   const [tags, setTags] = useState([]);
   const [meta, setMeta] = useState('');
@@ -24,19 +23,10 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
   const [isImageStack, setIsImageStack] = useState(false);
 
   useEffect(() => {
-    const activeDisplaySet = displaySets.find(
-      (ds) => ds.displaySetInstanceUID === activeDisplaySetInstanceUID
-    );
+    const activeDisplaySet = displaySets.find((ds) => ds.displaySetInstanceUID === activeDisplaySetInstanceUID);
 
     const newDisplaySetList = displaySets.map((displaySet) => {
-      const {
-        displaySetInstanceUID,
-        SeriesDate,
-        SeriesTime,
-        SeriesNumber,
-        SeriesDescription,
-        Modality,
-      } = displaySet;
+      const { displaySetInstanceUID, SeriesDate, SeriesTime, SeriesNumber, SeriesDescription, Modality } = displaySet;
 
       /* Map to display representation */
       const dateStr = `${SeriesDate}:${SeriesTime}`.split('.')[0];
@@ -55,9 +45,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
     });
 
     let metadata;
-    const isImageStack =
-      activeDisplaySet instanceof ImageSet &&
-      activeDisplaySet.isSOPClassUIDSupported === true;
+    const isImageStack = activeDisplaySet instanceof ImageSet && activeDisplaySet.isSOPClassUIDSupported === true;
 
     let instanceList;
 
@@ -92,9 +80,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
     setIsImageStack(isImageStack);
   }, [activeDisplaySetInstanceUID, activeInstance, displaySets]);
 
-  const selectedDisplaySetValue = displaySetList.find(
-    (ds) => ds.value === activeDisplaySetInstanceUID
-  );
+  const selectedDisplaySetValue = displaySetList.find((ds) => ds.value === activeDisplaySetInstanceUID);
 
   let instanceSelectList = null;
 
@@ -119,14 +105,10 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
 
   return (
     <div className="dicom-tag-browser-content">
-      <DicomBrowserSelect
-        value={selectedDisplaySetValue}
-        formatOptionLabel={DicomBrowserSelectItem}
-        options={displaySetList}
-      />
+      <CustomSelect value={selectedDisplaySetValue} options={displaySetList} />
       {instanceSelectList}
       <div className="dicom-tag-browser-table-wrapper">
-        <DicomTagTable tags={tags} meta={meta}></DicomTagTable>
+        <DicomTagTable tags={tags} meta={meta} />
       </div>
     </div>
   );
@@ -166,49 +148,30 @@ function getFormattedRowsFromTags(tags, meta) {
 
   tags.forEach((tagInfo) => {
     if (tagInfo.vr === 'SQ') {
-      rows.push([
-        `${tagInfo.tagIndent}${tagInfo.tag}`,
-        tagInfo.vr,
-        tagInfo.keyword,
-        '',
-      ]);
+      rows.push([`${tagInfo.tagIndent}${tagInfo.tag}`, tagInfo.vr, tagInfo.keyword, '']);
 
       const { values } = tagInfo;
 
       values.forEach((item, index) => {
         const formatedRowsFromTags = getFormattedRowsFromTags(item);
 
-        rows.push([
-          `${item[0].tagIndent}(FFFE,E000)`,
-          '',
-          `Item #${index}`,
-          '',
-        ]);
+        rows.push([`${item[0].tagIndent}(FFFE,E000)`, '', `Item #${index}`, '']);
 
         rows.push(...formatedRowsFromTags);
       });
     } else {
       if (tagInfo.vr === 'xs') {
         try {
-          const dataset = metadataProvider.getStudyDataset(
-            meta.StudyInstanceUID
-          );
+          const dataset = metadataProvider.getStudyDataset(meta.StudyInstanceUID);
           const tag = dcmjs.data.Tag.fromPString(tagInfo.tag).toCleanString();
           const originalTagInfo = dataset[tag];
           tagInfo.vr = originalTagInfo.vr;
         } catch (error) {
-          console.error(
-            `Failed to parse value representation for tag '${tagInfo.keyword}'`
-          );
+          console.error(`Failed to parse value representation for tag '${tagInfo.keyword}'`);
         }
       }
 
-      rows.push([
-        `${tagInfo.tagIndent}${tagInfo.tag}`,
-        tagInfo.vr,
-        tagInfo.keyword,
-        tagInfo.value,
-      ]);
+      rows.push([`${tagInfo.tagIndent}${tagInfo.tag}`, tagInfo.vr, tagInfo.keyword, tagInfo.value]);
     }
   });
 
@@ -232,10 +195,7 @@ function getRows(metadata, depth = 0) {
     keywords = Object.keys(metadata);
   } catch (err) {
     console.warn('Invalid metadata structure: ', metadata);
-    console.error(
-      'Unable to retrieve keywords from metadata due to an error: ',
-      err
-    );
+    console.error('Unable to retrieve keywords from metadata due to an error: ', err);
     keywords = [];
   }
 

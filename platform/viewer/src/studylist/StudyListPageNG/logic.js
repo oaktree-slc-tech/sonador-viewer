@@ -172,12 +172,16 @@ export const useStudies = (params) => {
 };
 
 export const useTags = ({ server }) => {
-  const domain = server?.qidoRoot?.match(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/?\n]+)/gim);
+  const [domain] = server?.qidoRoot
+    ? server?.qidoRoot?.match(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/?\n]+)/gim) || ['']
+    : [''];
+  const [port] = server?.qidoRoot ? server?.qidoRoot?.match(/:\d+/) || [''] : [''];
+  const url = `${domain}${port}`;
 
   return useQuery({
     queryKey: ['tags', server?.token],
     queryFn: () =>
-      fetch(`${domain}/cache/dcm-tags`, {
+      fetch(`${url}/cache/dcm-tags`, {
         headers: DICOMWeb.getAuthorizationHeader(server),
       }).then((res) => res.json()),
     select: (data) => {
@@ -198,6 +202,6 @@ export const useTags = ({ server }) => {
         return acc;
       }, {});
     },
-    enabled: !!server?.token,
+    enabled: !!server?.token && !!url,
   });
 };

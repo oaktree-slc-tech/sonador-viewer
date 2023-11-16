@@ -1,26 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import PropTypes from 'prop-types';
-import cornerstoneTools from 'cornerstone-tools';
-import cornerstone from 'cornerstone-core';
-import moment from 'moment';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
-import { utils, log } from '@ohif/core';
-import { ScrollableArea, TableList, Icon } from '@ohif/ui';
+import cornerstone from 'cornerstone-core';
+import cornerstoneTools from 'cornerstone-tools';
+import moment from 'moment';
+import PropTypes from 'prop-types';
+
+import { log, utils } from '@ohif/core';
+import { CustomSelect, Icon, ScrollableArea, TableList } from '@ohif/ui';
+
 import DICOMSegTempCrosshairsTool from '../../tools/DICOMSegTempCrosshairsTool';
-
-import setActiveLabelmap from '../../utils/setActiveLabelMap';
 import refreshViewports from '../../utils/refreshViewports';
-
-import {
-  BrushColorSelector,
-  BrushRadius,
-  SegmentationItem,
-  SegmentItem,
-  SegmentationSelect,
-} from '../index';
+import setActiveLabelmap from '../../utils/setActiveLabelMap';
+import { BrushColorSelector, BrushRadius, SegmentItem } from '../index';
+import SegmentationSettings from '../SegmentationSettings/SegmentationSettings';
 
 import './SegmentationPanel.css';
-import SegmentationSettings from '../SegmentationSettings/SegmentationSettings';
 
 const { studyMetadataManager } = utils;
 
@@ -100,9 +94,9 @@ const SegmentationPanel = ({
     });
   };
 
-  const updateSegDisplaySetsTolerance = tolerance => {
+  const updateSegDisplaySetsTolerance = (tolerance) => {
     const segDisplaySets = getAllSegDisplaySets();
-    segDisplaySets.forEach(segDisplaySet => {
+    segDisplaySets.forEach((segDisplaySet) => {
       // update tol value
       segDisplaySet.tolerance = tolerance;
       // reset load flags for allowing retry for seg parsing.
@@ -135,12 +129,10 @@ const SegmentationPanel = ({
     const { StudyInstanceUID, displaySetInstanceUID } = getActiveViewport();
     const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
     const allDisplaySets = studyMetadata.getDisplaySets();
-    return allDisplaySets.find(
-      ds => ds.displaySetInstanceUID === displaySetInstanceUID
-    );
+    return allDisplaySets.find((ds) => ds.displaySetInstanceUID === displaySetInstanceUID);
   };
 
-  const setActiveSegment = segmentIndex => {
+  const setActiveSegment = (segmentIndex) => {
     const activeSegmentIndex = getActiveSegmentIndex();
     const activeViewport = getActiveViewport();
 
@@ -161,17 +153,12 @@ const SegmentationPanel = ({
     const allDisplaySets = studyMetadata.getDisplaySets();
     let selectedSegmentation;
     let newLabelmapIndex = getActiveLabelMapIndex();
-    allDisplaySets.forEach(displaySet => {
+    allDisplaySets.forEach((displaySet) => {
       if (displaySet.labelmapSegments) {
-        Object.keys(displaySet.labelmapSegments).forEach(labelmapIndex => {
-          if (
-            displaySet.labelmapSegments[labelmapIndex].includes(segmentIndex)
-          ) {
+        Object.keys(displaySet.labelmapSegments).forEach((labelmapIndex) => {
+          if (displaySet.labelmapSegments[labelmapIndex].includes(segmentIndex)) {
             newLabelmapIndex = labelmapIndex;
-            selectedSegmentation =
-              displaySet.hasOverlapping === true
-                ? displaySet.originLabelMapIndex
-                : labelmapIndex;
+            selectedSegmentation = displaySet.hasOverlapping === true ? displaySet.originLabelMapIndex : labelmapIndex;
           }
         });
       }
@@ -180,7 +167,7 @@ const SegmentationPanel = ({
     const brushStackState = getBrushStackState();
     brushStackState.activeLabelmapIndex = newLabelmapIndex;
     if (selectedSegmentation) {
-      setState(state => ({ ...state, selectedSegmentation }));
+      setState((state) => ({ ...state, selectedSegmentation }));
     }
 
     refreshViewports();
@@ -189,7 +176,7 @@ const SegmentationPanel = ({
   };
 
   useEffect(() => {
-    const labelmapModifiedHandler = event => {
+    const labelmapModifiedHandler = (event) => {
       log.warn('Segmentation Panel: labelmap modified', event);
       refreshSegmentations();
     };
@@ -211,49 +198,31 @@ const SegmentationPanel = ({
      * allows us to easily watch the module or the segmentations loading process in any other component
      * without subscribing to external events.
      */
-    document.addEventListener(
-      'extensiondicomsegmentationsegloaded',
-      refreshSegmentations
-    );
-    document.addEventListener(
-      'extensiondicomsegmentationsegselected',
-      updateSegmentationComboBox
-    );
+    document.addEventListener('extensiondicomsegmentationsegloaded', refreshSegmentations);
+    document.addEventListener('extensiondicomsegmentationsegselected', updateSegmentationComboBox);
 
     /*
      * These are specific to each element;
      * Need to iterate cornerstone-tools tracked enabled elements?
      * Then only care about the one tied to active viewport?
      */
-    cornerstoneTools.store.state.enabledElements.forEach(enabledElement =>
-      enabledElement.addEventListener(
-        'cornerstonetoolslabelmapmodified',
-        labelmapModifiedHandler
-      )
+    cornerstoneTools.store.state.enabledElements.forEach((enabledElement) =>
+      enabledElement.addEventListener('cornerstonetoolslabelmapmodified', labelmapModifiedHandler)
     );
 
     return () => {
-      document.removeEventListener(
-        'extensiondicomsegmentationsegloaded',
-        refreshSegmentations
-      );
-      document.removeEventListener(
-        'extensiondicomsegmentationsegselected',
-        updateSegmentationComboBox
-      );
-      cornerstoneTools.store.state.enabledElements.forEach(enabledElement =>
-        enabledElement.removeEventListener(
-          'cornerstonetoolslabelmapmodified',
-          labelmapModifiedHandler
-        )
+      document.removeEventListener('extensiondicomsegmentationsegloaded', refreshSegmentations);
+      document.removeEventListener('extensiondicomsegmentationsegselected', updateSegmentationComboBox);
+      cornerstoneTools.store.state.enabledElements.forEach((enabledElement) =>
+        enabledElement.removeEventListener('cornerstonetoolslabelmapmodified', labelmapModifiedHandler)
       );
     };
   }, [activeIndex, viewports]);
 
-  const updateSegmentationComboBox = e => {
+  const updateSegmentationComboBox = (e) => {
     const index = e.detail.activatedLabelmapIndex;
     if (index !== -1) {
-      setState(state => ({ ...state, selectedSegmentation: index }));
+      setState((state) => ({ ...state, selectedSegmentation: index }));
     }
   };
 
@@ -264,12 +233,8 @@ const SegmentationPanel = ({
       const brushStackState = getBrushStackState();
       if (brushStackState) {
         const labelMapList = getLabelMapList();
-        const {
-          items: segmentList,
-          numbers: segmentNumbers,
-          segmentsHidden,
-        } = getSegmentList();
-        setState(state => ({
+        const { items: segmentList, numbers: segmentNumbers, segmentsHidden } = getSegmentList();
+        setState((state) => ({
           ...state,
           segmentsHidden,
           segmentNumbers,
@@ -278,7 +243,7 @@ const SegmentationPanel = ({
           isDisabled,
         }));
       } else {
-        setState(state => ({
+        setState((state) => ({
           ...state,
           segmentsHidden: [],
           segmentNumbers: [],
@@ -292,18 +257,11 @@ const SegmentationPanel = ({
 
   useEffect(() => {
     refreshSegmentations();
-  }, [
-    viewports,
-    activeIndex,
-    isOpen,
-    state.selectedSegmentation,
-    activeContexts,
-    state.isLoading,
-  ]);
+  }, [viewports, activeIndex, isOpen, state.selectedSegmentation, activeContexts, state.isLoading]);
 
   /* Handle open/closed panel behaviour */
   useEffect(() => {
-    setState(state => ({
+    setState((state) => ({
       ...state,
       showSettings: state.showSettings && !isOpen,
     }));
@@ -319,17 +277,11 @@ const SegmentationPanel = ({
     );
 
     const filteredReferencedSegDisplaysets = referencedSegDisplaysets.filter(
-      segDisplay => segDisplay.loadError !== true
+      (segDisplay) => segDisplay.loadError !== true
     );
 
     return filteredReferencedSegDisplaysets.map((displaySet, index) => {
-      const {
-        labelmapIndex,
-        originLabelMapIndex,
-        hasOverlapping,
-        SeriesDate,
-        SeriesTime,
-      } = displaySet;
+      const { labelmapIndex, originLabelMapIndex, hasOverlapping, SeriesDate, SeriesTime } = displaySet;
 
       /* Map to display representation */
       const dateStr = `${SeriesDate}:${SeriesTime}`.split('.')[0];
@@ -349,7 +301,7 @@ const SegmentationPanel = ({
             onSelectedSegmentationChange,
             onDisplaySetLoadFailure
           );
-          setState(state => ({
+          setState((state) => ({
             ...state,
             selectedSegmentation: activatedLabelmapIndex,
           }));
@@ -358,12 +310,12 @@ const SegmentationPanel = ({
     });
   };
 
-  const setCurrentSelectedSegment = segmentNumber => {
+  const setCurrentSelectedSegment = (segmentNumber) => {
     setActiveSegment(segmentNumber);
 
     const sameSegment = state.selectedSegment === segmentNumber;
     if (!sameSegment) {
-      setState(state => ({ ...state, selectedSegment: segmentNumber }));
+      setState((state) => ({ ...state, selectedSegment: segmentNumber }));
     }
 
     const validIndexList = [];
@@ -373,7 +325,7 @@ const SegmentationPanel = ({
       }
     });
 
-    const avg = array => array.reduce((a, b) => a + b) / array.length;
+    const avg = (array) => array.reduce((a, b) => a + b) / array.length;
     const average = avg(validIndexList);
     const closest = validIndexList.reduce((prev, curr) => {
       return Math.abs(curr - average) < Math.abs(prev - average) ? curr : prev;
@@ -389,14 +341,8 @@ const SegmentationPanel = ({
       const imageId = imageIds[closest];
       const frameIndex = imageIds.indexOf(imageId);
 
-      const SOPInstanceUID = cornerstone.metaData.get(
-        'SOPInstanceUID',
-        imageId
-      );
-      const StudyInstanceUID = cornerstone.metaData.get(
-        'StudyInstanceUID',
-        imageId
-      );
+      const SOPInstanceUID = cornerstone.metaData.get('SOPInstanceUID', imageId);
+      const StudyInstanceUID = cornerstone.metaData.get('StudyInstanceUID', imageId);
 
       DICOMSegTempCrosshairsTool.addCrosshair(element, imageId, segmentNumber);
 
@@ -437,11 +383,7 @@ const SegmentationPanel = ({
     return enabledElements[activeIndex].element;
   };
 
-  const onSegmentVisibilityChangeHandler = (
-    isVisible,
-    segmentNumber,
-    labelmap3D
-  ) => {
+  const onSegmentVisibilityChangeHandler = (isVisible, segmentNumber, labelmap3D) => {
     let segmentsHidden = [];
     if (labelmap3D.metadata.hasOverlapping) {
       /** Get all labelmaps with this segmentNumber and that
@@ -449,33 +391,24 @@ const SegmentationPanel = ({
       const { labelmaps3D } = getBrushStackState();
 
       const sameSeriesLabelMaps3D = labelmaps3D.filter(({ metadata }) => {
-        return (
-          labelmap3D.metadata.segmentationSeriesInstanceUID ===
-          metadata.segmentationSeriesInstanceUID
-        );
+        return labelmap3D.metadata.segmentationSeriesInstanceUID === metadata.segmentationSeriesInstanceUID;
       });
 
-      const possibleLabelMaps3D = sameSeriesLabelMaps3D.filter(
-        ({ labelmaps2D }) => {
-          return labelmaps2D.some(({ segmentsOnLabelmap }) =>
-            segmentsOnLabelmap.includes(segmentNumber)
-          );
-        }
-      );
+      const possibleLabelMaps3D = sameSeriesLabelMaps3D.filter(({ labelmaps2D }) => {
+        return labelmaps2D.some(({ segmentsOnLabelmap }) => segmentsOnLabelmap.includes(segmentNumber));
+      });
 
-      possibleLabelMaps3D.forEach(labelmap3D => {
+      possibleLabelMaps3D.forEach((labelmap3D) => {
         labelmap3D.segmentsHidden[segmentNumber] = !isVisible;
 
-        segmentsHidden = [
-          ...new Set([...segmentsHidden, ...labelmap3D.segmentsHidden]),
-        ];
+        segmentsHidden = [...new Set([...segmentsHidden, ...labelmap3D.segmentsHidden])];
       });
     } else {
       labelmap3D.segmentsHidden[segmentNumber] = !isVisible;
       segmentsHidden = [...labelmap3D.segmentsHidden];
     }
 
-    setState(state => ({ ...state, segmentsHidden }));
+    setState((state) => ({ ...state, segmentsHidden }));
 
     refreshSegmentations();
     refreshViewports();
@@ -561,37 +494,37 @@ const SegmentationPanel = ({
      */
   };
 
-  const updateBrushSize = evt => {
+  const updateBrushSize = (evt) => {
     const updatedRadius = Number(evt.target.value);
 
-    if (updatedRadius !== brushRadius) {
-      setState(state => ({ ...state, brushRadius: updatedRadius }));
+    if (updatedRadius !== state.brushRadius) {
+      setState((state) => ({ ...state, brushRadius: updatedRadius }));
       const module = cornerstoneTools.getModule('segmentation');
       module.setters.radius(updatedRadius);
     }
   };
 
-  const decrementSegment = event => {
-    const activeSegmentIndex = getActiveSegmentIndex();
+  const decrementSegment = (event) => {
+    let activeSegmentIndex = getActiveSegmentIndex();
     event.preventDefault();
     if (activeSegmentIndex > 1) {
       activeSegmentIndex--;
     }
-    setState(state => ({ ...state, selectedSegment: activeSegmentIndex }));
+    setState((state) => ({ ...state, selectedSegment: activeSegmentIndex }));
     updateActiveSegmentColor();
   };
 
-  const incrementSegment = event => {
-    const activeSegmentIndex = getActiveSegmentIndex();
+  const incrementSegment = (event) => {
+    let activeSegmentIndex = getActiveSegmentIndex();
     event.preventDefault();
     activeSegmentIndex++;
-    setState(state => ({ ...state, selectedSegment: activeSegmentIndex }));
+    setState((state) => ({ ...state, selectedSegment: activeSegmentIndex }));
     updateActiveSegmentColor();
   };
 
   const updateActiveSegmentColor = () => {
     const color = getActiveSegmentColor();
-    setState(state => ({ ...state, brushColor: color }));
+    setState((state) => ({ ...state, brushColor: color }));
   };
 
   const getBrushStackState = () => {
@@ -612,11 +545,10 @@ const SegmentationPanel = ({
     return `rgba(${color.join(',')})`;
   };
 
-  const updateConfiguration = newConfiguration => {
+  const updateConfiguration = (newConfiguration) => {
     configuration.renderFill = newConfiguration.renderFill;
     configuration.renderOutline = newConfiguration.renderOutline;
-    configuration.shouldRenderInactiveLabelmaps =
-      newConfiguration.shouldRenderInactiveLabelmaps;
+    configuration.shouldRenderInactiveLabelmaps = newConfiguration.shouldRenderInactiveLabelmaps;
     configuration.fillAlpha = newConfiguration.fillAlpha;
     configuration.outlineAlpha = newConfiguration.outlineAlpha;
     configuration.outlineWidth = newConfiguration.outlineWidth;
@@ -628,42 +560,35 @@ const SegmentationPanel = ({
     refreshViewports();
   };
 
-  const onVisibilityChangeHandler = isVisible => {
+  const onVisibilityChangeHandler = (isVisible) => {
     let segmentsHidden = [];
     const labelmap3D = getActiveLabelMaps3D();
 
-    state.segmentNumbers.forEach(segmentNumber => {
+    state.segmentNumbers.forEach((segmentNumber) => {
       if (isVTK()) {
         onSegmentVisibilityChange(segmentNumber, isVisible);
       }
 
       labelmap3D.segmentsHidden[segmentNumber] = !isVisible;
-      segmentsHidden = [
-        ...new Set([...segmentsHidden, ...labelmap3D.segmentsHidden]),
-      ];
+      segmentsHidden = [...new Set([...segmentsHidden, ...labelmap3D.segmentsHidden])];
     });
 
-    setState(state => ({ ...state, segmentsHidden }));
+    setState((state) => ({ ...state, segmentsHidden }));
 
     refreshSegmentations();
     refreshViewports();
   };
 
-  const disabledConfigurationFields = [
-    'outlineAlpha',
-    'shouldRenderInactiveLabelmaps',
-  ];
+  const disabledConfigurationFields = ['outlineAlpha', 'shouldRenderInactiveLabelmaps'];
 
-  const selectedSegmentationOption = state.labelMapList.find(
-    i => i.value === state.selectedSegmentation
-  );
+  const selectedSegmentationOption = state.labelMapList.find((i) => i.value === state.selectedSegmentation);
 
   if (state.showSettings) {
     return (
       <SegmentationSettings
         disabledFields={isVTK() ? disabledConfigurationFields : []}
         configuration={configuration}
-        onBack={() => setState(state => ({ ...state, showSettings: false }))}
+        onBack={() => setState((state) => ({ ...state, showSettings: false }))}
         onChange={updateConfiguration}
         servicesManager={servicesManager}
       />
@@ -675,42 +600,38 @@ const SegmentationPanel = ({
           disabled: state.isDisabled,
         })}
       >
-        {false && (
-          <form className="selector-form">
-            <BrushColorSelector
-              defaultColor={state.brushColor}
-              index={state.selectedSegment}
-              onNext={incrementSegment}
-              onPrev={decrementSegment}
-            />
-            <BrushRadius
-              value={state.brushRadius}
-              onChange={updateBrushSize}
-              min={configuration.minRadius}
-              max={configuration.maxRadius}
-            />
-          </form>
-        )}
+        {/*{false && (*/}
+        {/*  <form className="selector-form">*/}
+        {/*    <BrushColorSelector*/}
+        {/*      defaultColor={state.brushColor}*/}
+        {/*      index={state.selectedSegment}*/}
+        {/*      onNext={incrementSegment}*/}
+        {/*      onPrev={decrementSegment}*/}
+        {/*    />*/}
+        {/*    <BrushRadius*/}
+        {/*      value={state.brushRadius}*/}
+        {/*      onChange={updateBrushSize}*/}
+        {/*      min={configuration.minRadius}*/}
+        {/*      max={configuration.maxRadius}*/}
+        {/*    />*/}
+        {/*  </form>*/}
+        {/*)}*/}
         <Icon
           className="cog-icon"
           name="cog"
           width="25px"
           height="25px"
-          onClick={() => setState(state => ({ ...state, showSettings: true }))}
+          onClick={() => setState((state) => ({ ...state, showSettings: true }))}
         />
         <h3>Segmentations</h3>
         <div className="segmentations">
-          <SegmentationSelect
-            value={selectedSegmentationOption}
-            formatOptionLabel={SegmentationItem}
-            options={state.labelMapList}
-          />
+          <CustomSelect value={selectedSegmentationOption} options={state.labelMapList} />
         </div>
         <SegmentsSection
           count={state.segmentList.length}
           isVisible={
-            state.segmentsHidden.filter(isHidden => isHidden === true).length <
-              state.segmentNumbers.length && state.segmentNumbers.length > 0
+            state.segmentsHidden.filter((isHidden) => isHidden === true).length < state.segmentNumbers.length &&
+            state.segmentNumbers.length > 0
           }
           onVisibilityChange={onVisibilityChangeHandler}
         >
@@ -776,12 +697,7 @@ const _getReferencedSegDisplaysets = (StudyInstanceUID, SeriesInstanceUID) => {
   return referencedDisplaysets;
 };
 
-const SegmentsSection = ({
-  count,
-  children,
-  isVisible: defaultVisibility,
-  onVisibilityChange,
-}) => {
+const SegmentsSection = ({ count, children, isVisible: defaultVisibility, onVisibilityChange }) => {
   const [isVisible, setIsVisible] = useState(defaultVisibility);
 
   const onVisibilityChangeHandler = () => {

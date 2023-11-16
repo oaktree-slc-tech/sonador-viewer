@@ -1,0 +1,97 @@
+.customSelect {
+  position: relative;
+  width: 100%;
+}
+
+.customSelectControl {
+  display: flex;
+  align-items: center;
+  height: 50px;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 16px;
+  box-sizing: border-box;
+  background-color: #151a1f;
+  border: 1px solid #9ccef9;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.customSelectControl.withDescription {
+  padding-left: 8px;
+}
+
+.customSelectControl:hover {
+  border-color: #20a5d6;
+}
+
+.customSelectChevronWrapper {
+  padding-left: 9px;
+  border-left: 1px solid #ffffff;
+  display: flex;
+  align-items: center;
+}
+
+.customSelectMenu {
+  width: 100%;
+  background-color: #151a1f;
+  margin: 0;
+  list-style: none;
+  position: absolute;
+  top: 58px;
+  left: 0;
+  border-radius: 5px;
+  z-index: 1000;
+  padding: 0;
+}
+
+.customSelectOption {
+  width: 100%;
+  padding: 8px 12px;
+  height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.customSelectOption:hover {
+  background-color: #16202b;
+}
+
+.customSelectOption:first-of-type {
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+
+.customSelectOption:last-of-type {
+  border-bottom-left-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+.customSelectOption.active {
+  background-color: #16202b;
+}
+
+.customSelectOptionTitle,
+.customSelectOptionDescription {
+  margin: 0;
+  padding-right: 16px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.customSelectOptionTitle {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.customSelectOptionDescription {
+  color: #91b9cd;
+  font-size: 12px;
+}
+
+.customSelectControlTextContainer {
+  max-width: calc(100% - 22px);
+}

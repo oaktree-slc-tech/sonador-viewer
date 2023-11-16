@@ -1,5 +1,6 @@
 import { AboutContent } from './content/aboutContent/AboutContent';
 import { ViewportDownloadForm } from './content/viewportDownloadForm';
+import CustomSelect from './CustomSelect/CustomSelect';
 import { Checkbox } from './checkbox';
 import { CineDialog } from './cineDialog';
 import { ContextMenu } from './contextMenu';
@@ -53,4 +54,5 @@ export {
   AboutContent,
   OHIFModal,
   ErrorPage,
+  CustomSelect,
 };
