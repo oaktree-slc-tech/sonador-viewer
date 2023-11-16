@@ -67,16 +67,13 @@ function processSingleframe(instances) {
   // -- Have different orientations within a displaySet.
   for (let ii = 1; ii < n; ++ii) {
     const instance = instances[ii].getData().metadata;
-    const { Rows, Columns, SamplesPerPixel, ImageOrientationPatient } =
-      instance;
+    const { Rows, Columns, SamplesPerPixel, ImageOrientationPatient } = instance;
 
     if (Rows !== firstImageRows || Columns !== firstImageColumns) {
       reconstructionIssues.push(ReconstructionIssues.VARYING_IMAGESDIMENSIONS);
     } else if (SamplesPerPixel !== firstImageSamplesPerPixel) {
       reconstructionIssues.push(ReconstructionIssues.VARYING_IMAGESCOMPONENTS);
-    } else if (
-      !_isSameArray(ImageOrientationPatient, firstImageOrientationPatient)
-    ) {
+    } else if (!_isSameArray(ImageOrientationPatient, firstImageOrientationPatient)) {
       reconstructionIssues.push(ReconstructionIssues.VARYING_IMAGESORIENTATION);
     }
 
@@ -121,8 +118,7 @@ function isSpacingUniform(instances, datasetIs4D) {
 
     // We can't reconstruct if we are missing ImagePositionPatient values
     if (firstImagePositionPatient && lastIpp) {
-      const averageSpacingBetweenFrames =
-        _getPerpendicularDistance(firstImagePositionPatient, lastIpp) / (n - 1);
+      const averageSpacingBetweenFrames = _getPerpendicularDistance(firstImagePositionPatient, lastIpp) / (n - 1);
 
       let previousImagePositionPatient = firstImagePositionPatient;
 
@@ -130,10 +126,7 @@ function isSpacingUniform(instances, datasetIs4D) {
         const instance = instances[ii].getData().metadata;
         const { ImagePositionPatient } = instance;
 
-        const spacingBetweenFrames = _getPerpendicularDistance(
-          ImagePositionPatient,
-          previousImagePositionPatient
-        );
+        const spacingBetweenFrames = _getPerpendicularDistance(ImagePositionPatient, previousImagePositionPatient);
 
         if (datasetIs4D && spacingBetweenFrames < 1e-3) {
           // the dataset is 4D, if the distance is zero, means that we are
@@ -142,10 +135,7 @@ function isSpacingUniform(instances, datasetIs4D) {
           continue;
         }
 
-        const spacingIssue = _getSpacingIssue(
-          spacingBetweenFrames,
-          averageSpacingBetweenFrames
-        );
+        const spacingIssue = _getSpacingIssue(spacingBetweenFrames, averageSpacingBetweenFrames);
 
         if (spacingIssue) {
           const issue = spacingIssue.issue;
@@ -206,12 +196,7 @@ function _isDataset4D(instances) {
         continue;
       }
 
-      if (
-        _isSameArray(
-          instanceMetadataControl.ImagePositionPatient,
-          instanceMetadata.ImagePositionPatient
-        )
-      ) {
+      if (_isSameArray(instanceMetadataControl.ImagePositionPatient, instanceMetadata.ImagePositionPatient)) {
         return true;
       }
     }
@@ -245,8 +230,7 @@ const iopTolerance = 0.01;
  * @returns {Object} An object containing the issue and extra information if necessary.
  */
 function _getSpacingIssue(spacing, averageSpacing) {
-  const equalWithinTolerance =
-    Math.abs(spacing - averageSpacing) < averageSpacing * spacingTolerance;
+  const equalWithinTolerance = Math.abs(spacing - averageSpacing) < averageSpacing * spacingTolerance;
 
   if (equalWithinTolerance) {
     return;
@@ -256,8 +240,7 @@ function _getSpacingIssue(spacing, averageSpacing) {
 
   const numberOfSpacings = Math.round(multipleOfAverageSpacing);
 
-  const errorForEachSpacing =
-    Math.abs(spacing - numberOfSpacings * averageSpacing) / numberOfSpacings;
+  const errorForEachSpacing = Math.abs(spacing - numberOfSpacings * averageSpacing) / numberOfSpacings;
 
   if (errorForEachSpacing < spacingTolerance * averageSpacing) {
     return {
@@ -270,11 +253,7 @@ function _getSpacingIssue(spacing, averageSpacing) {
 }
 
 function _getPerpendicularDistance(a, b) {
-  return Math.sqrt(
-    Math.pow(a[0] - b[0], 2) +
-      Math.pow(a[1] - b[1], 2) +
-      Math.pow(a[2] - b[2], 2)
-  );
+  return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2));
 }
 
 const constructableModalities = ['MR', 'CT', 'PT', 'NM'];

@@ -2,12 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAppContext } from '../context/AppContext';
+
 import './NotFound.css';
 
-export default function NotFound({
-  message = 'Sorry, this page does not exist.',
-  showGoBackButton = true,
-}) {
+export default function NotFound({ message = 'Sorry, this page does not exist.', showGoBackButton = true }) {
   const context = useAppContext();
 
   return (

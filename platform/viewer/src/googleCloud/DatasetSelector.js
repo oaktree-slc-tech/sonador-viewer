@@ -1,11 +1,13 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
 import { withTranslation } from 'react-i18next';
-import DicomStorePicker from './DicomStorePicker';
-import DatasetPicker from './DatasetPicker';
-import ProjectPicker from './ProjectPicker';
-import LocationPicker from './LocationPicker';
+import PropTypes from 'prop-types';
+
 import GoogleCloudApi from './api/GoogleCloudApi';
+import DatasetPicker from './DatasetPicker';
+import DicomStorePicker from './DicomStorePicker';
+import LocationPicker from './LocationPicker';
+import ProjectPicker from './ProjectPicker';
+
 import './googleCloud.css';
 
 class DatasetSelector extends Component {
@@ -24,19 +26,19 @@ class DatasetSelector extends Component {
     setServers: PropTypes.func.isRequired,
   };
 
-  onProjectSelect = project => {
+  onProjectSelect = (project) => {
     this.setState({
       project,
     });
   };
 
-  onLocationSelect = location => {
+  onLocationSelect = (location) => {
     this.setState({
       location,
     });
   };
 
-  onDatasetSelect = dataset => {
+  onDatasetSelect = (dataset) => {
     this.setState({
       dataset,
     });
@@ -63,7 +65,7 @@ class DatasetSelector extends Component {
     });
   };
 
-  onDicomStoreSelect = dicomStoreJson => {
+  onDicomStoreSelect = (dicomStoreJson) => {
     const dicomStore = dicomStoreJson.name;
     const parts = dicomStore.split('/');
     const result = {
@@ -102,18 +104,8 @@ class DatasetSelector extends Component {
       projectBreadcrumbs = (
         <div className="gcp-picker--path">
           <span onClick={onProjectClick}>{project.name}</span>
-          {project && location && (
-            <span onClick={onLocationClick}>
-              {' '}
-              -> {location.name.split('/')[3]}
-            </span>
-          )}
-          {project && location && dataset && (
-            <span onClick={onDatasetClick}>
-              {' '}
-              -> {dataset.name.split('/')[5]}
-            </span>
-          )}
+          {project && location && <span onClick={onLocationClick}> -> {location.name.split('/')[3]}</span>}
+          {project && location && dataset && <span onClick={onDatasetClick}> -> {dataset.name.split('/')[5]}</span>}
         </div>
       );
     }
@@ -121,31 +113,16 @@ class DatasetSelector extends Component {
     return (
       <>
         {projectBreadcrumbs}
-        {!project && (
-          <ProjectPicker accessToken={accessToken} onSelect={onProjectSelect} />
-        )}
+        {!project && <ProjectPicker accessToken={accessToken} onSelect={onProjectSelect} />}
 
         {project && !location && (
-          <LocationPicker
-            accessToken={accessToken}
-            project={project}
-            onSelect={onLocationSelect}
-          />
+          <LocationPicker accessToken={accessToken} project={project} onSelect={onLocationSelect} />
         )}
         {project && location && !dataset && (
-          <DatasetPicker
-            accessToken={accessToken}
-            project={project}
-            location={location}
-            onSelect={onDatasetSelect}
-          />
+          <DatasetPicker accessToken={accessToken} project={project} location={location} onSelect={onDatasetSelect} />
         )}
         {project && location && dataset && (
-          <DicomStorePicker
-            accessToken={accessToken}
-            dataset={dataset}
-            onSelect={onDicomStoreSelect}
-          />
+          <DicomStorePicker accessToken={accessToken} dataset={dataset} onSelect={onDicomStoreSelect} />
         )}
       </>
     );

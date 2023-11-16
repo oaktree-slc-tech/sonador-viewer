@@ -1,7 +1,7 @@
 import { Reducer } from 'redux-testkit';
 
-import reducer, { defaultState } from './preferences';
 import { SET_USER_PREFERENCES } from './../constants/ActionTypes.js';
+import reducer, { defaultState } from './preferences';
 
 describe('preferences reducer', () => {
   it('should return the initial state', () => {
@@ -23,9 +23,6 @@ describe('preferences reducer', () => {
       },
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 });

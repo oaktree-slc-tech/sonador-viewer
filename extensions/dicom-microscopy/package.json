@@ -15,9 +15,9 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=10",
-    "npm": ">=6",
-    "yarn": ">=1.16.0"
+    "node": ">=18",
+    "npm": ">=8",
+    "yarn": ">=1.22.0"
   },
   "scripts": {
     "dev": "cross-env NODE_ENV=development webpack --config .webpack/webpack.dev.js --watch --debug --output-pathinfo",

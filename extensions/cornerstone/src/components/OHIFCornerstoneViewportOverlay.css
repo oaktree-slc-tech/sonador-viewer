@@ -1,9 +1,11 @@
-.imageViewerViewport.empty ~ .OHIFCornerstoneViewportOverlay {
-  display: none;
-}
 .OHIFCornerstoneViewportOverlay {
   color: #9ccef9;
 }
+
+.imageViewerViewport.empty ~ .OHIFCornerstoneViewportOverlay {
+  display: none;
+}
+
 .OHIFCornerstoneViewportOverlay .overlay-element {
   position: absolute;
   font-weight: 400;
@@ -53,6 +55,16 @@
   pointer-events: inherit;
 }
 
+.OHIFCornerstoneViewportOverlay svg {
+  color: #9ccef9;
+  fill: #9ccef9;
+  stroke: #9ccef9;
+  background-color: transparent;
+  margin: 2px;
+  width: 18px;
+  height: 18px;
+}
+
 .OHIFCornerstoneViewportOverlay .warning svg {
   opacity: 1;
   color: #e29e4a;
@@ -62,12 +74,16 @@
   height: 28px;
 }
 
-.OHIFCornerstoneViewportOverlay svg {
-  color: #9ccef9;
-  fill: #9ccef9;
-  stroke: #9ccef9;
-  background-color: transparent;
-  margin: 2px;
-  width: 18px;
-  height: 18px;
+.OHIFCornerstoneViewportOverlay .disabledButton {
+  color: white;
+  padding: 2px 7px;
+  border-radius: 10px;
+  outline: 0;
+  text-transform: none;
+  margin: 2px 2px;
+  cursor: pointer;
+  &:disabled {
+    cursor: default;
+    opacity: 0.9;
+  }
 }

@@ -1,14 +1,10 @@
 import { Component } from 'react';
-import PropTypes from 'prop-types';
 import React from 'react';
+import PropTypes from 'prop-types';
+
 import ToolbarButton from './ToolbarButton.js';
 
-const wLPresetIDs = [
-  'setWLPresetSoftTissue',
-  'setWLPresetLung',
-  'setWLPresetLiver',
-  'setWLPresetBrain',
-];
+const wLPresetIDs = ['setWLPresetSoftTissue', 'setWLPresetLung', 'setWLPresetLiver', 'setWLPresetBrain'];
 
 export default class PresetToggle extends Component {
   static propTypes = {
@@ -52,7 +48,7 @@ export default class PresetToggle extends Component {
       return '';
     });
 
-    const selectedButton = this.props.buttons.find(button => {
+    const selectedButton = this.props.buttons.find((button) => {
       return button.id === this.state.selected;
     });
 
@@ -68,8 +64,8 @@ export default class PresetToggle extends Component {
     );
   }
 
-  onClick = id => {
-    const buttonItem = this.props.buttons.find(button => button.command === id);
+  onClick = (id) => {
+    const buttonItem = this.props.buttons.find((button) => button.command === id);
 
     this.setState({
       selected: buttonItem.id,

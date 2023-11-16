@@ -1,60 +1,44 @@
 import React, { Component } from 'react';
-import { OidcProvider } from 'redux-oidc';
 import { I18nextProvider } from 'react-i18next';
-import PropTypes from 'prop-types';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router } from 'react-router-dom';
-
-import OHIFCornerstoneExtension from '@ohif/extension-cornerstone';
-
-import {
-  SnackbarProvider,
-  ModalProvider,
-  DialogProvider,
-  OHIFModal,
-  LoggerProvider,
-  ErrorBoundary,
-} from '@ohif/ui';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import PropTypes from 'prop-types';
+import { OidcProvider } from 'redux-oidc';
 
 import {
   CommandsManager,
   ExtensionManager,
-  ServicesManager,
   HotkeysManager,
-  UINotificationService,
-  UIModalService,
-  UIDialogService,
   LoggerService,
   MeasurementService,
+  ServicesManager,
+  UIDialogService,
+  UIModalService,
+  UINotificationService,
   utils,
 } from '@ohif/core';
-
+import OHIFCornerstoneExtension from '@ohif/extension-cornerstone';
 import i18n from '@ohif/i18n';
+import { DialogProvider, LoggerProvider, ModalProvider, OHIFModal, SnackbarProvider } from '@ohif/ui';
+import ErrorBoundaryNG from '@ohif/ui/src/components/ErrorBoudaryNG/ErrorBoundaryNG';
 
+import { AppProvider, CONTEXTS, useAppContext } from './context/AppContext';
+import UserManagerContext from './context/UserManagerContext';
+/** Contexts */
+import WhiteLabelingContext from './context/WhiteLabelingContext';
+/** Store */
+import { getActiveContexts } from './store/layout/selectors.js';
+/** Utils */
+import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils/index.js';
+/** Extensions */
+import { GenericViewerCommands, MeasurementsPanel } from './appExtensions';
 // TODO: This should not be here
 //import './config';
 import { setConfiguration } from './config';
-
-/** Utils */
-import {
-  getUserManagerForOpenIdConnectClient,
-  initWebWorkers,
-} from './utils/index.js';
-
-/** Extensions */
-import { GenericViewerCommands, MeasurementsPanel } from './appExtensions';
-
 /** Viewer */
 import OHIFStandaloneViewer from './OHIFStandaloneViewer';
-
-/** Store */
-import { getActiveContexts } from './store/layout/selectors.js';
 import store from './store';
-
-/** Contexts */
-import WhiteLabelingContext from './context/WhiteLabelingContext';
-import UserManagerContext from './context/UserManagerContext';
-import { AppProvider, useAppContext, CONTEXTS } from './context/AppContext';
 
 /** ~~~~~~~~~~~~~ Application Setup */
 const commandsManagerConfig = {
@@ -79,6 +63,14 @@ window.ohif.app = {
   servicesManager,
   extensionManager,
 };
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 class App extends Component {
   static propTypes = {
@@ -125,29 +117,13 @@ class App extends Component {
       ...(typeof config === 'function' ? config({ servicesManager }) : config),
     };
 
-    const {
-      servers,
-      hotkeys: appConfigHotkeys,
-      cornerstoneExtensionConfig,
-      extensions,
-      oidc,
-    } = this._appConfig;
+    const { servers, hotkeys: appConfigHotkeys, cornerstoneExtensionConfig, extensions, oidc } = this._appConfig;
 
     setConfiguration(this._appConfig);
 
     this.initUserManager(oidc);
-    _initServices([
-      UINotificationService,
-      UIModalService,
-      UIDialogService,
-      MeasurementService,
-      LoggerService,
-    ]);
-    _initExtensions(
-      [...defaultExtensions, ...extensions],
-      cornerstoneExtensionConfig,
-      this._appConfig
-    );
+    _initServices([UINotificationService, UIModalService, UIDialogService, MeasurementService, LoggerService]);
+    _initExtensions([...defaultExtensions, ...extensions], cornerstoneExtensionConfig, this._appConfig);
 
     /*
      * Must run after extension commands are registered
@@ -160,17 +136,11 @@ class App extends Component {
 
   render() {
     const { whiteLabeling, routerBasename } = this._appConfig;
-    const {
-      UINotificationService,
-      UIDialogService,
-      UIModalService,
-      MeasurementService,
-      LoggerService,
-    } = servicesManager.services;
+    const { UINotificationService, UIDialogService, UIModalService, LoggerService } = servicesManager.services;
 
     if (this._userManager) {
       return (
-        <ErrorBoundary context="App">
+        <ErrorBoundaryNG>
           <Provider store={store}>
             <AppProvider config={this._appConfig}>
               <I18nextProvider i18n={i18n}>
@@ -181,13 +151,10 @@ class App extends Component {
                         <LoggerProvider service={LoggerService}>
                           <SnackbarProvider service={UINotificationService}>
                             <DialogProvider service={UIDialogService}>
-                              <ModalProvider
-                                modal={OHIFModal}
-                                service={UIModalService}
-                              >
-                                <OHIFStandaloneViewer
-                                  userManager={this._userManager}
-                                />
+                              <ModalProvider modal={OHIFModal} service={UIModalService}>
+                                <QueryClientProvider client={queryClient}>
+                                  <OHIFStandaloneViewer userManager={this._userManager} />
+                                </QueryClientProvider>
                               </ModalProvider>
                             </DialogProvider>
                           </SnackbarProvider>
@@ -199,12 +166,12 @@ class App extends Component {
               </I18nextProvider>
             </AppProvider>
           </Provider>
-        </ErrorBoundary>
+        </ErrorBoundaryNG>
       );
     }
 
     return (
-      <ErrorBoundary context="App">
+      <ErrorBoundaryNG>
         <Provider store={store}>
           <AppProvider config={this._appConfig}>
             <I18nextProvider i18n={i18n}>
@@ -213,11 +180,10 @@ class App extends Component {
                   <LoggerProvider service={LoggerService}>
                     <SnackbarProvider service={UINotificationService}>
                       <DialogProvider service={UIDialogService}>
-                        <ModalProvider
-                          modal={OHIFModal}
-                          service={UIModalService}
-                        >
-                          <OHIFStandaloneViewer />
+                        <ModalProvider modal={OHIFModal} service={UIModalService}>
+                          <QueryClientProvider client={queryClient}>
+                            <OHIFStandaloneViewer />
+                          </QueryClientProvider>
                         </ModalProvider>
                       </DialogProvider>
                     </SnackbarProvider>
@@ -227,7 +193,7 @@ class App extends Component {
             </I18nextProvider>
           </AppProvider>
         </Provider>
-      </ErrorBoundary>
+      </ErrorBoundaryNG>
     );
   }
 
@@ -240,27 +206,16 @@ class App extends Component {
       const baseUri = `${protocol}//${host}${routerBasename}`;
 
       const redirect_uri = firstOpenIdClient.redirect_uri || '/callback';
-      const silent_redirect_uri =
-        firstOpenIdClient.silent_redirect_uri || '/silent-refresh.html';
-      const post_logout_redirect_uri =
-        firstOpenIdClient.post_logout_redirect_uri || '/';
+      const silent_redirect_uri = firstOpenIdClient.silent_redirect_uri || '/silent-refresh.html';
+      const post_logout_redirect_uri = firstOpenIdClient.post_logout_redirect_uri || '/';
 
       const openIdConnectConfiguration = Object.assign({}, firstOpenIdClient, {
         redirect_uri: _makeAbsoluteIfNecessary(redirect_uri, baseUri),
-        silent_redirect_uri: _makeAbsoluteIfNecessary(
-          silent_redirect_uri,
-          baseUri
-        ),
-        post_logout_redirect_uri: _makeAbsoluteIfNecessary(
-          post_logout_redirect_uri,
-          baseUri
-        ),
+        silent_redirect_uri: _makeAbsoluteIfNecessary(silent_redirect_uri, baseUri),
+        post_logout_redirect_uri: _makeAbsoluteIfNecessary(post_logout_redirect_uri, baseUri),
       });
 
-      this._userManager = getUserManagerForOpenIdConnectClient(
-        store,
-        openIdConnectConfiguration
-      );
+      this._userManager = getUserManagerForOpenIdConnectClient(store, openIdConnectConfiguration);
     }
   }
 }
@@ -285,10 +240,7 @@ function _initExtensions(extensions, cornerstoneExtensionConfig, appConfig) {
     },
   });
 
-  const requiredExtensions = [
-    GenericViewerCommands,
-    [OHIFCornerstoneExtension, cornerstoneExtensionConfig],
-  ];
+  const requiredExtensions = [GenericViewerCommands, [OHIFCornerstoneExtension, cornerstoneExtensionConfig]];
 
   if (appConfig.disableMeasurementPanel !== true) {
     /* WARNING: MUST BE REGISTERED _AFTER_ OHIFCornerstoneExtension */
@@ -306,13 +258,10 @@ function _initExtensions(extensions, cornerstoneExtensionConfig, appConfig) {
 function _initHotkeys(appConfigHotkeys) {
   // TODO: Use something more resilient
   // TODO: Mozilla has a special library for this
-  const userPreferredHotkeys = JSON.parse(
-    localStorage.getItem('hotkey-definitions') || '{}'
-  );
+  const userPreferredHotkeys = JSON.parse(localStorage.getItem('hotkey-definitions') || '{}');
 
   // TODO: hotkeysManager.isValidDefinitionObject(/* */)
-  const hasUserPreferences =
-    userPreferredHotkeys && Object.keys(userPreferredHotkeys).length > 0;
+  const hasUserPreferences = userPreferredHotkeys && Object.keys(userPreferredHotkeys).length > 0;
   if (hasUserPreferences) {
     hotkeysManager.setHotkeys(userPreferredHotkeys);
   } else {

@@ -1,8 +1,9 @@
-import OHIFLogo from '../components/OHIFLogo/OHIFLogo.js';
 import React from 'react';
 
+import OHIFLogo from '../components/OHIFLogo/OHIFLogo.js';
+
 const defaultContextValues = {
-  createLogoComponentFn: React => OHIFLogo(),
+  createLogoComponentFn: () => OHIFLogo(),
 };
 
 const WhiteLabelingContext = React.createContext(defaultContextValues);

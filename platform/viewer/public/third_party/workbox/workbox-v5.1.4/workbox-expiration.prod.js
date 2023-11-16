@@ -1,10 +1,10 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.expiration = (function(t, e, s, i, a, n, h) {
+  (this.workbox.expiration = (function (t, e, s, i, a, n, h) {
     'use strict';
     try {
       self['workbox:expiration:5.1.4'] && _();
     } catch (t) {}
-    const r = t => {
+    const r = (t) => {
       const e = new URL(t, location.href);
       return (e.hash = ''), e.href;
     };
@@ -12,7 +12,7 @@
       constructor(t) {
         (this.t = t),
           (this.s = new i.DBWrapper('workbox-expiration', 1, {
-            onupgradeneeded: t => this.i(t),
+            onupgradeneeded: (t) => this.i(t),
           }));
       }
       i(t) {
@@ -36,32 +36,21 @@
         return (await this.s.get('cache-entries', this.h(t))).timestamp;
       }
       async expireEntries(t, e) {
-        const s = await this.s.transaction(
-            'cache-entries',
-            'readwrite',
-            (s, i) => {
-              const a = s
-                  .objectStore('cache-entries')
-                  .index('timestamp')
-                  .openCursor(null, 'prev'),
-                n = [];
-              let h = 0;
-              a.onsuccess = () => {
-                const s = a.result;
-                if (s) {
-                  const i = s.value;
-                  i.cacheName === this.t &&
-                    ((t && i.timestamp < t) || (e && h >= e)
-                      ? n.push(s.value)
-                      : h++),
-                    s.continue();
-                } else i(n);
-              };
-            }
-          ),
+        const s = await this.s.transaction('cache-entries', 'readwrite', (s, i) => {
+            const a = s.objectStore('cache-entries').index('timestamp').openCursor(null, 'prev'),
+              n = [];
+            let h = 0;
+            a.onsuccess = () => {
+              const s = a.result;
+              if (s) {
+                const i = s.value;
+                i.cacheName === this.t && ((t && i.timestamp < t) || (e && h >= e) ? n.push(s.value) : h++),
+                  s.continue();
+              } else i(n);
+            };
+          }),
           i = [];
-        for (const t of s)
-          await this.s.delete('cache-entries', t.id), i.push(t.url);
+        for (const t of s) await this.s.delete('cache-entries', t.id), i.push(t.url);
         return i;
       }
       h(t) {
@@ -84,8 +73,7 @@
           s = await this.p.expireEntries(t, this.l),
           i = await self.caches.open(this.t);
         for (const t of s) await i.delete(t);
-        (this.o = !1),
-          this.u && ((this.u = !1), e.dontWaitFor(this.expireEntries()));
+        (this.o = !1), this.u && ((this.u = !1), e.dontWaitFor(this.expireEntries()));
       }
       async updateTimestamp(t) {
         await this.p.setTimestamp(t, Date.now());
@@ -104,12 +92,7 @@
       (t.CacheExpiration = o),
       (t.ExpirationPlugin = class {
         constructor(t = {}) {
-          (this.cachedResponseWillBeUsed = async ({
-            event: t,
-            request: s,
-            cacheName: i,
-            cachedResponse: a,
-          }) => {
+          (this.cachedResponseWillBeUsed = async ({ event: t, request: s, cacheName: i, cachedResponse: a }) => {
             if (!a) return null;
             const n = this.k(a),
               h = this.D(i);
@@ -128,12 +111,10 @@
             (this.N = t),
             (this.m = t.maxAgeSeconds),
             (this.g = new Map()),
-            t.purgeOnQuotaError &&
-              h.registerQuotaErrorCallback(() => this.deleteCacheAndMetadata());
+            t.purgeOnQuotaError && h.registerQuotaErrorCallback(() => this.deleteCacheAndMetadata());
         }
         D(t) {
-          if (t === n.cacheNames.getRuntimeName())
-            throw new s.WorkboxError('expire-custom-caches-only');
+          if (t === n.cacheNames.getRuntimeName()) throw new s.WorkboxError('expire-custom-caches-only');
           let e = this.g.get(t);
           return e || ((e = new o(t, this.N)), this.g.set(t, e)), e;
         }
@@ -150,8 +131,7 @@
           return isNaN(s) ? null : s;
         }
         async deleteCacheAndMetadata() {
-          for (const [t, e] of this.g)
-            await self.caches.delete(t), await e.delete();
+          for (const [t, e] of this.g) await self.caches.delete(t), await e.delete();
           this.g = new Map();
         }
       }),

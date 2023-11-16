@@ -1,11 +1,12 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import { withTranslation } from '../../contextProviders';
 
 import { Icon } from './../../elements/Icon';
 import { OverlayTrigger } from './../overlayTrigger';
-import { Tooltip } from './../tooltip';
 import { TableListItem } from './../tableList/TableListItem.js';
+import { Tooltip } from './../tooltip';
 
 import './MeasurementTableItem.styl';
 
@@ -38,11 +39,7 @@ class MeasurementTableItem extends Component {
   }
 
   render() {
-    const {
-      warningTitle = '',
-      hasWarnings,
-      isReadOnly,
-    } = this.props.measurementData;
+    const { warningTitle = '', hasWarnings, isReadOnly } = this.props.measurementData;
 
     return (
       <React.Fragment>
@@ -51,11 +48,7 @@ class MeasurementTableItem extends Component {
             key={this.props.itemIndex}
             placement="left"
             overlay={
-              <Tooltip
-                placement="left"
-                className="in tooltip-warning"
-                id="tooltip-left"
-              >
+              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
                 <div className="warningTitle">{this.props.t(warningTitle)}</div>
                 <div className="warningContent">{this.getWarningContent()}</div>
               </Tooltip>
@@ -83,25 +76,16 @@ class MeasurementTableItem extends Component {
 
   getTableListItem = () => {
     const hasWarningClass =
-      this.props.measurementData.hasWarnings &&
-      !this.props.measurementData.isReadOnly
-        ? 'hasWarnings'
-        : '';
+      this.props.measurementData.hasWarnings && !this.props.measurementData.isReadOnly ? 'hasWarnings' : '';
 
     const actionButtons = [];
 
     if (typeof this.props.onRelabel === 'function') {
-      const relabelButton = this.getActionButton(
-        'Relabel',
-        this.onRelabelClick
-      );
+      const relabelButton = this.getActionButton('Relabel', this.onRelabelClick);
       actionButtons.push(relabelButton);
     }
     if (typeof this.props.onEditDescription === 'function') {
-      const descriptionButton = this.getActionButton(
-        'Description',
-        this.onEditDescriptionClick
-      );
+      const descriptionButton = this.getActionButton('Description', this.onEditDescriptionClick);
       actionButtons.push(descriptionButton);
     }
     if (typeof this.props.onDelete === 'function') {
@@ -139,7 +123,7 @@ class MeasurementTableItem extends Component {
                 width="20px"
                 height="20px"
                 onClick={() => {
-                  this.props.measurementData.labels.forEach(label => {
+                  this.props.measurementData.labels.forEach((label) => {
                     label.visible = !this.state.visible;
                   });
 
@@ -149,9 +133,7 @@ class MeasurementTableItem extends Component {
                 }}
               />
               <Icon
-                className={`angle-double-${
-                  this.state.collapsed ? 'down' : 'up'
-                }`}
+                className={`angle-double-${this.state.collapsed ? 'down' : 'up'}`}
                 name={`angle-double-${this.state.collapsed ? 'down' : 'up'}`}
                 width="20px"
                 height="20px"
@@ -175,9 +157,7 @@ class MeasurementTableItem extends Component {
                 >
                   <div>
                     <div className="icons">
-                      <span style={{ width: '90px' }}>
-                        {SRLabel.label + ' : ' + SRLabel.value}
-                      </span>
+                      <span style={{ width: '90px' }}>{SRLabel.label + ' : ' + SRLabel.value}</span>
                       <Icon
                         className={`eye-icon`}
                         name={SRLabel.visible ? 'eye' : 'eye-closed'}
@@ -211,34 +191,32 @@ class MeasurementTableItem extends Component {
               })}
             </div>
             <div className="displayTexts">{this.getDataDisplayText()}</div>
-            {!this.props.measurementData.isReadOnly && (
-              <div className="rowActions">{actionButtons}</div>
-            )}
+            {!this.props.measurementData.isReadOnly && <div className="rowActions">{actionButtons}</div>}
           </div>
         </TableListItem>
       );
     }
   };
 
-  onItemClick = event => {
+  onItemClick = (event) => {
     this.props.onItemClick(event, this.props.measurementData);
   };
 
-  onRelabelClick = event => {
+  onRelabelClick = (event) => {
     // Prevent onItemClick from firing
     event.stopPropagation();
 
     this.props.onRelabel(event, this.props.measurementData);
   };
 
-  onEditDescriptionClick = event => {
+  onEditDescriptionClick = (event) => {
     // Prevent onItemClick from firing
     event.stopPropagation();
 
     this.props.onEditDescription(event, this.props.measurementData);
   };
 
-  onDeleteClick = event => {
+  onDeleteClick = (event) => {
     // Prevent onItemClick from firing
     event.stopPropagation();
 
@@ -270,8 +248,6 @@ class MeasurementTableItem extends Component {
   };
 }
 
-const connectedComponent = withTranslation('MeasurementTable')(
-  MeasurementTableItem
-);
+const connectedComponent = withTranslation('MeasurementTable')(MeasurementTableItem);
 export { connectedComponent as MeasurementTableItem };
 export default connectedComponent;

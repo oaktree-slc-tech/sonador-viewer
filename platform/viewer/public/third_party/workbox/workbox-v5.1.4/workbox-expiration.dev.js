@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.expiration = (function(
+this.workbox.expiration = (function (
   exports,
   assert_js,
   dontWaitFor_js,
@@ -27,7 +27,7 @@ this.workbox.expiration = (function(
   const DB_NAME = 'workbox-expiration';
   const OBJECT_STORE_NAME = 'cache-entries';
 
-  const normalizeURL = unNormalizedUrl => {
+  const normalizeURL = (unNormalizedUrl) => {
     const url = new URL(unNormalizedUrl, location.href);
     url.hash = '';
     return url.href;
@@ -48,7 +48,7 @@ this.workbox.expiration = (function(
     constructor(cacheName) {
       this._cacheName = cacheName;
       this._db = new DBWrapper_js.DBWrapper(DB_NAME, 1, {
-        onupgradeneeded: event => this._handleUpgrade(event),
+        onupgradeneeded: (event) => this._handleUpgrade(event),
       });
     }
     /**
@@ -127,50 +127,46 @@ this.workbox.expiration = (function(
      */
 
     async expireEntries(minTimestamp, maxCount) {
-      const entriesToDelete = await this._db.transaction(
-        OBJECT_STORE_NAME,
-        'readwrite',
-        (txn, done) => {
-          const store = txn.objectStore(OBJECT_STORE_NAME);
-          const request = store.index('timestamp').openCursor(null, 'prev');
-          const entriesToDelete = [];
-          let entriesNotDeletedCount = 0;
+      const entriesToDelete = await this._db.transaction(OBJECT_STORE_NAME, 'readwrite', (txn, done) => {
+        const store = txn.objectStore(OBJECT_STORE_NAME);
+        const request = store.index('timestamp').openCursor(null, 'prev');
+        const entriesToDelete = [];
+        let entriesNotDeletedCount = 0;
 
-          request.onsuccess = () => {
-            const cursor = request.result;
+        request.onsuccess = () => {
+          const cursor = request.result;
 
-            if (cursor) {
-              const result = cursor.value; // TODO(philipwalton): once we can use a multi-key index, we
-              // won't have to check `cacheName` here.
+          if (cursor) {
+            const result = cursor.value; // TODO(philipwalton): once we can use a multi-key index, we
+            // won't have to check `cacheName` here.
 
-              if (result.cacheName === this._cacheName) {
-                // Delete an entry if it's older than the max age or
-                // if we already have the max number allowed.
-                if (
-                  (minTimestamp && result.timestamp < minTimestamp) ||
-                  (maxCount && entriesNotDeletedCount >= maxCount)
-                ) {
-                  // TODO(philipwalton): we should be able to delete the
-                  // entry right here, but doing so causes an iteration
-                  // bug in Safari stable (fixed in TP). Instead we can
-                  // store the keys of the entries to delete, and then
-                  // delete the separate transactions.
-                  // https://github.com/GoogleChrome/workbox/issues/1978
-                  // cursor.delete();
-                  // We only need to return the URL, not the whole entry.
-                  entriesToDelete.push(cursor.value);
-                } else {
-                  entriesNotDeletedCount++;
-                }
+            if (result.cacheName === this._cacheName) {
+              // Delete an entry if it's older than the max age or
+              // if we already have the max number allowed.
+              if (
+                (minTimestamp && result.timestamp < minTimestamp) ||
+                (maxCount && entriesNotDeletedCount >= maxCount)
+              ) {
+                // TODO(philipwalton): we should be able to delete the
+                // entry right here, but doing so causes an iteration
+                // bug in Safari stable (fixed in TP). Instead we can
+                // store the keys of the entries to delete, and then
+                // delete the separate transactions.
+                // https://github.com/GoogleChrome/workbox/issues/1978
+                // cursor.delete();
+                // We only need to return the URL, not the whole entry.
+                entriesToDelete.push(cursor.value);
+              } else {
+                entriesNotDeletedCount++;
               }
-
-              cursor.continue();
-            } else {
-              done(entriesToDelete);
             }
-          };
-        }
-      ); // TODO(philipwalton): once the Safari bug in the following issue is fixed,
+
+            cursor.continue();
+          } else {
+            done(entriesToDelete);
+          }
+        };
+      }); // TODO(philipwalton): once the Safari bug in the following issue is fixed,
       // we should be able to remove this loop and do the entry deletion in the
       // cursor loop above:
       // https://github.com/GoogleChrome/workbox/issues/1978
@@ -241,14 +237,11 @@ this.workbox.expiration = (function(
         });
 
         if (!(config.maxEntries || config.maxAgeSeconds)) {
-          throw new WorkboxError_js.WorkboxError(
-            'max-entries-or-age-required',
-            {
-              moduleName: 'workbox-expiration',
-              className: 'CacheExpiration',
-              funcName: 'constructor',
-            }
-          );
+          throw new WorkboxError_js.WorkboxError('max-entries-or-age-required', {
+            moduleName: 'workbox-expiration',
+            className: 'CacheExpiration',
+            funcName: 'constructor',
+          });
         }
 
         if (config.maxEntries) {
@@ -286,13 +279,8 @@ this.workbox.expiration = (function(
       }
 
       this._isRunning = true;
-      const minTimestamp = this._maxAgeSeconds
-        ? Date.now() - this._maxAgeSeconds * 1000
-        : 0;
-      const urlsExpired = await this._timestampModel.expireEntries(
-        minTimestamp,
-        this._maxEntries
-      ); // Delete URLs from the cache
+      const minTimestamp = this._maxAgeSeconds ? Date.now() - this._maxAgeSeconds * 1000 : 0;
+      const urlsExpired = await this._timestampModel.expireEntries(minTimestamp, this._maxEntries); // Delete URLs from the cache
 
       const cache = await self.caches.open(this._cacheName);
 
@@ -308,17 +296,11 @@ this.workbox.expiration = (function(
               `${urlsExpired.length === 1 ? 'it' : 'them'} from the ` +
               `'${this._cacheName}' cache.`
           );
-          logger_js.logger.log(
-            `Expired the following ${
-              urlsExpired.length === 1 ? 'URL' : 'URLs'
-            }:`
-          );
-          urlsExpired.forEach(url => logger_js.logger.log(`    ${url}`));
+          logger_js.logger.log(`Expired the following ${urlsExpired.length === 1 ? 'URL' : 'URLs'}:`);
+          urlsExpired.forEach((url) => logger_js.logger.log(`    ${url}`));
           logger_js.logger.groupEnd();
         } else {
-          logger_js.logger.debug(
-            `Cache expiration ran and found no entries to remove.`
-          );
+          logger_js.logger.debug(`Cache expiration ran and found no entries to remove.`);
         }
       }
 
@@ -364,13 +346,10 @@ this.workbox.expiration = (function(
     async isURLExpired(url) {
       if (!this._maxAgeSeconds) {
         {
-          throw new WorkboxError_js.WorkboxError(
-            `expired-test-without-max-age`,
-            {
-              methodName: 'isURLExpired',
-              paramName: 'maxAgeSeconds',
-            }
-          );
+          throw new WorkboxError_js.WorkboxError(`expired-test-without-max-age`, {
+            methodName: 'isURLExpired',
+            paramName: 'maxAgeSeconds',
+          });
         }
       } else {
         const timestamp = await this._timestampModel.getTimestamp(url);
@@ -445,12 +424,7 @@ this.workbox.expiration = (function(
        *
        * @private
        */
-      this.cachedResponseWillBeUsed = async ({
-        event,
-        request,
-        cacheName,
-        cachedResponse,
-      }) => {
+      this.cachedResponseWillBeUsed = async ({ event, request, cacheName, cachedResponse }) => {
         if (!cachedResponse) {
           return null;
         }
@@ -463,9 +437,7 @@ this.workbox.expiration = (function(
         dontWaitFor_js.dontWaitFor(cacheExpiration.expireEntries()); // Update the metadata for the request URL to the current timestamp,
         // but don't `await` it as we don't want to block the response.
 
-        const updateTimestampDone = cacheExpiration.updateTimestamp(
-          request.url
-        );
+        const updateTimestampDone = cacheExpiration.updateTimestamp(request.url);
 
         if (event) {
           try {
@@ -521,14 +493,11 @@ this.workbox.expiration = (function(
 
       {
         if (!(config.maxEntries || config.maxAgeSeconds)) {
-          throw new WorkboxError_js.WorkboxError(
-            'max-entries-or-age-required',
-            {
-              moduleName: 'workbox-expiration',
-              className: 'Plugin',
-              funcName: 'constructor',
-            }
-          );
+          throw new WorkboxError_js.WorkboxError('max-entries-or-age-required', {
+            moduleName: 'workbox-expiration',
+            className: 'Plugin',
+            funcName: 'constructor',
+          });
         }
 
         if (config.maxEntries) {
@@ -555,9 +524,7 @@ this.workbox.expiration = (function(
       this._cacheExpirations = new Map();
 
       if (config.purgeOnQuotaError) {
-        registerQuotaErrorCallback_js.registerQuotaErrorCallback(() =>
-          this.deleteCacheAndMetadata()
-        );
+        registerQuotaErrorCallback_js.registerQuotaErrorCallback(() => this.deleteCacheAndMetadata());
       }
     }
     /**

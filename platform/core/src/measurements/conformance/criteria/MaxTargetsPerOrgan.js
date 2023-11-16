@@ -14,12 +14,12 @@ export const MaxTargetsPerOrganSchema = {
     },
     isNodal: {
       label: 'Filter to evaluate only nodal or extranodal measurements',
-      type: 'boolean'
+      type: 'boolean',
     },
     message: {
       label: 'Message to be displayed in case of nonconformity',
       type: 'string',
-    }
+    },
   },
   required: ['limit'],
 };
@@ -44,15 +44,13 @@ export class MaxTargetsPerOrganCriterion extends BaseCriterion {
     let measurements = [];
 
     const newTargetNumbers = this.getNewTargetNumbers(data);
-    data.targets.forEach(target => {
+    data.targets.forEach((target) => {
       const { measurement } = target;
       const { location, measurementNumber, isSplitLesion, isNodal } = measurement;
 
-      if (isSplitLesion)
-        return;
+      if (isSplitLesion) return;
 
-      if (typeof isNodal === 'boolean' && typeof options.isNodal === 'boolean' && options.isNodal !== isNodal)
-        return;
+      if (typeof isNodal === 'boolean' && typeof options.isNodal === 'boolean' && options.isNodal !== isNodal) return;
 
       if (!targetsPerOrgan[location]) {
         targetsPerOrgan[location] = new Set();
@@ -70,11 +68,7 @@ export class MaxTargetsPerOrganCriterion extends BaseCriterion {
     let message;
     if (measurements.length) {
       const increment = options.newTarget ? 'new ' : '';
-      message =
-        options.message ||
-        `Each organ should not have more than ${
-        options.limit
-        } ${increment}targets.`;
+      message = options.message || `Each organ should not have more than ${options.limit} ${increment}targets.`;
     }
 
     return this.generateResponse(message, measurements);

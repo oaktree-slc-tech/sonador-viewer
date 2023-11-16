@@ -15,12 +15,7 @@ const StudyMetaDataPromises = new Map();
  * as some DICOMWeb implementations only support single filters.
  * @returns {Promise} that will be resolved with the metadata or rejected with the error
  */
-export function retrieveStudyMetadata(
-  server,
-  StudyInstanceUID,
-  filters,
-  separateSeriesInstanceUIDFilters = false
-) {
+export function retrieveStudyMetadata(server, StudyInstanceUID, filters, separateSeriesInstanceUIDFilters = false) {
   // @TODO: Whenever a study metadata request has failed, its related promise will be rejected once and for all
   // and further requests for that metadata will always fail. On failure, we probably need to remove the
   // corresponding promise from the "StudyMetaDataPromises" map...
@@ -29,9 +24,7 @@ export function retrieveStudyMetadata(
     throw new Error(`${moduleName}: Required 'server' parameter not provided.`);
   }
   if (!StudyInstanceUID) {
-    throw new Error(
-      `${moduleName}: Required 'StudyInstanceUID' parameter not provided.`
-    );
+    throw new Error(`${moduleName}: Required 'StudyInstanceUID' parameter not provided.`);
   }
 
   // Already waiting on result? Return cached promise
@@ -42,11 +35,7 @@ export function retrieveStudyMetadata(
   // Create a promise to handle the data retrieval
   let promise;
 
-  if (
-    filters &&
-    filters.seriesInstanceUID &&
-    separateSeriesInstanceUIDFilters
-  ) {
+  if (filters && filters.seriesInstanceUID && separateSeriesInstanceUIDFilters) {
     promise = __separateSeriesRequestToAggregatePromiseateSeriesRequestToAggregatePromise(
       server,
       StudyInstanceUID,
@@ -87,22 +76,20 @@ function __separateSeriesRequestToAggregatePromiseateSeriesRequestToAggregatePro
   return new Promise((resolve, reject) => {
     const promises = [];
 
-    seriesInstanceUIDs.forEach(uid => {
+    seriesInstanceUIDs.forEach((uid) => {
       const seriesSpecificFilters = Object.assign({}, filters, {
         seriesInstanceUID: uid,
       });
 
-      promises.push(
-        RetrieveMetadata(server, StudyInstanceUID, seriesSpecificFilters)
-      );
+      promises.push(RetrieveMetadata(server, StudyInstanceUID, seriesSpecificFilters));
     });
 
-    Promise.all(promises).then(results => {
+    Promise.all(promises).then((results) => {
       const data = results[0];
 
       let series = [];
 
-      results.forEach(result => {
+      results.forEach((result) => {
         series = [...series, ...result.series];
       });
 

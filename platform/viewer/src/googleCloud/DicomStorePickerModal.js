@@ -1,24 +1,18 @@
 import React from 'react';
-import PropTypes from 'prop-types';
-import DatasetSelector from './DatasetSelector';
-import './googleCloud.css';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
+
+import { servicesManager } from '../App';
 import * as GoogleCloudUtilServers from './utils/getServers';
+import DatasetSelector from './DatasetSelector';
 
-import { servicesManager } from './../App.js';
+import './googleCloud.css';
 
-function DicomStorePickerModal({
-  isOpen = false,
-  setServers,
-  onClose,
-  user,
-  url,
-  t,
-}) {
+function DicomStorePickerModal({ isOpen = false, setServers, onClose, user, url, t }) {
   const { UIModalService } = servicesManager.services;
 
   const showDicomStorePickerModal = () => {
-    const handleEvent = data => {
+    const handleEvent = (data) => {
       const servers = GoogleCloudUtilServers.getServers(data, data.dicomstore);
       setServers(servers);
 
@@ -41,9 +35,7 @@ function DicomStorePickerModal({
     }
   };
 
-  return (
-    <React.Fragment>{isOpen && showDicomStorePickerModal()}</React.Fragment>
-  );
+  return <React.Fragment>{isOpen && showDicomStorePickerModal()}</React.Fragment>;
 }
 
 DicomStorePickerModal.propTypes = {

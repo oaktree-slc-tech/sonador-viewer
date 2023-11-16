@@ -1,5 +1,5 @@
-import { SeriesMetadata } from './SeriesMetadata';
 import { OHIFInstanceMetadata } from './OHIFInstanceMetadata';
+import { SeriesMetadata } from './SeriesMetadata';
 
 export class OHIFSeriesMetadata extends SeriesMetadata {
   /**
@@ -22,7 +22,7 @@ export class OHIFSeriesMetadata extends SeriesMetadata {
     });
 
     // populate internal list of instances...
-    series.instances.forEach(instance => {
+    series.instances.forEach((instance) => {
       this.addInstance(new OHIFInstanceMetadata(instance, series, study));
     });
   }

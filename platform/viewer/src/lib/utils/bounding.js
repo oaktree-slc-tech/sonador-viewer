@@ -4,13 +4,7 @@ export default function bounding(elementRef, currentPosition = {}) {
   }
 
   const currentElement = elementRef.current;
-  const {
-    offsetParent,
-    offsetTop,
-    offsetHeight,
-    offsetLeft,
-    offsetWidth,
-  } = currentElement;
+  const { offsetParent, offsetTop, offsetHeight, offsetLeft, offsetWidth } = currentElement;
   let top = currentPosition.top || offsetTop;
   let left = currentPosition.left || offsetLeft;
 

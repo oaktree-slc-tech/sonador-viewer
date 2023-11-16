@@ -1,35 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
-import throttle from 'lodash.throttle';
+import React, { useEffect, useState } from 'react';
 import { useDrag } from 'react-dnd';
-import { classes } from '@ohif/core';
-import ImageThumbnail from './ImageThumbnail';
 import classNames from 'classnames';
+import throttle from 'lodash.throttle';
+import PropTypes from 'prop-types';
+
+import { classes } from '@ohif/core';
+
 import { Icon } from './../../elements/Icon';
-import { Tooltip } from './../tooltip';
 import { OverlayTrigger } from './../overlayTrigger';
+import { Tooltip } from './../tooltip';
+import ImageThumbnail from './ImageThumbnail';
+
 import './Thumbnail.styl';
 
 const StudyLoadingListener = classes.StudyLoadingListener;
 
-function ThumbnailFooter({
-  SeriesDescription,
-  SeriesNumber,
-  numImageFrames,
-  hasWarnings,
-  hasDerivedDisplaySets,
-}) {
+function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets }) {
   const [inconsistencyWarnings, inconsistencyWarningsSet] = useState([]);
   const [derivedDisplaySetsActive, derivedDisplaySetsActiveSet] = useState([]);
 
   useEffect(() => {
     let unmounted = false;
-    hasWarnings.then(response => {
+    hasWarnings.then((response) => {
       if (!unmounted) {
         inconsistencyWarningsSet(response);
       }
     });
-    hasDerivedDisplaySets.then(response => {
+    hasDerivedDisplaySets.then((response) => {
       if (!unmounted) {
         derivedDisplaySetsActiveSet(response);
       }
@@ -50,7 +47,7 @@ function ThumbnailFooter({
     );
   };
 
-  const getWarningContent = inconsistencyWarnings => {
+  const getWarningContent = (inconsistencyWarnings) => {
     if (Array.isArray(inconsistencyWarnings)) {
       const listedWarnings = inconsistencyWarnings.map((warn, index) => {
         return <li key={index}>{warn}</li>;
@@ -70,15 +67,9 @@ function ThumbnailFooter({
             key={SeriesNumber}
             placement="left"
             overlay={
-              <Tooltip
-                placement="left"
-                className="in tooltip-warning"
-                id="tooltip-left"
-              >
+              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
                 <div className="warningTitle">Series Inconsistencies</div>
-                <div className="warningContent">
-                  {getWarningContent(inconsistencyWarnings)}
-                </div>
+                <div className="warningContent">{getWarningContent(inconsistencyWarnings)}</div>
               </Tooltip>
             }
           >
@@ -95,7 +86,7 @@ function ThumbnailFooter({
     );
   };
 
-  const getDerivedInfo = derivedDisplaySetsActive => {
+  const getDerivedInfo = (derivedDisplaySetsActive) => {
     return (
       <React.Fragment>
         {derivedDisplaySetsActive ? (
@@ -109,23 +100,14 @@ function ThumbnailFooter({
     );
   };
 
-  const getSeriesInformation = (
-    SeriesNumber,
-    numImageFrames,
-    inconsistencyWarnings,
-    derivedDisplaySetsActive
-  ) => {
+  const getSeriesInformation = (SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive) => {
     if (!SeriesNumber && !numImageFrames) {
       return;
     }
     const seriesInformation = (
       <div className="series-information">
         <React.Fragment>
-          {SeriesNumber !== undefined ? (
-            getInfo(SeriesNumber, 'S:')
-          ) : (
-            <React.Fragment></React.Fragment>
-          )}
+          {SeriesNumber !== undefined ? getInfo(SeriesNumber, 'S:') : <React.Fragment></React.Fragment>}
         </React.Fragment>
         <React.Fragment>
           {numImageFrames !== undefined ? (
@@ -145,12 +127,7 @@ function ThumbnailFooter({
   return (
     <div className={classNames('series-details', { 'info-only': infoOnly })}>
       <div className="series-description">{SeriesDescription}</div>
-      {getSeriesInformation(
-        SeriesNumber,
-        numImageFrames,
-        inconsistencyWarnings,
-        derivedDisplaySetsActive
-      )}
+      {getSeriesInformation(SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive)}
     </div>
   );
 }
@@ -183,18 +160,12 @@ function Thumbnail(props) {
       }
     }, 100);
 
-    document.addEventListener(
-      StudyLoadingListener.events.OnProgress,
-      onProgressChange
-    );
+    document.addEventListener(StudyLoadingListener.events.OnProgress, onProgressChange);
 
     return () => {
-      document.removeEventListener(
-        StudyLoadingListener.events.OnProgress,
-        onProgressChange
-      );
+      document.removeEventListener(StudyLoadingListener.events.OnProgress, onProgressChange);
     };
-  }, [displaySetInstanceUID]);
+  }, [displaySetInstanceUID, stackPercentComplete]);
 
   const [collectedProps, drag, dragPreview] = useDrag({
     // `droppedItem` in `dropTarget`
@@ -204,7 +175,7 @@ function Thumbnail(props) {
       displaySetInstanceUID,
       type: 'thumbnail', // Has to match `dropTarget`'s type
     },
-    canDrag: function(monitor) {
+    canDrag: function (monitor) {
       return supportsDrag;
     },
   });

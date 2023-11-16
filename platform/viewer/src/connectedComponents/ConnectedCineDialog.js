@@ -1,11 +1,13 @@
 import { connect } from 'react-redux';
-import { CineDialog } from '@ohif/ui';
-import OHIF from '@ohif/core';
 import csTools from 'cornerstone-tools';
-import { commandsManager } from './../App.js';
 // Our target output kills the `as` and "import" throws a keyword error
 // import { import as toolImport, getToolState } from 'cornerstone-tools';
 import * as _ from 'lodash';
+
+import OHIF from '@ohif/core';
+import { CineDialog } from '@ohif/ui';
+
+import { commandsManager } from '../App';
 
 const toolImport = csTools.import;
 const scrollToIndex = toolImport('util/scrollToIndex');
@@ -14,7 +16,7 @@ const { setViewportSpecificData } = OHIF.redux.actions;
 // Why do I need or care about any of this info?
 // A dispatch action should be able to pull this at the time of an event?
 // `isPlaying` and `cineFrameRate` might matter, but I think we can prop pass for those.
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   // Get activeViewport's `cine` and `stack`
   const { viewportSpecificData, activeViewportIndex } = state.viewports;
   const { cine } = viewportSpecificData[activeViewportIndex] || {};
@@ -33,7 +35,7 @@ const mapStateToProps = state => {
   };
 };
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
     dispatchSetViewportSpecificData: (viewportIndex, data) => {
       dispatch(setViewportSpecificData(viewportIndex, data));
@@ -41,17 +43,13 @@ const mapDispatchToProps = dispatch => {
   };
 };
 
-const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
-  const {
-    activeEnabledElement,
-    activeViewportCineData,
-    activeViewportIndex,
-  } = propsFromState;
+const mergeProps = (propsFromState, propsFromDispatch) => {
+  const { activeEnabledElement, activeViewportCineData, activeViewportIndex } = propsFromState;
 
   return {
     cineFrameRate: activeViewportCineData.cineFrameRate,
     isPlaying: activeViewportCineData.isPlaying,
-    onPlayPauseChanged: isPlaying => {
+    onPlayPauseChanged: () => {
       const cine = _.cloneDeep(activeViewportCineData);
       cine.isPlaying = !cine.isPlaying;
 
@@ -59,7 +57,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
         cine,
       });
     },
-    onFrameRateChanged: frameRate => {
+    onFrameRateChanged: (frameRate) => {
       const cine = _.cloneDeep(activeViewportCineData);
       cine.cineFrameRate = frameRate;
 
@@ -95,10 +93,6 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   };
 };
 
-const ConnectedCineDialog = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps
-)(CineDialog);
+const ConnectedCineDialog = connect(mapStateToProps, mapDispatchToProps, mergeProps)(CineDialog);
 
 export default ConnectedCineDialog;

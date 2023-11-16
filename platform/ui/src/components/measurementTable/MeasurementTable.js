@@ -1,15 +1,16 @@
-import './MeasurementTable.styl';
-
 import React, { Component } from 'react';
+import PropTypes from 'prop-types';
+
 import { withTranslation } from '../../contextProviders';
 
 import { Icon } from './../../elements/Icon';
-import { MeasurementTableItem } from './MeasurementTableItem.js';
-import { OverlayTrigger } from './../overlayTrigger';
-import PropTypes from 'prop-types';
 import { ScrollableArea } from './../../ScrollableArea/ScrollableArea.js';
+import { OverlayTrigger } from './../overlayTrigger';
 import { TableList } from './../tableList';
 import { Tooltip } from './../tooltip';
+import { MeasurementTableItem } from './MeasurementTableItem.js';
+
+import './MeasurementTable.styl';
 
 class MeasurementTable extends Component {
   static propTypes = {
@@ -50,18 +51,9 @@ class MeasurementTable extends Component {
               key={'overwall-warning'}
               placement="left"
               overlay={
-                <Tooltip
-                  placement="left"
-                  className="in tooltip-warning"
-                  id="tooltip-left"
-                  style={{}}
-                >
-                  <div className="warningTitle">
-                    {t('Criteria nonconformities')}
-                  </div>
-                  <div className="warningContent">
-                    {this.getWarningContent()}
-                  </div>
+                <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left" style={{}}>
+                  <div className="warningTitle">{t('Criteria nonconformities')}</div>
+                  <div className="warningContent">{this.getWarningContent()}</div>
                 </Tooltip>
               }
             >
@@ -79,11 +71,7 @@ class MeasurementTable extends Component {
         </ScrollableArea>
         <div className="measurementTableFooter">
           {saveFunction && (
-            <button
-              onClick={this.saveFunction}
-              className="saveBtn"
-              data-cy="save-measurements-btn"
-            >
+            <button onClick={this.saveFunction} className="saveBtn" data-cy="save-measurements-btn">
               <Icon name="save" width="14px" height="14px" />
               Save measurements
             </button>
@@ -93,7 +81,7 @@ class MeasurementTable extends Component {
     );
   }
 
-  saveFunction = async event => {
+  saveFunction = async (event) => {
     const { saveFunction, onSaveComplete } = this.props;
     if (saveFunction) {
       try {
@@ -120,25 +108,21 @@ class MeasurementTable extends Component {
   getMeasurementsGroups = () => {
     return this.props.measurementCollection.map((measureGroup, index) => {
       return (
-        <TableList
-          key={index}
-          customHeader={this.getCustomHeader(measureGroup)}
-        >
+        <TableList key={index} customHeader={this.getCustomHeader(measureGroup)}>
           {this.getMeasurements(measureGroup)}
         </TableList>
       );
     });
   };
 
-  getMeasurements = measureGroup => {
+  getMeasurements = (measureGroup) => {
     const selectedKey = this.props.selectedMeasurementNumber
       ? this.props.selectedMeasurementNumber
       : this.state.selectedKey;
     return measureGroup.measurements.map((measurement, index) => {
       const key = measurement.measurementNumber;
       const itemIndex = measurement.itemNumber || index + 1;
-      const itemClass =
-        selectedKey === key && !this.props.readOnly ? 'selected' : '';
+      const itemClass = selectedKey === key && !this.props.readOnly ? 'selected' : '';
       return (
         <MeasurementTableItem
           key={key}
@@ -166,12 +150,10 @@ class MeasurementTable extends Component {
     }
   };
 
-  getCustomHeader = measureGroup => {
+  getCustomHeader = (measureGroup) => {
     return (
       <React.Fragment>
-        <div className="tableListHeaderTitle">
-          {this.props.t(measureGroup.groupName)}
-        </div>
+        <div className="tableListHeaderTitle">{this.props.t(measureGroup.groupName)}</div>
         {measureGroup.maxMeasurements && (
           <div className="maxMeasurements">
             {this.props.t('MAX')} {measureGroup.maxMeasurements}
@@ -210,8 +192,6 @@ class MeasurementTable extends Component {
   };
 }
 
-const connectedComponent = withTranslation(['MeasurementTable', 'Common'])(
-  MeasurementTable
-);
+const connectedComponent = withTranslation(['MeasurementTable', 'Common'])(MeasurementTable);
 export { connectedComponent as MeasurementTable };
 export default connectedComponent;

@@ -1,7 +1,7 @@
 //We excluded the tests for '**/studies/**' because the bulk/all of our other study/viewer tests use this route
 
-describe('OHIF Routes', function() {
-  beforeEach(function() {
+describe('OHIF Routes', function () {
+  beforeEach(function () {
     cy.openStudyList();
   });
 

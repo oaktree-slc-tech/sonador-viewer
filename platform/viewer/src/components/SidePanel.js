@@ -1,10 +1,10 @@
-import './SidePanel.css';
-
-import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
+import React, { useEffect } from 'react';
 import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 import { eventTypes as uiEvents } from '@ohif/ui';
+
+import './SidePanel.css';
 
 const SidePanel = ({ from, isOpen, children, width, transitionDelay }) => {
   const fromSideClass = from === 'right' ? 'from-right' : 'from-left';

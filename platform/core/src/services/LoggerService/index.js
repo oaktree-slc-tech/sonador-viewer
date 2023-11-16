@@ -47,10 +47,7 @@ function _error({ error, stack, message, displayOnConsole }) {
  *   error: errorImplementation,
  * }
  */
-function setServiceImplementation({
-  info: infoImplementation,
-  error: errorImplementation,
-}) {
+function setServiceImplementation({ info: infoImplementation, error: errorImplementation }) {
   if (infoImplementation) {
     serviceImplementation._info = infoImplementation;
   }

@@ -1,14 +1,10 @@
 import cornerstone from 'cornerstone-core';
-import { MeasurementApi } from '../classes';
+
 import log from '../../log';
+import { MeasurementApi } from '../classes';
 import refreshCornerstoneViewports from '../lib/refreshCornerstoneViewports';
 
-export default function handleSingleMeasurementRemoved({
-  eventData,
-  tool,
-  toolGroupId,
-  toolGroup,
-}) {
+export default function handleSingleMeasurementRemoved({ eventData, tool, toolGroupId, toolGroup }) {
   log.info('CornerstoneToolsMeasurementRemoved');
   const { measurementData, toolType } = eventData;
 
@@ -23,7 +19,7 @@ export default function handleSingleMeasurementRemoved({
   if (!collection) return;
 
   const measurementTypeId = measurementApi.toolsGroupsMap[toolType];
-  const measurement = collection.find(t => t._id === measurementData._id);
+  const measurement = collection.find((t) => t._id === measurementData._id);
 
   // Stop here if the measurement is already gone or never existed
   if (!measurement) return;

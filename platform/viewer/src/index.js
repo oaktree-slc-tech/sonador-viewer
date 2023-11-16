@@ -3,17 +3,17 @@
  * Packaged (NPM) builds go through `index-umd.js`
  */
 
-import 'regenerator-runtime/runtime';
-
-import App from './App.js';
 import React from 'react';
 import ReactDOM from 'react-dom';
 
 // Import OHIF DICOM ECG extension
-import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg'
-
+import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
+import OHIFDicomHtmlExtension from '@ohif/extension-dicom-html';
+import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
+import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
+import OHIFDicomRtExtension from '@ohif/extension-dicom-rt';
+import OHIFDicomSegmentationExtension from '@ohif/extension-dicom-segmentation';
 // test
-
 /**
  * EXTENSIONS
  * =================
@@ -28,15 +28,15 @@ import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg'
  * the defaultExtensions property.
  */
 import OHIFVTKExtension from '@ohif/extension-vtk';
-import OHIFDicomHtmlExtension from '@ohif/extension-dicom-html';
-import OHIFDicomSegmentationExtension from '@ohif/extension-dicom-segmentation';
-import OHIFDicomRtExtension from '@ohif/extension-dicom-rt';
-import OHIFDicomMicroscopyExtension from '@ohif/extension-dicom-microscopy';
-import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
+
+import 'regenerator-runtime/runtime';
+
 //import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 // Add this for Debugging purposes:
 //import OHIFDebuggingExtension from '@ohif/extension-debugging';
 import { version } from '../package.json';
+
+import App from './App.js';
 
 /*
  * Default Settings
@@ -64,7 +64,7 @@ const appProps = {
 };
 
 /** Create App */
-const app = React.createElement(App, appProps, null);
+// const app = React.createElement(App, appProps, null);
 
 /** Render */
-ReactDOM.render(app, document.getElementById('root'));
+ReactDOM.render(<App {...appProps} />, document.getElementById('root'));

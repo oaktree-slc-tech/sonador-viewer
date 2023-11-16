@@ -1,5 +1,5 @@
 describe('Visual Regression - OHIF User Preferences', () => {
-  context('Study List Page', function() {
+  context('Study List Page', function () {
     before(() => {
       cy.visit('/');
     });
@@ -14,47 +14,39 @@ describe('Visual Regression - OHIF User Preferences', () => {
       cy.closePreferences();
     });
 
-    it('checks displayed information on User Preferences modal', function() {
+    it('checks displayed information on User Preferences modal', function () {
       // Go go hotkeys tab
       cy.selectPreferencesTab('@userPreferencesHotkeysTab');
       cy.get('@restoreBtn').scrollIntoView();
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - Hotkeys tab initial state in StudyList page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - Hotkeys tab initial state in StudyList page');
       cy.get('[data-cy="close-button"]').click();
     });
 
-    it('checks translation by selecting Spanish language', function() {
+    it('checks translation by selecting Spanish language', function () {
       cy.selectPreferencesTab('@userPreferencesGeneralTab');
 
       // Language dropdown should be displayed
       cy.get('#language-select').should('be.visible');
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - General tab initial state in StudyList page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - General tab initial state in StudyList page');
       // Set language to Spanish and save
       cy.setLanguage('Spanish');
 
       // Options menu should be translated
-      cy.get('[data-cy="options-menu"]')
-        .should('have.text', 'Opciones')
-        .click();
+      cy.get('[data-cy="options-menu"]').should('have.text', 'Opciones').click();
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - Spanish selected in StudyList page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - Spanish selected in StudyList page');
 
       // Close Options menu
       cy.get('[data-cy="options-menu"]').click();
     });
   });
 
-  context('Study Viewer Page', function() {
+  context('Study Viewer Page', function () {
     before(() => {
       cy.openStudyInViewer('1.2.840.113619.2.5.1762583153.215519.978957063.78');
       cy.expectMinimumThumbnails(3);
@@ -74,53 +66,43 @@ describe('Visual Regression - OHIF User Preferences', () => {
       cy.closePreferences();
     });
 
-    it('checks displayed information on User Preferences modal', function() {
+    it('checks displayed information on User Preferences modal', function () {
       // Go go hotkeys tab
       cy.selectPreferencesTab('@userPreferencesHotkeysTab');
       cy.get('@restoreBtn').scrollIntoView();
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - Hotkeys tab initial state in StudyViewer page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - Hotkeys tab initial state in StudyViewer page');
       cy.get('[data-cy="close-button"]').click(); //close User Preferences modal
     });
 
-    it('checks if W/L Preferences table is being displayed in the Window Level tab', function() {
+    it('checks if W/L Preferences table is being displayed in the Window Level tab', function () {
       //Navigate to Window Level tab
       cy.selectPreferencesTab('@userPreferencesWindowLevelTab');
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - Window Level Presets Tab'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - Window Level Presets Tab');
     });
 
-    it('checks translation by selecting Spanish language', function() {
+    it('checks translation by selecting Spanish language', function () {
       cy.selectPreferencesTab('@userPreferencesGeneralTab');
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - General tab initial state in StudyViewer page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - General tab initial state in StudyViewer page');
       // Set language to Spanish
       cy.setLanguage('Spanish');
 
       // Options menu should be translated
-      cy.get('[data-cy="options-menu"]')
-        .should('have.text', 'Opciones')
-        .click();
+      cy.get('[data-cy="options-menu"]').should('have.text', 'Opciones').click();
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - Spanish selected in StudyViewer page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - Spanish selected in StudyViewer page');
 
       // Close Options menu
       cy.get('[data-cy="options-menu"]').click();
     });
 
-    it('checks if user can restore to default the language selection and application will be in English', function() {
+    it('checks if user can restore to default the language selection and application will be in English', function () {
       cy.selectPreferencesTab('@userPreferencesGeneralTab');
 
       // Set language to Spanish
@@ -132,48 +114,32 @@ describe('Visual Regression - OHIF User Preferences', () => {
       // Go to general tab
       cy.selectPreferencesTab('@userPreferencesGeneralTab');
 
-      cy.get('@restoreBtn')
-        .scrollIntoView()
-        .click();
+      cy.get('@restoreBtn').scrollIntoView().click();
 
-      cy.get('@saveBtn')
-        .scrollIntoView()
-        .click();
+      cy.get('@saveBtn').scrollIntoView().click();
 
       // Options menu should be in English
-      cy.get('[data-cy="options-menu"]')
-        .should('have.text', 'Options')
-        .click();
+      cy.get('[data-cy="options-menu"]').should('have.text', 'Options').click();
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'User Preferences Modal - English selected in StudyViewer page'
-      );
+      cy.percyCanvasSnapshot('User Preferences Modal - English selected in StudyViewer page');
 
       // Close Options menu
       cy.get('[data-cy="options-menu"]').click();
     });
 
-    it('checks new hotkeys for "Next" and "Previous" Image on Viewport', function() {
+    it('checks new hotkeys for "Next" and "Previous" Image on Viewport', function () {
       // Go go hotkeys tab
       cy.selectPreferencesTab('@userPreferencesHotkeysTab');
 
       // Set new hotkey for 'Next Image Viewport' function
-      cy.setNewHotkeyShortcutOnUserPreferencesModal(
-        'Next Viewport',
-        '{shift}{rightarrow}'
-      );
+      cy.setNewHotkeyShortcutOnUserPreferencesModal('Next Viewport', '{shift}{rightarrow}');
 
       // Set new hotkey for 'Previous Image Viewport' function
-      cy.setNewHotkeyShortcutOnUserPreferencesModal(
-        'Previous Viewport',
-        '{shift}{leftarrow}'
-      );
+      cy.setNewHotkeyShortcutOnUserPreferencesModal('Previous Viewport', '{shift}{leftarrow}');
 
       // Save new hotkeys
-      cy.get('@saveBtn')
-        .scrollIntoView()
-        .click();
+      cy.get('@saveBtn').scrollIntoView().click();
 
       // Set 3 viewports layout
       cy.setLayout(3, 1);
@@ -193,9 +159,7 @@ describe('Visual Regression - OHIF User Preferences', () => {
       cy.get('body').type(' ');
 
       // Visual comparison
-      cy.percyCanvasSnapshot(
-        'Viewport Navigation - 2nd viewport inverted and rotated'
-      );
+      cy.percyCanvasSnapshot('Viewport Navigation - 2nd viewport inverted and rotated');
       // Set 1 viewport layout
       cy.setLayout(1, 1);
     });

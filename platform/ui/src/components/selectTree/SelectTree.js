@@ -1,12 +1,12 @@
-import './SelectTree.styl';
-
 import React, { Component } from 'react';
+import * as _ from 'lodash';
+import PropTypes from 'prop-types';
 
 import { Icon } from './../../elements/Icon';
 import InputRadio from './InputRadio.js';
-import PropTypes from 'prop-types';
 import SelectTreeBreadcrumb from './SelectTreeBreadcrumb.js';
-import * as _ from 'lodash';
+
+import './SelectTree.styl';
 
 export class SelectTree extends Component {
   static propTypes = {
@@ -69,9 +69,9 @@ export class SelectTree extends Component {
     }
   };
 
-  isLeafSelected = item => item && !Array.isArray(item.items);
+  isLeafSelected = (item) => item && !Array.isArray(item.items);
 
-  getLabelClass = item => {
+  getLabelClass = (item) => {
     let labelClass = 'treeLeaf';
     if (this.state.searchTerm || Array.isArray(item.items)) {
       labelClass = 'treeNode';
@@ -82,9 +82,9 @@ export class SelectTree extends Component {
   filterItems() {
     const filteredItems = [];
     const rawItems = cloneDeep(this.props.items);
-    rawItems.forEach(item => {
+    rawItems.forEach((item) => {
       if (Array.isArray(item.items)) {
-        item.items.forEach(item => {
+        item.items.forEach((item) => {
           const label = item.label.toLowerCase();
           const searchTerm = this.state.searchTerm.toLowerCase();
           if (label.indexOf(searchTerm) !== -1) {
@@ -162,7 +162,7 @@ export class SelectTree extends Component {
     );
   };
 
-  searchLocations = evt => {
+  searchLocations = (evt) => {
     this.setState({
       currentNode: null,
       searchTerm: evt.currentTarget.value,

@@ -1,7 +1,9 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import api from './api/GoogleCloudApi';
 import LocationsList from './LocationsList';
+
 import './googleCloud.css';
 
 export default class LocationPicker extends Component {
@@ -46,15 +48,9 @@ export default class LocationPicker extends Component {
           className="form-control gcp-input"
           type="text"
           value={filterStr}
-          onChange={e => this.setState({ filterStr: e.target.value })}
+          onChange={(e) => this.setState({ filterStr: e.target.value })}
         />
-        <LocationsList
-          locations={locations}
-          loading={loading}
-          error={error}
-          filter={filterStr}
-          onSelect={onSelect}
-        />
+        <LocationsList locations={locations} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
       </div>
     );
   }

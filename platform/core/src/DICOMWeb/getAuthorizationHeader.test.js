@@ -1,5 +1,5 @@
-import getAuthorizationHeader from './getAuthorizationHeader';
 import user from './../user';
+import getAuthorizationHeader from './getAuthorizationHeader';
 
 jest.mock('./../user.js');
 
@@ -28,9 +28,7 @@ describe('getAuthorizationHeader', () => {
     };
 
     const expectedAuthorizationHeader = {
-      Authorization: `Basic ${btoa(
-        validServerWithoutPassword.requestOptions.auth
-      )}`,
+      Authorization: `Basic ${btoa(validServerWithoutPassword.requestOptions.auth)}`,
     };
 
     const authentication = getAuthorizationHeader(validServerWithoutPassword);
@@ -41,7 +39,7 @@ describe('getAuthorizationHeader', () => {
   it('should return a HTTP Basic Auth when server contains requestOptions.auth custom function', () => {
     const validServerCustomAuth = {
       requestOptions: {
-        auth: options => `Basic ${options.token}`,
+        auth: (options) => `Basic ${options.token}`,
         token: 'ZHVtbXlfdXNlcjpkdW1teV9wYXNzd29yZA==',
       },
     };

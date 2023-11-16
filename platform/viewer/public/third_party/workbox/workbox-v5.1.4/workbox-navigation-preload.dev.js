@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.navigationPreload = (function(exports, logger_js) {
+this.workbox.navigationPreload = (function (exports, logger_js) {
   'use strict';
 
   try {
@@ -39,7 +39,7 @@ this.workbox.navigationPreload = (function(exports, logger_js) {
 
   function disable() {
     if (isSupported()) {
-      self.addEventListener('activate', event => {
+      self.addEventListener('activate', (event) => {
         event.waitUntil(
           self.registration.navigationPreload.disable().then(() => {
             {
@@ -50,9 +50,7 @@ this.workbox.navigationPreload = (function(exports, logger_js) {
       });
     } else {
       {
-        logger_js.logger.log(
-          `Navigation preload is not supported in this browser.`
-        );
+        logger_js.logger.log(`Navigation preload is not supported in this browser.`);
       }
     }
   }
@@ -77,7 +75,7 @@ this.workbox.navigationPreload = (function(exports, logger_js) {
 
   function enable(headerValue) {
     if (isSupported()) {
-      self.addEventListener('activate', event => {
+      self.addEventListener('activate', (event) => {
         event.waitUntil(
           self.registration.navigationPreload.enable().then(() => {
             // Defaults to Service-Worker-Navigation-Preload: true if not set.
@@ -93,9 +91,7 @@ this.workbox.navigationPreload = (function(exports, logger_js) {
       });
     } else {
       {
-        logger_js.logger.log(
-          `Navigation preload is not supported in this browser.`
-        );
+        logger_js.logger.log(`Navigation preload is not supported in this browser.`);
       }
     }
   }

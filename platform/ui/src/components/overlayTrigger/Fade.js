@@ -1,10 +1,7 @@
-import classNames from 'classnames';
 import React from 'react';
+import Transition, { ENTERED, ENTERING } from 'react-transition-group/Transition';
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
-import Transition, {
-  ENTERED,
-  ENTERING,
-} from 'react-transition-group/Transition';
 
 const propTypes = {
   /**
@@ -83,12 +80,7 @@ class Fade extends React.Component {
         {(status, innerProps) =>
           React.cloneElement(children, {
             ...innerProps,
-            className: classNames(
-              'fade',
-              className,
-              children.props.className,
-              fadeStyles[status]
-            ),
+            className: classNames('fade', className, children.props.className, fadeStyles[status]),
           })
         }
       </Transition>

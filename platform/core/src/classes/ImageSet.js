@@ -1,6 +1,8 @@
-import guid from '../utils/guid.js';
-import OHIFError from './OHIFError';
 import { Vector3 } from 'cornerstone-math';
+
+import guid from '../utils/guid.js';
+
+import OHIFError from './OHIFError';
 
 const OBJECT = 'object';
 
@@ -81,15 +83,9 @@ class ImageSet {
       ImageOrientationPatient[0],
       ImageOrientationPatient[1],
       ImageOrientationPatient[2]
-    ).cross(
-      new Vector3(
-        ImageOrientationPatient[3],
-        ImageOrientationPatient[4],
-        ImageOrientationPatient[5]
-      )
-    );
+    ).cross(new Vector3(ImageOrientationPatient[3], ImageOrientationPatient[4], ImageOrientationPatient[5]));
 
-    const distanceImagePairs = images.map(function(image) {
+    const distanceImagePairs = images.map(function (image) {
       const ippVec = new Vector3(..._getImagePositionPatient(image));
       const positionVector = refIppVec.clone().sub(ippVec);
       const distance = positionVector.dot(scanAxisNormal);
@@ -100,13 +96,13 @@ class ImageSet {
       };
     });
 
-    distanceImagePairs.sort(function(a, b) {
+    distanceImagePairs.sort(function (a, b) {
       return b.distance - a.distance;
     });
 
-    const sortedImages = distanceImagePairs.map(a => a.image);
+    const sortedImages = distanceImagePairs.map((a) => a.image);
 
-    images.sort(function(a, b) {
+    images.sort(function (a, b) {
       return sortedImages.indexOf(a) - sortedImages.indexOf(b);
     });
   }

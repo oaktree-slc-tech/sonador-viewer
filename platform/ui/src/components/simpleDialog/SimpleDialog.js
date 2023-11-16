@@ -1,5 +1,6 @@
 import React, { Component, useState } from 'react';
 import PropTypes from 'prop-types';
+
 import { TextInput } from '@ohif/ui';
 
 import './SimpleDialog.styl';
@@ -31,17 +32,8 @@ class SimpleDialog extends Component {
 
     return (
       <div className="InputDialog">
-        <SimpleDialog
-          headerTitle={title}
-          onClose={onClose}
-          onConfirm={onSubmitHandler}
-        >
-          <TextInput
-            type="text"
-            value={value}
-            onChange={event => setValue(event.target.value)}
-            label={label}
-          />
+        <SimpleDialog headerTitle={title} onClose={onClose} onConfirm={onSubmitHandler}>
+          <TextInput type="text" value={value} onChange={(event) => setValue(event.target.value)} label={label} />
         </SimpleDialog>
       </div>
     );
@@ -79,13 +71,13 @@ class SimpleDialog extends Component {
     );
   }
 
-  onClose = event => {
+  onClose = (event) => {
     event.preventDefault();
     event.stopPropagation();
     this.props.onClose();
   };
 
-  onConfirm = event => {
+  onConfirm = (event) => {
     event.preventDefault();
     event.stopPropagation();
     this.props.onConfirm();

@@ -1,6 +1,6 @@
-import DICOMWeb from '../../../DICOMWeb/';
 import { api } from 'dicomweb-client';
 
+import DICOMWeb from '../../../DICOMWeb/';
 import errorHandler from '../../../errorHandler';
 
 /**
@@ -16,7 +16,7 @@ function resultDataToStudyMetadata(server, StudyInstanceUID, resultData) {
   const seriesMap = {};
   const series = [];
 
-  resultData.forEach(function(instance) {
+  resultData.forEach(function (instance) {
     // Use seriesMap to cache series data
     // If the series instance UID has already been used to
     // process series data, continue using that series
@@ -84,15 +84,12 @@ export default function Instances(server, StudyInstanceUID) {
     errorInterceptor: errorHandler.getHTTPErrorHandler(),
   };
   const dicomWeb = new api.DICOMwebClient(config);
-  const queryParams = getQIDOQueryParams(
-    filter,
-    server.qidoSupportsIncludeField
-  );
+  const queryParams = getQIDOQueryParams(filter, server.qidoSupportsIncludeField);
   const options = {
     studyInstanceUID: StudyInstanceUID,
   };
 
-  return dicomWeb.searchForInstances(options).then(result => {
+  return dicomWeb.searchForInstances(options).then((result) => {
     return {
       wadoUriRoot: server.wadoUriRoot,
       StudyInstanceUID: StudyInstanceUID,

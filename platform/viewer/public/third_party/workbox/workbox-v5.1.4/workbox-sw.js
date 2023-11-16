@@ -1,4 +1,4 @@
-!(function() {
+!(function () {
   'use strict';
   try {
     self['workbox:sw:5.1.4'] && _();
@@ -38,10 +38,7 @@
       );
     }
     setConfig(t = {}) {
-      if (this.o)
-        throw new Error(
-          'Config must be set before accessing workbox.* modules'
-        );
+      if (this.o) throw new Error('Config must be set before accessing workbox.* modules');
       Object.assign(this.t, t), (this.s = this.t.debug ? 'dev' : 'prod');
     }
     loadModule(t) {
@@ -57,13 +54,7 @@
       let e = ['https://storage.googleapis.com/workbox-cdn/releases/5.1.4'];
       const s = `${t}.${this.s}.js`,
         o = this.t.modulePathPrefix;
-      return (
-        o &&
-          ((e = o.split('/')),
-          '' === e[e.length - 1] && e.splice(e.length - 1, 1)),
-        e.push(s),
-        e.join('/')
-      );
+      return o && ((e = o.split('/')), '' === e[e.length - 1] && e.splice(e.length - 1, 1)), e.push(s), e.join('/');
     }
   })();
 })();

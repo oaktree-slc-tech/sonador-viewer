@@ -1,0 +1,288 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 25px;
+
+  .headerLabel {
+    margin: 0;
+    font-size: 24px;
+    line-height: 28px;
+    color: #ffffff;
+    font-weight: 700;
+
+    @include md {
+      font-size: 22px;
+      line-height: 26px;
+    }
+  }
+
+  .investigational {
+    margin: 0;
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #ffffff;
+
+    @include md {
+      font-size: 12px;
+      line-height: 14px;
+    }
+  }
+}
+
+.uploadContainer {
+  display: flex;
+  gap: 25px;
+  height: 462px;
+  margin-bottom: 20px;
+
+  @include md {
+    flex-direction: column-reverse;
+  }
+
+  .upload {
+    flex: 1;
+    height: 100%;
+
+    .noFile {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      row-gap: 10px;
+      width: 100%;
+      height: 100%;
+      border: 1px dashed #d3d3d3;
+      border-radius: 5px;
+
+      &.dragging {
+        background-color: rgba(0, 0, 0, 0.5);
+        cursor: copy;
+      }
+
+      .inputsContainer {
+        display: flex;
+        column-gap: 10px;
+      }
+
+      .uploadIcon {
+        width: 53px;
+        height: 53px;
+      }
+
+      .dropHereLabel {
+        margin: 0;
+        font-size: 16px;
+        line-height: 18.75px;
+        text-align: center;
+        color: #d3d3d3;
+      }
+
+      .orLabel {
+        font-size: 10px;
+        line-height: 12px;
+        text-align: center;
+        margin: 0;
+        position: relative;
+        color: #d3d3d3;
+
+        &:after,
+        &:before {
+          position: absolute;
+          content: '';
+          width: 2px;
+          height: 1px;
+          background-color: #d3d3d3;
+          top: 50%;
+        }
+
+        &:after {
+          right: -5px;
+        }
+
+        &:before {
+          left: -5px;
+        }
+      }
+
+      .inputFileLabel {
+        border: 1px solid #d3d3d3;
+        border-radius: 5px;
+        padding: 5px 20px;
+        font-size: 16px;
+        line-height: 18.75px;
+        text-align: center;
+        color: #d3d3d3;
+        cursor: pointer;
+      }
+
+      .inputFile {
+        display: none;
+      }
+    }
+  }
+
+  .uploadedFilesContainer {
+    flex: 1;
+
+    @include md {
+      flex: none;
+    }
+
+    .uploadedFilesHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+
+      .uploadedFilesLabel {
+        margin: 0;
+        font-size: 20px;
+        line-height: 24px;
+        font-weight: 700;
+        color: #d3d3d3;
+      }
+
+      .viewAll {
+        color: #d3d3d3;
+        font-size: 16px;
+        line-height: 18.75px;
+        margin: 0;
+        text-decoration: underline;
+        background: none;
+        border: none;
+        cursor: pointer;
+      }
+    }
+
+    .uploadedFiles {
+      display: flex;
+      flex-direction: column;
+      row-gap: 10px;
+      max-height: 428px;
+      overflow-y: auto;
+
+      .uploadedFile {
+        border-radius: 5px;
+        border: 1px solid #60646d;
+        padding: 15px 20px;
+        display: flex;
+        column-gap: 10px;
+        align-items: center;
+
+        @include md {
+          border: none;
+          padding: 0;
+        }
+
+        .uploadedFileInfo {
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+          row-gap: 5px;
+
+          .uploadedFileHeader {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            .filename,
+            .statusLabel {
+              margin: 0;
+              font-size: 16px;
+              line-height: 18.75px;
+              color: #d3d3d3;
+            }
+
+            .statusLabel {
+              display: flex;
+              align-items: center;
+              column-gap: 10px;
+
+              &.completed {
+                color: #2ee979;
+              }
+
+              &.error {
+                color: #d8a059;
+              }
+            }
+          }
+
+          .progressBarWrapper {
+            border-radius: 9px;
+            height: 10px;
+            background-color: #2e363e;
+            padding: 2px 2px 2px 3px;
+
+            .progressBar {
+              height: 6px;
+              border-radius: 9px;
+              background-color: #2e46e9;
+
+              &.completed {
+                background-color: #2ee979;
+              }
+
+              &.error {
+                background-color: #d8a059;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.modalContent {
+  width: 100vw;
+  max-width: 826px;
+  max-height: 80vh;
+}
+
+.modalTable {
+  width: 100%;
+
+  .modalTableHeader th,
+  .modalTableRow td {
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #ffffff;
+    padding: 15px 5px;
+  }
+
+  .modalTableHeader th {
+    font-weight: 600;
+    border-bottom: 2.4px solid #d9d9d9;
+    padding-top: 0;
+  }
+
+  .modalTableRow {
+    &.error td {
+      color: #d8a059;
+    }
+
+    td.status.success {
+      color: #2ee979;
+    }
+
+    &:not(:last-of-type) {
+      td {
+        border-bottom: 1px solid #d9d9d9;
+      }
+    }
+
+    &:last-of-type td {
+      padding-bottom: 0;
+    }
+
+    .tableItemStatusError {
+      display: flex;
+      align-items: center;
+      column-gap: 10px;
+    }
+  }
+}

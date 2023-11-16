@@ -1,4 +1,4 @@
-const displayFunction = data => {
+const displayFunction = (data) => {
   let meanValue = '';
   const { cachedStats } = data;
   if (cachedStats && cachedStats.mean && !isNaN(cachedStats.mean)) {

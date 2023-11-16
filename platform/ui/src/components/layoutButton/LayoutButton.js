@@ -1,8 +1,9 @@
 import React, { PureComponent } from 'react';
+import PropTypes from 'prop-types';
+
+import ToolbarButton from '../../viewer/ToolbarButton';
 
 import { LayoutChooser } from './LayoutChooser.js';
-import PropTypes from 'prop-types';
-import ToolbarButton from '../../viewer/ToolbarButton';
 
 export class LayoutButton extends PureComponent {
   static defaultProps = {
@@ -35,7 +36,7 @@ export class LayoutButton extends PureComponent {
     });
   };
 
-  onChange = selectedCell => {
+  onChange = (selectedCell) => {
     if (this.props.onChange) {
       this.props.onChange(selectedCell);
     }
@@ -44,12 +45,7 @@ export class LayoutButton extends PureComponent {
   render() {
     return (
       <div className="btn-group">
-        <ToolbarButton
-          isActive={this.state.dropdownVisible}
-          label={'Layout'}
-          icon="th"
-          onClick={this.onClick}
-        />
+        <ToolbarButton isActive={this.state.dropdownVisible} label={'Layout'} icon="th" onClick={this.onClick} />
         <LayoutChooser
           visible={this.state.dropdownVisible}
           onChange={this.onChange}

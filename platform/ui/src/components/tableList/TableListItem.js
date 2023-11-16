@@ -1,9 +1,10 @@
-import './TableListItem.styl';
-
 import { Component } from 'react';
-import { Icon } from './../../elements/Icon';
-import PropTypes from 'prop-types';
 import React from 'react';
+import PropTypes from 'prop-types';
+
+import { Icon } from './../../elements/Icon';
+
+import './TableListItem.styl';
 
 export class TableListItem extends Component {
   static propTypes = {
@@ -23,10 +24,7 @@ export class TableListItem extends Component {
 
   render() {
     return (
-      <div
-        className={`tableListItem ${this.props.itemClass}`}
-        onClick={this.onItemClick}
-      >
+      <div className={`tableListItem ${this.props.itemClass}`} onClick={this.onItemClick}>
         <div className={`itemIndex ${this.props.itemMetaClass}`}>
           {this.props.itemIndex}
           {this.props.itemMeta}
@@ -39,7 +37,7 @@ export class TableListItem extends Component {
     );
   }
 
-  onItemClick = event => {
+  onItemClick = (event) => {
     if (this.props.onItemClick) {
       event.preventDefault();
       event.stopPropagation();

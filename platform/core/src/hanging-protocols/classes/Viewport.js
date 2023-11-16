@@ -1,9 +1,6 @@
-import {
-  StudyMatchingRule,
-  SeriesMatchingRule,
-  ImageMatchingRule,
-} from './rules';
 import { removeFromArray } from '../lib/removeFromArray';
+
+import { ImageMatchingRule, SeriesMatchingRule, StudyMatchingRule } from './rules';
 
 /**
  * This Class defines a Viewport in the Hanging Protocol Stage. A Viewport contains
@@ -30,7 +27,7 @@ export default class Viewport {
     // If ImageMatchingRules exist, create them from the Object data
     // and add them to the Viewport's imageMatchingRules array
     if (input.imageMatchingRules) {
-      input.imageMatchingRules.forEach(ruleObject => {
+      input.imageMatchingRules.forEach((ruleObject) => {
         var rule = new ImageMatchingRule();
         rule.fromObject(ruleObject);
         this.imageMatchingRules.push(rule);
@@ -40,7 +37,7 @@ export default class Viewport {
     // If SeriesMatchingRules exist, create them from the Object data
     // and add them to the Viewport's seriesMatchingRules array
     if (input.seriesMatchingRules) {
-      input.seriesMatchingRules.forEach(ruleObject => {
+      input.seriesMatchingRules.forEach((ruleObject) => {
         var rule = new SeriesMatchingRule();
         rule.fromObject(ruleObject);
         this.seriesMatchingRules.push(rule);
@@ -50,7 +47,7 @@ export default class Viewport {
     // If StudyMatchingRules exist, create them from the Object data
     // and add them to the Viewport's studyMatchingRules array
     if (input.studyMatchingRules) {
-      input.studyMatchingRules.forEach(ruleObject => {
+      input.studyMatchingRules.forEach((ruleObject) => {
         var rule = new StudyMatchingRule();
         rule.fromObject(ruleObject);
         this.studyMatchingRules.push(rule);

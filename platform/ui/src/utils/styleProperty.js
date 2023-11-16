@@ -32,7 +32,7 @@ function set(el, prop, value) {
   let match = false;
 
   if (browserProps[prop] === void 0) {
-    eachVendor(prop, function(vendorProp) {
+    eachVendor(prop, function (vendorProp) {
       if (el.style[vendorProp] !== void 0 && match === false) {
         el.style[vendorProp] = value;
         if (checkComputed(el, vendorProp)) {

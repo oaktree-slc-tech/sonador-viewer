@@ -1,8 +1,7 @@
-import './Select.css';
-
 import React, { Component } from 'react';
-
 import PropTypes from 'prop-types';
+
+import './Select.css';
 
 class Select extends Component {
   constructor(props) {
@@ -20,7 +19,7 @@ class Select extends Component {
     onChange: PropTypes.func,
   };
 
-  handleChange = event => {
+  handleChange = (event) => {
     const value = event.target.value;
     this.setState({ value });
     if (this.props.onChange) this.props.onChange(value);
@@ -30,7 +29,9 @@ class Select extends Component {
     return (
       <div className="select-ohif-container">
         {this.props.label && (
-          <label className="select-ohif-label" htmlFor={this.id}>{this.props.label}</label>
+          <label className="select-ohif-label" htmlFor={this.id}>
+            {this.props.label}
+          </label>
         )}
         <select className="form-control select-ohif" {...this.props}>
           {this.props.options.map(({ key, value }) => {

@@ -1,7 +1,8 @@
-import Header from '../components/Header/Header.js';
 import { connect } from 'react-redux';
 
-const mapStateToProps = state => {
+import Header from '../components/Header/Header.js';
+
+const mapStateToProps = (state) => {
   return {
     user: state.oidc && state.oidc.user,
     servers: state.servers.servers,

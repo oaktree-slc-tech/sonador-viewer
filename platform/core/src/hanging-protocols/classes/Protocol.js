@@ -1,8 +1,9 @@
-import { ProtocolMatchingRule } from './rules';
-import { removeFromArray } from '../lib/removeFromArray';
-import Stage from './Stage';
-import guid from '../../utils/guid';
 import user from '../../user';
+import guid from '../../utils/guid';
+import { removeFromArray } from '../lib/removeFromArray';
+
+import { ProtocolMatchingRule } from './rules';
+import Stage from './Stage';
 
 /**
  * This class represents a Hanging Protocol at the highest level
@@ -59,8 +60,7 @@ export default class Protocol {
   }
 
   getNumberOfPriorsReferenced(skipCache = false) {
-    let numberOfPriorsReferenced =
-      skipCache !== true ? this.numberOfPriorsReferenced : -1;
+    let numberOfPriorsReferenced = skipCache !== true ? this.numberOfPriorsReferenced : -1;
 
     // Check if information is cached already
     if (numberOfPriorsReferenced > -1) {
@@ -72,17 +72,17 @@ export default class Protocol {
     // Search each study matching rule for prior rules
     // Each stage can have many viewports that can have
     // multiple study matching rules.
-    this.stages.forEach(stage => {
+    this.stages.forEach((stage) => {
       if (!stage.viewports) {
         return;
       }
 
-      stage.viewports.forEach(viewport => {
+      stage.viewports.forEach((viewport) => {
         if (!viewport.studyMatchingRules) {
           return;
         }
 
-        viewport.studyMatchingRules.forEach(rule => {
+        viewport.studyMatchingRules.forEach((rule) => {
           // If the current rule is not a priors rule, it will return -1 then numberOfPriorsReferenced will continue to be 0
           const priorsReferenced = rule.getNumberOfPriorsReferenced();
           if (priorsReferenced > numberOfPriorsReferenced) {
@@ -148,7 +148,7 @@ export default class Protocol {
 
     // If the input contains Protocol matching rules
     if (input.protocolMatchingRules) {
-      input.protocolMatchingRules.forEach(ruleObject => {
+      input.protocolMatchingRules.forEach((ruleObject) => {
         // Create new Rules from the stored data
         var rule = new ProtocolMatchingRule();
         rule.fromObject(ruleObject);
@@ -161,7 +161,7 @@ export default class Protocol {
     // If the input contains data for various Stages in the
     // display set sequence
     if (input.stages) {
-      input.stages.forEach(stageObject => {
+      input.stages.forEach((stageObject) => {
         // Create Stages from the stored data
         var stage = new Stage();
         stage.fromObject(stageObject);

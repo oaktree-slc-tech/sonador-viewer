@@ -1,19 +1,20 @@
-import ViewportGrid from './ViewportGrid.js';
-import { MODULE_TYPES } from '@ohif/core';
 import { connect } from 'react-redux';
-import { extensionManager } from './../../App.js';
 import memoize from 'lodash/memoize';
 
-const getAvailableViewportModules = memoize(viewportModules => {
+import { MODULE_TYPES } from '@ohif/core';
+
+import { extensionManager } from '../../App';
+import ViewportGrid from './ViewportGrid.js';
+
+const getAvailableViewportModules = memoize((viewportModules) => {
   const availableViewportModules = {};
-  viewportModules.forEach(moduleDefinition => {
-    availableViewportModules[moduleDefinition.extensionId] =
-      moduleDefinition.module;
+  viewportModules.forEach((moduleDefinition) => {
+    availableViewportModules[moduleDefinition.extensionId] = moduleDefinition.module;
   });
   return availableViewportModules;
 });
 
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   const viewportModules = extensionManager.modules[MODULE_TYPES.VIEWPORT];
   const availableViewportModules = getAvailableViewportModules(viewportModules);
 
@@ -37,9 +38,6 @@ const mapStateToProps = state => {
   };
 };
 
-const ConnectedViewportGrid = connect(
-  mapStateToProps,
-  null
-)(ViewportGrid);
+const ConnectedViewportGrid = connect(mapStateToProps, null)(ViewportGrid);
 
 export default ConnectedViewportGrid;

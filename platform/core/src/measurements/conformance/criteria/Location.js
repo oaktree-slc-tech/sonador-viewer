@@ -17,7 +17,7 @@ export class LocationCriterion extends BaseCriterion {
     const measurements = [];
     let message;
 
-    items.forEach(item => {
+    items.forEach((item) => {
       const measurement = item.measurement;
 
       if (!measurement.location) {

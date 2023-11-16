@@ -6,7 +6,8 @@
   max-height: 500px;
 }
 
-.labellingComponent .selectedLabel, .labellingComponent .selectedDescription {
+.labellingComponent .selectedLabel,
+.labellingComponent .selectedDescription {
   padding: 5px;
   background-color: white;
   width: 150px;
@@ -25,7 +26,6 @@
   padding: 0 14px;
   transition: opacity 0.3s ease;
   outline: none;
-  cursor: pointer;
 }
 
 .labellingComponent .commonButton {
@@ -62,12 +62,16 @@
   bottom: 0;
 }
 
+.labellingComponent.editDescription .location {
+  color: #337ab7;
+}
+
 .labellingComponent.editDescription .locationDescriptionWrapper .location {
   bottom: 38px;
 }
 
 .labellingComponent .locationDescriptionWrapper #descriptionInput {
-  transition-delay: all 300ms linear;
+  transition-delay: 300ms;
   visibility: hidden;
   outline: none;
   height: 46px;
@@ -81,16 +85,7 @@
   visibility: visible;
 }
 
-.labellingComponent.editDescription .location {
-  color: #337ab7;
-}
-
-.labellingComponent .commonButtons, .labellingComponent.editDescription .editDescriptionButtons {
-  display: block;
-  margin-left: 55px;
-}
-
-.labellingComponent.editDescription .commonButtons, .labellingComponent .editDescriptionButtons {
+.labellingComponent .editDescriptionButtons {
   display: none;
 }
 
@@ -99,6 +94,13 @@
   margin-left: 55px;
 }
 
+.labellingComponent .commonButtons,
+.labellingComponent.editDescription .editDescriptionButtons {
+  display: block;
+  margin-left: 55px;
+}
+
+.labellingComponent.editDescription .commonButtons,
 .labellingComponent .commonButton.left {
   float: left;
 }

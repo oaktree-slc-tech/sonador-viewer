@@ -50,9 +50,6 @@ export function extend(publicAPI, model, initialValues = {}) {
   vtkInteractorStyleVolumeBase(publicAPI, model, initialValues);
 }
 
-export const newInstance = macro.newInstance(
-  extend,
-  'vtkInteractorStyleVolumeBase'
-);
+export const newInstance = macro.newInstance(extend, 'vtkInteractorStyleVolumeBase');
 
 export default Object.assign({ newInstance, extend });

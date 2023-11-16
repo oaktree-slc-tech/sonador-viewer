@@ -1,6 +1,7 @@
-import OHIFError from '../classes/OHIFError.js';
-import getImageId from './getImageId';
 import metadataProvider from '../classes/MetadataProvider.js';
+import OHIFError from '../classes/OHIFError.js';
+
+import getImageId from './getImageId';
 
 let stackMap = {};
 let configuration = {};
@@ -44,11 +45,7 @@ function createAndAddStack(stackMap, study, displaySet, stackUpdatedCallbacks) {
         imageId = getImageId(image, i);
         imageIds.push(imageId);
 
-        const {
-          StudyInstanceUID,
-          SeriesInstanceUID,
-          SOPInstanceUID,
-        } = instance.getData().metadata;
+        const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = instance.getData().metadata;
 
         metadataProvider.addImageIdToUIDs(imageId, {
           StudyInstanceUID,
@@ -61,11 +58,7 @@ function createAndAddStack(stackMap, study, displaySet, stackUpdatedCallbacks) {
       imageId = getImageId(image);
       imageIds.push(imageId);
 
-      const {
-        StudyInstanceUID,
-        SeriesInstanceUID,
-        SOPInstanceUID,
-      } = naturalizedInstance;
+      const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = naturalizedInstance;
 
       metadataProvider.addImageIdToUIDs(imageId, {
         StudyInstanceUID,
@@ -111,12 +104,7 @@ const StackManager = {
    * @return {Array} Array with image IDs
    */
   makeAndAddStack(study, displaySet) {
-    return configuration.createAndAddStack(
-      stackMap,
-      study,
-      displaySet,
-      stackUpdatedCallbacks
-    );
+    return configuration.createAndAddStack(stackMap, study, displaySet, stackUpdatedCallbacks);
   },
   /**
    * Find a stack from the currently created stacks.

@@ -50,6 +50,17 @@
   margin: 10px 0 0;
 }
 
+.sb-item {
+  position: relative;
+  transition: height 300ms ease;
+  animation: fadein 1s;
+  padding: 20px;
+  color: white;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 6px 10px 0 rgba(0, 0, 0, 0.2), 0 1px 18px 0 rgba(0, 0, 0, 0.12), 0 3px 5px -1px rgba(0, 0, 0, 0.14);
+}
+
 .sb-topLeft .sb-item,
 .sb-topCenter .sb-item,
 .sb-topRight .sb-item {
@@ -128,18 +139,6 @@
 .sb-message {
   font-size: 14px;
   word-break: normal;
-}
-
-.sb-item {
-  position: relative;
-  transition: height 300ms ease;
-  animation: fadein 1s;
-  padding: 20px;
-  color: white;
-  overflow: hidden;
-  border-radius: 4px;
-  box-shadow: 0 6px 10px 0 rgba(0, 0, 0, 0.2), 0 1px 18px 0 rgba(0, 0, 0, 0.12),
-    0 3px 5px -1px rgba(0, 0, 0, 0.14);
 }
 
 .sb-item a {

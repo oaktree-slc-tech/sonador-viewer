@@ -1,24 +1,10 @@
-import React from 'react';
-
-import { utils } from '@ohif/core';
 import { cornerstoneState } from '@ohif/extension-cornerstone';
 
-const { studyMetadataManager } = utils;
-
-export default function commandsModule({
-  servicesManager,
-  commandsManager,
-  appConfig,
-}) {
-  // Retrieve the available commands for the module
-  console.log('Get commands module: ', appConfig);
-
+export default function commandsModule({ servicesManager, commandsManager, appConfig }) {
   const actions = {
     getActiveViewportEnabledElement: ({ viewports }) => {
       // Retrieve the currently active viewport element
-      const enabledElement = cornerstoneState.getEnabledElement(
-        viewports.activeViewportIndex
-      );
+      const enabledElement = cornerstoneState.getEnabledElement(viewports.activeViewportIndex);
       return enabledElement;
     },
     getStaticUrl: () => {

@@ -23,13 +23,13 @@ export class BaseCriterion {
     const newTargetNumbers = new Set();
 
     if (options.newTarget) {
-      data.targets.forEach(target => {
+      data.targets.forEach((target) => {
         const { measurementNumber } = target.measurement;
         if (target.timepoint.timepointType === 'baseline') {
           baselineMeasurementNumbers.push(measurementNumber);
         }
       });
-      data.targets.forEach(target => {
+      data.targets.forEach((target) => {
         const { measurementNumber } = target.measurement;
         if (target.timepoint.timepointType === 'followup') {
           if (!baselineMeasurementNumbers.includes(measurementNumber)) {

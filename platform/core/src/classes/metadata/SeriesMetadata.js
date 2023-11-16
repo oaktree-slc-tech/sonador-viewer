@@ -1,5 +1,5 @@
-import { Metadata } from './Metadata';
 import { InstanceMetadata } from './InstanceMetadata';
+import { Metadata } from './Metadata';
 
 export class SeriesMetadata extends Metadata {
   constructor(data, uid) {
@@ -49,7 +49,7 @@ export class SeriesMetadata extends Metadata {
     Object.defineProperty(this, 'seriesInstanceUID', {
       configurable: false,
       enumerable: false,
-      get: function() {
+      get: function () {
         return this.getSeriesInstanceUID();
       },
     });
@@ -73,10 +73,7 @@ export class SeriesMetadata extends Metadata {
    */
   addInstance(instance) {
     let result = false;
-    if (
-      instance instanceof InstanceMetadata &&
-      this.getInstanceByUID(instance.getSOPInstanceUID()) === void 0
-    ) {
+    if (instance instanceof InstanceMetadata && this.getInstanceByUID(instance.getSOPInstanceUID()) === void 0) {
       this._instances.push(instance);
       result = true;
     }
@@ -121,7 +118,7 @@ export class SeriesMetadata extends Metadata {
   getInstanceByUID(uid) {
     let found; // undefined by default...
     if (Metadata.isValidUID(uid)) {
-      found = this._instances.find(instance => {
+      found = this._instances.find((instance) => {
         return instance.getSOPInstanceUID() === uid;
       });
     }
@@ -185,8 +182,7 @@ export class SeriesMetadata extends Metadata {
     const self = this;
     return (
       series === self ||
-      (series instanceof SeriesMetadata &&
-        series.getSeriesInstanceUID() === self.getSeriesInstanceUID())
+      (series instanceof SeriesMetadata && series.getSeriesInstanceUID() === self.getSeriesInstanceUID())
     );
   }
 }

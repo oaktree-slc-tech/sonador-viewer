@@ -1,15 +1,17 @@
 import { connect } from 'react-redux';
-import Viewer from './Viewer.js';
+
 import OHIF from '@ohif/core';
+
+import Viewer from './Viewer.js';
 
 const { setTimepoints, setMeasurements } = OHIF.redux.actions;
 
-const getActiveServer = servers => {
-  const isActive = a => a.active === true;
+const getActiveServer = (servers) => {
+  const isActive = (a) => a.active === true;
   return servers.servers.find(isActive);
 };
 
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   const { viewports, servers } = state;
   return {
     viewports: viewports.viewportSpecificData,
@@ -18,20 +20,17 @@ const mapStateToProps = state => {
   };
 };
 
-const mapDispatchToProps = dispatch => {
+const mapDispatchToProps = (dispatch) => {
   return {
-    onTimepointsUpdated: timepoints => {
+    onTimepointsUpdated: (timepoints) => {
       dispatch(setTimepoints(timepoints));
     },
-    onMeasurementsUpdated: measurements => {
+    onMeasurementsUpdated: (measurements) => {
       dispatch(setMeasurements(measurements));
     },
   };
 };
 
-const ConnectedViewer = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(Viewer);
+const ConnectedViewer = connect(mapStateToProps, mapDispatchToProps)(Viewer);
 
 export default ConnectedViewer;

@@ -1,9 +1,10 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import { withRouter } from 'react-router-dom';
+import PropTypes from 'prop-types';
+
+import OHIF from '@ohif/core';
 
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData.js';
-import OHIF from '@ohif/core';
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
@@ -16,18 +17,10 @@ function IHEInvokeImageDisplay({ location }) {
 
   switch (requestType) {
     case 'STUDY':
-      return (
-        <ConnectedViewerRetrieveStudyData
-          studyInstanceUIDs={studyUID.split(';')}
-        />
-      );
+      return <ConnectedViewerRetrieveStudyData studyInstanceUIDs={studyUID.split(';')} />;
 
     case 'STUDYBASE64':
-      return (
-        <ConnectedViewerRetrieveStudyData
-          studyInstanceUIDs={UrlUtil.paramString.parseParam(studyUID)}
-        />
-      );
+      return <ConnectedViewerRetrieveStudyData studyInstanceUIDs={UrlUtil.paramString.parseParam(studyUID)} />;
 
     case 'PATIENT':
       // TODO: connect this to the StudyList when we have the filter parameters set up

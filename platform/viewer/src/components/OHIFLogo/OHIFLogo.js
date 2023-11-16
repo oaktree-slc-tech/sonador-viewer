@@ -1,16 +1,12 @@
-import './OHIFLogo.css';
+import React from 'react';
 
 import { Icon } from '@ohif/ui';
-import React from 'react';
+
+import './OHIFLogo.css';
 
 function OHIFLogo() {
   return (
-    <a
-      target="_blank"
-      rel="noopener noreferrer"
-      className="header-brand"
-      href="http://ohif.org"
-    >
+    <a target="_blank" rel="noopener noreferrer" className="header-brand" href="http://ohif.org">
       <Icon name="ohif-logo" className="header-logo-image" />
       {/* Logo text would fit smaller displays at two lines:
        *

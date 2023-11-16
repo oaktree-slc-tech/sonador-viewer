@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import { useSelector, useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import PropTypes from 'prop-types';
 
 import { redux } from '@ohif/core';
 import { TabFooter, useSnackbarContext } from '@ohif/ui';
@@ -13,7 +13,7 @@ const { actions } = redux;
 function WindowLevelPreferences({ onClose }) {
   const dispatch = useDispatch();
 
-  const windowLevelData = useSelector(state => {
+  const windowLevelData = useSelector((state) => {
     const { preferences = {} } = state;
     const { windowLevelData } = preferences;
 
@@ -40,7 +40,7 @@ function WindowLevelPreferences({ onClose }) {
 
   const snackbar = useSnackbarContext();
 
-  const handleInputChange = event => {
+  const handleInputChange = (event) => {
     const $target = event.target;
     const { key, inputname } = $target.dataset;
     const inputValue = $target.value;
@@ -49,7 +49,7 @@ function WindowLevelPreferences({ onClose }) {
       return;
     }
 
-    setState(prevState => ({
+    setState((prevState) => ({
       ...prevState,
       values: {
         ...prevState.values,
@@ -71,7 +71,7 @@ function WindowLevelPreferences({ onClose }) {
             <div className="wlColumn window">Window</div>
             <div className="wlColumn level">Level</div>
           </div>
-          {Object.keys(state.values).map((key, index) => {
+          {Object.keys(state.values).map((key) => {
             return (
               <div className="wlRow" key={key}>
                 <div className="wlColumn preset">{key}</div>

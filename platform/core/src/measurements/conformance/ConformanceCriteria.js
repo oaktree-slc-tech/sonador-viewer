@@ -1,6 +1,7 @@
+import log from '../../log';
+
 import { CriteriaEvaluator } from './CriteriaEvaluator';
 import * as initialEvaluations from './evaluations';
-import log from '../../log';
 
 const evaluations = Object.assign({}, initialEvaluations);
 
@@ -32,10 +33,7 @@ class ConformanceCriteria {
   async validate(trialCriteriaType) {
     const baselinePromise = this.getData(BASELINE);
     const followupPromise = this.getData(FOLLOWUP);
-    const [baselineData, followupData] = await Promise.all([
-      baselinePromise,
-      followupPromise,
-    ]);
+    const [baselineData, followupData] = await Promise.all([baselinePromise, followupPromise]);
     const mergedData = {
       targets: [],
       nonTargets: [],
@@ -43,33 +41,15 @@ class ConformanceCriteria {
 
     mergedData.targets = mergedData.targets.concat(baselineData.targets);
     mergedData.targets = mergedData.targets.concat(followupData.targets);
-    mergedData.nonTargets = mergedData.nonTargets.concat(
-      baselineData.nonTargets
-    );
-    mergedData.nonTargets = mergedData.nonTargets.concat(
-      followupData.nonTargets
-    );
+    mergedData.nonTargets = mergedData.nonTargets.concat(baselineData.nonTargets);
+    mergedData.nonTargets = mergedData.nonTargets.concat(followupData.nonTargets);
 
     this.maxTargets = null;
     this.maxNewTargets = null;
-    const resultBoth = this.validateTimepoint(
-      BOTH,
-      trialCriteriaType,
-      mergedData
-    );
-    const resultBaseline = this.validateTimepoint(
-      BASELINE,
-      trialCriteriaType,
-      baselineData
-    );
-    const resultFollowup = this.validateTimepoint(
-      FOLLOWUP,
-      trialCriteriaType,
-      followupData
-    );
-    const nonconformities = resultBaseline
-      .concat(resultFollowup)
-      .concat(resultBoth);
+    const resultBoth = this.validateTimepoint(BOTH, trialCriteriaType, mergedData);
+    const resultBaseline = this.validateTimepoint(BASELINE, trialCriteriaType, baselineData);
+    const resultFollowup = this.validateTimepoint(FOLLOWUP, trialCriteriaType, followupData);
+    const nonconformities = resultBaseline.concat(resultFollowup).concat(resultBoth);
     const groupedNonConformities = this.groupNonConformities(nonconformities);
 
     // Keep both? Group the data only on viewer/measurementTable views?
@@ -89,7 +69,7 @@ class ConformanceCriteria {
     const groups = {};
     const toolsGroupsMap = this.measurementApi.toolsGroupsMap;
 
-    nonconformities.forEach(nonConformity => {
+    nonconformities.forEach((nonConformity) => {
       if (nonConformity.isGlobal) {
         groups.globals = groups.globals || { messages: [] };
         groups.globals.messages.push(nonConformity.message);
@@ -97,7 +77,7 @@ class ConformanceCriteria {
         return;
       }
 
-      nonConformity.measurements.forEach(measurement => {
+      nonConformity.measurements.forEach((measurement) => {
         const groupName = toolsGroupsMap[measurement.toolType];
         groups[groupName] = groups[groupName] || { measurementNumbers: {} };
 
@@ -124,7 +104,7 @@ class ConformanceCriteria {
     const evaluators = this.getEvaluators(timepointType, trialCriteriaType);
     let nonconformities = [];
 
-    evaluators.forEach(evaluator => {
+    evaluators.forEach((evaluator) => {
       const maxTargets = evaluator.getMaxTargets(false);
       const maxNewTargets = evaluator.getMaxTargets(true);
       if (maxTargets) {
@@ -138,7 +118,7 @@ class ConformanceCriteria {
       const result = evaluator.evaluate(data);
 
       if (result.length > 0) {
-        result.forEach(resultItem => {
+        result.forEach((resultItem) => {
           resultItem.timepointType = timepointType;
         });
       }
@@ -177,34 +157,29 @@ class ConformanceCriteria {
 
     const studyPromises = [];
 
-    const fillData = measurementType => {
+    const fillData = (measurementType) => {
       const measurements = this.measurementApi.fetch(measurementType);
 
-      measurements.forEach(measurement => {
+      measurements.forEach((measurement) => {
         const { StudyInstanceUID } = measurement;
 
         const timepointId = measurement.timepointId;
-        const timepoint =
-          timepointId &&
-          this.timepointApi.timepoints.find(a => a.timepointId === timepointId);
+        const timepoint = timepointId && this.timepointApi.timepoints.find((a) => a.timepointId === timepointId);
 
-        if (
-          !timepoint ||
-          (timepointType !== BOTH && timepoint.timepointType !== timepointType)
-        ) {
+        if (!timepoint || (timepointType !== BOTH && timepoint.timepointType !== timepointType)) {
           return;
         }
 
         const promise = this.loadStudy(StudyInstanceUID);
         promise.then(
-          studyMetadata => {
+          (studyMetadata) => {
             data[measurementType].push({
               measurement,
               metadata: studyMetadata.getFirstInstance(),
               timepoint,
             });
           },
-          error => {
+          (error) => {
             throw new Error(error);
           }
         );

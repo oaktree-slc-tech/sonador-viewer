@@ -2,9 +2,9 @@ import { connect } from 'react-redux';
 
 import StudyListRoute from './StudyListRoute.js';
 
-const isActive = a => a.active === true;
+const isActive = (a) => a.active === true;
 
-const mapStateToProps = state => {
+const mapStateToProps = (state) => {
   const activeServer = state.servers.servers.find(isActive);
 
   return {
@@ -13,9 +13,6 @@ const mapStateToProps = state => {
   };
 };
 
-const ConnectedStudyList = connect(
-  mapStateToProps,
-  null
-)(StudyListRoute);
+const ConnectedStudyList = connect(mapStateToProps, null)(StudyListRoute);
 
 export default ConnectedStudyList;

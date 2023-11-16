@@ -1,11 +1,6 @@
-import React, {
-  useState,
-  createContext,
-  useContext,
-  useCallback,
-  useEffect,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+
 import { classes } from '@ohif/core';
 
 import SnackbarContainer from '../components/snackbar/SnackbarContainer';
@@ -34,9 +29,7 @@ const SnackbarProvider = ({ children, service }) => {
   const show = useCallback(
     (options) => {
       if (!options || (!options.title && !options.message)) {
-        console.warn(
-          'Snackbar cannot be rendered without required parameters: title | message'
-        );
+        console.warn('Snackbar cannot be rendered without required parameters: title | message');
 
         return null;
       }
@@ -89,9 +82,7 @@ const SnackbarProvider = ({ children, service }) => {
       setSnackbarItems((state) => hideItem(state));
 
       setTimeout(() => {
-        setSnackbarItems((state) => [
-          ...state.filter((item) => item.id !== id),
-        ]);
+        setSnackbarItems((state) => [...state.filter((item) => item.id !== id)]);
       }, 1000);
     },
     [setSnackbarItems]
@@ -139,11 +130,7 @@ SnackbarProvider.defaultProps = {
 };
 
 SnackbarProvider.propTypes = {
-  children: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-    PropTypes.func,
-  ]).isRequired,
+  children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node, PropTypes.func]).isRequired,
   service: PropTypes.shape({
     setServiceImplementation: PropTypes.func,
   }),

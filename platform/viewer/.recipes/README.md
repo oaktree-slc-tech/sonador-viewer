@@ -1,7 +1,7 @@
 # Docker compose files
 
-This folder contains docker-compose files used to spin up OHIF-Viewer with
-differnt options such as locally or with any PAS you desire to
+This folder contains docker-compose files used to spin up OHIF-Viewer with differnt options such as locally or with any
+PAS you desire to
 
 ## Public Server
 
@@ -29,8 +29,7 @@ Starts containers and leaves them running in the background.
 
 then, access the application at [http://localhost](http://localhost)
 
-**remember that you have to access orthanc application and include your studies
-there**
+**remember that you have to access orthanc application and include your studies there**
 
 ## Local Dcm4chee
 
@@ -44,10 +43,9 @@ there**
 
 then, access the application at [http://localhost](http://localhost)
 
-**remember that you have to access dcm4chee application and include your studies
-there** You can use the following command to import your studies into dcm4che
+**remember that you have to access dcm4chee application and include your studies there** You can use the following
+command to import your studies into dcm4che
 
 `$ docker run -v {YOUR_STUDY_FOLDER}:/tmp --rm --network=docker_dcm4che_default dcm4che/dcm4che-tools:5.14.0 storescu -cDCM4CHEE@arc:11112 /tmp`
 
-**make sure that your Docker network name is docker_dcm4chee_default or change
-it to the right one**
+**make sure that your Docker network name is docker_dcm4chee_default or change it to the right one**

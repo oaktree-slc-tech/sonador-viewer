@@ -8,9 +8,9 @@
   "main": "dist/index.umd.js",
   "module": "src/index.js",
   "engines": {
-    "node": ">=10",
-    "npm": ">=6",
-    "yarn": ">=1.16.0"
+    "node": ">=18",
+    "npm": ">=8",
+    "yarn": ">=1.22.0"
   },
   "files": [
     "dist",
@@ -44,8 +44,7 @@
     "react-dom": "^16.8.6",
     "react-redux": "^6.0.0",
     "react-resize-detector": "^3.4.0",
-    "redux": "^4.0.1",
-    "styled-components": "^5.3.5"
+    "redux": "^4.0.1"
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",

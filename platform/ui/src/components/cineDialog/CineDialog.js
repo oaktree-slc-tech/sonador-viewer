@@ -1,9 +1,11 @@
-import './CineDialog.styl';
-
 import React, { PureComponent } from 'react';
-import { withTranslation } from '../../contextProviders';
-import { Icon } from './../../elements/Icon';
 import PropTypes from 'prop-types';
+
+import { withTranslation } from '../../contextProviders';
+
+import { Icon } from './../../elements/Icon';
+
+import './CineDialog.styl';
 
 class CineDialog extends PureComponent {
   constructor(props) {
@@ -46,26 +48,20 @@ class CineDialog extends PureComponent {
   componentDidUpdate(prevProps) {
     // TODO: Not sure if we should just switch this to a stateless
     // fully-controlled component instead
-    if (
-      this.props.isPlaying !== prevProps.isPlaying ||
-      this.props.isPlaying !== this.state.isPlaying
-    ) {
+    if (this.props.isPlaying !== prevProps.isPlaying || this.props.isPlaying !== this.state.isPlaying) {
       this.setState({
         isPlaying: this.props.isPlaying,
       });
     }
 
-    if (
-      this.props.cineFrameRate !== prevProps.cineFrameRate ||
-      this.props.cineFrameRate !== this.state.cineFrameRate
-    ) {
+    if (this.props.cineFrameRate !== prevProps.cineFrameRate || this.props.cineFrameRate !== this.state.cineFrameRate) {
       this.setState({
         cineFrameRate: this.props.cineFrameRate,
       });
     }
   }
 
-  handleInputChange = event => {
+  handleInputChange = (event) => {
     const target = event.target;
 
     let value = target.value;
@@ -97,25 +93,25 @@ class CineDialog extends PureComponent {
     }
   };
 
-  onClickNextButton = event => {
+  onClickNextButton = (event) => {
     if (this.props.onClickNextButton) {
       this.props.onClickNextButton(event);
     }
   };
 
-  onClickBackButton = event => {
+  onClickBackButton = (event) => {
     if (this.props.onClickBackButton) {
       this.props.onClickBackButton(event);
     }
   };
 
-  onClickSkipToStart = event => {
+  onClickSkipToStart = (event) => {
     if (this.props.onClickSkipToStart) {
       this.props.onClickSkipToStart(event);
     }
   };
 
-  onClickSkipToEnd = event => {
+  onClickSkipToEnd = (event) => {
     if (this.props.onClickSkipToEnd) {
       this.props.onClickSkipToEnd(event);
     }
@@ -144,20 +140,10 @@ class CineDialog extends PureComponent {
               >
                 <Icon name="step-backward" />
               </button>
-              <button
-                title={t('Play / Stop')}
-                className="btn"
-                data-toggle="tooltip"
-                onClick={this.onClickPlayPause}
-              >
+              <button title={t('Play / Stop')} className="btn" data-toggle="tooltip" onClick={this.onClickPlayPause}>
                 <Icon name={this.state.isPlaying ? 'stop' : 'play'} />
               </button>
-              <button
-                title={t('Next image')}
-                className="btn"
-                data-toggle="tooltip"
-                onClick={this.onClickNextButton}
-              >
+              <button title={t('Next image')} className="btn" data-toggle="tooltip" onClick={this.onClickNextButton}>
                 <Icon name="step-forward" />
               </button>
               <button

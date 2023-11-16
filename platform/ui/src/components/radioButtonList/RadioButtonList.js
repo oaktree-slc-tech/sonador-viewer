@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import './RadioButtonList.css';
 
 export class RadioButtonList extends Component {
@@ -33,12 +34,12 @@ export class RadioButtonList extends Component {
   }
 
   render() {
-    let buttons = this.props.description.map(button => {
+    let buttons = this.props.description.map((button) => {
       let input = (
         <input
           type="radio"
           checked={this.state.checked === button.id}
-          onChange={e => {
+          onChange={(e) => {
             this.handleChange(e);
           }}
           value={button.id}
@@ -48,9 +49,7 @@ export class RadioButtonList extends Component {
       //needed to style the custom radio check
       let inputSpan;
       if (this.state.checked === button.id) {
-        inputSpan = (
-          <span className="ohif-radio-button ohif-selected">{input}</span>
-        );
+        inputSpan = <span className="ohif-radio-button ohif-selected">{input}</span>;
       } else {
         inputSpan = <span className="ohif-radio-button">{input}</span>;
       }

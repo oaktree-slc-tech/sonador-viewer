@@ -1,5 +1,5 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.core = (function(e) {
+  (this.workbox.core = (function (e) {
     'use strict';
     try {
       self['workbox:core:5.1.4'] && _();
@@ -21,30 +21,26 @@
         runtime: 'runtime',
         suffix: 'undefined' != typeof registration ? registration.scope : '',
       },
-      i = e => [r.prefix, e, r.suffix].filter(e => e && e.length > 0).join('-'),
+      i = (e) => [r.prefix, e, r.suffix].filter((e) => e && e.length > 0).join('-'),
       o = {
-        updateDetails: e => {
-          (e => {
+        updateDetails: (e) => {
+          ((e) => {
             for (const t of Object.keys(r)) e(t);
-          })(t => {
+          })((t) => {
             'string' == typeof e[t] && (r[t] = e[t]);
           });
         },
-        getGoogleAnalyticsName: e => e || i(r.googleAnalytics),
-        getPrecacheName: e => e || i(r.precache),
+        getGoogleAnalyticsName: (e) => e || i(r.googleAnalytics),
+        getPrecacheName: (e) => e || i(r.precache),
         getPrefix: () => r.prefix,
-        getRuntimeName: e => e || i(r.runtime),
+        getRuntimeName: (e) => e || i(r.runtime),
         getSuffix: () => r.suffix,
       };
     async function a() {
       for (const e of s) await e();
     }
-    const c = e =>
-        new URL(String(e), location.href).href.replace(
-          new RegExp('^' + location.origin),
-          ''
-        ),
-      u = (e, t) => e.filter(e => t in e),
+    const c = (e) => new URL(String(e), location.href).href.replace(new RegExp('^' + location.origin), ''),
+      u = (e, t) => e.filter((e) => t in e),
       l = async ({ request: e, mode: t, plugins: n = [] }) => {
         const s = u(n, 'cacheKeyWillBeUsed');
         let r = e;
@@ -53,13 +49,7 @@
             'string' == typeof r && (r = new Request(r));
         return r;
       },
-      f = async ({
-        cacheName: e,
-        request: t,
-        event: n,
-        matchOptions: s,
-        plugins: r = [],
-      }) => {
+      f = async ({ cacheName: e, request: t, event: n, matchOptions: s, plugins: r = [] }) => {
         const i = await self.caches.open(e),
           o = await l({ plugins: r, request: t, mode: 'read' });
         let a = await i.match(o, s);
@@ -77,43 +67,24 @@
         return a;
       },
       h = {
-        put: async ({
-          cacheName: e,
-          request: t,
-          response: s,
-          event: r,
-          plugins: i = [],
-          matchOptions: o,
-        }) => {
+        put: async ({ cacheName: e, request: t, response: s, event: r, plugins: i = [], matchOptions: o }) => {
           const h = await l({ plugins: i, request: t, mode: 'write' });
           if (!s) throw new n('cache-put-with-no-response', { url: c(h.url) });
-          const w = await (async ({
-            request: e,
-            response: t,
-            event: n,
-            plugins: s = [],
-          }) => {
+          const w = await (async ({ request: e, response: t, event: n, plugins: s = [] }) => {
             let r = t,
               i = !1;
             for (const t of s)
               if ('cacheWillUpdate' in t) {
                 i = !0;
                 const s = t.cacheWillUpdate;
-                if (
-                  ((r = await s.call(t, { request: e, response: r, event: n })),
-                  !r)
-                )
-                  break;
+                if (((r = await s.call(t, { request: e, response: r, event: n })), !r)) break;
               }
             return i || (r = r && 200 === r.status ? r : void 0), r || null;
           })({ event: r, plugins: i, response: s, request: h });
           if (!w) return;
           const p = await self.caches.open(e),
             d = u(i, 'cacheDidUpdate'),
-            g =
-              d.length > 0
-                ? await f({ cacheName: e, matchOptions: o, request: h })
-                : null;
+            g = d.length > 0 ? await f({ cacheName: e, matchOptions: o, request: h }) : null;
           try {
             await p.put(h, w);
           } catch (e) {
@@ -146,11 +117,7 @@
     }
     class g {
       constructor(e, t, { onupgradeneeded: n, onversionchange: s } = {}) {
-        (this.t = null),
-          (this.s = e),
-          (this.i = t),
-          (this.o = n),
-          (this.u = s || (() => this.close()));
+        (this.t = null), (this.s = e), (this.i = t), (this.o = n), (this.u = s || (() => this.close()));
       }
       get db() {
         return this.t;
@@ -161,21 +128,16 @@
             (this.t = await new Promise((e, t) => {
               let n = !1;
               setTimeout(() => {
-                (n = !0),
-                  t(new Error('The open request was blocked and timed out'));
+                (n = !0), t(new Error('The open request was blocked and timed out'));
               }, this.OPEN_TIMEOUT);
               const s = indexedDB.open(this.s, this.i);
               (s.onerror = () => t(s.error)),
-                (s.onupgradeneeded = e => {
-                  n
-                    ? (s.transaction.abort(), s.result.close())
-                    : 'function' == typeof this.o && this.o(e);
+                (s.onupgradeneeded = (e) => {
+                  n ? (s.transaction.abort(), s.result.close()) : 'function' == typeof this.o && this.o(e);
                 }),
                 (s.onsuccess = () => {
                   const t = s.result;
-                  n
-                    ? t.close()
-                    : ((t.onversionchange = this.u.bind(this)), e(t));
+                  n ? t.close() : ((t.onversionchange = this.u.bind(this)), e(t));
                 });
             })),
             this
@@ -188,21 +150,17 @@
         return await this.getAllMatching(e, { query: t, count: n });
       }
       async getAllKeys(e, t, n) {
-        return (await this.getAllMatching(e, {
-          query: t,
-          count: n,
-          includeKeys: !0,
-        })).map(e => e.key);
+        return (
+          await this.getAllMatching(e, {
+            query: t,
+            count: n,
+            includeKeys: !0,
+          })
+        ).map((e) => e.key);
       }
       async getAllMatching(
         e,
-        {
-          index: t,
-          query: n = null,
-          direction: s = 'next',
-          count: r,
-          includeKeys: i = !1,
-        } = {}
+        { index: t, query: n = null, direction: s = 'next', count: r, includeKeys: i = !1 } = {}
       ) {
         return await this.transaction([e], 'readonly', (o, a) => {
           const c = o.objectStore(e),
@@ -211,10 +169,7 @@
             f = u.openCursor(n, s);
           f.onsuccess = () => {
             const e = f.result;
-            e
-              ? (l.push(i ? e : e.value),
-                r && l.length >= r ? a(l) : e.continue())
-              : a(l);
+            e ? (l.push(i ? e : e.value), r && l.length >= r ? a(l) : e.continue()) : a(l);
           };
         });
       }
@@ -223,9 +178,7 @@
           await this.open(),
           await new Promise((s, r) => {
             const i = this.t.transaction(e, t);
-            (i.onabort = () => r(i.error)),
-              (i.oncomplete = () => s()),
-              n(i, e => s(e));
+            (i.onabort = () => r(i.error)), (i.oncomplete = () => s()), n(i, (e) => s(e));
           })
         );
       }
@@ -248,20 +201,12 @@
     for (const [e, t] of Object.entries(y))
       for (const n of t)
         n in IDBObjectStore.prototype &&
-          (g.prototype[n] = async function(t, ...s) {
+          (g.prototype[n] = async function (t, ...s) {
             return await this.l(n, t, e, ...s);
           });
     const m = {
-      fetch: async ({
-        request: e,
-        fetchOptions: t,
-        event: s,
-        plugins: r = [],
-      }) => {
-        if (
-          ('string' == typeof e && (e = new Request(e)),
-          s instanceof FetchEvent && s.preloadResponse)
-        ) {
+      fetch: async ({ request: e, fetchOptions: t, event: s, plugins: r = [] }) => {
+        if (('string' == typeof e && (e = new Request(e)), s instanceof FetchEvent && s.preloadResponse)) {
           const e = await s.preloadResponse;
           if (e) return e;
         }
@@ -302,14 +247,14 @@
       },
     };
     function q(e) {
-      return new Promise(t => setTimeout(t, e));
+      return new Promise((t) => setTimeout(t, e));
     }
     var v = Object.freeze({
       __proto__: null,
       assert: null,
       cacheNames: o,
       cacheWrapper: h,
-      canConstructReadableStream: function() {
+      canConstructReadableStream: function () {
         if (void 0 === w)
           try {
             new ReadableStream({ start() {} }), (w = !0);
@@ -319,7 +264,7 @@
         return w;
       },
       canConstructResponseFromBodyStream: d,
-      dontWaitFor: function(e) {
+      dontWaitFor: function (e) {
         e.then(() => {});
       },
       DBWrapper: g,
@@ -330,7 +275,7 @@
           });
         }
       },
-      deleteDatabase: async e => {
+      deleteDatabase: async (e) => {
         await new Promise((t, n) => {
           const s = indexedDB.deleteDatabase(e);
           (s.onerror = () => {
@@ -348,17 +293,17 @@
       fetchWrapper: m,
       getFriendlyURL: c,
       logger: null,
-      resultingClientExists: async function(e) {
+      resultingClientExists: async function (e) {
         if (!e) return;
         let t = await self.clients.matchAll({ type: 'window' });
-        const n = new Set(t.map(e => e.id));
+        const n = new Set(t.map((e) => e.id));
         let s;
         const r = performance.now();
         for (
           ;
           performance.now() - r < 2e3 &&
           ((t = await self.clients.matchAll({ type: 'window' })),
-          (s = t.find(t => (e ? t.id === e : !n.has(t.id)))),
+          (s = t.find((t) => (e ? t.id === e : !n.has(t.id)))),
           !s);
 
         )
@@ -388,10 +333,10 @@
     return (
       (e._private = v),
       (e.cacheNames = x),
-      (e.clientsClaim = function() {
+      (e.clientsClaim = function () {
         self.addEventListener('activate', () => self.clients.claim());
       }),
-      (e.copyResponse = async function(e, t) {
+      (e.copyResponse = async function (e, t) {
         const n = e.clone(),
           s = {
             headers: new Headers(n.headers),
@@ -402,13 +347,13 @@
           i = d() ? n.body : await n.blob();
         return new Response(i, r);
       }),
-      (e.registerQuotaErrorCallback = function(e) {
+      (e.registerQuotaErrorCallback = function (e) {
         s.add(e);
       }),
-      (e.setCacheNameDetails = function(e) {
+      (e.setCacheNameDetails = function (e) {
         o.updateDetails(e);
       }),
-      (e.skipWaiting = function() {
+      (e.skipWaiting = function () {
         self.addEventListener('install', () => self.skipWaiting());
       }),
       e

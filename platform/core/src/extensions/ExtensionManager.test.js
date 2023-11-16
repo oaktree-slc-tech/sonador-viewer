@@ -1,7 +1,8 @@
 import { Exception } from 'handlebars';
+
+import log from './../log.js';
 import ExtensionManager from './ExtensionManager.js';
 import MODULE_TYPES from './MODULE_TYPES.js';
-import log from './../log.js';
 
 jest.mock('./../log.js');
 
@@ -53,17 +54,11 @@ describe('ExtensionManager.js', () => {
       extensionManager.registerExtension = jest.fn();
 
       // SUT
-      const fakeExtensions = [
-        { one: '1' },
-        [{ two: '2' }, fakeConfiguration],
-        { three: '3 ' },
-      ];
+      const fakeExtensions = [{ one: '1' }, [{ two: '2' }, fakeConfiguration], { three: '3 ' }];
       extensionManager.registerExtensions(fakeExtensions);
 
       // Assert
-      expect(extensionManager.registerExtension.mock.calls[1][1]).toEqual(
-        fakeConfiguration
-      );
+      expect(extensionManager.registerExtension.mock.calls[1][1]).toEqual(fakeConfiguration);
     });
   });
 
@@ -142,9 +137,7 @@ describe('ExtensionManager.js', () => {
       extensionManager.registerExtension(extensionWithBadModule);
 
       expect(log.warn.mock.calls.length).toBe(1);
-      expect(log.warn.mock.calls[0][0]).toContain(
-        'Null or undefined returned when registering'
-      );
+      expect(log.warn.mock.calls[0][0]).toContain('Null or undefined returned when registering');
     });
 
     it('logs an error if an exception is thrown while retrieving a module', () => {
@@ -158,9 +151,7 @@ describe('ExtensionManager.js', () => {
       extensionManager.registerExtension(extensionWithBadModule);
 
       expect(log.error.mock.calls.length).toBe(1);
-      expect(log.error.mock.calls[0][0]).toContain(
-        'Exception thrown while trying to call'
-      );
+      expect(log.error.mock.calls[0][0]).toContain('Exception thrown while trying to call');
     });
 
     it('successfully passes dependencies to each module along with extension configuration', () => {
@@ -177,7 +168,7 @@ describe('ExtensionManager.js', () => {
 
       extensionManager.registerExtension(extension, extensionConfiguration);
 
-      Object.keys(extension).forEach(module => {
+      Object.keys(extension).forEach((module) => {
         if (typeof extension[module] === 'function') {
           expect(extension[module].mock.calls[0][0]).toEqual({
             servicesManager,
@@ -214,7 +205,7 @@ describe('ExtensionManager.js', () => {
       extensionManager.registerExtension(extension);
 
       // Registers 1 module per module type
-      Object.keys(extensionManager.modules).forEach(moduleType => {
+      Object.keys(extensionManager.modules).forEach((moduleType) => {
         const modulesForType = extensionManager.modules[moduleType];
 
         expect(modulesForType.length).toBe(1);
@@ -255,9 +246,7 @@ describe('ExtensionManager.js', () => {
       extensionManager.registerExtension(extension);
 
       expect(log.warn.mock.calls.length).toBe(1);
-      expect(log.warn.mock.calls[0][0]).toContain(
-        'Commands Module contains no command definitions'
-      );
+      expect(log.warn.mock.calls[0][0]).toContain('Commands Module contains no command definitions');
     });
   });
 });

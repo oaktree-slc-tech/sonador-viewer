@@ -1,18 +1,18 @@
-!(function(n, t) {
+!(function (n, t) {
   'object' == typeof exports && 'undefined' != typeof module
     ? t(exports)
     : 'function' == typeof define && define.amd
     ? define(['exports'], t)
     : t(((n = n || self).workbox = {}));
-})(this, function(n) {
+})(this, function (n) {
   'use strict';
   try {
     self['workbox:window:5.1.4'] && _();
   } catch (n) {}
   function t(n, t) {
-    return new Promise(function(r) {
+    return new Promise(function (r) {
       var e = new MessageChannel();
-      (e.port1.onmessage = function(n) {
+      (e.port1.onmessage = function (n) {
         r(n.data);
       }),
         n.postMessage(t, [e.port2]);
@@ -37,7 +37,7 @@
     if ('undefined' == typeof Symbol || null == n[Symbol.iterator]) {
       if (
         Array.isArray(n) ||
-        (r = (function(n, t) {
+        (r = (function (n, t) {
           if (n) {
             if ('string' == typeof n) return e(n, t);
             var r = Object.prototype.toString.call(n).slice(8, -1);
@@ -45,8 +45,7 @@
               'Object' === r && n.constructor && (r = n.constructor.name),
               'Map' === r || 'Set' === r
                 ? Array.from(n)
-                : 'Arguments' === r ||
-                  /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(r)
+                : 'Arguments' === r || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(r)
                 ? e(n, t)
                 : void 0
             );
@@ -56,7 +55,7 @@
       ) {
         r && (n = r);
         var i = 0;
-        return function() {
+        return function () {
           return i >= n.length ? { done: !0 } : { done: !1, value: n[i++] };
         };
       }
@@ -69,9 +68,9 @@
   try {
     self['workbox:core:5.1.4'] && _();
   } catch (n) {}
-  var o = function() {
+  var o = function () {
     var n = this;
-    this.promise = new Promise(function(t, r) {
+    this.promise = new Promise(function (t, r) {
       (n.resolve = t), (n.reject = r);
     });
   };
@@ -79,18 +78,14 @@
     var r = location.href;
     return new URL(n, r).href === new URL(t, r).href;
   }
-  var a = function(n, t) {
+  var a = function (n, t) {
     (this.type = n), Object.assign(this, t);
   };
   function c(n, t, r) {
-    return r
-      ? t
-        ? t(n)
-        : n
-      : ((n && n.then) || (n = Promise.resolve(n)), t ? n.then(t) : n);
+    return r ? (t ? t(n) : n) : ((n && n.then) || (n = Promise.resolve(n)), t ? n.then(t) : n);
   }
   function f() {}
-  var s = (function(n) {
+  var s = (function (n) {
     var e, i;
     function f(t, r) {
       var e, i;
@@ -103,7 +98,7 @@
         (e.s = new o()),
         (e.v = 0),
         (e.h = new Set()),
-        (e.l = function() {
+        (e.l = function () {
           var n = e.m,
             t = n.installing;
           e.i > 0 || !u(t.scriptURL, e.g) || performance.now() > e.v + 6e4
@@ -112,7 +107,7 @@
             ++e.i,
             t.addEventListener('statechange', e.j);
         }),
-        (e.j = function(n) {
+        (e.j = function (n) {
           var t = e.m,
             r = n.target,
             i = r.state,
@@ -122,35 +117,26 @@
           !o && e.S && (c.isUpdate = !0),
             e.dispatchEvent(new a(u + i, c)),
             'installed' === i
-              ? (e.O = self.setTimeout(function() {
-                  'installed' === i &&
-                    t.waiting === r &&
-                    e.dispatchEvent(new a(u + 'waiting', c));
+              ? (e.O = self.setTimeout(function () {
+                  'installed' === i && t.waiting === r && e.dispatchEvent(new a(u + 'waiting', c));
                 }, 200))
               : 'activating' === i && (clearTimeout(e.O), o || e.u.resolve(r));
         }),
-        (e.A = function(n) {
+        (e.A = function (n) {
           var t = e.P;
           t === navigator.serviceWorker.controller &&
-            (e.dispatchEvent(
-              new a('controlling', { sw: t, originalEvent: n, isUpdate: e.S })
-            ),
-            e.s.resolve(t));
+            (e.dispatchEvent(new a('controlling', { sw: t, originalEvent: n, isUpdate: e.S })), e.s.resolve(t));
         }),
         (e.M =
-          ((i = function(n) {
+          ((i = function (n) {
             var t = n.data,
               r = n.source;
-            return c(e.getSW(), function() {
-              e.h.has(r) &&
-                e.dispatchEvent(
-                  new a('message', { data: t, sw: r, originalEvent: n })
-                );
+            return c(e.getSW(), function () {
+              e.h.has(r) && e.dispatchEvent(new a('message', { data: t, sw: r, originalEvent: n }));
             });
           }),
-          function() {
-            for (var n = [], t = 0; t < arguments.length; t++)
-              n[t] = arguments[t];
+          function () {
+            for (var n = [], t = 0; t < arguments.length; t++) n[t] = arguments[t];
             try {
               return Promise.resolve(i.apply(this, n));
             } catch (n) {
@@ -163,38 +149,35 @@
         e
       );
     }
-    (i = n),
-      ((e = f).prototype = Object.create(i.prototype)),
-      (e.prototype.constructor = e),
-      (e.__proto__ = i);
+    (i = n), ((e = f).prototype = Object.create(i.prototype)), (e.prototype.constructor = e), (e.__proto__ = i);
     var s,
       h,
       l,
       d = f.prototype;
     return (
-      (d.register = function(n) {
+      (d.register = function (n) {
         var t = (void 0 === n ? {} : n).immediate,
           r = void 0 !== t && t;
         try {
           var e = this;
-          return (function(n, t) {
+          return (function (n, t) {
             var r = n();
             if (r && r.then) return r.then(t);
             return t(r);
           })(
-            function() {
+            function () {
               if (!r && 'complete' !== document.readyState)
                 return v(
-                  new Promise(function(n) {
+                  new Promise(function (n) {
                     return window.addEventListener('load', n);
                   })
                 );
             },
-            function() {
+            function () {
               return (
                 (e.S = Boolean(navigator.serviceWorker.controller)),
                 (e.U = e._()),
-                c(e.I(), function(n) {
+                c(e.I(), function (n) {
                   (e.m = n),
                     e.U &&
                       ((e.P = e.U),
@@ -207,7 +190,7 @@
                       u(t.scriptURL, e.g) &&
                       ((e.P = t),
                       Promise.resolve()
-                        .then(function() {
+                        .then(function () {
                           e.dispatchEvent(
                             new a('waiting', {
                               sw: t,
@@ -215,14 +198,10 @@
                             })
                           );
                         })
-                        .then(function() {})),
+                        .then(function () {})),
                     e.P && (e.o.resolve(e.P), e.h.add(e.P)),
                     e.m.addEventListener('updatefound', e.l),
-                    navigator.serviceWorker.addEventListener(
-                      'controllerchange',
-                      e.A,
-                      { once: !0 }
-                    ),
+                    navigator.serviceWorker.addEventListener('controllerchange', e.A, { once: !0 }),
                     e.m
                   );
                 })
@@ -233,37 +212,37 @@
           return Promise.reject(n);
         }
       }),
-      (d.update = function() {
+      (d.update = function () {
         try {
           return this.m ? v(this.m.update()) : void 0;
         } catch (n) {
           return Promise.reject(n);
         }
       }),
-      (d.getSW = function() {
+      (d.getSW = function () {
         try {
           return void 0 !== this.P ? this.P : this.o.promise;
         } catch (n) {
           return Promise.reject(n);
         }
       }),
-      (d.messageSW = function(n) {
+      (d.messageSW = function (n) {
         try {
-          return c(this.getSW(), function(r) {
+          return c(this.getSW(), function (r) {
             return t(r, n);
           });
         } catch (n) {
           return Promise.reject(n);
         }
       }),
-      (d._ = function() {
+      (d._ = function () {
         var n = navigator.serviceWorker.controller;
         return n && u(n.scriptURL, this.g) ? n : void 0;
       }),
-      (d.I = function() {
+      (d.I = function () {
         try {
           var n = this;
-          return (function(n, t) {
+          return (function (n, t) {
             try {
               var r = n();
             } catch (n) {
@@ -272,12 +251,12 @@
             if (r && r.then) return r.then(void 0, t);
             return r;
           })(
-            function() {
-              return c(navigator.serviceWorker.register(n.g, n.t), function(t) {
+            function () {
+              return c(navigator.serviceWorker.register(n.g, n.t), function (t) {
                 return (n.v = performance.now()), t;
               });
             },
-            function(n) {
+            function (n) {
               throw n;
             }
           );
@@ -289,13 +268,13 @@
       (h = [
         {
           key: 'active',
-          get: function() {
+          get: function () {
             return this.u.promise;
           },
         },
         {
           key: 'controlling',
-          get: function() {
+          get: function () {
             return this.s.promise;
           },
         },
@@ -304,25 +283,25 @@
       f
     );
   })(
-    (function() {
+    (function () {
       function n() {
         this.R = new Map();
       }
       var t = n.prototype;
       return (
-        (t.addEventListener = function(n, t) {
+        (t.addEventListener = function (n, t) {
           this.k(n).add(t);
         }),
-        (t.removeEventListener = function(n, t) {
+        (t.removeEventListener = function (n, t) {
           this.k(n).delete(t);
         }),
-        (t.dispatchEvent = function(n) {
+        (t.dispatchEvent = function (n) {
           n.target = this;
           for (var t, r = i(this.k(n.type)); !(t = r()).done; ) {
             (0, t.value)(n);
           }
         }),
-        (t.k = function(n) {
+        (t.k = function (n) {
           return this.R.has(n) || this.R.set(n, new Set()), this.R.get(n);
         }),
         n
@@ -332,8 +311,6 @@
   function v(n, t) {
     if (!t) return n && n.then ? n.then(f) : Promise.resolve();
   }
-  (n.Workbox = s),
-    (n.messageSW = t),
-    Object.defineProperty(n, '__esModule', { value: !0 });
+  (n.Workbox = s), (n.messageSW = t), Object.defineProperty(n, '__esModule', { value: !0 });
 });
 //# sourceMappingURL=workbox-window.prod.umd.js.map

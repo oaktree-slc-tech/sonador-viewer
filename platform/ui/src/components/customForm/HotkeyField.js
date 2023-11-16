@@ -20,7 +20,7 @@ const getKeys = ({ sequence, modifier_keys }) => {
   const keysArray = sequence.join(' ').split('+');
   let keys = [];
   let modifiers = [];
-  keysArray.forEach(key => {
+  keysArray.forEach((key) => {
     if (modifier_keys && modifier_keys.includes(key)) {
       modifiers.push(key);
     } else {
@@ -43,11 +43,11 @@ const getKeys = ({ sequence, modifier_keys }) => {
 function HotkeyField({ keys, handleChange, classNames, modifier_keys }) {
   const inputValue = formatKeysForInput(keys);
 
-  const onInputKeyDown = event => {
+  const onInputKeyDown = (event) => {
     event.stopPropagation();
     event.preventDefault();
 
-    hotkeys.record(sequence => {
+    hotkeys.record((sequence) => {
       const keys = getKeys({ sequence, modifier_keys });
       hotkeys.unpause();
       handleChange(keys);

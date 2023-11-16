@@ -25,10 +25,10 @@ try {
  */
 
 function messageSW(sw, data) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const messageChannel = new MessageChannel();
 
-    messageChannel.port1.onmessage = event => {
+    messageChannel.port1.onmessage = (event) => {
       resolve(event.data);
     };
 
@@ -66,7 +66,6 @@ class Deferred {
       this.reject = reject;
     });
   }
-
 }
 
 /*
@@ -92,7 +91,7 @@ function dontWaitFor(promise) {
   license that can be found in the LICENSE file or at
   https://opensource.org/licenses/MIT.
 */
-const logger =  (() => {
+const logger = (() => {
   // Don't overwrite this value if it's already set.
   // See https://github.com/GoogleChrome/workbox/pull/2284#issuecomment-560470923
   if (!('__WB_DISABLE_DEV_LOGS' in self)) {
@@ -106,7 +105,7 @@ const logger =  (() => {
     warn: `#f39c12`,
     error: `#c0392b`,
     groupCollapsed: `#3498db`,
-    groupEnd: null
+    groupEnd: null,
   };
 
   const print = function (method, args) {
@@ -123,7 +122,13 @@ const logger =  (() => {
       }
     }
 
-    const styles = [`background: ${methodToColorMap[method]}`, `border-radius: 0.5em`, `color: white`, `font-weight: bold`, `padding: 2px 0.5em`]; // When in a group, the workbox prefix is not displayed.
+    const styles = [
+      `background: ${methodToColorMap[method]}`,
+      `border-radius: 0.5em`,
+      `color: white`,
+      `font-weight: bold`,
+      `padding: 2px 0.5em`,
+    ]; // When in a group, the workbox prefix is not displayed.
 
     const logPrefix = inGroup ? [] : ['%cworkbox', styles.join(';')];
     console[method](...logPrefix, ...args);
@@ -175,7 +180,6 @@ class WorkboxEventTarget {
    * @private
    */
 
-
   addEventListener(type, listener) {
     const foo = this._getEventListenersByType(type);
 
@@ -187,7 +191,6 @@ class WorkboxEventTarget {
    * @private
    */
 
-
   removeEventListener(type, listener) {
     this._getEventListenersByType(type).delete(listener);
   }
@@ -195,7 +198,6 @@ class WorkboxEventTarget {
    * @param {Object} event
    * @private
    */
-
 
   dispatchEvent(event) {
     event.target = this;
@@ -215,7 +217,6 @@ class WorkboxEventTarget {
    * @private
    */
 
-
   _getEventListenersByType(type) {
     if (!this._eventListenerRegistry.has(type)) {
       this._eventListenerRegistry.set(type, new Set());
@@ -223,7 +224,6 @@ class WorkboxEventTarget {
 
     return this._eventListenerRegistry.get(type);
   }
-
 }
 
 /*
@@ -244,9 +244,7 @@ class WorkboxEventTarget {
  */
 
 function urlsMatch(url1, url2) {
-  const {
-    href
-  } = location;
+  const { href } = location;
   return new URL(url1, href).href === new URL(url2, href).href;
 }
 
@@ -269,7 +267,6 @@ class WorkboxEvent {
     this.type = type;
     Object.assign(this, props);
   }
-
 }
 
 /*
@@ -345,18 +342,19 @@ class Workbox extends WorkboxEventTarget {
       // To minimize the possibility of a false positive, we use the logic here:
 
       const updateLikelyTriggeredExternally = // Since we enforce only calling `register()` once, and since we don't
-      // add the `updatefound` event listener until the `register()` call, if
-      // `_updateFoundCount` is > 0 then it means this method has already
-      // been called, thus this SW must be external
-      this._updateFoundCount > 0 || // If the script URL of the installing SW is different from this
-      // instance's script URL, we know it's definitely not from our
-      // registration.
-      !urlsMatch(installingSW.scriptURL, this._scriptURL) || // If all of the above are false, then we use a time-based heuristic:
-      // Any `updatefound` event that occurs long after our registration is
-      // assumed to be external.
-      performance.now() > this._registrationTime + REGISTRATION_TIMEOUT_DURATION ? // If any of the above are not true, we assume the update was
-      // triggered by this instance.
-      true : false;
+        // add the `updatefound` event listener until the `register()` call, if
+        // `_updateFoundCount` is > 0 then it means this method has already
+        // been called, thus this SW must be external
+        this._updateFoundCount > 0 || // If the script URL of the installing SW is different from this
+        // instance's script URL, we know it's definitely not from our
+        // registration.
+        !urlsMatch(installingSW.scriptURL, this._scriptURL) || // If all of the above are false, then we use a time-based heuristic:
+        // Any `updatefound` event that occurs long after our registration is
+        // assumed to be external.
+        performance.now() > this._registrationTime + REGISTRATION_TIMEOUT_DURATION // If any of the above are not true, we assume the update was
+          ? // triggered by this instance.
+            true
+          : false;
 
       if (updateLikelyTriggeredExternally) {
         this._externalSW = installingSW;
@@ -371,7 +369,6 @@ class Workbox extends WorkboxEventTarget {
         this._swDeferred.resolve(installingSW); // The `installing` state isn't something we have a dedicated
         // callback for, but we do log messages for it in development.
 
-
         {
           if (navigator.serviceWorker.controller) {
             logger.log('Updated service worker found. Installing now...');
@@ -381,7 +378,6 @@ class Workbox extends WorkboxEventTarget {
         }
       } // Increment the `updatefound` count, so future invocations of this
       // method can be sure they were triggered externally.
-
 
       ++this._updateFoundCount; // Add a `statechange` listener regardless of whether this update was
       // triggered externally, since we have callbacks for both.
@@ -393,19 +389,16 @@ class Workbox extends WorkboxEventTarget {
      * @param {Event} originalEvent
      */
 
-
-    this._onStateChange = originalEvent => {
+    this._onStateChange = (originalEvent) => {
       // `this._registration` will never be `undefined` after an update is found.
       const registration = this._registration;
       const sw = originalEvent.target;
-      const {
-        state
-      } = sw;
+      const { state } = sw;
       const isExternal = sw === this._externalSW;
       const eventPrefix = isExternal ? 'external' : '';
       const eventProps = {
         sw,
-        originalEvent
+        originalEvent,
       };
 
       if (!isExternal && this._isUpdate) {
@@ -430,9 +423,15 @@ class Workbox extends WorkboxEventTarget {
 
             {
               if (isExternal) {
-                logger.warn('An external service worker has installed but is ' + 'waiting for this client to close before activating...');
+                logger.warn(
+                  'An external service worker has installed but is ' +
+                    'waiting for this client to close before activating...'
+                );
               } else {
-                logger.warn('The service worker has installed but is waiting ' + 'for existing clients to close before activating...');
+                logger.warn(
+                  'The service worker has installed but is waiting ' +
+                    'for existing clients to close before activating...'
+                );
               }
             }
           }
@@ -449,7 +448,9 @@ class Workbox extends WorkboxEventTarget {
         switch (state) {
           case 'installed':
             if (isExternal) {
-              logger.warn('An external service worker has installed. ' + 'You may want to suggest users reload this page.');
+              logger.warn(
+                'An external service worker has installed. ' + 'You may want to suggest users reload this page.'
+              );
             } else {
               logger.log('Registered service worker installed.');
             }
@@ -463,7 +464,11 @@ class Workbox extends WorkboxEventTarget {
               logger.log('Registered service worker activated.');
 
               if (sw !== navigator.serviceWorker.controller) {
-                logger.warn('The registered service worker is active but ' + 'not yet controlling the page. Reload or run ' + '`clients.claim()` in the service worker.');
+                logger.warn(
+                  'The registered service worker is active but ' +
+                    'not yet controlling the page. Reload or run ' +
+                    '`clients.claim()` in the service worker.'
+                );
               }
             }
 
@@ -485,16 +490,17 @@ class Workbox extends WorkboxEventTarget {
      * @param {Event} originalEvent
      */
 
-
-    this._onControllerChange = originalEvent => {
+    this._onControllerChange = (originalEvent) => {
       const sw = this._sw;
 
       if (sw === navigator.serviceWorker.controller) {
-        this.dispatchEvent(new WorkboxEvent('controlling', {
-          sw,
-          originalEvent,
-          isUpdate: this._isUpdate
-        }));
+        this.dispatchEvent(
+          new WorkboxEvent('controlling', {
+            sw,
+            originalEvent,
+            isUpdate: this._isUpdate,
+          })
+        );
 
         {
           logger.log('Registered service worker now controlling this page.');
@@ -508,12 +514,8 @@ class Workbox extends WorkboxEventTarget {
      * @param {Event} originalEvent
      */
 
-
-    this._onMessage = async originalEvent => {
-      const {
-        data,
-        source
-      } = originalEvent; // Wait until there's an "own" service worker. This is used to buffer
+    this._onMessage = async (originalEvent) => {
+      const { data, source } = originalEvent; // Wait until there's an "own" service worker. This is used to buffer
       // `message` events that may be received prior to calling `register()`.
 
       await this.getSW(); // If the service worker that sent the message is in the list of own
@@ -524,11 +526,13 @@ class Workbox extends WorkboxEventTarget {
       // update to be found.
 
       if (this._ownSWs.has(source)) {
-        this.dispatchEvent(new WorkboxEvent('message', {
-          data,
-          sw: source,
-          originalEvent
-        }));
+        this.dispatchEvent(
+          new WorkboxEvent('message', {
+            data,
+            sw: source,
+            originalEvent,
+          })
+        );
       }
     };
 
@@ -550,22 +554,20 @@ class Workbox extends WorkboxEventTarget {
    *     not loaded (not recommended).
    */
 
-
-  async register({
-    immediate = false
-  } = {}) {
+  async register({ immediate = false } = {}) {
     {
       if (this._registrationTime) {
-        logger.error('Cannot re-register a Workbox instance after it has ' + 'been registered. Create a new instance instead.');
+        logger.error(
+          'Cannot re-register a Workbox instance after it has ' + 'been registered. Create a new instance instead.'
+        );
         return;
       }
     }
 
     if (!immediate && document.readyState !== 'complete') {
-      await new Promise(res => window.addEventListener('load', res));
+      await new Promise((res) => window.addEventListener('load', res));
     } // Set this flag to true if any service worker was controlling the page
     // at registration time.
-
 
     this._isUpdate = Boolean(navigator.serviceWorker.controller); // Before registering, attempt to determine if a SW is already controlling
     // the page, and if that SW script (and version, if specified) matches this
@@ -583,14 +585,13 @@ class Workbox extends WorkboxEventTarget {
       this._controllingDeferred.resolve(this._compatibleControllingSW);
 
       this._compatibleControllingSW.addEventListener('statechange', this._onStateChange, {
-        once: true
+        once: true,
       });
     } // If there's a waiting service worker with a matching URL before the
     // `updatefound` event fires, it likely means that this site is open
     // in another tab, or the user refreshed the page (and thus the previous
     // page wasn't fully unloaded before this page started loading).
     // https://developers.google.com/web/fundamentals/primers/service-workers/lifecycle#waiting
-
 
     const waitingSW = this._registration.waiting;
 
@@ -600,18 +601,21 @@ class Workbox extends WorkboxEventTarget {
       this._sw = waitingSW; // Run this in the next microtask, so any code that adds an event
       // listener after awaiting `register()` will get this event.
 
-      dontWaitFor(Promise.resolve().then(() => {
-        this.dispatchEvent(new WorkboxEvent('waiting', {
-          sw: waitingSW,
-          wasWaitingBeforeRegister: true
-        }));
+      dontWaitFor(
+        Promise.resolve().then(() => {
+          this.dispatchEvent(
+            new WorkboxEvent('waiting', {
+              sw: waitingSW,
+              wasWaitingBeforeRegister: true,
+            })
+          );
 
-        {
-          logger.warn('A service worker was already waiting to activate ' + 'before this script was registered...');
-        }
-      }));
+          {
+            logger.warn('A service worker was already waiting to activate ' + 'before this script was registered...');
+          }
+        })
+      );
     } // If an "own" SW is already set, resolve the deferred.
-
 
     if (this._sw) {
       this._swDeferred.resolve(this._sw);
@@ -626,7 +630,11 @@ class Workbox extends WorkboxEventTarget {
         if (this._compatibleControllingSW) {
           logger.debug('A service worker with the same script URL ' + 'is already controlling this page.');
         } else {
-          logger.debug('A service worker with a different script URL is ' + 'currently controlling the page. The browser is now fetching ' + 'the new script now...');
+          logger.debug(
+            'A service worker with a different script URL is ' +
+              'currently controlling the page. The browser is now fetching ' +
+              'the new script now...'
+          );
         }
       }
 
@@ -644,7 +652,7 @@ class Workbox extends WorkboxEventTarget {
     this._registration.addEventListener('updatefound', this._onUpdateFound);
 
     navigator.serviceWorker.addEventListener('controllerchange', this._onControllerChange, {
-      once: true
+      once: true,
     });
     return this._registration;
   }
@@ -652,16 +660,16 @@ class Workbox extends WorkboxEventTarget {
    * Checks for updates of the registered service worker.
    */
 
-
   async update() {
     if (!this._registration) {
       {
-        logger.error('Cannot update a Workbox instance without ' + 'being registered. Register the Workbox instance first.');
+        logger.error(
+          'Cannot update a Workbox instance without ' + 'being registered. Register the Workbox instance first.'
+        );
       }
 
       return;
     } // Try to update registration
-
 
     await this._registration.update();
   }
@@ -674,7 +682,6 @@ class Workbox extends WorkboxEventTarget {
    *
    * @return {Promise<ServiceWorker>}
    */
-
 
   get active() {
     return this._activeDeferred.promise;
@@ -691,7 +698,6 @@ class Workbox extends WorkboxEventTarget {
    *
    * @return {Promise<ServiceWorker>}
    */
-
 
   get controlling() {
     return this._controllingDeferred.promise;
@@ -712,7 +718,6 @@ class Workbox extends WorkboxEventTarget {
    * @return {Promise<ServiceWorker>}
    */
 
-
   async getSW() {
     // If `this._sw` is set, resolve with that as we want `getSW()` to
     // return the correct (new) service worker if an update is found.
@@ -732,7 +737,6 @@ class Workbox extends WorkboxEventTarget {
    * @return {Promise<Object>}
    */
 
-
   async messageSW(data) {
     const sw = await this.getSW();
     return messageSW(sw, data);
@@ -744,7 +748,6 @@ class Workbox extends WorkboxEventTarget {
    * @private
    * @return {ServiceWorker|undefined}
    */
-
 
   _getControllingSWIfCompatible() {
     const controller = navigator.serviceWorker.controller;
@@ -762,7 +765,6 @@ class Workbox extends WorkboxEventTarget {
    * @private
    */
 
-
   async _registerScript() {
     try {
       const reg = await navigator.serviceWorker.register(this._scriptURL, this._registerOptions); // Keep track of when registration happened, so it can be used in the
@@ -776,11 +778,9 @@ class Workbox extends WorkboxEventTarget {
         logger.error(error);
       } // Re-throw the error.
 
-
       throw error;
     }
   }
-
 }
 // -----------------------------------------------------------------------
 

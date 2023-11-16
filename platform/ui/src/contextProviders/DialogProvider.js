@@ -1,13 +1,7 @@
-import React, {
-  useState,
-  createContext,
-  useContext,
-  useCallback,
-  useEffect,
-} from 'react';
-import PropTypes from 'prop-types';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import Draggable from 'react-draggable';
 import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 import { utils } from '@ohif/core';
 
@@ -26,14 +20,14 @@ const DialogProvider = ({ children, service }) => {
 
   useEffect(() => {
     setCenterPositions(
-      dialogs.map(dialog => ({
+      dialogs.map((dialog) => ({
         id: dialog.id,
         ...getCenterPosition(dialog.id),
       }))
     );
   }, [dialogs]);
 
-  const getCenterPosition = id => {
+  const getCenterPosition = (id) => {
     const root = document.querySelector('#root');
     const centerX = root.offsetLeft + root.offsetWidth / 2;
     const centerY = root.offsetTop + root.offsetHeight / 2;
@@ -51,7 +45,7 @@ const DialogProvider = ({ children, service }) => {
    * @param {DialogProps} props The dialog props.
    * @returns The new dialog id.
    */
-  const create = useCallback(props => {
+  const create = useCallback((props) => {
     const { id } = props;
 
     let dialogId = id;
@@ -59,7 +53,7 @@ const DialogProvider = ({ children, service }) => {
       dialogId = utils.guid();
     }
 
-    setDialogs(dialogs => [...dialogs, { ...props, id: dialogId }]);
+    setDialogs((dialogs) => [...dialogs, { ...props, id: dialogId }]);
     setLastDialogId(dialogId);
 
     return dialogId;
@@ -72,11 +66,7 @@ const DialogProvider = ({ children, service }) => {
    * @property {string} props.id The dialog id.
    * @returns void
    */
-  const dismiss = useCallback(
-    ({ id }) =>
-      setDialogs(dialogs => dialogs.filter(dialog => dialog.id !== id)),
-    []
-  );
+  const dismiss = useCallback(({ id }) => setDialogs((dialogs) => dialogs.filter((dialog) => dialog.id !== id)), []);
 
   /**
    * Sets the implementation of a dialog service that can be used by extensions.
@@ -95,12 +85,10 @@ const DialogProvider = ({ children, service }) => {
    * @param {string} id The dialog id.
    * @returns void
    */
-  const _bringToFront = useCallback(id => {
-    setDialogs(dialogs => {
-      const topDialog = dialogs.find(dialog => dialog.id === id);
-      return topDialog
-        ? [...dialogs.filter(dialog => dialog.id !== id), topDialog]
-        : dialogs;
+  const _bringToFront = useCallback((id) => {
+    setDialogs((dialogs) => {
+      const topDialog = dialogs.find((dialog) => dialog.id === id);
+      return topDialog ? [...dialogs.filter((dialog) => dialog.id !== id), topDialog] : dialogs;
     });
   }, []);
 
@@ -140,7 +128,7 @@ const DialogProvider = ({ children, service }) => {
   const isEmpty = () => dialogs && dialogs.length < 1;
 
   const renderDialogs = () =>
-    dialogs.map(dialog => {
+    dialogs.map((dialog) => {
       const {
         id,
         content: DialogContent,
@@ -155,10 +143,9 @@ const DialogProvider = ({ children, service }) => {
         showOverlay,
       } = dialog;
 
-      let position =
-        (preservePosition && lastDialogPosition) || defaultPosition;
+      let position = (preservePosition && lastDialogPosition) || defaultPosition;
       if (centralize) {
-        position = centerPositions.find(position => position.id === id);
+        position = centerPositions.find((position) => position.id === id);
       }
 
       const dragableItem = () => (
@@ -168,17 +155,10 @@ const DialogProvider = ({ children, service }) => {
           position={position}
           defaultPosition={position}
           bounds="parent"
-          onStart={event => {
+          onStart={(event) => {
             const e = event || window.event;
             const target = e.target || e.srcElement;
-            const BLACKLIST = [
-              'SVG',
-              'BUTTON',
-              'PATH',
-              'INPUT',
-              'SPAN',
-              'LABEL',
-            ];
+            const BLACKLIST = ['SVG', 'BUTTON', 'PATH', 'INPUT', 'SPAN', 'LABEL'];
             if (BLACKLIST.includes(target.tagName.toUpperCase())) {
               return false;
             }
@@ -187,14 +167,14 @@ const DialogProvider = ({ children, service }) => {
               return onStart(event);
             }
           }}
-          onStop={event => {
+          onStop={(event) => {
             setIsDragging(false);
 
             if (validCallback(onStop)) {
               return onStop(event);
             }
           }}
-          onDrag={event => {
+          onDrag={(event) => {
             setIsDragging(true);
             _bringToFront(id);
             _updateLastDialogPosition(id);
@@ -206,11 +186,7 @@ const DialogProvider = ({ children, service }) => {
         >
           <div
             id={`draggableItem-${id}`}
-            className={classNames(
-              'DraggableItem',
-              isDragging && 'dragging',
-              isDraggable && 'draggable'
-            )}
+            className={classNames('DraggableItem', isDragging && 'dragging', isDraggable && 'draggable')}
             style={{ zIndex: '999', position: 'absolute' }}
             onClick={() => _bringToFront(id)}
           >
@@ -233,17 +209,15 @@ const DialogProvider = ({ children, service }) => {
    *
    * @returns void
    */
-  const _updateLastDialogPosition = dialogId => {
-    const draggableItemBounds = document
-      .querySelector(`#draggableItem-${dialogId}`)
-      .getBoundingClientRect();
+  const _updateLastDialogPosition = (dialogId) => {
+    const draggableItemBounds = document.querySelector(`#draggableItem-${dialogId}`).getBoundingClientRect();
     setLastDialogPosition({
       x: draggableItemBounds.x,
       y: draggableItemBounds.y,
     });
   };
 
-  const validCallback = callback => callback && typeof callback === 'function';
+  const validCallback = (callback) => callback && typeof callback === 'function';
 
   return (
     <DialogContext.Provider value={{ create, dismiss, dismissAll, isEmpty }}>
@@ -258,12 +232,10 @@ const DialogProvider = ({ children, service }) => {
  * High Order Component to use the dialog methods through a Class Component
  *
  */
-export const withDialog = Component => {
+export const withDialog = (Component) => {
   return function WrappedComponent(props) {
     const { create, dismiss, dismissAll, isEmpty } = useDialog();
-    return (
-      <Component {...props} dialog={{ create, dismiss, dismissAll, isEmpty }} />
-    );
+    return <Component {...props} dialog={{ create, dismiss, dismissAll, isEmpty }} />;
   };
 };
 
@@ -272,11 +244,7 @@ DialogProvider.defaultProps = {
 };
 
 DialogProvider.propTypes = {
-  children: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-    PropTypes.func,
-  ]).isRequired,
+  children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node, PropTypes.func]).isRequired,
   service: PropTypes.shape({
     setServiceImplementation: PropTypes.func,
   }),

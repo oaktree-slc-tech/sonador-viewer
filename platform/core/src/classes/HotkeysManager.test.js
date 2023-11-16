@@ -1,7 +1,7 @@
+import log from './../log.js';
+import hotkeys from './../utils/hotkeys';
 import CommandsManager from './CommandsManager.js';
 import HotkeysManager from './HotkeysManager.js';
-import hotkeys from './../utils/hotkeys';
-import log from './../log.js';
 
 jest.mock('./CommandsManager.js');
 jest.mock('./../utils/hotkeys');
@@ -21,15 +21,9 @@ describe('HotkeysManager', () => {
 
   it('has expected properties', () => {
     const allProperties = Object.keys(hotkeysManager);
-    const expectedProprties = [
-      'hotkeyDefinitions',
-      'hotkeyDefaults',
-      'isEnabled',
-    ];
+    const expectedProprties = ['hotkeyDefinitions', 'hotkeyDefaults', 'isEnabled'];
 
-    const containsAllExpectedProperties = expectedProprties.every(expected =>
-      allProperties.includes(expected)
-    );
+    const containsAllExpectedProperties = expectedProprties.every((expected) => allProperties.includes(expected));
 
     expect(containsAllExpectedProperties).toBe(true);
   });
@@ -131,16 +125,11 @@ describe('HotkeysManager', () => {
 
       hotkeysManager.registerHotkeys(definition);
 
-      const numOfHotkeyDefinitions = Object.keys(
-        hotkeysManager.hotkeyDefinitions
-      ).length;
-      const hotkeyDefinitionForRegisteredCommand =
-        hotkeysManager.hotkeyDefinitions[definition.commandName];
+      const numOfHotkeyDefinitions = Object.keys(hotkeysManager.hotkeyDefinitions).length;
+      const hotkeyDefinitionForRegisteredCommand = hotkeysManager.hotkeyDefinitions[definition.commandName];
 
       expect(numOfHotkeyDefinitions).toBe(1);
-      expect(hotkeyDefinitionForRegisteredCommand).toEqual(
-        expectedHotkeyDefinition
-      );
+      expect(hotkeyDefinitionForRegisteredCommand).toEqual(expectedHotkeyDefinition);
     });
     it('calls hotkeys.bind for the group of keys', () => {
       const definition = { commandName: 'dance', keys: ['shift', 'e'] };
@@ -173,9 +162,7 @@ describe('HotkeysManager', () => {
 
       hotkeysManager.restoreDefaultBindings();
 
-      expect(hotkeysManager.setHotkeys.mock.calls[0][0]).toEqual(
-        hotkeysManager.hotkeyDefaults
-      );
+      expect(hotkeysManager.setHotkeys.mock.calls[0][0]).toEqual(hotkeysManager.hotkeyDefaults);
     });
   });
 

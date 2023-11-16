@@ -1,12 +1,11 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.strategies = (function(t, e, s, i, n) {
+  (this.workbox.strategies = (function (t, e, s, i, n) {
     'use strict';
     try {
       self['workbox:strategies:5.1.4'] && _();
     } catch (t) {}
     const r = {
-      cacheWillUpdate: async ({ response: t }) =>
-        200 === t.status || 0 === t.status ? t : null,
+      cacheWillUpdate: async ({ response: t }) => (200 === t.status || 0 === t.status ? t : null),
     };
     return (
       (t.CacheFirst = class {
@@ -32,8 +31,7 @@
             } catch (t) {
               i = t;
             }
-          if (!r)
-            throw new n.WorkboxError('no-response', { url: e.url, error: i });
+          if (!r) throw new n.WorkboxError('no-response', { url: e.url, error: i });
           return r;
         }
         async o(t, e) {
@@ -60,9 +58,7 @@
       }),
       (t.CacheOnly = class {
         constructor(t = {}) {
-          (this.t = e.cacheNames.getRuntimeName(t.cacheName)),
-            (this.s = t.plugins || []),
-            (this.h = t.matchOptions);
+          (this.t = e.cacheNames.getRuntimeName(t.cacheName)), (this.s = t.plugins || []), (this.h = t.matchOptions);
         }
         async handle({ event: t, request: e }) {
           'string' == typeof e && (e = new Request(e));
@@ -79,15 +75,11 @@
       }),
       (t.NetworkFirst = class {
         constructor(t = {}) {
-          if (
-            ((this.t = e.cacheNames.getRuntimeName(t.cacheName)), t.plugins)
-          ) {
-            const e = t.plugins.some(t => !!t.cacheWillUpdate);
+          if (((this.t = e.cacheNames.getRuntimeName(t.cacheName)), t.plugins)) {
+            const e = t.plugins.some((t) => !!t.cacheWillUpdate);
             this.s = e ? t.plugins : [r, ...t.plugins];
           } else this.s = [r];
-          (this.u = t.networkTimeoutSeconds || 0),
-            (this.i = t.fetchOptions),
-            (this.h = t.matchOptions);
+          (this.u = t.networkTimeoutSeconds || 0), (this.i = t.fetchOptions), (this.h = t.matchOptions);
         }
         async handle({ event: t, request: e }) {
           const s = [];
@@ -105,14 +97,13 @@
           const h = this.p({ timeoutId: r, request: e, event: t, logs: s });
           i.push(h);
           let o = await Promise.race(i);
-          if ((o || (o = await h), !o))
-            throw new n.WorkboxError('no-response', { url: e.url });
+          if ((o || (o = await h), !o)) throw new n.WorkboxError('no-response', { url: e.url });
           return o;
         }
         l({ request: t, logs: e, event: s }) {
           let i;
           return {
-            promise: new Promise(e => {
+            promise: new Promise((e) => {
               i = setTimeout(async () => {
                 e(await this.q({ request: t, event: s }));
               }, 1e3 * this.u);
@@ -132,8 +123,7 @@
           } catch (t) {
             h = t;
           }
-          if ((t && clearTimeout(t), h || !o))
-            o = await this.q({ request: e, event: r });
+          if ((t && clearTimeout(t), h || !o)) o = await this.q({ request: e, event: r });
           else {
             const t = o.clone(),
               i = s.cacheWrapper.put({
@@ -177,19 +167,14 @@
           } catch (t) {
             s = t;
           }
-          if (!r)
-            throw new n.WorkboxError('no-response', { url: e.url, error: s });
+          if (!r) throw new n.WorkboxError('no-response', { url: e.url, error: s });
           return r;
         }
       }),
       (t.StaleWhileRevalidate = class {
         constructor(t = {}) {
-          if (
-            ((this.t = e.cacheNames.getRuntimeName(t.cacheName)),
-            (this.s = t.plugins || []),
-            t.plugins)
-          ) {
-            const e = t.plugins.some(t => !!t.cacheWillUpdate);
+          if (((this.t = e.cacheNames.getRuntimeName(t.cacheName)), (this.s = t.plugins || []), t.plugins)) {
+            const e = t.plugins.some((t) => !!t.cacheWillUpdate);
             this.s = e ? t.plugins : [r, ...t.plugins];
           } else this.s = [r];
           (this.i = t.fetchOptions), (this.h = t.matchOptions);
@@ -216,8 +201,7 @@
             } catch (t) {
               r = t;
             }
-          if (!h)
-            throw new n.WorkboxError('no-response', { url: e.url, error: r });
+          if (!h) throw new n.WorkboxError('no-response', { url: e.url, error: r });
           return h;
         }
         async o({ request: t, event: e }) {
@@ -243,11 +227,5 @@
       }),
       t
     );
-  })(
-    {},
-    workbox.core._private,
-    workbox.core._private,
-    workbox.core._private,
-    workbox.core._private
-  ));
+  })({}, workbox.core._private, workbox.core._private, workbox.core._private, workbox.core._private));
 //# sourceMappingURL=workbox-strategies.prod.js.map

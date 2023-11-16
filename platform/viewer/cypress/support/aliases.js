@@ -16,21 +16,15 @@ export function initCornerstoneToolsAliases() {
 
 //Creating aliases for Common page elements
 export function initCommonElementsAliases() {
-  cy.get(
-    '.pull-right > .RoundedButtonGroup > .roundedButtonWrapper:first-of-type > .roundedButton'
-  ).as('measurementsBtn');
+  cy.get('.pull-right > .RoundedButtonGroup > .roundedButtonWrapper:first-of-type > .roundedButton').as(
+    'measurementsBtn'
+  );
   cy.get('.viewport-element').as('viewport');
   cy.get('section.sidepanel.from-right').as('measurementsPanel');
-  cy.get(
-    '.pull-left > .RoundedButtonGroup > .roundedButtonWrapper > .roundedButton'
-  ).as('seriesBtn');
+  cy.get('.pull-left > .RoundedButtonGroup > .roundedButtonWrapper > .roundedButton').as('seriesBtn');
   cy.get('section.sidepanel.from-left').as('seriesPanel');
-  cy.get(
-    'div.OHIFCornerstoneViewportOverlay > div.bottom-left.overlay-element > div'
-  ).as('viewportInfoBottomLeft');
-  cy.get(
-    'div.OHIFCornerstoneViewportOverlay > div.bottom-right.overlay-element > div'
-  ).as('viewportInfoBottomRight');
+  cy.get('div.OHIFCornerstoneViewportOverlay > div.bottom-left.overlay-element > div').as('viewportInfoBottomLeft');
+  cy.get('div.OHIFCornerstoneViewportOverlay > div.bottom-right.overlay-element > div').as('viewportInfoBottomRight');
   cy.get('.left-mid.orientation-marker').as('viewportInfoMidLeft');
   cy.get('.top-mid.orientation-marker').as('viewportInfoMidTop');
 }
@@ -70,9 +64,7 @@ export function initStudyListAliasesOnDesktop() {
 export function initStudyListAliasesOnTablet() {
   cy.get('.study-count').as('studyCount');
   cy.get('#filter-patientNameOrId').as('patientNameOrMRN');
-  cy.get('#filter-accessionOrModalityOrDescription').as(
-    'accessionModalityDescription'
-  );
+  cy.get('#filter-accessionOrModalityOrDescription').as('accessionModalityDescription');
   cy.get('#start-date').as('studyListStartDate');
   cy.get('#end-date').as('studyListEndDate');
   cy.get('[data-cy="study-list-results"] > tr').as('searchResult');

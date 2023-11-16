@@ -3,15 +3,9 @@ export default function resolveObjectPath(root, path, defaultValue) {
     let value,
       separator = path.indexOf('.');
     if (separator >= 0) {
-      return resolveObjectPath(
-        root[path.slice(0, separator)],
-        path.slice(separator + 1, path.length),
-        defaultValue
-      );
+      return resolveObjectPath(root[path.slice(0, separator)], path.slice(separator + 1, path.length), defaultValue);
     }
     value = root[path];
-    return value === undefined && defaultValue !== undefined
-      ? defaultValue
-      : value;
+    return value === undefined && defaultValue !== undefined ? defaultValue : value;
   }
 }

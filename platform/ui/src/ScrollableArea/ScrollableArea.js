@@ -1,11 +1,12 @@
-import './ScrollableArea.styl';
-
 import React, { Component } from 'react';
-
-import { Icon } from './../elements/Icon';
 import PropTypes from 'prop-types';
+
 import getScrollbarSize from '../utils/getScrollbarSize.js';
 import throttled from '../utils/throttled.js';
+
+import { Icon } from './../elements/Icon';
+
+import './ScrollableArea.styl';
 
 export class ScrollableArea extends Component {
   static propTypes = {
@@ -49,14 +50,10 @@ export class ScrollableArea extends Component {
     }
 
     return (
-      <div
-        className={`scrollArea ${this.props.class} ${
-          this.state.scrollAreaClasses
-        }`}
-      >
+      <div className={`scrollArea ${this.props.class} ${this.state.scrollAreaClasses}`}>
         <div
           className={scrollableClass}
-          ref={element => {
+          ref={(element) => {
             this.scrollableElement = element;
           }}
           onScroll={this.scrollHandlerThrottled}
@@ -91,12 +88,8 @@ export class ScrollableArea extends Component {
     window.removeEventListener('resize', this.adjustMargins);
   }
 
-  scrollNavDown = event => {
-    const {
-      scrollTop: currentTop,
-      offsetHeight: height,
-      scrollHeight,
-    } = this.scrollableElement;
+  scrollNavDown = (event) => {
+    const { scrollTop: currentTop, offsetHeight: height, scrollHeight } = this.scrollableElement;
 
     const limit = scrollHeight - height;
     let scrollTop = currentTop + this.props.scrollStep;
@@ -104,7 +97,7 @@ export class ScrollableArea extends Component {
     this.scrollableElement.scrollTop = scrollTop;
   };
 
-  scrollNavUp = event => {
+  scrollNavUp = (event) => {
     const { scrollTop: currentTop } = this.scrollableElement;
 
     let scrollTop = currentTop - this.props.scrollStep;
@@ -118,19 +111,13 @@ export class ScrollableArea extends Component {
       const x = this.props.scrollX ? 1 : 0;
       const y = this.props.scrollY ? 1 : 0;
       const scrollbarSize = getScrollbarSize();
-      this.scrollableElement.style.marginRight = `${0 -
-        scrollbarSize[0] * y}px`;
-      this.scrollableElement.style.marginBottom = `${0 -
-        scrollbarSize[1] * x}px`;
+      this.scrollableElement.style.marginRight = `${0 - scrollbarSize[0] * y}px`;
+      this.scrollableElement.style.marginBottom = `${0 - scrollbarSize[1] * x}px`;
     }
   };
 
   scrollHandler = () => {
-    const {
-      offsetHeight: height,
-      scrollTop: scrollTop,
-      scrollHeight,
-    } = this.scrollableElement;
+    const { offsetHeight: height, scrollTop: scrollTop, scrollHeight } = this.scrollableElement;
     let scrollAreaClasses = '';
 
     // Check if can scroll up

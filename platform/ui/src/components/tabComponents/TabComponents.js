@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
 import classnames from 'classnames';
+import PropTypes from 'prop-types';
 
 // Style
 import './TabComponents.styl';
@@ -12,10 +12,7 @@ import './TabComponents.styl';
  * @returns {string} data-cy value
  */
 const getDataCy = (name = '') => {
-  return name
-    .split(' ')
-    .join('-')
-    .toLowerCase();
+  return name.split(' ').join('-').toLowerCase();
 };
 
 /**
@@ -54,10 +51,7 @@ function TabComponents({ tabs, customProps = {} }) {
                         onClick={() => {
                           setCurrentTabIndex(index);
                         }}
-                        className={classnames(
-                          'nav-link',
-                          index === currentTabIndex && 'active'
-                        )}
+                        className={classnames('nav-link', index === currentTabIndex && 'active')}
                         data-cy={getDataCy(name)}
                       >
                         <button>{name}</button>
@@ -70,20 +64,10 @@ function TabComponents({ tabs, customProps = {} }) {
           </div>
         </div>
         {tabs.map((tab, index) => {
-          const {
-            Component,
-            customProps: tabCustomProps,
-            hidden = false,
-          } = tab;
+          const { Component, customProps: tabCustomProps, hidden = false } = tab;
           return (
             !hidden && (
-              <div
-                key={index}
-                className={classnames(
-                  'TabComponents_content',
-                  index === currentTabIndex && 'active'
-                )}
-              >
+              <div key={index} className={classnames('TabComponents_content', index === currentTabIndex && 'active')}>
                 <Component {...customProps} {...tabCustomProps} />
               </div>
             )

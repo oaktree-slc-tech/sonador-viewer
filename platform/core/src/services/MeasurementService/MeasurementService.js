@@ -100,10 +100,7 @@ class MeasurementService {
    */
   getMeasurements() {
     const measurements = this._arrayOfObjects(this.measurements);
-    return (
-      measurements &&
-      measurements.map(m => this.measurements[Object.keys(m)[0]])
-    );
+    return measurements && measurements.map((m) => this.measurements[Object.keys(m)[0]]);
   }
 
   /**
@@ -148,7 +145,7 @@ class MeasurementService {
     source.addOrUpdate = (definition, measurement) => {
       return this.addOrUpdate(source, definition, measurement);
     };
-    source.remove = id => {
+    source.remove = (id) => {
       return this.remove(id, source);
     };
     source.getAnnotation = (definition, measurementId) => {
@@ -178,7 +175,7 @@ class MeasurementService {
   _getSourceId(name, version) {
     const { sources } = this;
 
-    const sourceId = Object.keys(sources).find(sourceId => {
+    const sourceId = Object.keys(sources).find((sourceId) => {
       const source = sources[sourceId];
 
       return source.name === name && source.version === version;
@@ -197,13 +194,7 @@ class MeasurementService {
    * @param {Function} toMeasurementSchema Mapping function to measurement schema
    * @return void
    */
-  addMapping(
-    source,
-    definition,
-    matchingCriteria,
-    toSourceSchema,
-    toMeasurementSchema
-  ) {
+  addMapping(source, definition, matchingCriteria, toSourceSchema, toMeasurementSchema) {
     if (!this._isValidSource(source)) {
       throw new Error('Invalid source.');
     }
@@ -237,11 +228,7 @@ class MeasurementService {
       this.mappings[source.id] = [mapping];
     }
 
-    log.info(
-      `New measurement mapping added to source '${this._getSourceInfo(
-        source
-      )}'.`
-    );
+    log.info(`New measurement mapping added to source '${this._getSourceInfo(source)}'.`);
   }
 
   /**
@@ -263,18 +250,11 @@ class MeasurementService {
       return;
     }
 
-    const mapping = this._getMappingByMeasurementSource(
-      measurementId,
-      definition
-    );
+    const mapping = this._getMappingByMeasurementSource(measurementId, definition);
     const measurement = this.getMeasurement(measurementId);
     if (mapping) return mapping.toSourceSchema(measurement, definition);
 
-    const matchingMapping = this._getMatchingMapping(
-      source,
-      definition,
-      measurement
-    );
+    const matchingMapping = this._getMatchingMapping(source, definition, measurement);
 
     if (matchingMapping) {
       log.info('Matching mapping found:', matchingMapping);
@@ -290,10 +270,7 @@ class MeasurementService {
         modifiedTimestamp: Math.floor(Date.now() / 1000),
       };
 
-      log.info(
-        `Updating internal measurement representation...`,
-        updatedMeasurement
-      );
+      log.info(`Updating internal measurement representation...`, updatedMeasurement);
 
       this.measurements[id] = updatedMeasurement;
 
@@ -320,13 +297,7 @@ class MeasurementService {
    * @param {object} data The data you wish to add to the source.
    * @param {function} toMeasurementSchema A function to get the `data` into the same shape as the source definition.
    */
-  addRawMeasurement(
-    source,
-    definition,
-    data,
-    toMeasurementSchema,
-    dataSource = {}
-  ) {
+  addRawMeasurement(source, definition, data, toMeasurementSchema, dataSource = {}) {
     if (!this._isValidSource(source)) {
       log.warn('Invalid source. Exiting early.');
       return;
@@ -340,9 +311,7 @@ class MeasurementService {
     }
 
     if (!this._sourceHasMappings(source)) {
-      log.warn(
-        `No measurement mappings found for '${sourceInfo}' source. Exiting early.`
-      );
+      log.warn(`No measurement mappings found for '${sourceInfo}' source. Exiting early.`);
       return;
     }
 
@@ -353,17 +322,12 @@ class MeasurementService {
       /* Assign measurement source instance */
       measurement.source = source;
     } catch (error) {
-      log.warn(
-        `Failed to map '${sourceInfo}' measurement for definition ${definition}:`,
-        error.message
-      );
+      log.warn(`Failed to map '${sourceInfo}' measurement for definition ${definition}:`, error.message);
       return;
     }
 
     if (!this._isValidMeasurement(measurement)) {
-      log.warn(
-        `Attempting to add or update a invalid measurement provided by '${sourceInfo}'. Exiting early.`
-      );
+      log.warn(`Attempting to add or update a invalid measurement provided by '${sourceInfo}'. Exiting early.`);
       return;
     }
 
@@ -380,10 +344,7 @@ class MeasurementService {
     };
 
     if (this.measurements[internalId]) {
-      log.info(
-        `Measurement already defined. Updating measurement.`,
-        newMeasurement
-      );
+      log.info(`Measurement already defined. Updating measurement.`, newMeasurement);
       this.measurements[internalId] = newMeasurement;
       this.publish(this.EVENTS.MEASUREMENT_UPDATED, {
         source,
@@ -427,17 +388,13 @@ class MeasurementService {
     const sourceInfo = this._getSourceInfo(source);
 
     if (!this._sourceHasMappings(source)) {
-      throw new Error(
-        `No measurement mappings found for '${sourceInfo}' source. Exiting early.`
-      );
+      throw new Error(`No measurement mappings found for '${sourceInfo}' source. Exiting early.`);
     }
 
     let measurement = {};
     try {
       const sourceMappings = this.mappings[source.id];
-      const { toMeasurementSchema } = sourceMappings.find(
-        mapping => mapping.definition === definition
-      );
+      const { toMeasurementSchema } = sourceMappings.find((mapping) => mapping.definition === definition);
 
       /* Convert measurement */
       measurement = toMeasurementSchema(sourceMeasurement);
@@ -445,16 +402,11 @@ class MeasurementService {
       /* Assign measurement source instance */
       measurement.source = source;
     } catch (error) {
-      throw new Error(
-        `Failed to map '${sourceInfo}' measurement for definition ${definition}:`,
-        error.message
-      );
+      throw new Error(`Failed to map '${sourceInfo}' measurement for definition ${definition}:`, error.message);
     }
 
     if (!this._isValidMeasurement(measurement)) {
-      throw new Error(
-        `Attempting to add or update a invalid measurement provided by '${sourceInfo}'. Exiting early.`
-      );
+      throw new Error(`Attempting to add or update a invalid measurement provided by '${sourceInfo}'. Exiting early.`);
     }
 
     let internalId = sourceMeasurement.id;
@@ -470,10 +422,7 @@ class MeasurementService {
     };
 
     if (this.measurements[internalId]) {
-      log.info(
-        `Measurement already defined. Updating measurement.`,
-        newMeasurement
-      );
+      log.info(`Measurement already defined. Updating measurement.`, newMeasurement);
       this.measurements[internalId] = newMeasurement;
       this.publish(this.EVENTS.MEASUREMENT_UPDATED, {
         source,
@@ -534,7 +483,7 @@ class MeasurementService {
     const hasCallbacks = Array.isArray(this.listeners[eventName]);
 
     if (hasListeners && hasCallbacks) {
-      this.listeners[eventName].forEach(listener => {
+      this.listeners[eventName].forEach((listener) => {
         listener.callback({ viewportIndex, measurement });
       });
     }
@@ -555,9 +504,7 @@ class MeasurementService {
   _getMappingByMeasurementSource(measurementId, definition) {
     const measurement = this.getMeasurement(measurementId);
     if (this._isValidSource(measurement.source)) {
-      return this.mappings[measurement.source.id].find(
-        m => m.definition === definition
-      );
+      return this.mappings[measurement.source.id].find((m) => m.definition === definition);
     }
   }
 
@@ -580,9 +527,7 @@ class MeasurementService {
   _getMatchingMapping(source, definition, measurement) {
     const sourceMappings = this.mappings[source.id];
 
-    const sourceMappingsByDefinition = sourceMappings.filter(
-      mapping => mapping.definition === definition
-    );
+    const sourceMappingsByDefinition = sourceMappings.filter((mapping) => mapping.definition === definition);
 
     /* Criteria Matching */
     return sourceMappingsByDefinition.find(({ matchingCriteria }) => {
@@ -592,17 +537,12 @@ class MeasurementService {
 
       if (
         matchingCriteria.properties &&
-        matchingCriteria.properties.every(name =>
-          measurement.hasOwnProperty(name)
-        )
+        matchingCriteria.properties.every((name) => measurement.hasOwnProperty(name))
       ) {
         return true;
       }
 
-      if (
-        measurement.points &&
-        measurement.points.length === matchingCriteria.points
-      ) {
+      if (measurement.points && measurement.points.length === matchingCriteria.points) {
         return true;
       }
 
@@ -637,9 +577,7 @@ class MeasurementService {
    * @return {boolean} Validation if source has mappings
    */
   _sourceHasMappings(source) {
-    return (
-      Array.isArray(this.mappings[source.id]) && this.mappings[source.id].length
-    );
+    return Array.isArray(this.mappings[source.id]) && this.mappings[source.id].length;
   }
 
   /**
@@ -649,7 +587,7 @@ class MeasurementService {
    * @return {boolean} Measurement validation
    */
   _isValidMeasurement(measurementData) {
-    Object.keys(measurementData).forEach(key => {
+    Object.keys(measurementData).forEach((key) => {
       if (!MEASUREMENT_SCHEMA_KEYS.includes(key)) {
         log.warn(`Invalid measurement key: ${key}`);
         return false;
@@ -674,8 +612,8 @@ class MeasurementService {
    *
    * @return {Array} Array of objects
    */
-  _arrayOfObjects = obj => {
-    return Object.entries(obj).map(e => ({ [e[0]]: e[1] }));
+  _arrayOfObjects = (obj) => {
+    return Object.entries(obj).map((e) => ({ [e[0]]: e[1] }));
   };
 }
 

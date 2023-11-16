@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 import './LanguageSwitcher.styl';
 
 const LanguageSwitcher = ({ language, onLanguageChange, languages }) => {
-  const onChange = event => {
+  const onChange = (event) => {
     const { value } = event.target;
     onLanguageChange(value);
   };
@@ -17,7 +17,7 @@ const LanguageSwitcher = ({ language, onLanguageChange, languages }) => {
       value={language}
       onChange={onChange}
     >
-      {languages.map(lng => (
+      {languages.map((lng) => (
         <option key={lng.value} value={lng.value}>
           {lng.label}
         </option>

@@ -1,0 +1,45 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.studyFilterContainer {
+  display: flex;
+  align-items: center;
+  height: fit-content;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #60646d;
+  column-gap: 10px;
+  font-size: 16px;
+  color: #60646d;
+  line-height: 18px;
+  background-color: transparent;
+  cursor: pointer;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  @include xs {
+    padding: 7px 10px;
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  &.active {
+    background-color: #000000;
+    border-color: #000000;
+  }
+
+  .resetIcon {
+    cursor: pointer;
+  }
+}
+
+.dropdown {
+  left: 0;
+}
+
+.chevronUp {
+  transform: rotate(180deg);
+}
+
+.dropdownContainer {
+  height: 38px;
+}

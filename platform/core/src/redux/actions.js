@@ -6,11 +6,11 @@ import {
   CLEAR_VIEWPORT,
   SET_ACTIVE_SPECIFIC_DATA,
   SET_SERVERS,
+  SET_USER_PREFERENCES,
   SET_VIEWPORT,
   SET_VIEWPORT_ACTIVE,
   SET_VIEWPORT_LAYOUT,
   SET_VIEWPORT_LAYOUT_AND_DATA,
-  SET_USER_PREFERENCES,
 } from './constants/ActionTypes.js';
 
 /**
@@ -25,16 +25,13 @@ import {
 /**
  * VIEWPORT
  */
-export const setViewportSpecificData = (
-  viewportIndex,
-  viewportSpecificData
-) => ({
+export const setViewportSpecificData = (viewportIndex, viewportSpecificData) => ({
   type: SET_VIEWPORT,
   viewportIndex,
   viewportSpecificData,
 });
 
-export const setViewportActive = viewportIndex => ({
+export const setViewportActive = (viewportIndex) => ({
   type: SET_VIEWPORT_ACTIVE,
   viewportIndex,
 });
@@ -54,10 +51,7 @@ export const setLayout = ({ numRows, numColumns, viewports }) => ({
  * @param {number} layout.numColumns
  * @param {array} viewports
  */
-export const setViewportLayoutAndData = (
-  { numRows, numColumns, viewports },
-  viewportSpecificData
-) => ({
+export const setViewportLayoutAndData = ({ numRows, numColumns, viewports }, viewportSpecificData) => ({
   type: SET_VIEWPORT_LAYOUT_AND_DATA,
   numRows,
   numColumns,
@@ -65,12 +59,12 @@ export const setViewportLayoutAndData = (
   viewportSpecificData,
 });
 
-export const clearViewportSpecificData = viewportIndex => ({
+export const clearViewportSpecificData = (viewportIndex) => ({
   type: CLEAR_VIEWPORT,
   viewportIndex,
 });
 
-export const setActiveViewportSpecificData = viewportSpecificData => ({
+export const setActiveViewportSpecificData = (viewportSpecificData) => ({
   type: SET_ACTIVE_SPECIFIC_DATA,
   viewportSpecificData,
 });
@@ -78,7 +72,7 @@ export const setActiveViewportSpecificData = viewportSpecificData => ({
 /**
  * NOT-VIEWPORT
  */
-export const setUserPreferences = state => ({
+export const setUserPreferences = (state) => ({
   type: SET_USER_PREFERENCES,
   state,
 });
@@ -89,12 +83,12 @@ export const setExtensionData = (extension, data) => ({
   data,
 });
 
-export const setTimepoints = state => ({
+export const setTimepoints = (state) => ({
   type: 'SET_TIMEPOINTS',
   state,
 });
 
-export const setMeasurements = state => ({
+export const setMeasurements = (state) => ({
   type: 'SET_MEASUREMENTS',
   state,
 });
@@ -105,7 +99,7 @@ export const setStudyData = (StudyInstanceUID, data) => ({
   data,
 });
 
-export const setServers = servers => ({
+export const setServers = (servers) => ({
   type: SET_SERVERS,
   servers,
 });

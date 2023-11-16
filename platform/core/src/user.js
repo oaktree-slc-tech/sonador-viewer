@@ -6,7 +6,7 @@ let user = {
   getAccessToken: () => null,
   login: () => new Promise((resolve, reject) => reject()),
   logout: () => new Promise((resolve, reject) => reject()),
-  getData: key => null,
+  getData: (key) => null,
   setData: (key, value) => null,
 };
 

@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.strategies = (function(
+this.workbox.strategies = (function (
   exports,
   assert_js,
   cacheNames_js,
@@ -24,10 +24,8 @@ this.workbox.strategies = (function(
     */
   const messages = {
     strategyStart: (strategyName, request) =>
-      `Using ${strategyName} to respond to '${getFriendlyURL_js.getFriendlyURL(
-        request.url
-      )}'`,
-    printFinalResponse: response => {
+      `Using ${strategyName} to respond to '${getFriendlyURL_js.getFriendlyURL(request.url)}'`,
+    printFinalResponse: (response) => {
       if (response) {
         logger_js.logger.groupCollapsed(`View the final response here.`);
         logger_js.logger.log(response || '[No response returned]');
@@ -71,9 +69,7 @@ this.workbox.strategies = (function(
      * @param {Object} options.matchOptions [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
      */
     constructor(options = {}) {
-      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(
-        options.cacheName
-      );
+      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(options.cacheName);
       this._plugins = options.plugins || [];
       this._fetchOptions = options.fetchOptions;
       this._matchOptions = options.matchOptions;
@@ -116,10 +112,7 @@ this.workbox.strategies = (function(
 
       if (!response) {
         {
-          logs.push(
-            `No response found in the '${this._cacheName}' cache. ` +
-              `Will respond with a network request.`
-          );
+          logs.push(`No response found in the '${this._cacheName}' cache. ` + `Will respond with a network request.`);
         }
 
         try {
@@ -137,16 +130,12 @@ this.workbox.strategies = (function(
         }
       } else {
         {
-          logs.push(
-            `Found a cached response in the '${this._cacheName}' cache.`
-          );
+          logs.push(`Found a cached response in the '${this._cacheName}' cache.`);
         }
       }
 
       {
-        logger_js.logger.groupCollapsed(
-          messages.strategyStart('CacheFirst', request)
-        );
+        logger_js.logger.groupCollapsed(messages.strategyStart('CacheFirst', request));
 
         for (const log of logs) {
           logger_js.logger.log(log);
@@ -199,9 +188,7 @@ this.workbox.strategies = (function(
           {
             logger_js.logger.warn(
               `Unable to ensure service worker stays alive when ` +
-                `updating cache for '${getFriendlyURL_js.getFriendlyURL(
-                  request.url
-                )}'.`
+                `updating cache for '${getFriendlyURL_js.getFriendlyURL(request.url)}'.`
             );
           }
         }
@@ -242,9 +229,7 @@ this.workbox.strategies = (function(
      * @param {Object} options.matchOptions [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
      */
     constructor(options = {}) {
-      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(
-        options.cacheName
-      );
+      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(options.cacheName);
       this._plugins = options.plugins || [];
       this._matchOptions = options.matchOptions;
     }
@@ -282,19 +267,13 @@ this.workbox.strategies = (function(
       });
 
       {
-        logger_js.logger.groupCollapsed(
-          messages.strategyStart('CacheOnly', request)
-        );
+        logger_js.logger.groupCollapsed(messages.strategyStart('CacheOnly', request));
 
         if (response) {
-          logger_js.logger.log(
-            `Found a cached response in the '${this._cacheName}'` + ` cache.`
-          );
+          logger_js.logger.log(`Found a cached response in the '${this._cacheName}'` + ` cache.`);
           messages.printFinalResponse(response);
         } else {
-          logger_js.logger.log(
-            `No response found in the '${this._cacheName}' cache.`
-          );
+          logger_js.logger.log(`No response found in the '${this._cacheName}' cache.`);
         }
 
         logger_js.logger.groupEnd();
@@ -380,17 +359,11 @@ this.workbox.strategies = (function(
      * scenarios.
      */
     constructor(options = {}) {
-      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(
-        options.cacheName
-      );
+      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(options.cacheName);
 
       if (options.plugins) {
-        const isUsingCacheWillUpdate = options.plugins.some(
-          plugin => !!plugin.cacheWillUpdate
-        );
-        this._plugins = isUsingCacheWillUpdate
-          ? options.plugins
-          : [cacheOkAndOpaquePlugin, ...options.plugins];
+        const isUsingCacheWillUpdate = options.plugins.some((plugin) => !!plugin.cacheWillUpdate);
+        this._plugins = isUsingCacheWillUpdate ? options.plugins : [cacheOkAndOpaquePlugin, ...options.plugins];
       } else {
         // No plugins passed in, use the default plugin.
         this._plugins = [cacheOkAndOpaquePlugin];
@@ -473,9 +446,7 @@ this.workbox.strategies = (function(
       }
 
       {
-        logger_js.logger.groupCollapsed(
-          messages.strategyStart('NetworkFirst', request)
-        );
+        logger_js.logger.groupCollapsed(messages.strategyStart('NetworkFirst', request));
 
         for (const log of logs) {
           logger_js.logger.log(log);
@@ -505,13 +476,10 @@ this.workbox.strategies = (function(
 
     _getTimeoutPromise({ request, logs, event }) {
       let timeoutId;
-      const timeoutPromise = new Promise(resolve => {
+      const timeoutPromise = new Promise((resolve) => {
         const onNetworkTimeout = async () => {
           {
-            logs.push(
-              `Timing out the network response at ` +
-                `${this._networkTimeoutSeconds} seconds.`
-            );
+            logs.push(`Timing out the network response at ` + `${this._networkTimeoutSeconds} seconds.`);
           }
 
           resolve(
@@ -522,10 +490,7 @@ this.workbox.strategies = (function(
           );
         };
 
-        timeoutId = setTimeout(
-          onNetworkTimeout,
-          this._networkTimeoutSeconds * 1000
-        );
+        timeoutId = setTimeout(onNetworkTimeout, this._networkTimeoutSeconds * 1000);
       });
       return {
         promise: timeoutPromise,
@@ -566,10 +531,7 @@ this.workbox.strategies = (function(
         if (response) {
           logs.push(`Got response from network.`);
         } else {
-          logs.push(
-            `Unable to get a response from the network. Will respond ` +
-              `with a cached response.`
-          );
+          logs.push(`Unable to get a response from the network. Will respond ` + `with a cached response.`);
         }
       }
 
@@ -581,9 +543,7 @@ this.workbox.strategies = (function(
 
         {
           if (response) {
-            logs.push(
-              `Found a cached response in the '${this._cacheName}'` + ` cache.`
-            );
+            logs.push(`Found a cached response in the '${this._cacheName}'` + ` cache.`);
           } else {
             logs.push(`No response found in the '${this._cacheName}' cache.`);
           }
@@ -608,9 +568,7 @@ this.workbox.strategies = (function(
             {
               logger_js.logger.warn(
                 `Unable to ensure service worker stays alive when ` +
-                  `updating cache for '${getFriendlyURL_js.getFriendlyURL(
-                    request.url
-                  )}'.`
+                  `updating cache for '${getFriendlyURL_js.getFriendlyURL(request.url)}'.`
               );
             }
           }
@@ -717,9 +675,7 @@ this.workbox.strategies = (function(
       }
 
       {
-        logger_js.logger.groupCollapsed(
-          messages.strategyStart('NetworkOnly', request)
-        );
+        logger_js.logger.groupCollapsed(messages.strategyStart('NetworkOnly', request));
 
         if (response) {
           logger_js.logger.log(`Got response from network.`);
@@ -784,18 +740,12 @@ this.workbox.strategies = (function(
      * @param {Object} options.matchOptions [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
      */
     constructor(options = {}) {
-      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(
-        options.cacheName
-      );
+      this._cacheName = cacheNames_js.cacheNames.getRuntimeName(options.cacheName);
       this._plugins = options.plugins || [];
 
       if (options.plugins) {
-        const isUsingCacheWillUpdate = options.plugins.some(
-          plugin => !!plugin.cacheWillUpdate
-        );
-        this._plugins = isUsingCacheWillUpdate
-          ? options.plugins
-          : [cacheOkAndOpaquePlugin, ...options.plugins];
+        const isUsingCacheWillUpdate = options.plugins.some((plugin) => !!plugin.cacheWillUpdate);
+        this._plugins = isUsingCacheWillUpdate ? options.plugins : [cacheOkAndOpaquePlugin, ...options.plugins];
       } else {
         // No plugins passed in, use the default plugin.
         this._plugins = [cacheOkAndOpaquePlugin];
@@ -860,19 +810,14 @@ this.workbox.strategies = (function(
             {
               logger_js.logger.warn(
                 `Unable to ensure service worker stays alive when ` +
-                  `updating cache for '${getFriendlyURL_js.getFriendlyURL(
-                    request.url
-                  )}'.`
+                  `updating cache for '${getFriendlyURL_js.getFriendlyURL(request.url)}'.`
               );
             }
           }
         }
       } else {
         {
-          logs.push(
-            `No response found in the '${this._cacheName}' cache. ` +
-              `Will wait for the network response.`
-          );
+          logs.push(`No response found in the '${this._cacheName}' cache. ` + `Will wait for the network response.`);
         }
 
         try {
@@ -883,9 +828,7 @@ this.workbox.strategies = (function(
       }
 
       {
-        logger_js.logger.groupCollapsed(
-          messages.strategyStart('StaleWhileRevalidate', request)
-        );
+        logger_js.logger.groupCollapsed(messages.strategyStart('StaleWhileRevalidate', request));
 
         for (const log of logs) {
           logger_js.logger.log(log);
@@ -935,9 +878,7 @@ this.workbox.strategies = (function(
           {
             logger_js.logger.warn(
               `Unable to ensure service worker stays alive when ` +
-                `updating cache for '${getFriendlyURL_js.getFriendlyURL(
-                  request.url
-                )}'.`
+                `updating cache for '${getFriendlyURL_js.getFriendlyURL(request.url)}'.`
             );
           }
         }

@@ -1,7 +1,7 @@
-import './Range.css';
-
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
+import './Range.css';
 
 class Range extends Component {
   constructor(props) {
@@ -9,7 +9,7 @@ class Range extends Component {
     this.state = { value: props.value || 0 };
   }
 
-  handleChange = event => {
+  handleChange = (event) => {
     this.setState({ value: event.target.value });
     if (this.props.onChange) this.props.onChange(event);
   };
@@ -29,11 +29,7 @@ class Range extends Component {
         />
         {this.props.showPercentage && <span>{`${this.state.value}%`}</span>}
         {this.props.showValue && (
-          <span>
-            {this.props.valueRenderer
-              ? this.props.valueRenderer(this.state.value)
-              : this.state.value}
-          </span>
+          <span>{this.props.valueRenderer ? this.props.valueRenderer(this.state.value) : this.state.value}</span>
         )}
       </>
     );

@@ -1,4 +1,5 @@
 import Mousetrap from 'mousetrap';
+
 import pausePlugin from './pausePlugin';
 import recordPlugin from './recordPlugin';
 

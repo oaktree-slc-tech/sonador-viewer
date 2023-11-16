@@ -1,13 +1,9 @@
-import _ from 'lodash';
-
 import React from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
-import { utils, redux } from '@ohif/core';
+import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseGetDisplaySet } from '@ohif/ui';
-
-const { studyMetadataManager } = utils;
 
 const _isM3DModality = (viewportSpecificData = {}, activeViewportIndex) => {
   // Determine if the active viewport is a 3D file. TODO: The file check in this method uses
@@ -15,14 +11,13 @@ const _isM3DModality = (viewportSpecificData = {}, activeViewportIndex) => {
   // maybe uses the encapsulated mimetype might be a better option.
 
   try {
-    const { study, displaySet } = viewerbaseGetDisplaySet(
-      viewportSpecificData,
-      activeViewportIndex
-    );
+    const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
 
     // Check if the modality is M3D
     return displaySet && displaySet.Modality == 'M3D';
-  } catch (err) {}
+  } catch (err) {
+    console.error(err);
+  }
 
   return false;
 };
@@ -34,23 +29,16 @@ const _isM3DAnimated = (viewportSpecificData = {}, activeViewportIndex) => {
     const { m3d } = vdata;
 
     return vdata && (m3d || {}).animations;
-  } catch (err) {}
+  } catch (err) {
+    console.error(err);
+  }
 
   return false;
 };
 
-function M3DToolbarButton({
-  parentContext,
-  toolbarClickCallback,
-  button,
-  activeButtons,
-  isActive,
-  className,
-}) {
+function M3DToolbarButton({ toolbarClickCallback, button, isActive, className }) {
   const { id, label, icon } = button;
-  const { viewportSpecificData, activeViewportIndex } = useSelector(
-    redux.selectors.getActiveViewportData
-  );
+  const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 
   // Should the M3D button be visible
   const isVisible = _isM3DModality(viewportSpecificData, activeViewportIndex);
@@ -75,24 +63,14 @@ M3DToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,
   toolbarClickCallback: PropTypes.func.isRequired,
   button: PropTypes.object.isRequired,
-  activeButtons: PropTypes.object.isRequired,
-  activeButtons: PropTypes.array.isRequired,
+  activeButtons: PropTypes.oneOfType([PropTypes.object.isRequired, PropTypes.array.isRequired]).isRequired,
   isActive: PropTypes.bool,
   className: PropTypes.string,
 };
 
-function M3DAnimationControlToolbarButton({
-  parentContext,
-  toolbarClickCallback,
-  button,
-  activeButtons,
-  isActive,
-  className,
-}) {
+function M3DAnimationControlToolbarButton({ toolbarClickCallback, button, isActive, className }) {
   const { id, label, icon } = button;
-  const { viewportSpecificData, activeViewportIndex } = useSelector(
-    redux.selectors.getActiveViewportData
-  );
+  const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 
   // Should the M3D button be visible
   const isVisible = _isM3DAnimated(viewportSpecificData, activeViewportIndex);
@@ -117,8 +95,7 @@ M3DAnimationControlToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,
   toolbarClickCallback: PropTypes.func.isRequired,
   button: PropTypes.object.isRequired,
-  activeButtons: PropTypes.object.isRequired,
-  activeButtons: PropTypes.array.isRequired,
+  activeButtons: PropTypes.oneOfType([PropTypes.object.isRequired, PropTypes.array.isRequired]).isRequired,
   isActive: PropTypes.bool,
   className: PropTypes.string,
 };

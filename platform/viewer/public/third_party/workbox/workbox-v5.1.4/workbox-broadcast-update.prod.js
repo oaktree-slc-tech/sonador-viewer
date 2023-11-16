@@ -1,12 +1,12 @@
 (this.workbox = this.workbox || {}),
-  (this.workbox.broadcastUpdate = (function(t, a, o, s) {
+  (this.workbox.broadcastUpdate = (function (t, a, o, s) {
     'use strict';
     try {
       self['workbox:broadcast-update:5.1.4'] && _();
     } catch (t) {}
     const e = (t, a, o) =>
-        !o.some(o => t.headers.has(o) && a.headers.has(o)) ||
-        o.every(o => {
+        !o.some((o) => t.headers.has(o) && a.headers.has(o)) ||
+        o.every((o) => {
           const s = t.headers.has(o) === a.headers.has(o),
             e = t.headers.get(o) === a.headers.get(o);
           return s && e;
@@ -30,8 +30,7 @@
           if ('navigate' === t.request.mode) {
             let s;
             t.event instanceof FetchEvent && (s = t.event.resultingClientId);
-            ((await o.resultingClientExists(s)) && !i) ||
-              (await a.timeout(3500));
+            ((await o.resultingClientExists(s)) && !i) || (await a.timeout(3500));
           }
           const e = await self.clients.matchAll({ type: 'window' });
           for (const t of e) t.postMessage(s);
@@ -42,7 +41,7 @@
       (t.BroadcastCacheUpdate = r),
       (t.BroadcastUpdatePlugin = class {
         constructor(t) {
-          (this.cacheDidUpdate = async t => {
+          (this.cacheDidUpdate = async (t) => {
             s.dontWaitFor(this.s.notifyIfUpdated(t));
           }),
             (this.s = new r(t));

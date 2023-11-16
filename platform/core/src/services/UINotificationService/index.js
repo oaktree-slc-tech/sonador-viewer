@@ -24,7 +24,7 @@ const publicAPI = {
 
 const serviceImplementation = {
   _hide: () => console.warn('hide() NOT IMPLEMENTED'),
-  _show: showArguments => {
+  _show: (showArguments) => {
     serviceShowRequestQueue.push(showArguments);
 
     console.warn('show() NOT IMPLEMENTED');
@@ -76,10 +76,7 @@ function _hide(id) {
  *   show: showImplementation,
  * }
  */
-function setServiceImplementation({
-  hide: hideImplementation,
-  show: showImplementation,
-}) {
+function setServiceImplementation({ hide: hideImplementation, show: showImplementation }) {
   if (hideImplementation) {
     serviceImplementation._hide = hideImplementation;
   }

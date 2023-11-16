@@ -1,5 +1,5 @@
-import { comparators } from '../lib/comparators';
 import guid from '../../utils/guid';
+import { comparators } from '../lib/comparators';
 
 const EQUALS_REGEXP = /^equals$/;
 
@@ -92,9 +92,7 @@ export default class Rule {
     const ruleConstraint = Object.keys(this.constraint)[0];
 
     if (ruleConstraint !== void 0) {
-      constraintInfo = comparators.find(
-        comparator => ruleConstraint === comparator.id
-      );
+      constraintInfo = comparators.find((comparator) => ruleConstraint === comparator.id);
     }
 
     // Cache this information for later use

@@ -6,7 +6,7 @@ import dcmjs from 'dcmjs';
  * @param {string} toolName
  * @returns {boolean}
  */
-const isToolSupported = toolName => {
+const isToolSupported = (toolName) => {
   const adapter = dcmjs.adapters.Cornerstone;
   return !!adapter[toolName];
 };

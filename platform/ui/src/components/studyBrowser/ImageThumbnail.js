@@ -1,13 +1,14 @@
 /* global cornerstone */
-import './ImageThumbnail.styl';
+import React, { createRef, useCallback, useEffect, useState } from 'react';
+import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 import { utils } from '@ohif/core';
-import React, { useState, useEffect, createRef, useCallback } from 'react';
-import classNames from 'classnames';
 
-import PropTypes from 'prop-types';
 import ViewportErrorIndicator from '../../viewer/ViewportErrorIndicator';
 import ViewportLoadingIndicator from '../../viewer/ViewportLoadingIndicator';
+
+import './ImageThumbnail.styl';
 
 // TODO: How should we have this component depend on Cornerstone?
 // - Passed in as a prop?
@@ -15,33 +16,22 @@ import ViewportLoadingIndicator from '../../viewer/ViewportLoadingIndicator';
 // - Pass in the entire load and render function as a prop?
 //import cornerstone from 'cornerstone-core';
 function ImageThumbnail(props) {
-  const {
-    active,
-    width,
-    height,
-    imageSrc,
-    imageId,
-    stackPercentComplete,
-    error: propsError,
-    showProgressBar,
-  } = props;
+  const { active, width, height, imageSrc, imageId, stackPercentComplete, error: propsError, showProgressBar } = props;
 
   const [isLoading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
   const [image, setImage] = useState({});
   const canvasRef = createRef();
 
   let loadingOrError;
   let cancelablePromise;
 
-  if (propsError || error) {
+  if (propsError) {
     loadingOrError = <ViewportErrorIndicator />;
   } else if (isLoading) {
     loadingOrError = <ViewportLoadingIndicator />;
   }
 
-  const showStackLoadingProgressBar =
-    showProgressBar && stackPercentComplete !== undefined;
+  const showStackLoadingProgressBar = showProgressBar && stackPercentComplete !== undefined;
 
   const shouldRenderToCanvas = () => {
     return imageId && !imageSrc;
@@ -54,10 +44,10 @@ function ImageThumbnail(props) {
 
     setLoading(true);
     cancelablePromise
-      .then(response => {
+      .then((response) => {
         setImage(response);
       })
-      .catch(error => {
+      .catch((error) => {
         if (error.isCanceled) return;
         // setLoading(false);
         // setError(true);
@@ -67,9 +57,7 @@ function ImageThumbnail(props) {
 
   const setImagePromise = () => {
     if (shouldRenderToCanvas()) {
-      cancelablePromise = utils.makeCancelable(
-        cornerstone.loadAndCacheImage(imageId)
-      );
+      cancelablePromise = utils.makeCancelable(cornerstone.loadAndCacheImage(imageId));
     }
   };
 
@@ -98,13 +86,7 @@ function ImageThumbnail(props) {
       setImagePromise();
       fetchImagePromise();
     }
-  }, [
-    fetchImagePromise,
-    image.imageId,
-    imageId,
-    purgeCancelablePromise,
-    setImagePromise,
-  ]);
+  }, [fetchImagePromise, image.imageId, imageId, purgeCancelablePromise, setImagePromise]);
 
   return (
     <div className={classNames('ImageThumbnail', { active: active })}>
@@ -124,10 +106,7 @@ function ImageThumbnail(props) {
       {loadingOrError}
       {showStackLoadingProgressBar && (
         <div className="image-thumbnail-progress-bar">
-          <div
-            className="image-thumbnail-progress-bar-inner"
-            style={{ width: `${stackPercentComplete}%` }}
-          />
+          <div className="image-thumbnail-progress-bar-inner" style={{ width: `${stackPercentComplete}%` }} />
         </div>
       )}
       {isLoading && <div className="image-thumbnail-loading-indicator"></div>}

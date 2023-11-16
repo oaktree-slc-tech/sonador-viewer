@@ -10,12 +10,12 @@ export const storeMeasurements = (measurementData, timepointIds) => {
   return Promise.resolve();
 };
 
-export const retrieveTimepoints = filter => {
+export const retrieveTimepoints = (filter) => {
   log.error('retrieveTimepoints');
   return Promise.resolve();
 };
 
-export const storeTimepoints = timepointData => {
+export const storeTimepoints = (timepointData) => {
   log.error('storeTimepoints');
   return Promise.resolve();
 };
@@ -25,7 +25,7 @@ export const updateTimepoint = (timepointData, query) => {
   return Promise.resolve();
 };
 
-export const removeTimepoint = timepointId => {
+export const removeTimepoint = (timepointId) => {
   log.error('removeTimepoint');
   return Promise.resolve();
 };

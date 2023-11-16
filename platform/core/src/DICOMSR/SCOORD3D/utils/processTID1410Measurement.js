@@ -1,6 +1,7 @@
-import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
+import { CodeNameCodeSequenceValues, RELATIONSHIP_TYPE } from '../enums';
+
 import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
-import { RELATIONSHIP_TYPE, CodeNameCodeSequenceValues } from '../enums';
+import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
 
 /**
  * TID 1410 Planar ROI Measurements and Qualitative Evaluations.
@@ -8,34 +9,24 @@ import { RELATIONSHIP_TYPE, CodeNameCodeSequenceValues } from '../enums';
  * @param {*} contentSequence
  * @returns
  */
-const processTID1410Measurement = contentSequence => {
+const processTID1410Measurement = (contentSequence) => {
   // Need to deal with TID 1410 style measurements, which will have a SCOORD or SCOORD3D at the top level,
   // And non-geometric representations where each NUM has "INFERRED FROM" SCOORD/SCOORD3D
 
-  const graphicItem = contentSequence.find(
-    group => group.ValueType === 'SCOORD' || group.ValueType === 'SCOORD3D'
-  );
+  const graphicItem = contentSequence.find((group) => group.ValueType === 'SCOORD' || group.ValueType === 'SCOORD3D');
 
   if (!graphicItem) {
-    console.warn(
-      `graphic ValueType ${graphicItem.ValueType} not currently supported, skipping annotation.`
-    );
+    console.warn(`graphic ValueType ${graphicItem.ValueType} not currently supported, skipping annotation.`);
     return;
   }
 
-  const UIDREFContentItem = contentSequence.find(
-    group => group.ValueType === 'UIDREF'
-  );
+  const UIDREFContentItem = contentSequence.find((group) => group.ValueType === 'UIDREF');
 
   const TrackingIdentifierContentItem = contentSequence.find(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.TrackingIdentifier
+    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
-  const NUMContentItems = contentSequence.filter(
-    group => group.ValueType === 'NUM'
-  );
+  const NUMContentItems = contentSequence.filter((group) => group.ValueType === 'NUM');
 
   const measurement = {
     loaded: false,
@@ -45,26 +36,14 @@ const processTID1410Measurement = contentSequence => {
     TrackingIdentifier: TrackingIdentifierContentItem.TextValue,
   };
 
-  NUMContentItems.forEach(item => {
-    const {
-      ConceptNameCodeSequence,
-      ContentSequence,
-      MeasuredValueSequence,
-    } = item;
+  NUMContentItems.forEach((item) => {
+    const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
-    if (
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.Score
-    ) {
-      ContentSequence.forEach(item => {
-        if (
-          [
-            RELATIONSHIP_TYPE.SELECTED_FROM,
-            RELATIONSHIP_TYPE.INFERRED_FROM,
-          ].includes(item.RelationshipType)
-        ) {
+    if (item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.Score) {
+      ContentSequence.forEach((item) => {
+        if ([RELATIONSHIP_TYPE.SELECTED_FROM, RELATIONSHIP_TYPE.INFERRED_FROM].includes(item.RelationshipType)) {
           if (item.ReferencedSOPSequence) {
-            measurement.coords.forEach(coord => {
+            measurement.coords.forEach((coord) => {
               coord.ReferencedSOPSequence = item.ReferencedSOPSequence;
             });
           }
@@ -73,12 +52,7 @@ const processTID1410Measurement = contentSequence => {
     }
 
     if (MeasuredValueSequence) {
-      measurement.labels.push(
-        getLabelFromMeasuredValueSequence(
-          ConceptNameCodeSequence,
-          MeasuredValueSequence
-        )
-      );
+      measurement.labels.push(getLabelFromMeasuredValueSequence(ConceptNameCodeSequence, MeasuredValueSequence));
     }
   });
 

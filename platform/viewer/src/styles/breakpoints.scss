@@ -1,0 +1,48 @@
+//== Media queries breakpoints
+$xxs: 370px;
+$xs: 480px;
+$sm: 768px;
+$md: 833px;
+$lg: 1411px;
+
+@mixin xxs {
+  @media (max-width: $xxs) {
+    @content;
+  }
+}
+
+@mixin xs {
+  @media (max-width: $xs) {
+    @content;
+  }
+}
+
+@mixin sm {
+  @media (max-width: $sm) {
+    @content;
+  }
+}
+
+@mixin md {
+  @media (max-width: $md) {
+    @content;
+  }
+}
+
+@mixin lg {
+  @media (max-width: $lg) {
+    @content;
+  }
+}
+
+@mixin min-md {
+  @media (min-width: $md) {
+    @content;
+  }
+}
+
+@mixin min-xs {
+  @media (min-width: $xs) {
+    @content;
+  }
+}

@@ -59,7 +59,7 @@ const languagesMap = {
 export default function getAvailableLanguagesInfo(locales) {
   const availableLanguagesInfo = [];
 
-  Object.keys(locales).forEach(key => {
+  Object.keys(locales).forEach((key) => {
     availableLanguagesInfo.push({
       value: key,
       label: languagesMap[key] || key,

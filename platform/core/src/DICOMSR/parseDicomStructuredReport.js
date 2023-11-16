@@ -1,7 +1,8 @@
 import dcmjs from 'dcmjs';
-import classes from '../classes';
-import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 
+import classes from '../classes';
+
+import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
 
 const { LogManager } = classes;
@@ -16,21 +17,12 @@ const { LogManager } = classes;
  * @param {object} external
  * @returns
  */
-const parseDicomStructuredReport = (
-  part10SRArrayBuffer,
-  displaySets,
-  external
-) => {
+const parseDicomStructuredReport = (part10SRArrayBuffer, displaySets, external) => {
   // Get the dicom data as an Object
   const dicomData = dcmjs.data.DicomMessage.readFile(part10SRArrayBuffer);
-  const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(
-    dicomData.dict
-  );
+  const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
 
-  const {
-    LoggerService,
-    UINotificationService,
-  } = external.servicesManager.services;
+  const { LoggerService, UINotificationService } = external.servicesManager.services;
   if (external && external.servicesManager) {
     try {
       parseSCOORD3D({ servicesManager: external.servicesManager, displaySets });
@@ -67,26 +59,18 @@ const parseDicomStructuredReport = (
   const measurementData = {};
   let measurementNumber = 0;
 
-  Object.keys(storedMeasurementByToolType).forEach(toolName => {
+  Object.keys(storedMeasurementByToolType).forEach((toolName) => {
     const measurements = storedMeasurementByToolType[toolName];
     measurementData[toolName] = [];
 
-    measurements.forEach(measurement => {
-      const instanceMetadata = findInstanceMetadataBySopInstanceUID(
-        displaySets,
-        measurement.sopInstanceUid
-      );
+    measurements.forEach((measurement) => {
+      const instanceMetadata = findInstanceMetadataBySopInstanceUID(displaySets, measurement.sopInstanceUid);
 
       const { _study: study, _series: series } = instanceMetadata;
       const { StudyInstanceUID, PatientID } = study;
       const { SeriesInstanceUID } = series;
       const { sopInstanceUid, frameIndex } = measurement;
-      const imagePath = getImagePath(
-        StudyInstanceUID,
-        SeriesInstanceUID,
-        sopInstanceUid,
-        frameIndex
-      );
+      const imagePath = getImagePath(StudyInstanceUID, SeriesInstanceUID, sopInstanceUid, frameIndex);
 
       const imageId = instanceMetadata.getImageId();
       if (!imageId) {
@@ -124,15 +108,8 @@ const parseDicomStructuredReport = (
  * @param {string} frameIndex
  * @returns
  */
-const getImagePath = (
-  StudyInstanceUID,
-  SeriesInstanceUID,
-  SOPInstanceUID,
-  frameIndex
-) => {
-  return [StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameIndex].join(
-    '_'
-  );
+const getImagePath = (StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameIndex) => {
+  return [StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameIndex].join('_');
 };
 
 export default parseDicomStructuredReport;

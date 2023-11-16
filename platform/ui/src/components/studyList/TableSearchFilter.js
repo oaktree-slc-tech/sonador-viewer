@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import moment from 'moment';
 import { isInclusivelyBeforeDay } from 'react-dates';
-import CustomDateRangePicker from './CustomDateRangePicker.js';
-import { Icon } from './../../elements/Icon';
 import { useTranslation } from 'react-i18next';
+import moment from 'moment';
+import PropTypes from 'prop-types';
+
+import { Icon } from './../../elements/Icon';
+import CustomDateRangePicker from './CustomDateRangePicker.js';
 
 const getDateEntry = (datePicked, rangeDatePicked) => {
   return rangeDatePicked || datePicked || null;
@@ -39,23 +40,14 @@ function TableSearchFilter(props) {
   const { t, ready: translationsAreReady } = useTranslation('Common');
 
   const sortIcons = ['sort', 'sort-up', 'sort-down'];
-  const sortIconForSortField =
-    sortDirection === 'asc' ? sortIcons[1] : sortIcons[2];
+  const sortIconForSortField = sortDirection === 'asc' ? sortIcons[1] : sortIcons[2];
 
   const today = moment();
   const lastWeek = moment().subtract(7, 'day');
   const lastMonth = moment().subtract(1, 'month');
 
-  const defaultStartDate = getDateEntryFromRange(
-    today,
-    studyListDateFilterNumDays,
-    'start'
-  );
-  const defaultEndDate = getDateEntryFromRange(
-    today,
-    studyListDateFilterNumDays,
-    'end'
-  );
+  const defaultStartDate = getDateEntryFromRange(today, studyListDateFilterNumDays, 'start');
+  const defaultEndDate = getDateEntryFromRange(today, studyListDateFilterNumDays, 'end');
 
   const studyDatePresets = [
     {
@@ -83,10 +75,7 @@ function TableSearchFilter(props) {
 
         return (
           <th key={`${fieldName}-${i}`}>
-            <label
-              htmlFor={`filter-${fieldName}`}
-              onClick={() => onSort(fieldName)}
-            >
+            <label htmlFor={`filter-${fieldName}`} onClick={() => onSort(fieldName)}>
               {`${displayText}`}
               <Icon name={sortIcon} style={{ fontSize: '12px' }} />
             </label>
@@ -96,7 +85,7 @@ function TableSearchFilter(props) {
                 id={`filter-${fieldName}`}
                 className="form-control studylist-search"
                 value={values[fieldName]}
-                onChange={e => onValueChange(fieldName, e.target.value)}
+                onChange={(e) => onValueChange(fieldName, e.target.value)}
               />
             )}
             {inputType === 'date-range' && (
@@ -113,14 +102,14 @@ function TableSearchFilter(props) {
                   onValueChange('studyDateTo', endDate);
                 }}
                 focusedInput={focusedInput}
-                onFocusChange={updatedVal => setFocusedInput(updatedVal)}
+                onFocusChange={(updatedVal) => setFocusedInput(updatedVal)}
                 // Optional
                 numberOfMonths={1} // For med and small screens? 2 for large?
                 showClearDates={true}
                 anchorDirection="left"
                 presets={studyDatePresets}
                 hideKeyboardShortcutsPanel={true}
-                isOutsideRange={day => !isInclusivelyBeforeDay(day, moment())}
+                isOutsideRange={(day) => !isInclusivelyBeforeDay(day, moment())}
               />
             )}
           </th>

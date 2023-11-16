@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import './googleCloud.css';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
+
 import { Icon } from '@ohif/ui';
+
+import './googleCloud.css';
 
 class ProjectsList extends Component {
   state = {
@@ -22,15 +24,11 @@ class ProjectsList extends Component {
     loading: true,
   };
 
-  renderTableRow = project => {
+  renderTableRow = (project) => {
     return (
       <tr
         key={project.projectId}
-        className={
-          this.state.highlightedItem === project.projectId
-            ? 'noselect active'
-            : 'noselect'
-        }
+        className={this.state.highlightedItem === project.projectId ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
           this.onHighlightItem(project.projectId);
         }}
@@ -56,9 +54,7 @@ class ProjectsList extends Component {
       return <p>{error}</p>;
     }
 
-    const loadingIcon = (
-      <Icon name="circle-notch" className="loading-icon-spin loading-icon" />
-    );
+    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
     if (loading) {
       return loadingIcon;
@@ -66,16 +62,11 @@ class ProjectsList extends Component {
 
     const lowerCaseFilter = filter.toLowerCase();
     const filteredProjects = projects.filter(
-      project =>
-        typeof project.name === 'string' &&
-        (filter === '' || project.name.toLowerCase().includes(lowerCaseFilter))
+      (project) =>
+        typeof project.name === 'string' && (filter === '' || project.name.toLowerCase().includes(lowerCaseFilter))
     );
 
-    const body = (
-      <tbody id="ProjectList">
-        {filteredProjects.map(this.renderTableRow)}
-      </tbody>
-    );
+    const body = <tbody id="ProjectList">{filteredProjects.map(this.renderTableRow)}</tbody>;
 
     return (
       <table id="tblProjectList" className="gcp-table table noselect">

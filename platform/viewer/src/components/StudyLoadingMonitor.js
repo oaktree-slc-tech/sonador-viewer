@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+
 import OHIF from '@ohif/core';
 
 const { StudyLoadingListener } = OHIF.classes;

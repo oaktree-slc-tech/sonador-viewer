@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import './checkbox.css';
 
 export class Checkbox extends Component {
@@ -43,11 +44,7 @@ export class Checkbox extends Component {
       <div className="ohif-check-container">
         <form>
           <label className="ohif-check-label">
-            <input
-              type="checkbox"
-              checked={this.state.checked}
-              onChange={this.handleChange.bind(this)}
-            />
+            <input type="checkbox" checked={this.state.checked} onChange={this.handleChange.bind(this)} />
             {checkbox}
             {this.state.label}
           </label>

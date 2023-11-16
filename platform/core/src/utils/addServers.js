@@ -4,9 +4,9 @@ const addServers = (servers, store) => {
     throw new Error('The servers and store must be defined');
   }
 
-  Object.keys(servers).forEach(serverType => {
+  Object.keys(servers).forEach((serverType) => {
     const endpoints = servers[serverType];
-    let serversWithTypes = endpoints.map(endpoint => {
+    let serversWithTypes = endpoints.map((endpoint) => {
       const server = Object.assign({}, endpoint);
       server.type = serverType;
       return server;

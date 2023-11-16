@@ -1,7 +1,7 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import Modal from 'react-modal';
 import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 import './OHIFModal.styl';
 
@@ -17,16 +17,7 @@ const customStyle = {
 
 Modal.setAppElement(document.getElementById('root'));
 
-const OHIFModal = ({
-  className,
-  closeButton,
-  shouldCloseOnEsc,
-  isOpen,
-  fullscreen,
-  title,
-  onClose,
-  children,
-}) => {
+const OHIFModal = ({ className, closeButton, shouldCloseOnEsc, isOpen, fullscreen, title, onClose, children }) => {
   const renderHeader = () => {
     return (
       title && (
@@ -72,10 +63,7 @@ OHIFModal.propTypes = {
   isOpen: PropTypes.bool,
   title: PropTypes.string,
   onClose: PropTypes.func,
-  children: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-  ]).isRequired,
+  children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,
 };
 
 export default OHIFModal;

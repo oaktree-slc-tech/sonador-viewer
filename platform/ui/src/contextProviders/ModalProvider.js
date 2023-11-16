@@ -1,12 +1,6 @@
-import React, {
-  useState,
-  createContext,
-  useContext,
-  useEffect,
-  useCallback,
-} from 'react';
-import PropTypes from 'prop-types';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import classNames from 'classnames';
+import PropTypes from 'prop-types';
 
 const ModalContext = createContext(null);
 const { Provider } = ModalContext;
@@ -48,18 +42,14 @@ const ModalProvider = ({ children, modal: Modal, service }) => {
    * @param {ModalProps} props { content, contentProps, shouldCloseOnEsc, isOpen, closeButton, title, customClassName }
    * @returns void
    */
-  const show = useCallback(props => setOptions({ ...options, ...props }), [
-    options,
-  ]);
+  const show = useCallback((props) => setOptions({ ...options, ...props }), [options]);
 
   /**
    * Hide the modal and set its properties to default.
    *
    * @returns void
    */
-  const hide = useCallback(() => setOptions(DEFAULT_OPTIONS), [
-    DEFAULT_OPTIONS,
-  ]);
+  const hide = useCallback(() => setOptions(DEFAULT_OPTIONS), [DEFAULT_OPTIONS]);
 
   /**
    * Sets the implementation of a modal service that can be used by extensions.
@@ -122,7 +112,7 @@ const ModalProvider = ({ children, modal: Modal, service }) => {
  *
  * @returns
  */
-export const withModal = Component => {
+export const withModal = (Component) => {
   return function WrappedComponent(props) {
     const { show, hide } = useModal();
     return <Component {...props} modal={{ show, hide }} />;
@@ -134,15 +124,8 @@ ModalProvider.defaultProps = {
 };
 
 ModalProvider.propTypes = {
-  children: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-  ]).isRequired,
-  modal: PropTypes.oneOfType([
-    PropTypes.arrayOf(PropTypes.node),
-    PropTypes.node,
-    PropTypes.func,
-  ]).isRequired,
+  children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,
+  modal: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node, PropTypes.func]).isRequired,
   service: PropTypes.shape({
     setServiceImplementation: PropTypes.func,
   }),

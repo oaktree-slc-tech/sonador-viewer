@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import classnames from 'classnames';
 import PropTypes from 'prop-types';
-import { ErrorBoundary, Icon } from '@ohif/ui';
-import { servicesManager } from './../../App';
+
+import { Icon } from '@ohif/ui';
+import ErrorBoundaryNG from '@ohif/ui/src/components/ErrorBoudaryNG/ErrorBoundaryNG';
+
+import { servicesManager } from '../../App';
 
 import './ErrorBoundaryDialog.css';
 
@@ -20,10 +23,7 @@ const ErrorBoundaryDialog = ({ context, children }) => {
               {context}: <span>{error.message}</span>
             </h3>
           </div>
-          <button
-            className="btn btn-primary btn-sm ErrorBoundaryDialogButton"
-            onClick={() => setOpen(s => !s)}
-          >
+          <button className="btn btn-primary btn-sm ErrorBoundaryDialogButton" onClick={() => setOpen((s) => !s)}>
             <Icon
               name="chevron-down"
               className={classnames('ErrorBoundaryDialogIcon', {
@@ -47,20 +47,15 @@ const ErrorBoundaryDialog = ({ context, children }) => {
   const fallbackComponent = () => (
     <div className="ErrorFallback" role="alert">
       <p>
-        Error rendering {context}. <br /> Check the browser console for more
-        details.
+        Error rendering {context}. <br /> Check the browser console for more details.
       </p>
     </div>
   );
 
   return (
-    <ErrorBoundary
-      fallbackComponent={fallbackComponent}
-      context={context}
-      onError={handleOnError}
-    >
+    <ErrorBoundaryNG fallbackComponent={fallbackComponent} context={context} onError={handleOnError}>
       {children}
-    </ErrorBoundary>
+    </ErrorBoundaryNG>
   );
 };
 

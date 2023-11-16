@@ -1,5 +1,6 @@
 import { measurements, utils } from '@ohif/core';
-import { servicesManager } from './../../App.js';
+
+import { servicesManager } from '../../App';
 const { MeasurementApi } = measurements;
 const { studyMetadataManager } = utils;
 
@@ -55,11 +56,8 @@ export default function jumpToRowItem(
   for (let i = 0; i < numViewportsToUpdate; i++) {
     const { timepointId } = timepoints[i];
 
-    const dataAtThisTimepoint = measurementsForToolGroup.find(entry => {
-      return (
-        entry.timepointId === timepointId &&
-        entry.measurementNumber === measurementNumber
-      );
+    const dataAtThisTimepoint = measurementsForToolGroup.find((entry) => {
+      return entry.timepointId === timepointId && entry.measurementNumber === measurementNumber;
     });
 
     if (!dataAtThisTimepoint) {
@@ -73,7 +71,7 @@ export default function jumpToRowItem(
     if (options.childToolKey) {
       measurement = dataAtThisTimepoint[options.childToolKey];
     } else if (Array.isArray(tool.childTools)) {
-      const key = tool.childTools.find(key => !!dataAtThisTimepoint[key]);
+      const key = tool.childTools.find((key) => !!dataAtThisTimepoint[key]);
       measurement = dataAtThisTimepoint[key];
     }
 
@@ -92,9 +90,7 @@ export default function jumpToRowItem(
       return;
     }
 
-    return displaySet.images.find(
-      image => image.getSOPInstanceUID() === SOPInstanceUID
-    );
+    return displaySet.images.find((image) => image.getSOPInstanceUID() === SOPInstanceUID);
   };
 
   const viewportSpecificData = [];
@@ -109,7 +105,7 @@ export default function jumpToRowItem(
       throw new Error('Study not found.');
     }
 
-    const displaySet = study.findDisplaySet(displaySet => {
+    const displaySet = study.findDisplaySet((displaySet) => {
       return displaySetContainsSopInstance(displaySet, data.SOPInstanceUID);
     });
 
@@ -122,8 +118,7 @@ export default function jumpToRowItem(
       displaySet.frameIndex = data.frameIndex;
     }
 
-    viewportIndex =
-      (viewportIndex + viewportsState.activeViewportIndex) % numViewports;
+    viewportIndex = (viewportIndex + viewportsState.activeViewportIndex) % numViewports;
     viewportSpecificData.push({
       viewportIndex,
       displaySet,

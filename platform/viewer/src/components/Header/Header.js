@@ -1,25 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Link, withRouter } from 'react-router-dom';
+import React from 'react';
 import { withTranslation } from 'react-i18next';
-import PropTypes from 'prop-types';
+import { Link, withRouter } from 'react-router-dom';
 import classNames from 'classnames';
-import { Dropdown, AboutContent, withModal } from '@ohif/ui';
+import PropTypes from 'prop-types';
+
+import { AboutContent, Dropdown, withModal } from '@ohif/ui';
+
+import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 //
 import { UserPreferences } from '../UserPreferences';
-import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
+
 import './Header.css';
 
-function Header({
-  t,
-  user,
-  userManager,
-  modal: { show },
-  useLargeLogo,
-  linkPath,
-  linkText,
-  location,
-  children,
-}) {
+function Header({ t, user, userManager, modal: { show }, useLargeLogo, linkPath, linkText, location, children }) {
   const hasLink = linkText && linkPath;
 
   const options = [
@@ -56,15 +49,10 @@ function Header({
   return (
     <>
       <div className="notification-bar">{t('INVESTIGATIONAL USE ONLY')}</div>
-      <div
-        className={classNames('entry-header', { 'header-big': useLargeLogo })}
-      >
+      <div className={classNames('entry-header', { 'header-big': useLargeLogo })}>
         <div className="header-left-box">
           {location && location.studyLink && (
-            <Link
-              to={location.studyLink}
-              className="header-btn header-viewerLink"
-            >
+            <Link to={location.studyLink} className="header-btn header-viewerLink">
               {t('Back to Viewer')}
             </Link>
           )}
@@ -112,6 +100,4 @@ Header.defaultProps = {
   children: OHIFLogo(),
 };
 
-export default withTranslation(['Header', 'AboutModal'])(
-  withRouter(withModal(Header))
-);
+export default withTranslation(['Header', 'AboutModal'])(withRouter(withModal(Header)));

@@ -1,21 +1,15 @@
 import { CodeNameCodeSequenceValues } from '../enums';
+
 import getSequenceAsArray from './getSequenceAsArray';
-import getMergedContentSequencesByTrackingUniqueIdentifiers from './getMergedContentSequencesByTrackingUniqueIdentifiers';
 import processMeasurement from './processMeasurement';
 
-const getMeasurements = ImagingMeasurementReportContentSequence => {
+const getMeasurements = (ImagingMeasurementReportContentSequence) => {
   const ImagingMeasurements = ImagingMeasurementReportContentSequence.find(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.ImagingMeasurements
+    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.ImagingMeasurements
   );
 
-  const MeasurementGroups = getSequenceAsArray(
-    ImagingMeasurements.ContentSequence
-  ).filter(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue ===
-      CodeNameCodeSequenceValues.MeasurementGroup
+  const MeasurementGroups = getSequenceAsArray(ImagingMeasurements.ContentSequence).filter(
+    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.MeasurementGroup
   );
 
   /* const mergedContentSequencesByTrackingUniqueIdentifiers = getMergedContentSequencesByTrackingUniqueIdentifiers(
@@ -24,7 +18,7 @@ const getMeasurements = ImagingMeasurementReportContentSequence => {
 
   let measurements = [];
 
-  MeasurementGroups.forEach(MeasurementGroup => {
+  MeasurementGroups.forEach((MeasurementGroup) => {
     const contentSequence = MeasurementGroup.ContentSequence;
     const measurement = processMeasurement(contentSequence);
     if (measurement) {

@@ -16,8 +16,7 @@
 
 ## Why?
 
-This library offers pre-packaged solutions for features common to Web-based
-medical imaging viewers. For example:
+This library offers pre-packaged solutions for features common to Web-based medical imaging viewers. For example:
 
 - Hotkeys
 - DICOM Web
@@ -27,24 +26,20 @@ medical imaging viewers. For example:
 - A flexible pattern for extensions
 - And many others
 
-It does this while remaining decoupled from any particular view library or
-rendering logic. While we use it to power our [React Viewer][react-viewer], it
-can be used with Vue, React, Vanilla JS, or any number of other frameworks.
+It does this while remaining decoupled from any particular view library or rendering logic. While we use it to power our
+[React Viewer][react-viewer], it can be used with Vue, React, Vanilla JS, or any number of other frameworks.
 
 ## Getting Started
 
-The documentation for this library is sparse. The best way to get started is to
-look at its
-[top level exports](https://github.com/OHIF/Viewers/blob/master/platform/core/src/index.js),
-and explore the source code of features that interest you. If you want to see
-how we use this library, you can check out [our viewer
+The documentation for this library is sparse. The best way to get started is to look at its
+[top level exports](https://github.com/OHIF/Viewers/blob/master/platform/core/src/index.js), and explore the source code
+of features that interest you. If you want to see how we use this library, you can check out [our viewer
 implementation][react-viewer].
 
 ### Install
 
-> This library is pre- v1.0. All realeases until a v1.0 have the possibility of
-> introducing breaking changes. Please depend on an "exact" version in your
-> projects to prevent issues caused by loose versioning.
+> This library is pre- v1.0. All realeases until a v1.0 have the possibility of introducing breaking changes. Please
+> depend on an "exact" version in your projects to prevent issues caused by loose versioning.
 
 ```
 // with npm
@@ -56,8 +51,8 @@ yarn add @ohif/core --exact
 
 ### Usage
 
-Usage is dependent on the feature(s) you want to leverage. The bulk of
-`@ohif/core`'s features are "pure" and can be imported and used in place.
+Usage is dependent on the feature(s) you want to leverage. The bulk of `@ohif/core`'s features are "pure" and can be
+imported and used in place.
 
 _Example: retrieving study metadata from a server_
 
@@ -73,11 +68,9 @@ const studiesMetadata = await studies.retrieveStudiesMetadata(
 
 ### Contributing
 
-It is notoriously difficult to setup multiple dependent repositories for
-end-to-end testing and development. That's why we recommend writing and running
-unit tests when adding and modifying features for this library. This allows us
-to program in isolation without a complex setup, and has the added benefit of
-producing well-tested business logic.
+It is notoriously difficult to setup multiple dependent repositories for end-to-end testing and development. That's why
+we recommend writing and running unit tests when adding and modifying features for this library. This allows us to
+program in isolation without a complex setup, and has the added benefit of producing well-tested business logic.
 
 1. Clone this repository
 2. Navigate to the project directory, and `yarn install`
@@ -95,15 +88,13 @@ index.js;
 index.test.js;
 ```
 
-As you add and modify code, `jest` will watch for uncommitted changes and run
-your tests, reporting the results to your terminal. Make a pull request with
-your changes to `master`, and a core team member will review your work. If you
-have any questions, please don't hesitate to reach out via a GitHub issue.
+As you add and modify code, `jest` will watch for uncommitted changes and run your tests, reporting the results to your
+terminal. Make a pull request with your changes to `master`, and a core team member will review your work. If you have
+any questions, please don't hesitate to reach out via a GitHub issue.
 
 ## Contributors
 
-Thanks goes to these wonderful people
-([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore -->
@@ -111,9 +102,8 @@ Thanks goes to these wonderful people
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
-This project follows the
-[all-contributors](https://github.com/all-contributors/all-contributors)
-specification. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
+Contributions of any kind welcome!
 
 ## License
 

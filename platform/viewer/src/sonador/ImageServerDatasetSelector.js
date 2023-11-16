@@ -1,13 +1,13 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
 
 import './ImageServerPickerModal.css';
 
 class ImageServerDatasetSelector extends Component {
   // Switch to a different Sonador server
 
-  switchServer = token => {
+  switchServer = (token) => {
     this.props.switchServer(token);
     this.props.onServerChange(token);
   };
@@ -29,10 +29,7 @@ class ImageServerDatasetSelector extends Component {
                 <div className="modal-table-row" key={idx}>
                   <div className="modal-table-cell">{server.name}</div>
                   <div className="modal-table-cell">{server.type}</div>
-                  <div
-                    className="modal-table-cell"
-                    onClick={() => this.switchServer(server.token)}
-                  >
+                  <div className="modal-table-cell" onClick={() => this.switchServer(server.token)}>
                     {server.active ? String.fromCharCode(10003) : 'Switch'}
                   </div>
                 </div>

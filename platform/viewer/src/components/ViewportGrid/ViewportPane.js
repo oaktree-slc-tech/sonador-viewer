@@ -1,10 +1,11 @@
 import React from 'react';
 import { useDrop } from 'react-dnd';
-import PropTypes from 'prop-types';
 import classNames from 'classnames';
+import PropTypes from 'prop-types';
+
 import './ViewportPane.css';
 
-const ViewportPane = function(props) {
+const ViewportPane = function (props) {
   const { children, onDrop, viewportIndex, className: propClassName } = props;
   const [{ hovered, highlighted }, drop] = useDrop({
     accept: 'thumbnail',
@@ -20,7 +21,7 @@ const ViewportPane = function(props) {
     },
     // Monitor, and collect props.
     // Returned as values by `useDrop`
-    collect: monitor => ({
+    collect: (monitor) => ({
       highlighted: monitor.canDrop(),
       hovered: monitor.isOver(),
     }),
@@ -28,12 +29,7 @@ const ViewportPane = function(props) {
 
   return (
     <div
-      className={classNames(
-        'viewport-drop-target',
-        { hovered: hovered },
-        { highlighted: highlighted },
-        propClassName
-      )}
+      className={classNames('viewport-drop-target', { hovered: hovered }, { highlighted: highlighted }, propClassName)}
       ref={drop}
       data-cy={`viewport-container-${viewportIndex}`}
     >

@@ -165,9 +165,7 @@ class Node {
 
     if (typeof type === STRING && typeof handler === FUNCTION) {
       const handlers = this.handlers;
-      const list = handlers.hasOwnProperty(type)
-        ? handlers[type]
-        : (handlers[type] = []);
+      const list = handlers.hasOwnProperty(type) ? handlers[type] : (handlers[type] = []);
       const length = list.length;
 
       let notFound = true;
@@ -286,7 +284,7 @@ export const unsavedChanges = {
   /**
    * Register a reactive dependency on every change any path suffers
    */
-  depend: function() {
+  depend: function () {
     return; // this.observer.depend();
   },
 
@@ -295,7 +293,7 @@ export const unsavedChanges = {
    * @param {String} path A string (e.g., "viewer.studyViewer.measurements.targets") that identifies the namespace of the signaled changes.
    * @return {Boolean} Returns false if the signal could not be saved or the supplied namespace is invalid. Otherwise, true is returned.
    */
-  set: function(path) {
+  set: function (path) {
     const result = rootNode.appendPath(path, 1);
     //this.observer.changed();
     return result;
@@ -310,11 +308,8 @@ export const unsavedChanges = {
    * @param {Boolean} recursively Clear node and all its children recursively. If not specified defaults to true.
    * @return {Boolean} Returns false if the signal could not be removed or the supplied namespace is invalid. Otherwise, true is returned.
    */
-  clear: function(path, recursively) {
-    const result = rootNode.clearPath(
-      path,
-      typeof recursively === UNDEFINED ? true : recursively
-    );
+  clear: function (path, recursively) {
+    const result = rootNode.clearPath(path, typeof recursively === UNDEFINED ? true : recursively);
     //this.observer.changed();
     return result;
   },
@@ -329,11 +324,8 @@ export const unsavedChanges = {
    * @return {Number} Returns the amount of signaled changes for a given namespace. If the supplied namespace is a wildcard, the sum of all
    *  changes for that namespace are returned.
    */
-  probe: function(path, recursively) {
-    return rootNode.probePath(
-      path,
-      typeof recursively === UNDEFINED ? true : recursively
-    );
+  probe: function (path, recursively) {
+    return rootNode.probePath(path, typeof recursively === UNDEFINED ? true : recursively);
   },
 
   /**
@@ -344,11 +336,8 @@ export const unsavedChanges = {
    * @param {Function} handler The handler that will be executed when the specifed event is triggered.
    * @return {Boolean} Returns true on success and false on failure.
    */
-  attachHandler: function(path, type, handler) {
-    return (
-      rootNode.appendPath(path, 0) &&
-      rootNode.attachHandlerForPath(path, type, handler)
-    );
+  attachHandler: function (path, type, handler) {
+    return rootNode.appendPath(path, 0) && rootNode.attachHandlerForPath(path, type, handler);
   },
 
   /**
@@ -359,7 +348,7 @@ export const unsavedChanges = {
    * @param {Function} handler The handler that will be removed from execution list.
    * @return {Boolean} Returns true on success and false on failure.
    */
-  removeHandler: function(path, type, handler) {
+  removeHandler: function (path, type, handler) {
     return rootNode.removeHandlerForPath(path, type, handler);
   },
 
@@ -371,7 +360,7 @@ export const unsavedChanges = {
    * @param {Boolean} nonRecursively If set to true, prevents triggering event handlers from descending tree.
    * @return {Void} No value is returned.
    */
-  trigger: function(path, type, nonRecursively) {
+  trigger: function (path, type, nonRecursively) {
     rootNode.triggerHandlersForPath(path, type, nonRecursively);
   },
 
@@ -388,7 +377,7 @@ export const unsavedChanges = {
    * @param {String} options.message The string that will be used as a message for confirmation dialog.
    * @return {void} No value is returned.
    */
-  checkBeforeAction: function(path, callback, options) {
+  checkBeforeAction: function (path, callback, options) {
     let probe, hasChanges, shouldProceed;
 
     if (typeof callback !== 'function') {
@@ -409,12 +398,12 @@ export const unsavedChanges = {
         options
       );
       OHIF.ui.showDialog('dialogConfirm', dialogOptions).then(
-        function() {
+        function () {
           // Unsaved changes exist but user confirms action...
           shouldProceed = true;
           callback.call(null, shouldProceed, hasChanges);
         },
-        function() {
+        function () {
           // Unsaved changes exist and user does NOT confirm action...
           shouldProceed = false;
           callback.call(null, shouldProceed, hasChanges);
@@ -440,7 +429,7 @@ export const unsavedChanges = {
    * @param {Object} options.position An object with optimal position (e.g., { x: ..., y: ... }) for the dialog.
    * @return {void} No value is returned.
    */
-  presentProactiveDialog: function(path, callback, options) {
+  presentProactiveDialog: function (path, callback, options) {
     let probe, hasChanges;
 
     if (typeof callback !== 'function') {
@@ -452,7 +441,7 @@ export const unsavedChanges = {
     if (probe > 0) {
       // Unsaved changes exist...
       hasChanges = true;
-      OHIF.ui.unsavedChangesDialog(function(choice) {
+      OHIF.ui.unsavedChangesDialog(function (choice) {
         callback.call(null, hasChanges, choice);
       }, options);
     } else {
@@ -480,7 +469,7 @@ export const unsavedChanges = {
 
   confirmNavigation(navigateCallback, event) {
     let dialogPresented = false;
-    Array.from(this.hooks.keys()).every(saveCallback => {
+    Array.from(this.hooks.keys()).every((saveCallback) => {
       const options = this.hooks.get(saveCallback);
       const probe = this.probe(options.path, true);
       if (!probe) return true;

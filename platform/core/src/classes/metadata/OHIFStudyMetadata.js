@@ -1,5 +1,5 @@
-import { StudyMetadata } from './StudyMetadata';
 import { OHIFSeriesMetadata } from './OHIFSeriesMetadata';
+import { StudyMetadata } from './StudyMetadata';
 
 export class OHIFStudyMetadata extends StudyMetadata {
   /**
@@ -22,7 +22,7 @@ export class OHIFStudyMetadata extends StudyMetadata {
     });
 
     // populate internal list of series
-    study.series.forEach(series => {
+    study.series.forEach((series) => {
       this.addSeries(new OHIFSeriesMetadata(series, study));
     });
   }

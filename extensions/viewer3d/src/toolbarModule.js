@@ -1,9 +1,6 @@
-import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
+import { TOOLBAR_BUTTON_BEHAVIORS, TOOLBAR_BUTTON_TYPES } from '@ohif/ui';
 
-import {
-  M3DToolbarButton,
-  M3DAnimationControlToolbarButton,
-} from './toolbarComponents/M3DToolbarButton.js';
+import { M3DAnimationControlToolbarButton } from './toolbarComponents/M3DToolbarButton.js';
 
 const definitions = [
   {

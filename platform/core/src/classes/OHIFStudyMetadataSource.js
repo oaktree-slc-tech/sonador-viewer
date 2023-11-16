@@ -1,9 +1,9 @@
+import { retrieveStudyMetadata } from '../studies/retrieveStudyMetadata.js';
 import { studyMetadataManager } from '../utils';
 
-import OHIFError from './OHIFError';
 import { StudyMetadata } from './metadata/StudyMetadata';
+import OHIFError from './OHIFError';
 import { StudyMetadataSource } from './StudyMetadataSource.js';
-import { retrieveStudyMetadata } from '../studies/retrieveStudyMetadata.js';
 
 export class OHIFStudyMetadataSource extends StudyMetadataSource {
   /**
@@ -22,9 +22,7 @@ export class OHIFStudyMetadataSource extends StudyMetadataSource {
    */
   loadStudy(study) {
     if (!(study instanceof StudyMetadata)) {
-      throw new OHIFError(
-        'OHIFStudyMetadataSource::loadStudy study is not an instance of StudyMetadata'
-      );
+      throw new OHIFError('OHIFStudyMetadataSource::loadStudy study is not an instance of StudyMetadata');
     }
 
     return new Promise((resolve, reject) => {
@@ -44,12 +42,9 @@ export class OHIFStudyMetadataSource extends StudyMetadataSource {
       }
 
       this.getByInstanceUID(studyInstanceUID)
-        .then(studyInfo => {
+        .then((studyInfo) => {
           // Create study metadata object
-          const studyMetadata = new StudyMetadata(
-            studyInfo,
-            studyInfo.StudyInstanceUID
-          );
+          const studyMetadata = new StudyMetadata(studyInfo, studyInfo.StudyInstanceUID);
 
           // Get Study display sets
           const displaySets = studyMetadata.createDisplaySets();

@@ -1,10 +1,10 @@
-(function(global, factory) {
+(function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined'
     ? factory(exports)
     : typeof define === 'function' && define.amd
     ? define(['exports'], factory)
     : ((global = global || self), factory((global.workbox = {})));
-})(this, function(exports) {
+})(this, function (exports) {
   'use strict';
 
   try {
@@ -34,10 +34,10 @@
    */
 
   function messageSW(sw, data) {
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve) {
       var messageChannel = new MessageChannel();
 
-      messageChannel.port1.onmessage = function(event) {
+      messageChannel.port1.onmessage = function (event) {
         resolve(event.data);
       };
 
@@ -73,8 +73,7 @@
     var n = Object.prototype.toString.call(o).slice(8, -1);
     if (n === 'Object' && o.constructor) n = o.constructor.name;
     if (n === 'Map' || n === 'Set') return Array.from(o);
-    if (n === 'Arguments' || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n))
-      return _arrayLikeToArray(o, minLen);
+    if (n === 'Arguments' || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
   }
 
   function _arrayLikeToArray(arr, len) {
@@ -96,7 +95,7 @@
       ) {
         if (it) o = it;
         var i = 0;
-        return function() {
+        return function () {
           if (i >= o.length)
             return {
               done: true,
@@ -144,7 +143,7 @@
     function Deferred() {
       var _this = this;
 
-      this.promise = new Promise(function(resolve, reject) {
+      this.promise = new Promise(function (resolve, reject) {
         _this.resolve = resolve;
         _this.reject = reject;
       });
@@ -164,7 +163,7 @@
 
   function dontWaitFor(promise) {
     // Effective no-op.
-    promise.then(function() {});
+    promise.then(function () {});
   }
 
   /*
@@ -173,7 +172,7 @@
       license that can be found in the LICENSE file or at
       https://opensource.org/licenses/MIT.
     */
-  var logger = (function() {
+  var logger = (function () {
     // Don't overwrite this value if it's already set.
     // See https://github.com/GoogleChrome/workbox/pull/2284#issuecomment-560470923
     if (!('__WB_DISABLE_DEV_LOGS' in self)) {
@@ -237,12 +236,8 @@
       var key = _loggerMethods[_i];
       var method = key;
 
-      api[method] = function() {
-        for (
-          var _len = arguments.length, args = new Array(_len), _key = 0;
-          _key < _len;
-          _key++
-        ) {
+      api[method] = function () {
+        for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
           args[_key] = arguments[_key];
         }
 
@@ -250,11 +245,7 @@
       };
     };
 
-    for (
-      var _i = 0, _loggerMethods = loggerMethods;
-      _i < _loggerMethods.length;
-      _i++
-    ) {
+    for (var _i = 0, _loggerMethods = loggerMethods; _i < _loggerMethods.length; _i++) {
       _loop();
     }
 
@@ -275,7 +266,7 @@
    * `EventTarget`, so using a real `EventTarget` will error.
    * @private
    */
-  var WorkboxEventTarget = /*#__PURE__*/ (function() {
+  var WorkboxEventTarget = /*#__PURE__*/ (function () {
     function WorkboxEventTarget() {
       this._eventListenerRegistry = new Map();
     }
@@ -311,11 +302,7 @@
 
       var listeners = this._getEventListenersByType(event.type);
 
-      for (
-        var _iterator = _createForOfIteratorHelperLoose(listeners), _step;
-        !(_step = _iterator()).done;
-
-      ) {
+      for (var _iterator = _createForOfIteratorHelperLoose(listeners), _step; !(_step = _iterator()).done; ) {
         var listener = _step.value;
         listener(event);
       }
@@ -401,7 +388,7 @@
   // that the registration didn't trigger an update.
 
   function _async(f) {
-    return function() {
+    return function () {
       for (var args = [], i = 0; i < arguments.length; i++) {
         args[i] = arguments[i];
       }
@@ -433,7 +420,7 @@
 
   function _empty() {}
 
-  var Workbox = /*#__PURE__*/ (function(_WorkboxEventTarget) {
+  var Workbox = /*#__PURE__*/ (function (_WorkboxEventTarget) {
     _inheritsLoose(Workbox, _WorkboxEventTarget);
 
     /**
@@ -467,7 +454,7 @@
        * @private
        */
 
-      _this._onUpdateFound = function() {
+      _this._onUpdateFound = function () {
         // `this._registration` will never be `undefined` after an update is found.
         var registration = _this._registration;
         var installingSW = registration.installing; // If the script URL passed to `navigator.serviceWorker.register()` is
@@ -493,8 +480,7 @@
           !urlsMatch(installingSW.scriptURL, _this._scriptURL) || // If all of the above are false, then we use a time-based heuristic:
           // Any `updatefound` event that occurs long after our registration is
           // assumed to be external.
-          performance.now() >
-            _this._registrationTime + REGISTRATION_TIMEOUT_DURATION // If any of the above are not true, we assume the update was
+          performance.now() > _this._registrationTime + REGISTRATION_TIMEOUT_DURATION // If any of the above are not true, we assume the update was
             ? // triggered by this instance.
               true
             : false;
@@ -532,7 +518,7 @@
        * @param {Event} originalEvent
        */
 
-      _this._onStateChange = function(originalEvent) {
+      _this._onStateChange = function (originalEvent) {
         // `this._registration` will never be `undefined` after an update is found.
         var registration = _this._registration;
         var sw = originalEvent.target;
@@ -559,12 +545,10 @@
           // is very short.)
           // NOTE: we don't need separate timeouts for the own and external SWs
           // since they can't go through these phases at the same time.
-          _this._waitingTimeout = self.setTimeout(function() {
+          _this._waitingTimeout = self.setTimeout(function () {
             // Ensure the SW is still waiting (it may now be redundant).
             if (state === 'installed' && registration.waiting === sw) {
-              _this.dispatchEvent(
-                new WorkboxEvent(eventPrefix + 'waiting', eventProps)
-              );
+              _this.dispatchEvent(new WorkboxEvent(eventPrefix + 'waiting', eventProps));
 
               {
                 if (isExternal) {
@@ -594,8 +578,7 @@
             case 'installed':
               if (isExternal) {
                 logger.warn(
-                  'An external service worker has installed. ' +
-                    'You may want to suggest users reload this page.'
+                  'An external service worker has installed. ' + 'You may want to suggest users reload this page.'
                 );
               } else {
                 logger.log('Registered service worker installed.');
@@ -622,9 +605,7 @@
 
             case 'redundant':
               if (sw === _this._compatibleControllingSW) {
-                logger.log(
-                  'Previously controlling service worker now redundant!'
-                );
+                logger.log('Previously controlling service worker now redundant!');
               } else if (!isExternal) {
                 logger.log('Registered service worker now redundant!');
               }
@@ -638,7 +619,7 @@
        * @param {Event} originalEvent
        */
 
-      _this._onControllerChange = function(originalEvent) {
+      _this._onControllerChange = function (originalEvent) {
         var sw = _this._sw;
 
         if (sw === navigator.serviceWorker.controller) {
@@ -662,12 +643,12 @@
        * @param {Event} originalEvent
        */
 
-      _this._onMessage = _async(function(originalEvent) {
+      _this._onMessage = _async(function (originalEvent) {
         var data = originalEvent.data,
           source = originalEvent.source; // Wait until there's an "own" service worker. This is used to buffer
         // `message` events that may be received prior to calling `register()`.
 
-        return _await(_this.getSW(), function() {
+        return _await(_this.getSW(), function () {
           if (_this._ownSWs.has(source)) {
             _this.dispatchEvent(
               new WorkboxEvent('message', {
@@ -716,24 +697,23 @@
         if ('dev' !== 'production') {
           if (_this3._registrationTime) {
             logger.error(
-              'Cannot re-register a Workbox instance after it has ' +
-                'been registered. Create a new instance instead.'
+              'Cannot re-register a Workbox instance after it has ' + 'been registered. Create a new instance instead.'
             );
             return;
           }
         }
 
         return _invoke(
-          function() {
+          function () {
             if (!immediate && document.readyState !== 'complete') {
               return _awaitIgnored(
-                new Promise(function(res) {
+                new Promise(function (res) {
                   return window.addEventListener('load', res);
                 })
               );
             }
           },
-          function() {
+          function () {
             // Set this flag to true if any service worker was controlling the page
             // at registration time.
             _this3._isUpdate = Boolean(navigator.serviceWorker.controller); // Before registering, attempt to determine if a SW is already controlling
@@ -741,9 +721,7 @@
             // instance's script.
 
             _this3._compatibleControllingSW = _this3._getControllingSWIfCompatible();
-            return _await(_this3._registerScript(), function(
-              _this2$_registerScrip
-            ) {
+            return _await(_this3._registerScript(), function (_this2$_registerScrip) {
               _this3._registration = _this2$_registerScrip;
 
               // If we have a compatible controller, store the controller as the "own"
@@ -753,17 +731,11 @@
 
                 _this3._activeDeferred.resolve(_this3._compatibleControllingSW);
 
-                _this3._controllingDeferred.resolve(
-                  _this3._compatibleControllingSW
-                );
+                _this3._controllingDeferred.resolve(_this3._compatibleControllingSW);
 
-                _this3._compatibleControllingSW.addEventListener(
-                  'statechange',
-                  _this3._onStateChange,
-                  {
-                    once: true,
-                  }
-                );
+                _this3._compatibleControllingSW.addEventListener('statechange', _this3._onStateChange, {
+                  once: true,
+                });
               } // If there's a waiting service worker with a matching URL before the
               // `updatefound` event fires, it likely means that this site is open
               // in another tab, or the user refreshed the page (and thus the previous
@@ -772,17 +744,14 @@
 
               var waitingSW = _this3._registration.waiting;
 
-              if (
-                waitingSW &&
-                urlsMatch(waitingSW.scriptURL, _this3._scriptURL)
-              ) {
+              if (waitingSW && urlsMatch(waitingSW.scriptURL, _this3._scriptURL)) {
                 // Store the waiting SW as the "own" Sw, even if it means overwriting
                 // a compatible controller.
                 _this3._sw = waitingSW; // Run this in the next microtask, so any code that adds an event
                 // listener after awaiting `register()` will get this event.
 
                 dontWaitFor(
-                  Promise.resolve().then(function() {
+                  Promise.resolve().then(function () {
                     _this3.dispatchEvent(
                       new WorkboxEvent('waiting', {
                         sw: waitingSW,
@@ -792,8 +761,7 @@
 
                     if ('dev' !== 'production') {
                       logger.warn(
-                        'A service worker was already waiting to activate ' +
-                          'before this script was registered...'
+                        'A service worker was already waiting to activate ' + 'before this script was registered...'
                       );
                     }
                   })
@@ -807,17 +775,11 @@
               }
 
               if ('dev' !== 'production') {
-                logger.log(
-                  'Successfully registered service worker.',
-                  _this3._scriptURL
-                );
+                logger.log('Successfully registered service worker.', _this3._scriptURL);
 
                 if (navigator.serviceWorker.controller) {
                   if (_this3._compatibleControllingSW) {
-                    logger.debug(
-                      'A service worker with the same script URL ' +
-                        'is already controlling this page.'
-                    );
+                    logger.debug('A service worker with the same script URL ' + 'is already controlling this page.');
                   } else {
                     logger.debug(
                       'A service worker with a different script URL is ' +
@@ -828,34 +790,23 @@
                 }
 
                 var currentPageIsOutOfScope = function currentPageIsOutOfScope() {
-                  var scopeURL = new URL(
-                    _this3._registerOptions.scope || _this3._scriptURL,
-                    document.baseURI
-                  );
+                  var scopeURL = new URL(_this3._registerOptions.scope || _this3._scriptURL, document.baseURI);
                   var scopeURLBasePath = new URL('./', scopeURL.href).pathname;
                   return !location.pathname.startsWith(scopeURLBasePath);
                 };
 
                 if (currentPageIsOutOfScope()) {
                   logger.warn(
-                    'The current page is not in scope for the registered ' +
-                      'service worker. Was this a mistake?'
+                    'The current page is not in scope for the registered ' + 'service worker. Was this a mistake?'
                   );
                 }
               }
 
-              _this3._registration.addEventListener(
-                'updatefound',
-                _this3._onUpdateFound
-              );
+              _this3._registration.addEventListener('updatefound', _this3._onUpdateFound);
 
-              navigator.serviceWorker.addEventListener(
-                'controllerchange',
-                _this3._onControllerChange,
-                {
-                  once: true,
-                }
-              );
+              navigator.serviceWorker.addEventListener('controllerchange', _this3._onControllerChange, {
+                once: true,
+              });
               return _this3._registration;
             });
           }
@@ -875,8 +826,7 @@
         if (!_this5._registration) {
           if ('dev' !== 'production') {
             logger.error(
-              'Cannot update a Workbox instance without ' +
-                'being registered. Register the Workbox instance first.'
+              'Cannot update a Workbox instance without ' + 'being registered. Register the Workbox instance first.'
             );
           }
 
@@ -919,9 +869,7 @@
 
         // If `this._sw` is set, resolve with that as we want `getSW()` to
         // return the correct (new) service worker if an update is found.
-        return _this7._sw !== undefined
-          ? _this7._sw
-          : _this7._swDeferred.promise;
+        return _this7._sw !== undefined ? _this7._sw : _this7._swDeferred.promise;
       } catch (e) {
         return Promise.reject(e);
       }
@@ -944,7 +892,7 @@
       try {
         var _this9 = this;
 
-        return _await(_this9.getSW(), function(sw) {
+        return _await(_this9.getSW(), function (sw) {
           return messageSW(sw, data);
         });
       } catch (e) {
@@ -980,13 +928,10 @@
         var _this11 = this;
 
         return _catch(
-          function() {
+          function () {
             return _await(
-              navigator.serviceWorker.register(
-                _this11._scriptURL,
-                _this11._registerOptions
-              ),
-              function(reg) {
+              navigator.serviceWorker.register(_this11._scriptURL, _this11._registerOptions),
+              function (reg) {
                 // Keep track of when registration happened, so it can be used in the
                 // `this._onUpdateFound` heuristic. Also use the presence of this
                 // property as a way to see if `.register()` has been called.
@@ -995,7 +940,7 @@
               }
             );
           },
-          function(error) {
+          function (error) {
             if ('dev' !== 'production') {
               logger.error(error);
             } // Re-throw the error.

@@ -1,15 +1,8 @@
-import ServicesManager from './ServicesManager.js';
-import UINotificationService from './UINotificationService';
-import UIModalService from './UIModalService';
-import UIDialogService from './UIDialogService';
-import MeasurementService from './MeasurementService';
 import LoggerService from './LoggerService';
+import MeasurementService from './MeasurementService';
+import ServicesManager from './ServicesManager.js';
+import UIDialogService from './UIDialogService';
+import UIModalService from './UIModalService';
+import UINotificationService from './UINotificationService';
 
-export {
-  UINotificationService,
-  UIModalService,
-  UIDialogService,
-  ServicesManager,
-  MeasurementService,
-  LoggerService,
-};
+export { UINotificationService, UIModalService, UIDialogService, ServicesManager, MeasurementService, LoggerService };

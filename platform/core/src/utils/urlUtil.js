@@ -35,14 +35,14 @@ const decode = (strToDecode = '') => {
   }
 };
 
-const parse = toParse => {
+const parse = (toParse) => {
   if (toParse) {
     return lib.parse(toParse);
   }
 
   return {};
 };
-const parseParam = paramStr => {
+const parseParam = (paramStr) => {
   const _paramDecoded = decode(paramStr);
   if (_paramDecoded && typeof _paramDecoded === 'string') {
     return _paramDecoded.split(PARAM_SEPARATOR);
@@ -58,7 +58,7 @@ const replaceParam = (path = '', paramKey, paramValue) => {
   return path;
 };
 
-const isValidPath = path => {
+const isValidPath = (path) => {
   const paramPatternPiece = `/${PARAM_PATTERN_IDENTIFIER}`;
   return path.indexOf(paramPatternPiece) < 0;
 };

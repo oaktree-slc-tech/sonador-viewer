@@ -81,7 +81,7 @@ function publish(eventName, callbackProps) {
   const hasCallbacks = Array.isArray(this.listeners[eventName]);
 
   if (hasListeners && hasCallbacks) {
-    this.listeners[eventName].forEach(listener => {
+    this.listeners[eventName].forEach((listener) => {
       listener.callback(callbackProps);
     });
   }

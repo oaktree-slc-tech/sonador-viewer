@@ -1,7 +1,9 @@
-import dcmjs from 'dcmjs';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
-import FileLoader from './fileLoader';
+import dcmjs from 'dcmjs';
+
 import OHIF from '@ohif/core';
+
+import FileLoader from './fileLoader';
 
 const metadataProvider = OHIF.cornerstone.metadataProvider;
 
@@ -16,15 +18,11 @@ const DICOMFileLoader = new (class extends FileLoader {
     try {
       const dicomData = dcmjs.data.DicomMessage.readFile(image);
 
-      dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(
-        dicomData.dict
-      );
+      dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
 
       metadataProvider.addInstance(dataset);
 
-      dataset._meta = dcmjs.data.DicomMetaDictionary.namifyDataset(
-        dicomData.meta
-      );
+      dataset._meta = dcmjs.data.DicomMetaDictionary.namifyDataset(dicomData.meta);
     } catch (e) {
       console.error('Error reading dicom file', e);
     }

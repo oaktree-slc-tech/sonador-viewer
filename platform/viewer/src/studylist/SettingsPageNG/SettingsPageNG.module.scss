@@ -1,0 +1,138 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .title {
+    margin: 0;
+    font-size: 24px;
+    line-height: 28px;
+    font-weight: 700;
+    color: #ffffff;
+
+    @include lg {
+      font-size: 22px;
+      line-height: 25px;
+    }
+  }
+
+  .investigational {
+    margin: 0;
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #ffffff;
+
+    @include lg {
+      font-size: 12px;
+      line-height: 14px;
+    }
+  }
+}
+
+.content {
+  display: flex;
+  column-gap: 100px;
+  margin-top: 100px;
+
+  @include lg {
+    flex-direction: column;
+    margin-top: 20px;
+  }
+
+  .left {
+    display: flex;
+    flex-direction: column;
+
+    .tabs {
+      display: flex;
+      flex-direction: column;
+      padding-top: 10px;
+      row-gap: 20px;
+    }
+
+    .tabName,
+    .leftTitle {
+      margin: 0;
+      color: #60646d;
+      white-space: nowrap;
+    }
+
+    .tabName {
+      font-size: 20px;
+      line-height: 24px;
+      font-weight: 500;
+      border: none;
+      background: none;
+      text-align: left;
+      cursor: pointer;
+
+      &.active {
+        color: #ffffff;
+      }
+    }
+
+    .leftTitle {
+      font-size: 14px;
+      line-height: 16px;
+      padding: 5px 0;
+      border-bottom: 1px solid #60646d;
+    }
+
+    .securityTitle {
+      margin-top: 50px;
+    }
+
+    .horizontalTabs {
+      display: flex;
+      position: relative;
+      column-gap: 20px;
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+
+      .horizontalTabName {
+        font-size: 16px;
+        line-height: 18.75px;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+        color: #60646d;
+        padding: 0 10px 8px;
+        position: relative;
+        z-index: 10;
+        white-space: nowrap;
+
+        &.active {
+          color: #ffffff;
+          border-bottom: 2.4px solid #2E46E9;
+        }
+      }
+    }
+  }
+
+  .right {
+    flex-grow: 1;
+  }
+}
+
+.indicator {
+  position: absolute;
+  width: calc(100dvw - 100px);
+  top: 172px;
+  left: 50px;
+  margin: 0;
+  color: #2E363E;
+  border-bottom: 2.4px solid;
+  border-top-width: 0;
+  border-left-width: 0;
+  border-right-width: 0;
+
+  @include xs {
+    width: calc(100dvw - 30px);
+    left: 15px;
+    top: 162px;
+  }
+}

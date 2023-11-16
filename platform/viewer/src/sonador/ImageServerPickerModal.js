@@ -1,19 +1,12 @@
 import React from 'react';
-import PropTypes from 'prop-types';
-
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
 
 import { servicesManager } from '../App.js';
 
 import ConnectedImageServerDatasetSelector from './ConnectedImageServerDatasetSelector.js';
 
-function ImageServerPickerModal({
-  isOpen = false,
-  onClose,
-  user,
-  onServerChange,
-  t,
-}) {
+function ImageServerPickerModal({ isOpen = false, onClose, user, onServerChange, t }) {
   const { UIModalService } = servicesManager.services;
 
   const showImageServerPickerModal = () => {
@@ -36,9 +29,7 @@ function ImageServerPickerModal({
     }
   };
 
-  return (
-    <React.Fragment>{isOpen && showImageServerPickerModal()}</React.Fragment>
-  );
+  return <React.Fragment>{isOpen && showImageServerPickerModal()}</React.Fragment>;
 }
 
 ImageServerPickerModal.propTypes = {

@@ -1,10 +1,11 @@
-.modal-table{
+.modal-table {
   display: table;
-  width:100%;
-  border-collapse:collapse;
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.modal-table-row, .modal-table-header {
+.modal-table-row,
+.modal-table-header {
   display: table-row;
 }
 
@@ -13,29 +14,25 @@
 }
 
 .modal-table-head {
-  padding-left: 0.5rem; padding-right: 0.5m;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
   display: table-cell;
-}
-
-.modal-table-cell {
-  display: table-cell;
-  padding-right: 0.5rem; padding-left: 0.5rem; padding-top: 0.5rem;
-}
-
-.modal-table-row :first {
-  padding-right: 0.75rem;
-}
-
-.modal-table-head {
   padding-bottom: 0.5rem;
   font-weight: bold;
 }
 
-.modal-title{
+.modal-table-cell {
+  display: table-cell;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.modal-title {
   display: flex;
   justify-content: space-between;
 }
 
-.modal-table-wrapper{
+.modal-table-wrapper {
   margin: 20px;
 }

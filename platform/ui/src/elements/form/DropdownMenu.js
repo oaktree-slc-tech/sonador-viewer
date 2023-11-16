@@ -1,9 +1,9 @@
-import './DropdownMenu.css';
-
 import React, { Component } from 'react';
+import PropTypes from 'prop-types';
 
 import { Icon } from '../Icon';
-import PropTypes from 'prop-types';
+
+import './DropdownMenu.css';
 
 class DropdownMenu extends Component {
   state = {
@@ -31,24 +31,14 @@ class DropdownMenu extends Component {
     return list.map(({ icon, title, link, onClick }, key) => {
       if (link) {
         return (
-          <a
-            href={link || '#'}
-            key={key}
-            className="dd-item"
-            onClick={() => this.handleOnClick(onClick)}
-          >
+          <a href={link || '#'} key={key} className="dd-item" onClick={() => this.handleOnClick(onClick)}>
             {icon && <Icon {...icon} className="dd-item-icon" />}
             <span>{title}</span>
           </a>
         );
       } else {
         return (
-          <button
-            key={key}
-            className="dd-item"
-            data-cy="dd-item-menu"
-            onClick={() => this.handleOnClick(onClick)}
-          >
+          <button key={key} className="dd-item" data-cy="dd-item-menu" onClick={() => this.handleOnClick(onClick)}>
             {icon && <Icon {...icon} className="dd-item-icon" />}
             <span>{title}</span>
           </button>
@@ -64,14 +54,10 @@ class DropdownMenu extends Component {
       return null;
     }
 
-    return (
-      <div className={`dd-menu-list ${align || 'left'}`}>
-        {this.getListItems()}
-      </div>
-    );
+    return <div className={`dd-menu-list ${align || 'left'}`}>{this.getListItems()}</div>;
   };
 
-  handleOnClick = onClick => {
+  handleOnClick = (onClick) => {
     this.toggleList();
 
     if (onClick) {
@@ -79,7 +65,7 @@ class DropdownMenu extends Component {
     }
   };
 
-  handleMouseClick = e => {
+  handleMouseClick = (e) => {
     if (this.node.contains(e.target)) {
       return;
     }
@@ -120,11 +106,7 @@ class DropdownMenu extends Component {
 
   render() {
     return (
-      <div
-        className="dd-menu"
-        data-cy="options-menu"
-        ref={node => (this.node = node)}
-      >
+      <div className="dd-menu" data-cy="options-menu" ref={(node) => (this.node = node)}>
         <div className="dd-menu-toggle" onClick={this.toggleList}>
           {this.renderTitleElement()}
         </div>

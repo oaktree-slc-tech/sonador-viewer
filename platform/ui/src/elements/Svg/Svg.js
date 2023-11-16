@@ -1,9 +1,10 @@
-import './Svg.styl';
-
 import PropTypes from 'prop-types';
+
 import getSvg from './getSvg.js';
 
-const Svg = props => {
+import './Svg.styl';
+
+const Svg = (props) => {
   return getSvg(props.name, props);
 };
 

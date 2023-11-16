@@ -1,5 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.core = (function(exports) {
+this.workbox.core = (function (exports) {
   'use strict';
 
   try {
@@ -29,7 +29,7 @@ this.workbox.core = (function(exports) {
       groupEnd: null,
     };
 
-    const print = function(method, args) {
+    const print = function (method, args) {
       if (self.__WB_DISABLE_DEV_LOGS) {
         return;
       }
@@ -102,17 +102,10 @@ this.workbox.core = (function(exports) {
       }
 
       return (
-        `The parameter '${paramName}' passed into ` +
-        `'${moduleName}.${className}.${funcName}()' must be an array.`
+        `The parameter '${paramName}' passed into ` + `'${moduleName}.${className}.${funcName}()' must be an array.`
       );
     },
-    'incorrect-type': ({
-      expectedType,
-      paramName,
-      moduleName,
-      className,
-      funcName,
-    }) => {
+    'incorrect-type': ({ expectedType, paramName, moduleName, className, funcName }) => {
       if (!expectedType || !paramName || !moduleName || !funcName) {
         throw new Error(`Unexpected input to 'incorrect-type' error.`);
       }
@@ -123,14 +116,7 @@ this.workbox.core = (function(exports) {
         `${funcName}()' must be of type ${expectedType}.`
       );
     },
-    'incorrect-class': ({
-      expectedClass,
-      paramName,
-      moduleName,
-      className,
-      funcName,
-      isReturnValueProblem,
-    }) => {
+    'incorrect-class': ({ expectedClass, paramName, moduleName, className, funcName, isReturnValueProblem }) => {
       if (!expectedClass || !moduleName || !funcName) {
         throw new Error(`Unexpected input to 'incorrect-class' error.`);
       }
@@ -149,20 +135,8 @@ this.workbox.core = (function(exports) {
         `must be an instance of class ${expectedClass.name}.`
       );
     },
-    'missing-a-method': ({
-      expectedMethod,
-      paramName,
-      moduleName,
-      className,
-      funcName,
-    }) => {
-      if (
-        !expectedMethod ||
-        !paramName ||
-        !moduleName ||
-        !className ||
-        !funcName
-      ) {
+    'missing-a-method': ({ expectedMethod, paramName, moduleName, className, funcName }) => {
+      if (!expectedMethod || !paramName || !moduleName || !className || !funcName) {
         throw new Error(`Unexpected input to 'missing-a-method' error.`);
       }
 
@@ -175,19 +149,14 @@ this.workbox.core = (function(exports) {
       return (
         `An unexpected entry was passed to ` +
         `'workbox-precaching.PrecacheController.addToCacheList()' The entry ` +
-        `'${JSON.stringify(
-          entry
-        )}' isn't supported. You must supply an array of ` +
+        `'${JSON.stringify(entry)}' isn't supported. You must supply an array of ` +
         `strings with one or more characters, objects with a url property or ` +
         `Request objects.`
       );
     },
     'add-to-cache-list-conflicting-entries': ({ firstEntry, secondEntry }) => {
       if (!firstEntry || !secondEntry) {
-        throw new Error(
-          `Unexpected input to ` +
-            `'add-to-cache-list-duplicate-entries' error.`
-        );
+        throw new Error(`Unexpected input to ` + `'add-to-cache-list-duplicate-entries' error.`);
       }
 
       return (
@@ -200,9 +169,7 @@ this.workbox.core = (function(exports) {
     },
     'plugin-error-request-will-fetch': ({ thrownError }) => {
       if (!thrownError) {
-        throw new Error(
-          `Unexpected input to ` + `'plugin-error-request-will-fetch', error.`
-        );
+        throw new Error(`Unexpected input to ` + `'plugin-error-request-will-fetch', error.`);
       }
 
       return (
@@ -212,9 +179,7 @@ this.workbox.core = (function(exports) {
     },
     'invalid-cache-name': ({ cacheNameId, value }) => {
       if (!cacheNameId) {
-        throw new Error(
-          `Expected a 'cacheNameId' for error 'invalid-cache-name'`
-        );
+        throw new Error(`Expected a 'cacheNameId' for error 'invalid-cache-name'`);
       }
 
       return (
@@ -225,22 +190,15 @@ this.workbox.core = (function(exports) {
     },
     'unregister-route-but-not-found-with-method': ({ method }) => {
       if (!method) {
-        throw new Error(
-          `Unexpected input to ` +
-            `'unregister-route-but-not-found-with-method' error.`
-        );
+        throw new Error(`Unexpected input to ` + `'unregister-route-but-not-found-with-method' error.`);
       }
 
       return (
-        `The route you're trying to unregister was not  previously ` +
-        `registered for the method type '${method}'.`
+        `The route you're trying to unregister was not  previously ` + `registered for the method type '${method}'.`
       );
     },
     'unregister-route-route-not-registered': () => {
-      return (
-        `The route you're trying to unregister was not previously ` +
-        `registered.`
-      );
+      return `The route you're trying to unregister was not previously ` + `registered.`;
     },
     'queue-replay-failed': ({ name }) => {
       return `Replaying the background sync queue '${name}' failed.`;
@@ -252,31 +210,16 @@ this.workbox.core = (function(exports) {
       );
     },
     'expired-test-without-max-age': ({ methodName, paramName }) => {
-      return (
-        `The '${methodName}()' method can only be used when the ` +
-        `'${paramName}' is used in the constructor.`
-      );
+      return `The '${methodName}()' method can only be used when the ` + `'${paramName}' is used in the constructor.`;
     },
-    'unsupported-route-type': ({
-      moduleName,
-      className,
-      funcName,
-      paramName,
-    }) => {
+    'unsupported-route-type': ({ moduleName, className, funcName, paramName }) => {
       return (
         `The supplied '${paramName}' parameter was an unsupported type. ` +
         `Please check the docs for ${moduleName}.${className}.${funcName} for ` +
         `valid input types.`
       );
     },
-    'not-array-of-class': ({
-      value,
-      expectedClass,
-      moduleName,
-      className,
-      funcName,
-      paramName,
-    }) => {
+    'not-array-of-class': ({ value, expectedClass, moduleName, className, funcName, paramName }) => {
       return (
         `The supplied '${paramName}' parameter must be an array of ` +
         `'${expectedClass}' objects. Received '${JSON.stringify(value)},'. ` +
@@ -286,15 +229,11 @@ this.workbox.core = (function(exports) {
     },
     'max-entries-or-age-required': ({ moduleName, className, funcName }) => {
       return (
-        `You must define either config.maxEntries or config.maxAgeSeconds` +
-        `in ${moduleName}.${className}.${funcName}`
+        `You must define either config.maxEntries or config.maxAgeSeconds` + `in ${moduleName}.${className}.${funcName}`
       );
     },
     'statuses-or-headers-required': ({ moduleName, className, funcName }) => {
-      return (
-        `You must define either config.statuses or config.headers` +
-        `in ${moduleName}.${className}.${funcName}`
-      );
+      return `You must define either config.statuses or config.headers` + `in ${moduleName}.${className}.${funcName}`;
     },
     'invalid-string': ({ moduleName, funcName, paramName }) => {
       if (!paramName || !moduleName || !funcName) {
@@ -309,10 +248,7 @@ this.workbox.core = (function(exports) {
       );
     },
     'channel-name-required': () => {
-      return (
-        `You must provide a channelName to construct a ` +
-        `BroadcastCacheUpdate instance.`
-      );
+      return `You must provide a channelName to construct a ` + `BroadcastCacheUpdate instance.`;
     },
     'invalid-responses-are-same-args': () => {
       return (
@@ -322,8 +258,7 @@ this.workbox.core = (function(exports) {
     },
     'expire-custom-caches-only': () => {
       return (
-        `You must provide a 'cacheName' property when using the ` +
-        `expiration plugin with a runtime caching strategy.`
+        `You must provide a 'cacheName' property when using the ` + `expiration plugin with a runtime caching strategy.`
       );
     },
     'unit-must-be-bytes': ({ normalizedRangeHeader }) => {
@@ -368,16 +303,10 @@ this.workbox.core = (function(exports) {
       );
     },
     'attempt-to-cache-non-get-request': ({ url, method }) => {
-      return (
-        `Unable to cache '${url}' because it is a '${method}' request and ` +
-        `only 'GET' requests can be cached.`
-      );
+      return `Unable to cache '${url}' because it is a '${method}' request and ` + `only 'GET' requests can be cached.`;
     },
     'cache-put-with-no-response': ({ url }) => {
-      return (
-        `There was an attempt to cache '${url}' but the response was not ` +
-        `defined.`
-      );
+      return `There was an attempt to cache '${url}' but the response was not ` + `defined.`;
     },
     'no-response': ({ url, error }) => {
       let message = `The strategy could not generate a response for '${url}'.`;
@@ -389,10 +318,7 @@ this.workbox.core = (function(exports) {
       return message;
     },
     'bad-precaching-response': ({ url, status }) => {
-      return (
-        `The precaching request for '${url}' failed with an HTTP ` +
-        `status of ${status}.`
-      );
+      return `The precaching request for '${url}' failed with an HTTP ` + `status of ${status}.`;
     },
     'non-precached-url': ({ url }) => {
       return (
@@ -511,9 +437,7 @@ this.workbox.core = (function(exports) {
 
   const isOneOf = (value, validValues, details) => {
     if (!validValues.includes(value)) {
-      details['validValueDescription'] = `Valid values are ${JSON.stringify(
-        validValues
-      )}.`;
+      details['validValueDescription'] = `Valid values are ${JSON.stringify(validValues)}.`;
       throw new WorkboxError('invalid-value', details);
     }
   };
@@ -597,38 +521,36 @@ this.workbox.core = (function(exports) {
     suffix: typeof registration !== 'undefined' ? registration.scope : '',
   };
 
-  const _createCacheName = cacheName => {
+  const _createCacheName = (cacheName) => {
     return [_cacheNameDetails.prefix, cacheName, _cacheNameDetails.suffix]
-      .filter(value => value && value.length > 0)
+      .filter((value) => value && value.length > 0)
       .join('-');
   };
 
-  const eachCacheNameDetail = fn => {
+  const eachCacheNameDetail = (fn) => {
     for (const key of Object.keys(_cacheNameDetails)) {
       fn(key);
     }
   };
 
   const cacheNames = {
-    updateDetails: details => {
-      eachCacheNameDetail(key => {
+    updateDetails: (details) => {
+      eachCacheNameDetail((key) => {
         if (typeof details[key] === 'string') {
           _cacheNameDetails[key] = details[key];
         }
       });
     },
-    getGoogleAnalyticsName: userCacheName => {
-      return (
-        userCacheName || _createCacheName(_cacheNameDetails.googleAnalytics)
-      );
+    getGoogleAnalyticsName: (userCacheName) => {
+      return userCacheName || _createCacheName(_cacheNameDetails.googleAnalytics);
     },
-    getPrecacheName: userCacheName => {
+    getPrecacheName: (userCacheName) => {
       return userCacheName || _createCacheName(_cacheNameDetails.precache);
     },
     getPrefix: () => {
       return _cacheNameDetails.prefix;
     },
-    getRuntimeName: userCacheName => {
+    getRuntimeName: (userCacheName) => {
       return userCacheName || _createCacheName(_cacheNameDetails.runtime);
     },
     getSuffix: () => {
@@ -653,10 +575,7 @@ this.workbox.core = (function(exports) {
 
   async function executeQuotaErrorCallbacks() {
     {
-      logger.log(
-        `About to run ${quotaErrorCallbacks.size} ` +
-          `callbacks to clean up caches.`
-      );
+      logger.log(`About to run ${quotaErrorCallbacks.size} ` + `callbacks to clean up caches.`);
     }
 
     for (const callback of quotaErrorCallbacks) {
@@ -680,7 +599,7 @@ this.workbox.core = (function(exports) {
       https://opensource.org/licenses/MIT.
     */
 
-  const getFriendlyURL = url => {
+  const getFriendlyURL = (url) => {
     const urlObj = new URL(String(url), location.href); // See https://github.com/GoogleChrome/workbox/issues/2323
     // We want to include everything, except for the origin if it's same-origin.
 
@@ -696,7 +615,7 @@ this.workbox.core = (function(exports) {
     */
   const pluginUtils = {
     filter: (plugins, callbackName) => {
-      return plugins.filter(plugin => callbackName in plugin);
+      return plugins.filter((plugin) => callbackName in plugin);
     },
   };
 
@@ -771,12 +690,7 @@ this.workbox.core = (function(exports) {
    * @memberof module:workbox-core
    */
 
-  const _isResponseSafeToCache = async ({
-    request,
-    response,
-    event,
-    plugins = [],
-  }) => {
+  const _isResponseSafeToCache = async ({ request, response, event, plugins = [] }) => {
     let responseToCache = response;
     let pluginsUsed = false;
 
@@ -836,10 +750,7 @@ this.workbox.core = (function(exports) {
         }
       }
 
-      responseToCache =
-        responseToCache && responseToCache.status === 200
-          ? responseToCache
-          : undefined;
+      responseToCache = responseToCache && responseToCache.status === 200 ? responseToCache : undefined;
     }
 
     return responseToCache ? responseToCache : null;
@@ -860,13 +771,7 @@ this.workbox.core = (function(exports) {
    * @memberof module:workbox-core
    */
 
-  const matchWrapper = async ({
-    cacheName,
-    request,
-    event,
-    matchOptions,
-    plugins = [],
-  }) => {
+  const matchWrapper = async ({ cacheName, request, event, matchOptions, plugins = [] }) => {
     const cache = await self.caches.open(cacheName);
     const effectiveRequest = await _getEffectiveRequest({
       plugins,
@@ -935,14 +840,7 @@ this.workbox.core = (function(exports) {
    * @memberof module:workbox-core
    */
 
-  const putWrapper = async ({
-    cacheName,
-    request,
-    response,
-    event,
-    plugins = [],
-    matchOptions,
-  }) => {
+  const putWrapper = async ({ cacheName, request, response, event, plugins = [], matchOptions }) => {
     {
       if (request.method && request.method !== 'GET') {
         throw new WorkboxError('attempt-to-cache-non-get-request', {
@@ -960,10 +858,7 @@ this.workbox.core = (function(exports) {
 
     if (!response) {
       {
-        logger.error(
-          `Cannot cache non-existent response for ` +
-            `'${getFriendlyURL(effectiveRequest.url)}'.`
-        );
+        logger.error(`Cannot cache non-existent response for ` + `'${getFriendlyURL(effectiveRequest.url)}'.`);
       }
 
       throw new WorkboxError('cache-put-with-no-response', {
@@ -980,11 +875,7 @@ this.workbox.core = (function(exports) {
 
     if (!responseToCache) {
       {
-        logger.debug(
-          `Response '${getFriendlyURL(effectiveRequest.url)}' will ` +
-            `not be cached.`,
-          responseToCache
-        );
+        logger.debug(`Response '${getFriendlyURL(effectiveRequest.url)}' will ` + `not be cached.`, responseToCache);
       }
 
       return;
@@ -1007,8 +898,7 @@ this.workbox.core = (function(exports) {
 
     {
       logger.debug(
-        `Updating the '${cacheName}' cache with a new Response for ` +
-          `${getFriendlyURL(effectiveRequest.url)}.`
+        `Updating the '${cacheName}' cache with a new Response for ` + `${getFriendlyURL(effectiveRequest.url)}.`
       );
     }
 
@@ -1199,7 +1089,7 @@ this.workbox.core = (function(exports) {
 
         openRequest.onerror = () => reject(openRequest.error);
 
-        openRequest.onupgradeneeded = evt => {
+        openRequest.onupgradeneeded = (evt) => {
           if (openRequestTimedOut) {
             openRequest.transaction.abort();
             openRequest.result.close();
@@ -1268,7 +1158,7 @@ this.workbox.core = (function(exports) {
         count,
         includeKeys: true,
       });
-      return entries.map(entry => entry.key);
+      return entries.map((entry) => entry.key);
     }
     /**
      * Supports flexible lookup in an object store by specifying an index,
@@ -1349,7 +1239,7 @@ this.workbox.core = (function(exports) {
 
         txn.oncomplete = () => resolve();
 
-        callback(txn, value => resolve(value));
+        callback(txn, (value) => resolve(value));
       });
     }
     /**
@@ -1410,7 +1300,7 @@ this.workbox.core = (function(exports) {
     for (const method of methods) {
       if (method in IDBObjectStore.prototype) {
         // Don't use arrow functions here since we're outside of the class.
-        DBWrapper.prototype[method] = async function(storeName, ...args) {
+        DBWrapper.prototype[method] = async function (storeName, ...args) {
           return await this._call(method, storeName, mode, ...args);
         };
       }
@@ -1462,7 +1352,7 @@ this.workbox.core = (function(exports) {
    * @private
    */
 
-  const deleteDatabase = async name => {
+  const deleteDatabase = async (name) => {
     await new Promise((resolve, reject) => {
       const request = indexedDB.deleteDatabase(name);
 
@@ -1503,12 +1393,7 @@ this.workbox.core = (function(exports) {
    * @memberof module:workbox-core
    */
 
-  const wrappedFetch = async ({
-    request,
-    fetchOptions,
-    event,
-    plugins = [],
-  }) => {
+  const wrappedFetch = async ({ request, fetchOptions, event, plugins = [] }) => {
     if (typeof request === 'string') {
       request = new Request(request);
     } // We *should* be able to call `await event.preloadResponse` even if it's
@@ -1520,10 +1405,7 @@ this.workbox.core = (function(exports) {
 
       if (possiblePreloadResponse) {
         {
-          logger.log(
-            `Using a preloaded navigation response for ` +
-              `'${getFriendlyURL(request.url)}'`
-          );
+          logger.log(`Using a preloaded navigation response for ` + `'${getFriendlyURL(request.url)}'`);
         }
 
         return possiblePreloadResponse;
@@ -1548,8 +1430,7 @@ this.workbox.core = (function(exports) {
     // original request before it's either modified by a requestWillFetch
     // plugin or before the original request's body is consumed via fetch().
 
-    const originalRequest =
-      failedFetchPlugins.length > 0 ? request.clone() : null;
+    const originalRequest = failedFetchPlugins.length > 0 ? request.clone() : null;
 
     try {
       for (const plugin of plugins) {
@@ -1639,11 +1520,7 @@ this.workbox.core = (function(exports) {
       return fetchResponse;
     } catch (error) {
       {
-        logger.error(
-          `Network request for ` +
-            `'${getFriendlyURL(request.url)}' threw an error.`,
-          error
-        );
+        logger.error(`Network request for ` + `'${getFriendlyURL(request.url)}' threw an error.`, error);
       }
 
       for (const plugin of failedFetchPlugins) {
@@ -1682,7 +1559,7 @@ this.workbox.core = (function(exports) {
    */
 
   function timeout(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /*
@@ -1711,7 +1588,7 @@ this.workbox.core = (function(exports) {
     let existingWindows = await self.clients.matchAll({
       type: 'window',
     });
-    const existingWindowIds = new Set(existingWindows.map(w => w.id));
+    const existingWindowIds = new Set(existingWindows.map((w) => w.id));
     let resultingWindow;
     const startTime = performance.now(); // Only wait up to `MAX_RETRY_TIME` to find a matching client.
 
@@ -1719,7 +1596,7 @@ this.workbox.core = (function(exports) {
       existingWindows = await self.clients.matchAll({
         type: 'window',
       });
-      resultingWindow = existingWindows.find(w => {
+      resultingWindow = existingWindows.find((w) => {
         if (resultingClientId) {
           // If we have a `resultingClientId`, we can match on that.
           return w.id === resultingClientId;
@@ -1845,15 +1722,11 @@ this.workbox.core = (function(exports) {
       statusText: clonedResponse.statusText,
     }; // Apply any user modifications.
 
-    const modifiedResponseInit = modifier
-      ? modifier(responseInit)
-      : responseInit; // Create the new response from the body stream and `ResponseInit`
+    const modifiedResponseInit = modifier ? modifier(responseInit) : responseInit; // Create the new response from the body stream and `ResponseInit`
     // modifications. Note: not all browsers support the Response.body stream,
     // so fall back to reading the entire body into memory as a blob.
 
-    const body = canConstructResponseFromBodyStream()
-      ? clonedResponse.body
-      : await clonedResponse.blob();
+    const body = canConstructResponseFromBodyStream() ? clonedResponse.body : await clonedResponse.blob();
     return new Response(body, modifiedResponseInit);
   }
 
@@ -1902,7 +1775,7 @@ this.workbox.core = (function(exports) {
 
   function setCacheNameDetails(details) {
     {
-      Object.keys(details).forEach(key => {
+      Object.keys(details).forEach((key) => {
         finalAssertExports.isType(details[key], 'string', {
           moduleName: 'workbox-core',
           funcName: 'setCacheNameDetails',
@@ -1924,10 +1797,7 @@ this.workbox.core = (function(exports) {
         });
       }
 
-      if (
-        'googleAnalytics' in details &&
-        details['googleAnalytics'].length === 0
-      ) {
+      if ('googleAnalytics' in details && details['googleAnalytics'].length === 0) {
         throw new WorkboxError('invalid-cache-name', {
           cacheNameId: 'googleAnalytics',
           value: details['googleAnalytics'],

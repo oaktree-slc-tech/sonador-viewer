@@ -1,7 +1,7 @@
 import { Reducer } from 'redux-testkit';
 
-import reducer, { DEFAULT_STATE } from './viewports.js';
 import * as types from './../constants/ActionTypes.js';
+import reducer, { DEFAULT_STATE } from './viewports.js';
 
 describe('viewports reducer', () => {
   it('should return the initial state', () => {
@@ -24,10 +24,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 0,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toChangeInState(expectedToChangeInState);
+    Reducer(reducer).withState(initialState).expect(action).toChangeInState(expectedToChangeInState);
   });
 
   it('should handle SET_VIEWPORT_ACTIVE with existent viewport index', () => {
@@ -46,10 +43,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 5,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toChangeInState(expectedToChangeInState);
+    Reducer(reducer).withState(initialState).expect(action).toChangeInState(expectedToChangeInState);
   });
 
   it('should handle SET_VIEWPORT_LAYOUT', () => {
@@ -84,10 +78,7 @@ describe('viewports reducer', () => {
       },
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toChangeInState(expectedToChangeInState);
+    Reducer(reducer).withState(initialState).expect(action).toChangeInState(expectedToChangeInState);
   });
 
   it('should handle SET_VIEWPORT_LAYOUT when we reduce the number of viewports', () => {
@@ -123,10 +114,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 0,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should handle SET_VIEWPORT_LAYOUT_AND_DATA', () => {
@@ -166,10 +154,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 0,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should handle SET_VIEWPORT_LAYOUT_AND_DATA when we reduce the number of viewports', () => {
@@ -209,10 +194,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 0,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should handle SET_VIEWPORT when we only set one viewport specific data', () => {
@@ -250,10 +232,7 @@ describe('viewports reducer', () => {
       activeViewportIndex: 0,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should handle SET_VIEWPORT', () => {
@@ -290,8 +269,7 @@ describe('viewports reducer', () => {
     };
 
     const updatedState = reducer(existingViewportData, clearViewportAction);
-    const clearedViewport =
-      updatedState.viewportSpecificData[clearViewportAction.viewportIndex];
+    const clearedViewport = updatedState.viewportSpecificData[clearViewportAction.viewportIndex];
     const originalOtherViewport = existingViewportData.viewportSpecificData[0];
     const updatedOtherViewport = updatedState.viewportSpecificData[0];
 

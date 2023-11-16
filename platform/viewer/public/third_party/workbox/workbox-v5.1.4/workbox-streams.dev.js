@@ -1,11 +1,5 @@
 this.workbox = this.workbox || {};
-this.workbox.streams = (function(
-  exports,
-  logger_js,
-  assert_js,
-  Deferred_js,
-  canConstructReadableStream_js
-) {
+this.workbox.streams = (function (exports, logger_js, assert_js, Deferred_js, canConstructReadableStream_js) {
   'use strict';
 
   try {
@@ -63,8 +57,8 @@ this.workbox.streams = (function(
       });
     }
 
-    const readerPromises = sourcePromises.map(sourcePromise => {
-      return Promise.resolve(sourcePromise).then(source => {
+    const readerPromises = sourcePromises.map((sourcePromise) => {
+      return Promise.resolve(sourcePromise).then((source) => {
         return _getReaderFromSource(source);
       });
     });
@@ -74,14 +68,11 @@ this.workbox.streams = (function(
     const stream = new ReadableStream({
       pull(controller) {
         return readerPromises[i]
-          .then(reader => reader.read())
-          .then(result => {
+          .then((reader) => reader.read())
+          .then((result) => {
             if (result.done) {
               {
-                logMessages.push([
-                  'Reached the end of source:',
-                  sourcePromises[i],
-                ]);
+                logMessages.push(['Reached the end of source:', sourcePromises[i]]);
               }
 
               i++;
@@ -89,9 +80,7 @@ this.workbox.streams = (function(
               if (i >= readerPromises.length) {
                 // Log all the messages in the group at once in a single group.
                 {
-                  logger_js.logger.groupCollapsed(
-                    `Concatenating ${readerPromises.length} sources.`
-                  );
+                  logger_js.logger.groupCollapsed(`Concatenating ${readerPromises.length} sources.`);
 
                   for (const message of logMessages) {
                     if (Array.isArray(message)) {
@@ -115,7 +104,7 @@ this.workbox.streams = (function(
               controller.enqueue(result.value);
             }
           })
-          .catch(error => {
+          .catch((error) => {
             {
               logger_js.logger.error('An error occurred:', error);
             }
@@ -258,7 +247,7 @@ this.workbox.streams = (function(
 
   function strategy(sourceFunctions, headersInit) {
     return async ({ event, request, url, params }) => {
-      const sourcePromises = sourceFunctions.map(fn => {
+      const sourcePromises = sourceFunctions.map((fn) => {
         // Ensure the return value of the function is always a promise.
         return Promise.resolve(
           fn({
@@ -271,10 +260,7 @@ this.workbox.streams = (function(
       });
 
       if (isSupported()) {
-        const { done, response } = concatenateToResponse(
-          sourcePromises,
-          headersInit
-        );
+        const { done, response } = concatenateToResponse(sourcePromises, headersInit);
 
         if (event) {
           event.waitUntil(done);
@@ -291,7 +277,7 @@ this.workbox.streams = (function(
       } // Fallback to waiting for everything to finish, and concatenating the
       // responses.
 
-      const blobPartsPromises = sourcePromises.map(async sourcePromise => {
+      const blobPartsPromises = sourcePromises.map(async (sourcePromise) => {
         const source = await sourcePromise;
 
         if (source instanceof Response) {
@@ -320,11 +306,5 @@ this.workbox.streams = (function(
   exports.strategy = strategy;
 
   return exports;
-})(
-  {},
-  workbox.core._private,
-  workbox.core._private,
-  workbox.core._private,
-  workbox.core._private
-);
+})({}, workbox.core._private, workbox.core._private, workbox.core._private, workbox.core._private);
 //# sourceMappingURL=workbox-streams.dev.js.map

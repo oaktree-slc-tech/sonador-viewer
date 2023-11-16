@@ -59,22 +59,13 @@
   z-index: 1;
 }
 
-.roundedButtonWrapper
-  .roundedButton
-  svg
-  .roundedButtonWrapper
-  .roundedButton
-  span {
+.roundedButtonWrapper .roundedButton svg .roundedButtonWrapper .roundedButton span {
   margin: 0 2px;
 }
 
 .roundedButtonWrapper .roundedButton i {
   line-height: 15px;
   font-size: 15px;
-}
-
-.roundedButtonWrapper .bottomLabel {
-  padding: 0 10px 0 10px;
 }
 
 .bottomLabel {
@@ -85,18 +76,12 @@
   margin-top: 8px;
 }
 
+.roundedButtonWrapper .bottomLabel {
+  padding: 0 10px 0 10px;
+}
+
 .roundedButtonWrapper:first-child {
   margin-left: 0;
-}
-
-.RoundedButtonGroup .roundedButtonWrapper:first-child .roundedButton {
-  border-bottom-left-radius: var(--height);
-  border-top-left-radius: var(--height);
-}
-
-.RoundedButtonGroup .roundedButtonWrapper:last-child .roundedButton {
-  border-bottom-right-radius: var(--height);
-  border-top-right-radius: var(--height);
 }
 
 .roundedButtonWrapper:hover .roundedButton {
@@ -109,4 +94,14 @@
   border-color: var(--ui-border-color-active);
   color: var(--ui-gray-dark);
   z-index: 2;
+}
+
+.RoundedButtonGroup .roundedButtonWrapper:first-child .roundedButton {
+  border-bottom-left-radius: var(--height);
+  border-top-left-radius: var(--height);
+}
+
+.RoundedButtonGroup .roundedButtonWrapper:last-child .roundedButton {
+  border-bottom-right-radius: var(--height);
+  border-top-right-radius: var(--height);
 }

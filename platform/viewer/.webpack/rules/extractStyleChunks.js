@@ -1,6 +1,23 @@
 const ExtractCssChunksPlugin = require('extract-css-chunks-webpack-plugin');
 
 function extractStyleChunks(isProdBuild) {
+  const CSSModuleLoader = {
+    loader: 'css-loader',
+    options: {
+      modules: {
+        localIdentName: isProdBuild ? '[hash:base64]' : '[name][local]_[hash:base64:5]',
+      },
+    },
+  };
+
+  const PostCSSLoader = {
+    loader: 'postcss-loader',
+    options: {
+      ident: 'postcss',
+      sourceMap: false, // turned off as causes delay
+    },
+  };
+
   return [
     {
       test: /\.styl$/,
@@ -11,12 +28,12 @@ function extractStyleChunks(isProdBuild) {
             hot: !isProdBuild,
           },
         },
-        { loader: 'css-loader' },
-        { loader: 'stylus-loader' },
+        'css-loader',
+        'stylus-loader',
       ],
     },
     {
-      test: /\.(sa|sc|c)ss$/,
+      test: /^((?!\.module).)*\.(sa|sc|c)ss$/, // Excludes files with .module in filename
       use: [
         {
           loader: ExtractCssChunksPlugin.loader,
@@ -25,8 +42,22 @@ function extractStyleChunks(isProdBuild) {
           },
         },
         'css-loader',
-        'postcss-loader',
-        // 'sass-loader',
+        PostCSSLoader,
+        'sass-loader',
+      ],
+    },
+    {
+      test: /\.module\.(sa|sc|c)ss$/,
+      use: [
+        {
+          loader: ExtractCssChunksPlugin.loader,
+          options: {
+            hot: !isProdBuild,
+          },
+        },
+        CSSModuleLoader,
+        PostCSSLoader,
+        'sass-loader',
       ],
     },
   ];

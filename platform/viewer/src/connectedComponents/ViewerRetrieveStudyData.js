@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { metadata, studies, utils, log } from '@ohif/core';
-import usePrevious from '../customHooks/usePrevious';
-
-import ConnectedViewer from './ConnectedViewer.js';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { extensionManager } from './../App.js';
-import { useSnackbarContext, ErrorPage } from '@ohif/ui';
+
+import { log, metadata, studies, utils } from '@ohif/core';
+import { useSnackbarContext } from '@ohif/ui';
 
 // Contexts
 import AppContext from '../context/AppContext';
+import usePrevious from '../customHooks/usePrevious';
 import NotFound from '../routes/NotFound';
+
+import { extensionManager } from '../App';
+import ConnectedViewer from './ConnectedViewer';
 
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata, deleteStudyMetadataPromise } = studies;
@@ -21,7 +22,7 @@ const _promoteToFront = (list, values, searchMethod) => {
   let promotedCount = 0;
 
   const arrayValues = values.split(',');
-  arrayValues.forEach(value => {
+  arrayValues.forEach((value) => {
     const index = listCopy.findIndex(searchMethod.bind(undefined, value));
 
     if (index >= 0) {
@@ -65,11 +66,7 @@ const _promoteStudyDisplaySet = (study, studyMetadata, filters) => {
     const _seriesLookup = (valueToCompare, displaySet) => {
       return displaySet.SeriesInstanceUID === valueToCompare;
     };
-    const promotedResponse = _promoteToFront(
-      studyMetadata.getDisplaySets(),
-      seriesInstanceUID,
-      _seriesLookup
-    );
+    const promotedResponse = _promoteToFront(studyMetadata.getDisplaySets(), seriesInstanceUID, _seriesLookup);
 
     study.displaySets = promotedResponse.data;
     promoted = promotedResponse.promoted;
@@ -101,10 +98,8 @@ const _isQueryParamApplied = (study, filters = {}, isFilterStrategy) => {
       return;
     }
 
-    return arrayToInspect.every(item =>
-      seriesInstanceUIDs.some(
-        seriesInstanceUIDStr => seriesInstanceUIDStr === item.SeriesInstanceUID
-      )
+    return arrayToInspect.every((item) =>
+      seriesInstanceUIDs.some((seriesInstanceUIDStr) => seriesInstanceUIDStr === item.SeriesInstanceUID)
     );
   };
 
@@ -114,10 +109,7 @@ const _isQueryParamApplied = (study, filters = {}, isFilterStrategy) => {
       const seriesInstanceUIDStr = seriesInstanceUIDs[index];
       const resultSeries = arrayToInspect[index];
 
-      if (
-        !resultSeries ||
-        resultSeries.SeriesInstanceUID !== seriesInstanceUIDStr
-      ) {
+      if (!resultSeries || resultSeries.SeriesInstanceUID !== seriesInstanceUIDStr) {
         isValid = false;
         break;
       }
@@ -127,9 +119,7 @@ const _isQueryParamApplied = (study, filters = {}, isFilterStrategy) => {
 
   const { series = [], displaySets = [] } = study;
   const arrayToInspect = isFilterStrategy ? series : displaySets;
-  const validateMethod = isFilterStrategy
-    ? validateFilterApplied
-    : validatePromoteApplied;
+  const validateMethod = isFilterStrategy ? validateFilterApplied : validatePromoteApplied;
 
   if (!arrayToInspect) {
     applied = false;
@@ -151,8 +141,7 @@ const _showUserMessage = (queryParamApplied, message, dialog = {}) => {
 };
 
 const _addSeriesToStudy = (studyMetadata, series) => {
-  const sopClassHandlerModules =
-    extensionManager.modules['sopClassHandlerModule'];
+  const sopClassHandlerModules = extensionManager.modules['sopClassHandlerModule'];
   const study = studyMetadata.getData();
   const seriesMetadata = new OHIFSeriesMetadata(series, study);
   const existingSeries = studyMetadata.getSeriesByUID(series.SeriesInstanceUID);
@@ -162,10 +151,7 @@ const _addSeriesToStudy = (studyMetadata, series) => {
     studyMetadata.addSeries(seriesMetadata);
   }
 
-  studyMetadata.createAndAddDisplaySetsForSeries(
-    sopClassHandlerModules,
-    seriesMetadata
-  );
+  studyMetadata.createAndAddDisplaySetsForSeries(sopClassHandlerModules, seriesMetadata);
 
   study.displaySets = studyMetadata.getDisplaySets();
   study.derivedDisplaySets = studyMetadata.getDerivedDatasets({
@@ -184,8 +170,7 @@ const _updateStudyMetadataManager = (study, studyMetadata) => {
 };
 
 const _updateStudyDisplaySets = (study, studyMetadata) => {
-  const sopClassHandlerModules =
-    extensionManager.modules['sopClassHandlerModule'];
+  const sopClassHandlerModules = extensionManager.modules['sopClassHandlerModule'];
 
   if (!study.displaySets) {
     study.displaySets = studyMetadata.createDisplaySets(sopClassHandlerModules);
@@ -196,10 +181,10 @@ const _updateStudyDisplaySets = (study, studyMetadata) => {
   }
 };
 
-const _thinStudyData = study => {
+const _thinStudyData = (study) => {
   return {
     StudyInstanceUID: study.StudyInstanceUID,
-    series: study.series.map(item => ({
+    series: study.series.map((item) => ({
       SeriesInstanceUID: item.SeriesInstanceUID,
     })),
   };
@@ -218,10 +203,7 @@ function ViewerRetrieveStudyData({
   const [isStudyLoaded, setIsStudyLoaded] = useState(false);
   const snackbarContext = useSnackbarContext();
   const { appConfig = {} } = useContext(AppContext);
-  const {
-    filterQueryParam: isFilterStrategy = false,
-    maxConcurrentMetadataRequests,
-  } = appConfig;
+  const { filterQueryParam: isFilterStrategy = false, maxConcurrentMetadataRequests } = appConfig;
 
   let cancelableSeriesPromises;
   let cancelableStudiesPromises;
@@ -234,23 +216,14 @@ function ViewerRetrieveStudyData({
    */
   const studyDidLoad = (study, studyMetadata, filters) => {
     // User message
-    const promoted = _promoteList(
-      study,
-      studyMetadata,
-      filters,
-      isFilterStrategy
-    );
+    const promoted = _promoteList(study, studyMetadata, filters, isFilterStrategy);
 
     // Clear viewport to allow new promoted one to be displayed
     if (promoted) {
       clearViewportSpecificData(0);
     }
 
-    const isQueryParamApplied = _isQueryParamApplied(
-      study,
-      filters,
-      isFilterStrategy
-    );
+    const isQueryParamApplied = _isQueryParamApplied(study, filters, isFilterStrategy);
     // Show message in case not promoted neither filtered but should to
     _showUserMessage(
       isQueryParamApplied,
@@ -270,26 +243,21 @@ function ViewerRetrieveStudyData({
   const processStudies = (studiesData, filters) => {
     if (Array.isArray(studiesData) && studiesData.length > 0) {
       // Map studies to new format, update metadata manager?
-      const studies = studiesData.map(study => {
+      const studies = studiesData.map((study) => {
         setStudyData(study.StudyInstanceUID, _thinStudyData(study));
-        const studyMetadata = new OHIFStudyMetadata(
-          study,
-          study.StudyInstanceUID
-        );
+        const studyMetadata = new OHIFStudyMetadata(study, study.StudyInstanceUID);
 
         _updateStudyDisplaySets(study, studyMetadata);
         _updateStudyMetadataManager(study, studyMetadata);
 
         // Attempt to load remaning series if any
-        cancelableSeriesPromises[study.StudyInstanceUID] = makeCancelable(
-          loadRemainingSeries(studyMetadata)
-        )
-          .then(result => {
+        cancelableSeriesPromises[study.StudyInstanceUID] = makeCancelable(loadRemainingSeries(studyMetadata))
+          .then((result) => {
             if (result && !result.isCanceled) {
               studyDidLoad(study, studyMetadata, filters);
             }
           })
-          .catch(error => {
+          .catch((error) => {
             if (error && !error.isCanceled) {
               setError(error);
               log.error(error);
@@ -306,10 +274,11 @@ function ViewerRetrieveStudyData({
     }
   };
 
-  const forceRerender = () => setStudies(studies => [...studies]);
+  const forceRerender = () => setStudies((studies) => [...studies]);
 
-  const loadRemainingSeries = async studyMetadata => {
+  const loadRemainingSeries = async (studyMetadata) => {
     const { seriesLoader } = studyMetadata.getData();
+
     if (!seriesLoader) return;
 
     const loadNextSeries = async () => {
@@ -320,11 +289,8 @@ function ViewerRetrieveStudyData({
       return loadNextSeries();
     };
 
-    const concurrentRequestsAllowed =
-      maxConcurrentMetadataRequests || studyMetadata.getSeriesCount();
-    const promises = Array(concurrentRequestsAllowed)
-      .fill(null)
-      .map(loadNextSeries);
+    const concurrentRequestsAllowed = maxConcurrentMetadataRequests || studyMetadata.getSeriesCount();
+    const promises = Array(concurrentRequestsAllowed).fill(null).map(loadNextSeries);
     const remainingPromises = await Promise.all(promises);
     setIsStudyLoaded(true);
     return remainingPromises;
@@ -345,22 +311,17 @@ function ViewerRetrieveStudyData({
         }
       }
 
-      if (
-        appConfig.splitQueryParameterCalls ||
-        appConfig.enableGoogleCloudAdapter
-      ) {
+      if (appConfig.splitQueryParameterCalls || appConfig.enableGoogleCloudAdapter) {
         retrieveParams.push(true); // Seperate SeriesInstanceUID filter calls.
       }
 
-      cancelableStudiesPromises[studyInstanceUIDs] = makeCancelable(
-        retrieveStudiesMetadata(...retrieveParams)
-      )
-        .then(result => {
+      cancelableStudiesPromises[studyInstanceUIDs] = makeCancelable(retrieveStudiesMetadata(...retrieveParams))
+        .then((result) => {
           if (result && !result.isCanceled) {
             processStudies(result, filters);
           }
         })
-        .catch(error => {
+        .catch((error) => {
           if (error && !error.isCanceled) {
             setError(error);
             log.error(error);
@@ -394,8 +355,7 @@ function ViewerRetrieveStudyData({
 
   useEffect(() => {
     const hasStudyInstanceUIDsChanged = !(
-      prevStudyInstanceUIDs &&
-      prevStudyInstanceUIDs.every(e => studyInstanceUIDs.includes(e))
+      prevStudyInstanceUIDs && prevStudyInstanceUIDs.every((e) => studyInstanceUIDs.includes(e))
     );
 
     if (hasStudyInstanceUIDsChanged) {
@@ -423,13 +383,7 @@ function ViewerRetrieveStudyData({
     return <NotFound message="Failed to retrieve study data" />;
   }
 
-  return (
-    <ConnectedViewer
-      studies={studies}
-      isStudyLoaded={isStudyLoaded}
-      studyInstanceUIDs={studyInstanceUIDs}
-    />
-  );
+  return <ConnectedViewer studies={studies} isStudyLoaded={isStudyLoaded} studyInstanceUIDs={studyInstanceUIDs} />;
 }
 
 ViewerRetrieveStudyData.propTypes = {

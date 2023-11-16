@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
-import classnames from 'classnames';
-
-import { useSnackbarContext, TabFooter, HotkeyField } from '@ohif/ui';
 import { useTranslation } from 'react-i18next';
+import classnames from 'classnames';
+import PropTypes from 'prop-types';
 
-import { hotkeysValidators } from './hotkeysValidators';
-import { MODIFIER_KEYS } from './hotkeysConfig';
+import { HotkeyField, TabFooter, useSnackbarContext } from '@ohif/ui';
 
 import { hotkeysManager } from '../../App';
+
+import { MODIFIER_KEYS } from './hotkeysConfig';
+import { hotkeysValidators } from './hotkeysValidators';
 
 import './HotkeysPreferences.styl';
 /**
@@ -17,7 +17,7 @@ import './HotkeysPreferences.styl';
  * @param {Object} hotkeyDefinitions
  * @returns {Object} initialState
  */
-const initialState = hotkeyDefinitions => ({
+const initialState = (hotkeyDefinitions) => ({
   hotkeys: { ...hotkeyDefinitions },
   errors: {},
 });
@@ -53,16 +53,14 @@ const validateCommandKey = ({ commandName, pressedKeys, hotkeys }) => {
  * @param {array} hotkeys list of all hotkeys
  * @returns {array} array containing two arrays of keys
  */
-const splitHotkeys = hotkeys => {
+const splitHotkeys = (hotkeys) => {
   const splitedHotkeys = [];
   const arrayHotkeys = Object.entries(hotkeys);
 
   if (arrayHotkeys.length) {
     const halfwayThrough = Math.ceil(arrayHotkeys.length / 2);
     splitedHotkeys.push(arrayHotkeys.slice(0, halfwayThrough));
-    splitedHotkeys.push(
-      arrayHotkeys.slice(halfwayThrough, arrayHotkeys.length)
-    );
+    splitedHotkeys.push(arrayHotkeys.slice(halfwayThrough, arrayHotkeys.length));
   }
 
   return splitedHotkeys;
@@ -87,7 +85,7 @@ function HotkeysPreferences({ onClose }) {
   const onResetPreferences = () => {
     const defaultHotKeyDefinitions = {};
 
-    hotkeyDefaults.map(item => {
+    hotkeyDefaults.map((item) => {
       const { commandName, ...values } = item;
       defaultHotKeyDefinitions[commandName] = { ...values };
     });
@@ -117,7 +115,7 @@ function HotkeysPreferences({ onClose }) {
       hotkeys: state.hotkeys,
     });
 
-    setState(prevState => ({
+    setState((prevState) => ({
       hotkeys: {
         ...prevState.hotkeys,
         [commandName]: { ...hotkeyDefinition, keys },
@@ -129,7 +127,7 @@ function HotkeysPreferences({ onClose }) {
     }));
   };
 
-  const hasErrors = Object.keys(state.errors).some(key => !!state.errors[key]);
+  const hasErrors = Object.keys(state.errors).some((key) => !!state.errors[key]);
   const hasHotkeys = Object.keys(state.hotkeys).length;
   const splitedHotkeys = splitHotkeys(state.hotkeys);
 
@@ -145,12 +143,12 @@ function HotkeysPreferences({ onClose }) {
                     <div className="headerItemText text-right">Function</div>
                     <div className="headerItemText text-center">Shortcut</div>
                   </div>
-                  {hotkeys.map(hotkey => {
+                  {hotkeys.map((hotkey) => {
                     const commandName = hotkey[0];
                     const hotkeyDefinition = hotkey[1];
                     const { keys, label } = hotkeyDefinition;
                     const errorMessage = state.errors[hotkey[0]];
-                    const handleChange = keys => {
+                    const handleChange = (keys) => {
                       onHotkeyChanged(commandName, hotkeyDefinition, keys);
                     };
 
@@ -159,10 +157,7 @@ function HotkeysPreferences({ onClose }) {
                         <div className="hotkeyLabel">{label}</div>
                         <div
                           data-key="defaultTool"
-                          className={classnames(
-                            'wrapperHotkeyInput',
-                            errorMessage ? 'stateError' : ''
-                          )}
+                          className={classnames('wrapperHotkeyInput', errorMessage ? 'stateError' : '')}
                         >
                           <HotkeyField
                             keys={keys}
@@ -170,9 +165,7 @@ function HotkeysPreferences({ onClose }) {
                             handleChange={handleChange}
                             classNames={'preferencesInput'}
                           ></HotkeyField>
-                          <span className="preferencesInputErrorMessage">
-                            {errorMessage}
-                          </span>
+                          <span className="preferencesInputErrorMessage">{errorMessage}</span>
                         </div>
                       </div>
                     );

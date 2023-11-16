@@ -1,5 +1,6 @@
 import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
+
 import './LayoutChooser.styl';
 
 /**
@@ -61,7 +62,7 @@ class LayoutChooser extends PureComponent {
   isRange = (cell, parentCell) => {
     return cell.row <= parentCell.row && cell.col <= parentCell.col;
   };
-  highlightCells = currentCell => {
+  highlightCells = (currentCell) => {
     let table = [];
     for (let row = 0; row < this.props.Rows; row++) {
       let newRow = [];
@@ -69,10 +70,7 @@ class LayoutChooser extends PureComponent {
         let cell = { row: row, col: col };
         if (this.isRange(cell, currentCell)) {
           cell.className = 'hover';
-        } else if (
-          this.isRange(currentCell, this.emptyCell) &&
-          this.isRange(cell, this.state.selectedCell)
-        ) {
+        } else if (this.isRange(currentCell, this.emptyCell) && this.isRange(cell, this.state.selectedCell)) {
           cell.className = 'selectedBefore';
         }
         newRow.push(cell);
@@ -86,15 +84,10 @@ class LayoutChooser extends PureComponent {
     let Columns = this.props.Columns;
     const style = {
       display: this.props.visible ? 'block' : 'none',
-      minWidth:
-        Columns * this.props.boxSize + (Columns + 5) * this.props.cellBorder,
+      minWidth: Columns * this.props.boxSize + (Columns + 5) * this.props.cellBorder,
     };
     return (
-      <div
-        className="layoutChooser layoutChooser-dropdown-menu"
-        role="menu"
-        style={style}
-      >
+      <div className="layoutChooser layoutChooser-dropdown-menu" role="menu" style={style}>
         <table>
           <tbody>
             {this.state.table.map((row, i) => {

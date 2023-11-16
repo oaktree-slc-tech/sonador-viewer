@@ -1,4 +1,5 @@
 import { redux, utils } from '@ohif/core';
+
 import store from './../../store';
 
 const commandsModule = ({ commandsManager }) => {
@@ -18,8 +19,7 @@ const commandsModule = ({ commandsManager }) => {
     setWindowLevelPreset: ({ viewports, preset }) => {
       const state = store.getState();
       const { preferences = {} } = state;
-      const { window, level } =
-        preferences.windowLevelData && preferences.windowLevelData[preset];
+      const { window, level } = preferences.windowLevelData && preferences.windowLevelData[preset];
 
       if (window && level) {
         commandsManager.runCommand('setWindowLevel', {
@@ -31,11 +31,8 @@ const commandsModule = ({ commandsManager }) => {
     },
     updateViewportDisplaySet: ({ viewports, direction }) => {
       const viewportSpecificData = { ...viewports.viewportSpecificData };
-      const activeViewport =
-        viewportSpecificData[viewports.activeViewportIndex];
-      const studyMetadata = utils.studyMetadataManager.get(
-        activeViewport.StudyInstanceUID
-      );
+      const activeViewport = viewportSpecificData[viewports.activeViewportIndex];
+      const studyMetadata = utils.studyMetadataManager.get(activeViewport.StudyInstanceUID);
 
       if (!studyMetadata) {
         return;
@@ -43,9 +40,7 @@ const commandsModule = ({ commandsManager }) => {
 
       const allDisplaySets = studyMetadata.getDisplaySets();
       const currentDisplaySetIndex = allDisplaySets.findIndex(
-        displaySet =>
-          displaySet.displaySetInstanceUID ===
-          activeViewport.displaySetInstanceUID
+        (displaySet) => displaySet.displaySetInstanceUID === activeViewport.displaySetInstanceUID
       );
       if (currentDisplaySetIndex < 0) {
         return;

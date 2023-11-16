@@ -1,7 +1,7 @@
 import { Reducer } from 'redux-testkit';
 
-import reducer, { defaultState } from './extensions';
 import * as actionTypes from './../constants/ActionTypes.js';
+import reducer, { defaultState } from './extensions';
 
 describe('viewports reducer', () => {
   it('should return the initial state', () => {
@@ -21,10 +21,7 @@ describe('viewports reducer', () => {
       'uber plugin': { greeting: 'Hello!' },
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should shallow-merge extension data, keeping unmodified fields, on SET_EXTENSION_DATA', () => {
@@ -42,9 +39,6 @@ describe('viewports reducer', () => {
       'uber plugin': { greeting: 'Aloha!', "Can't touch this": 42 },
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 });

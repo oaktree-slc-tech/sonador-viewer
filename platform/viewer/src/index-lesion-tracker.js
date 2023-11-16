@@ -3,12 +3,10 @@
  * Packaged (NPM) builds go through `index-umd.js`
  */
 
-import 'regenerator-runtime/runtime';
-
 import React from 'react';
 import ReactDOM from 'react-dom';
 
-import App from './App.js';
+import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 /**
  * EXTENSIONS
  * =================
@@ -23,7 +21,10 @@ import App from './App.js';
  * the defaultExtensions property.
  */
 import OHIFLesionTrackerExtension from '@ohif/extension-lesion-tracker';
-import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
+
+import 'regenerator-runtime/runtime';
+
+import App from './App.js';
 
 /*
  * Default Settings

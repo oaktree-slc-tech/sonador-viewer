@@ -40,10 +40,7 @@ const sortingCriteria = {
  * @param {function} seriesSortingCriteria method for sorting
  * @returns {Array} sorted series object
  */
-const sortStudySeries = (
-  series,
-  seriesSortingCriteria = seriesSortCriteria.default
-) => {
+const sortStudySeries = (series, seriesSortingCriteria = seriesSortCriteria.default) => {
   return series.sort(seriesSortingCriteria);
 };
 
@@ -55,10 +52,7 @@ const sortStudySeries = (
  * @param {function} instancesSortingCriteria method for sorting
  * @returns {Array} sorted instancesList object
  */
-const sortStudyInstances = (
-  instancesList,
-  instancesSortingCriteria = instancesSortCriteria.default
-) => {
+const sortStudyInstances = (instancesList, instancesSortingCriteria = instancesSortCriteria.default) => {
   return instancesList.sort(instancesSortingCriteria);
 };
 
@@ -85,7 +79,7 @@ export default function sortStudy(
   sortStudySeries(study.series, seriesSortingCriteria);
 
   if (deepSort) {
-    study.series.forEach(series => {
+    study.series.forEach((series) => {
       sortStudyInstances(series.instances, instancesSortingCriteria);
     });
   }

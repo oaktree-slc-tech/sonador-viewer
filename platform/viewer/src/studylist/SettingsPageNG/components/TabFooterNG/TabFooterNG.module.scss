@@ -1,0 +1,32 @@
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  .reset,
+  .save {
+    padding: 10px 20px;
+    border-radius: 10px;
+    color: #ffffff;
+    border: none;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 21px;
+    cursor: pointer;
+  }
+
+  .reset {
+    background-color: #60646d;
+  }
+
+  .save {
+    background-color: #2e46e9;
+    margin-left: 10px;
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+}

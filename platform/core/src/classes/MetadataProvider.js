@@ -1,9 +1,10 @@
 import dcmjs from 'dcmjs';
-import queryString from 'query-string';
 import dicomParser from 'dicom-parser';
-import getPixelSpacingInformation from '../utils/metadataProvider/getPixelSpacingInformation';
-import fetchPaletteColorLookupTableData from '../utils/metadataProvider/fetchPaletteColorLookupTableData';
+import queryString from 'query-string';
+
 import fetchOverlayData from '../utils/metadataProvider/fetchOverlayData';
+import fetchPaletteColorLookupTableData from '../utils/metadataProvider/fetchPaletteColorLookupTableData';
+import getPixelSpacingInformation from '../utils/metadataProvider/getPixelSpacingInformation';
 import validNumber from '../utils/metadataProvider/validNumber';
 
 class MetadataProvider {
@@ -41,18 +42,12 @@ class MetadataProvider {
     let naturalizedDataset;
 
     if (dicomJSONDataset['SeriesInstanceUID'] === undefined) {
-      naturalizedDataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(
-        dicomJSONDataset
-      );
+      naturalizedDataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomJSONDataset);
     } else {
       naturalizedDataset = dicomJSONDataset;
     }
 
-    const {
-      StudyInstanceUID,
-      SeriesInstanceUID,
-      SOPInstanceUID,
-    } = naturalizedDataset;
+    const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = naturalizedDataset;
 
     this._getAndCacheStudyDataset(StudyInstanceUID, dicomJSONDataset);
     const study = this._getAndCacheStudy(StudyInstanceUID);
@@ -136,11 +131,7 @@ class MetadataProvider {
 
     const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = uids;
 
-    return this._getInstanceData(
-      StudyInstanceUID,
-      SeriesInstanceUID,
-      SOPInstanceUID
-    );
+    return this._getInstanceData(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
   }
 
   get(query, imageId, options = { fallback: false }) {
@@ -161,11 +152,7 @@ class MetadataProvider {
     return this.get(INSTANCE, imageId);
   }
 
-  getTagFromInstance(
-    naturalizedTagOrWADOImageLoaderTag,
-    instance,
-    options = { fallback: false }
-  ) {
+  getTagFromInstance(naturalizedTagOrWADOImageLoaderTag, instance, options = { fallback: false }) {
     if (!instance) {
       return;
     }
@@ -176,10 +163,7 @@ class MetadataProvider {
     }
 
     // Maybe its a legacy CornerstoneWADOImageLoader tag then:
-    return this._getCornerstoneWADOImageLoaderTag(
-      naturalizedTagOrWADOImageLoaderTag,
-      instance
-    );
+    return this._getCornerstoneWADOImageLoaderTag(naturalizedTagOrWADOImageLoaderTag, instance);
   }
 
   _getCornerstoneWADOImageLoaderTag(wadoImageLoaderTag, instance) {
@@ -269,30 +253,20 @@ class MetadataProvider {
           pixelAspectRatio: instance.PixelAspectRatio,
           smallestPixelValue: instance.SmallestPixelValue,
           largestPixelValue: instance.LargestPixelValue,
-          redPaletteColorLookupTableDescriptor:
-            instance.RedPaletteColorLookupTableDescriptor,
-          greenPaletteColorLookupTableDescriptor:
-            instance.GreenPaletteColorLookupTableDescriptor,
-          bluePaletteColorLookupTableDescriptor:
-            instance.BluePaletteColorLookupTableDescriptor,
-          redPaletteColorLookupTableData:
-            instance.RedPaletteColorLookupTableData,
-          greenPaletteColorLookupTableData:
-            instance.GreenPaletteColorLookupTableData,
-          bluePaletteColorLookupTableData:
-            instance.BluePaletteColorLookupTableData,
+          redPaletteColorLookupTableDescriptor: instance.RedPaletteColorLookupTableDescriptor,
+          greenPaletteColorLookupTableDescriptor: instance.GreenPaletteColorLookupTableDescriptor,
+          bluePaletteColorLookupTableDescriptor: instance.BluePaletteColorLookupTableDescriptor,
+          redPaletteColorLookupTableData: instance.RedPaletteColorLookupTableData,
+          greenPaletteColorLookupTableData: instance.GreenPaletteColorLookupTableData,
+          bluePaletteColorLookupTableData: instance.BluePaletteColorLookupTableData,
         };
 
         break;
       case WADO_IMAGE_LOADER_TAGS.VOI_LUT_MODULE:
         let { WindowCenter, WindowWidth } = instance;
 
-        const windowCenter = Array.isArray(WindowCenter)
-          ? WindowCenter
-          : [WindowCenter];
-        const windowWidth = Array.isArray(WindowWidth)
-          ? WindowWidth
-          : [WindowWidth];
+        const windowCenter = Array.isArray(WindowCenter) ? WindowCenter : [WindowCenter];
+        const windowWidth = Array.isArray(WindowWidth) ? WindowWidth : [WindowWidth];
 
         metadata = {
           windowCenter: validNumber(windowCenter),
@@ -319,22 +293,15 @@ class MetadataProvider {
         const { RadiopharmaceuticalInformationSequence } = instance;
 
         if (RadiopharmaceuticalInformationSequence) {
-          const RadiopharmaceuticalInformation = Array.isArray(
-            RadiopharmaceuticalInformationSequence
-          )
+          const RadiopharmaceuticalInformation = Array.isArray(RadiopharmaceuticalInformationSequence)
             ? RadiopharmaceuticalInformationSequence[0]
             : RadiopharmaceuticalInformationSequence;
 
-          const {
-            RadiopharmaceuticalStartTime,
-            RadionuclideTotalDose,
-            RadionuclideHalfLife,
-          } = RadiopharmaceuticalInformation;
+          const { RadiopharmaceuticalStartTime, RadionuclideTotalDose, RadionuclideHalfLife } =
+            RadiopharmaceuticalInformation;
 
           const radiopharmaceuticalInfo = {
-            radiopharmaceuticalStartTime: dicomParser.parseTM(
-              RadiopharmaceuticalStartTime
-            ),
+            radiopharmaceuticalStartTime: dicomParser.parseTM(RadiopharmaceuticalStartTime),
             radionuclideTotalDose: RadionuclideTotalDose,
             radionuclideHalfLife: RadionuclideHalfLife,
           };
@@ -347,11 +314,7 @@ class MetadataProvider {
       case WADO_IMAGE_LOADER_TAGS.OVERLAY_PLANE_MODULE:
         const overlays = [];
 
-        for (
-          let overlayGroup = 0x00;
-          overlayGroup <= 0x1e;
-          overlayGroup += 0x02
-        ) {
+        for (let overlayGroup = 0x00; overlayGroup <= 0x1e; overlayGroup += 0x02) {
           let groupStr = `60${overlayGroup.toString(16)}`;
 
           if (groupStr.length === 3) {

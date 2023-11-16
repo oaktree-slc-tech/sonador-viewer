@@ -1,6 +1,6 @@
-import { MODIFIER_KEYS, DISALLOWED_COMBINATIONS } from './hotkeysConfig';
+import { DISALLOWED_COMBINATIONS, MODIFIER_KEYS } from './hotkeysConfig';
 
-const formatPressedKeys = pressedKeysArray => pressedKeysArray.join('+');
+const formatPressedKeys = (pressedKeysArray) => pressedKeysArray.join('+');
 
 const findConflictingCommand = (hotkeys, currentCommandName, pressedKeys) => {
   let firstConflictingCommand = undefined;
@@ -10,10 +10,7 @@ const findConflictingCommand = (hotkeys, currentCommandName, pressedKeys) => {
     const toolHotkeys = hotkeys[commandName].keys;
     const formatedToolHotkeys = formatPressedKeys(toolHotkeys);
 
-    if (
-      formatedPressedHotkeys === formatedToolHotkeys &&
-      commandName !== currentCommandName
-    ) {
+    if (formatedPressedHotkeys === formatedToolHotkeys && commandName !== currentCommandName) {
       firstConflictingCommand = hotkeys[commandName];
       break;
     }
@@ -23,8 +20,7 @@ const findConflictingCommand = (hotkeys, currentCommandName, pressedKeys) => {
 };
 
 const ERROR_MESSAGES = {
-  MODIFIER:
-    "It's not possible to define only modifier keys (ctrl, alt and shift) as a shortcut",
+  MODIFIER: "It's not possible to define only modifier keys (ctrl, alt and shift) as a shortcut",
   EMPTY: "Field can't be empty.",
 };
 
@@ -52,11 +48,7 @@ const emptyValidator = ({ pressedKeys = [] }) => {
 };
 
 const conflictingValidator = ({ commandName, pressedKeys, hotkeys }) => {
-  const conflictingCommand = findConflictingCommand(
-    hotkeys,
-    commandName,
-    pressedKeys
-  );
+  const conflictingCommand = findConflictingCommand(hotkeys, commandName, pressedKeys);
 
   if (conflictingCommand) {
     return {
@@ -68,30 +60,19 @@ const conflictingValidator = ({ commandName, pressedKeys, hotkeys }) => {
 
 const disallowedValidator = ({ pressedKeys = [] }) => {
   const lastPressedKey = pressedKeys[pressedKeys.length - 1];
-  const modifierCommand = formatPressedKeys(
-    pressedKeys.slice(0, pressedKeys.length - 1)
-  );
+  const modifierCommand = formatPressedKeys(pressedKeys.slice(0, pressedKeys.length - 1));
 
   const disallowedCombination = DISALLOWED_COMBINATIONS[modifierCommand];
-  const hasDisallowedCombinations = disallowedCombination
-    ? disallowedCombination.includes(lastPressedKey)
-    : false;
+  const hasDisallowedCombinations = disallowedCombination ? disallowedCombination.includes(lastPressedKey) : false;
 
   if (hasDisallowedCombinations) {
     return {
       hasError: true,
-      errorMessage: `"${formatPressedKeys(
-        pressedKeys
-      )}" shortcut combination is not allowed`,
+      errorMessage: `"${formatPressedKeys(pressedKeys)}" shortcut combination is not allowed`,
     };
   }
 };
 
-const hotkeysValidators = [
-  emptyValidator,
-  modifierValidator,
-  conflictingValidator,
-  disallowedValidator,
-];
+const hotkeysValidators = [emptyValidator, modifierValidator, conflictingValidator, disallowedValidator];
 
 export { hotkeysValidators };

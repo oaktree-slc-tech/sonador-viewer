@@ -174,9 +174,5 @@ module.exports = (env, argv) => {
     mergedConfig.devServer.proxy[PROXY_TARGET] = PROXY_DOMAIN;
   }
 
-  if (!isProdBuild) {
-    mergedConfig.plugins.push(new webpack.HotModuleReplacementPlugin());
-  }
-
   return mergedConfig;
 };

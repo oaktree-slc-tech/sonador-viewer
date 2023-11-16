@@ -1,16 +1,11 @@
-import React, {
-  useRef,
-  useCallback,
-  useEffect,
-  useState,
-  createRef,
-} from 'react';
-import PropTypes from 'prop-types';
+import React, { createRef, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import classnames from 'classnames';
+import PropTypes from 'prop-types';
+
+import { Icon, Select, TextInput } from '@ohif/ui';
 
 import './ViewportDownloadForm.styl';
-import { TextInput, Select, Icon } from '@ohif/ui';
-import classnames from 'classnames';
 
 const FILE_TYPE_OPTIONS = [
   {
@@ -87,12 +82,7 @@ const ViewportDownloadForm = ({
   const refreshViewport = useRef(null);
 
   const downloadImage = () => {
-    downloadBlob(
-      filename || DEFAULT_FILENAME,
-      fileType,
-      viewportElement,
-      downloadCanvas.ref.current
-    );
+    downloadBlob(filename || DEFAULT_FILENAME, fileType, viewportElement, downloadCanvas.ref.current);
   };
 
   /**
@@ -104,9 +94,7 @@ const ViewportDownloadForm = ({
     const sanitizedTargetValue = event.target.value.replace(/\D/, '');
     const isEmpty = sanitizedTargetValue === '';
     const newDimensions = { ...dimensions };
-    const updatedDimension = isEmpty
-      ? ''
-      : Math.min(sanitizedTargetValue, maximumSize);
+    const updatedDimension = isEmpty ? '' : Math.min(sanitizedTargetValue, maximumSize);
 
     if (updatedDimension === dimensions[dimension]) {
       return;
@@ -115,9 +103,7 @@ const ViewportDownloadForm = ({
     newDimensions[dimension] = updatedDimension;
 
     if (keepAspect && newDimensions[oppositeDimension] !== '') {
-      newDimensions[oppositeDimension] = Math.round(
-        newDimensions[dimension] * aspectMultiplier[oppositeDimension]
-      );
+      newDimensions[oppositeDimension] = Math.round(newDimensions[dimension] * aspectMultiplier[oppositeDimension]);
     }
 
     // In current code, keepAspect is always `true`
@@ -127,7 +113,7 @@ const ViewportDownloadForm = ({
     // Only update if value is non-empty
     if (!isEmpty) {
       setViewportElementDimensions(newDimensions);
-      setDownloadCanvas(state => ({
+      setDownloadCanvas((state) => ({
         ...state,
         ...newDimensions,
       }));
@@ -140,7 +126,7 @@ const ViewportDownloadForm = ({
     filename: t('emptyFilenameError'),
   };
 
-  const renderErrorHandler = errorType => {
+  const renderErrorHandler = (errorType) => {
     if (!error[errorType]) {
       return null;
     }
@@ -161,7 +147,7 @@ const ViewportDownloadForm = ({
     setKeepAspect(!keepAspect);
   };
 
-  const validSize = value => (value >= minimumSize ? value : minimumSize);
+  const validSize = (value) => (value >= minimumSize ? value : minimumSize);
   const loadAndUpdateViewports = useCallback(async () => {
     const { width: scaledWidth, height: scaledHeight } = await loadImage(
       activeViewport,
@@ -178,7 +164,7 @@ const ViewportDownloadForm = ({
     };
 
     setViewportElementDimensions(scaledDimensions);
-    setDownloadCanvas(state => ({
+    setDownloadCanvas((state) => ({
       ...state,
       ...scaledDimensions,
     }));
@@ -187,13 +173,9 @@ const ViewportDownloadForm = ({
       dataUrl,
       width: viewportElementWidth,
       height: viewportElementHeight,
-    } = await updateViewportPreview(
-      viewportElement,
-      downloadCanvas.ref.current,
-      fileType
-    );
+    } = await updateViewportPreview(viewportElement, downloadCanvas.ref.current, fileType);
 
-    setViewportPreview(state => ({
+    setViewportPreview((state) => ({
       ...state,
       src: dataUrl,
       width: validSize(viewportElementWidth),
@@ -269,7 +251,7 @@ const ViewportDownloadForm = ({
                 max={maximumSize}
                 value={dimensions.width}
                 label={t('imageWidth')}
-                onChange={evt => onDimensionsChange(evt, 'width')}
+                onChange={(evt) => onDimensionsChange(evt, 'width')}
                 data-cy="image-width"
               />
               {renderErrorHandler('width')}
@@ -281,7 +263,7 @@ const ViewportDownloadForm = ({
                 max={maximumSize}
                 value={dimensions.height}
                 label={t('imageHeight')}
-                onChange={evt => onDimensionsChange(evt, 'height')}
+                onChange={(evt) => onDimensionsChange(evt, 'height')}
                 data-cy="image-height"
               />
               {renderErrorHandler('height')}
@@ -290,18 +272,12 @@ const ViewportDownloadForm = ({
           <div className="keep-aspect-wrapper">
             <button
               id="keep-aspect"
-              className={classnames(
-                'form-button btn',
-                keepAspect ? 'active' : ''
-              )}
+              className={classnames('form-button btn', keepAspect ? 'active' : '')}
               data-cy="keep-aspect"
               alt={t('keepAspectRatio')}
               onClick={onKeepAspectToggle}
             >
-              <Icon
-                name={keepAspect ? 'link' : 'unlink'}
-                alt={keepAspect ? 'Dismiss Aspect' : 'Keep Aspect'}
-              />
+              <Icon name={keepAspect ? 'link' : 'unlink'} alt={keepAspect ? 'Dismiss Aspect' : 'Keep Aspect'} />
             </button>
           </div>
         </div>
@@ -312,7 +288,7 @@ const ViewportDownloadForm = ({
               type="text"
               data-cy="file-name"
               value={filename}
-              onChange={event => setFilename(event.target.value)}
+              onChange={(event) => setFilename(event.target.value)}
               label={t('filename')}
               id="file-name"
             />
@@ -322,7 +298,7 @@ const ViewportDownloadForm = ({
             <Select
               value={fileType}
               data-cy="file-type"
-              onChange={event => setFileType(event.target.value)}
+              onChange={(event) => setFileType(event.target.value)}
               options={FILE_TYPE_OPTIONS}
               label={t('fileType')}
             />
@@ -338,7 +314,7 @@ const ViewportDownloadForm = ({
                 type="checkbox"
                 className="form-check-input"
                 checked={showAnnotations}
-                onChange={event => setShowAnnotations(event.target.checked)}
+                onChange={(event) => setShowAnnotations(event.target.checked)}
               />
               {t('showAnnotations')}
             </label>
@@ -353,7 +329,7 @@ const ViewportDownloadForm = ({
           position: 'absolute',
           left: '9999px',
         }}
-        ref={ref => setViewportElement(ref)}
+        ref={(ref) => setViewportElement(ref)}
       >
         <canvas
           className={canvasClass}
@@ -388,22 +364,12 @@ const ViewportDownloadForm = ({
 
       <div className="actions">
         <div className="action-cancel">
-          <button
-            type="button"
-            data-cy="cancel-btn"
-            className="btn btn-danger"
-            onClick={onClose}
-          >
+          <button type="button" data-cy="cancel-btn" className="btn btn-danger" onClick={onClose}>
             {t('Buttons:Cancel')}
           </button>
         </div>
         <div className="action-save">
-          <button
-            disabled={hasError}
-            onClick={downloadImage}
-            className="btn btn-primary"
-            data-cy="download-btn"
-          >
+          <button disabled={hasError} onClick={downloadImage} className="btn btn-primary" data-cy="download-btn">
             {t('Buttons:Download')}
           </button>
         </div>

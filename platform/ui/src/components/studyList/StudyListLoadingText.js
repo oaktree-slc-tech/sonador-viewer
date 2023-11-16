@@ -1,7 +1,9 @@
 import React from 'react';
-import { Icon } from './../../elements/Icon';
+
 // TODO: useTranslation
 import { withTranslation } from '../../contextProviders';
+
+import { Icon } from './../../elements/Icon';
 
 function StudyListLoadingText({ t: translate }) {
   return (
@@ -11,8 +13,6 @@ function StudyListLoadingText({ t: translate }) {
   );
 }
 
-const connectedComponent = withTranslation('StudyListLoadingText')(
-  StudyListLoadingText
-);
+const connectedComponent = withTranslation('StudyListLoadingText')(StudyListLoadingText);
 
 export { connectedComponent as StudyListLoadingText };

@@ -1,4 +1,4 @@
-const displayFunction = data => {
+const displayFunction = (data) => {
   let lengthValue = '';
   if (data.length && !isNaN(data.length)) {
     lengthValue = data.length.toFixed(2) + ' mm';

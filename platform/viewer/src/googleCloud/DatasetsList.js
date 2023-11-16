@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import './googleCloud.css';
 import { withTranslation } from 'react-i18next';
+import PropTypes from 'prop-types';
+
 import { Icon } from '@ohif/ui';
+
+import './googleCloud.css';
 
 class DatasetsList extends Component {
   state = {
@@ -20,15 +22,11 @@ class DatasetsList extends Component {
     loading: true,
   };
 
-  renderTableRow = dataset => {
+  renderTableRow = (dataset) => {
     return (
       <tr
         key={dataset.name}
-        className={
-          this.state.highlightedItem === dataset.name
-            ? 'noselect active'
-            : 'noselect'
-        }
+        className={this.state.highlightedItem === dataset.name ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
           this.onHighlightItem(dataset.name);
         }}
@@ -52,9 +50,7 @@ class DatasetsList extends Component {
       return <p>{error}</p>;
     }
 
-    const loadingIcon = (
-      <Icon name="circle-notch" className="loading-icon-spin loading-icon" />
-    );
+    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
     if (loading) {
       return loadingIcon;
@@ -63,13 +59,7 @@ class DatasetsList extends Component {
     const body = (
       <tbody id="DatasetList">
         {datasets
-          .filter(
-            dataset =>
-              dataset.name
-                .split('/')[5]
-                .toLowerCase()
-                .includes(filter.toLowerCase()) || filter == ''
-          )
+          .filter((dataset) => dataset.name.split('/')[5].toLowerCase().includes(filter.toLowerCase()) || filter == '')
           .map(this.renderTableRow)}
       </tbody>
     );

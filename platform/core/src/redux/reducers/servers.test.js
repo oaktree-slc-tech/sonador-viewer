@@ -1,7 +1,7 @@
 import { Reducer } from 'redux-testkit';
 
-import reducer, { defaultState } from './servers';
 import * as types from './../constants/ActionTypes.js';
+import reducer, { defaultState } from './servers';
 
 describe('viewports reducer', () => {
   it('should return the initial state', () => {
@@ -15,10 +15,7 @@ describe('viewports reducer', () => {
 
     const expectedState = { servers: [action.server] };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should add to servers list on ADD_SERVER', () => {
@@ -40,10 +37,7 @@ describe('viewports reducer', () => {
       servers: [...initialState.servers, action.server],
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
   it('should not add duplicated servers on ADD_SERVER', () => {
@@ -61,10 +55,7 @@ describe('viewports reducer', () => {
       server: { id: 'two', active: true },
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(initialState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(initialState);
   });
 
   it('should replace servers on SET_SERVERS', () => {
@@ -81,9 +72,6 @@ describe('viewports reducer', () => {
       servers: action.servers,
     };
 
-    Reducer(reducer)
-      .withState(initialState)
-      .expect(action)
-      .toReturnState(expectedState);
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 });

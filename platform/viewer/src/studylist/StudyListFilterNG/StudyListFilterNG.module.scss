@@ -1,0 +1,25 @@
+.studyFilterContainer {
+  display: flex;
+  align-items: center;
+  height: fit-content;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #60646d;
+  column-gap: 10px;
+  font-size: 16px;
+  color: #60646d;
+  line-height: 19px;
+  background-color: transparent;
+  cursor: pointer;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  &.active {
+    background-color: #000000;
+    border-color: #000000;
+  }
+
+  .resetIcon {
+    cursor: pointer;
+  }
+}

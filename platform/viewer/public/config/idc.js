@@ -1,4 +1,4 @@
-window.config = function(props) {
+window.config = function (props) {
   var servicesManager = props.servicesManager;
 
   return {
@@ -9,7 +9,7 @@ window.config = function(props) {
     enableGoogleCloudAdapterUI: false,
     showStudyList: true,
     filterQueryParam: true,
-    httpErrorHandler: error => {
+    httpErrorHandler: (error) => {
       // This is 429 when rejected from the public idc sandbox too often.
       console.warn(error.status);
 

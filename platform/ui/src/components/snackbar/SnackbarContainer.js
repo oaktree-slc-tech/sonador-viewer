@@ -1,12 +1,15 @@
 import React from 'react';
-import SnackbarItem from './SnackbarItem';
-import './Snackbar.css';
+
 import { useSnackbarContext } from '../../contextProviders';
+
+import SnackbarItem from './SnackbarItem';
+
+import './Snackbar.css';
 
 const SnackbarContainer = () => {
   const { snackbarItems, hide } = useSnackbarContext();
 
-  const renderItem = item => {
+  const renderItem = (item) => {
     return <SnackbarItem key={item.itemId} options={item} onClose={hide} />;
   };
 
@@ -24,13 +27,13 @@ const SnackbarContainer = () => {
       bottomRight: [],
     };
 
-    snackbarItems.map(item => {
+    snackbarItems.map((item) => {
       items[item.position].push(item);
     });
 
     return (
       <div>
-        {Object.keys(items).map(pos => {
+        {Object.keys(items).map((pos) => {
           if (!items[pos].length) {
             return null;
           }

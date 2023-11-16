@@ -17,20 +17,16 @@ export class TargetTypeCriterion extends BaseCriterion {
     const measurements = [];
     let message;
 
-    items.forEach(item => {
+    items.forEach((item) => {
       const measurement = item.measurement;
 
-      if (
-        measurement.toolType !== 'Bidirectional' &&
-        !measurement.bidirectional
-      ) {
+      if (measurement.toolType !== 'Bidirectional' && !measurement.bidirectional) {
         measurements.push(measurement);
       }
     });
 
     if (measurements.length) {
-      message =
-        'Target lesions must have measurements (cannot be assessed as CR, UN/NE, EX)';
+      message = 'Target lesions must have measurements (cannot be assessed as CR, UN/NE, EX)';
     }
 
     return this.generateResponse(message, measurements);

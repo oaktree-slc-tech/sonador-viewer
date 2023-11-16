@@ -1,0 +1,66 @@
+.studyFilterDatePickerWrapper {
+  position: relative;
+  height: 38px;
+
+  .singleDatePickerNG {
+    position: absolute;
+    top: 0;
+    cursor: pointer;
+    width: 100%;
+
+    .SingleDatePicker {
+      width: 100%;
+
+      .SingleDatePickerInput {
+        width: 100%;
+      }
+    }
+
+    .DateInput {
+      width: 100%;
+      cursor: pointer;
+      opacity: 0;
+
+      .DateInput_input {
+        cursor: pointer;
+        height: 100%;
+      }
+    }
+  }
+
+  .study-filter-container.active ~ .singleDatePickerNG {
+    width: calc(100% - 25px);
+  }
+}
+
+.studyFilterContainer {
+  display: flex;
+  align-items: center;
+  height: fit-content;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #60646d;
+  column-gap: 10px;
+  font-size: 16px;
+  color: #60646d;
+  line-height: 18px;
+  background-color: transparent;
+  cursor: pointer;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  &.active {
+    background-color: #000000;
+    border-color: #000000;
+  }
+
+  .resetIcon {
+    cursor: pointer;
+    position: relative;
+    z-index: 100;
+  }
+
+  .chevronUp {
+    transform: rotate(180deg);
+  }
+}

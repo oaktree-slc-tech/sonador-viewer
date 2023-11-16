@@ -5,7 +5,7 @@ export const targetUN = {
   cornerstoneToolType: 'TargetUN',
   options: {
     measurementTable: {
-      displayFunction: data => data.response,
+      displayFunction: (data) => data.response,
     },
     caseProgress: {
       include: true,

@@ -5,9 +5,7 @@ import getName from './getName.js';
 import getNumber from './getNumber.js';
 import getString from './getString.js';
 
-
-const dcmStudyTags = [
-  'PatientName', 'PatientID', 'AccessionNumber', 'StudyDate', 'StudyDescription'];
+const dcmStudyTags = ['PatientName', 'PatientID', 'AccessionNumber', 'StudyDate', 'StudyDescription'];
 
 const DICOMWeb = {
   dcmStudyTags,

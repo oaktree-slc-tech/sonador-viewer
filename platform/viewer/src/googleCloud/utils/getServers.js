@@ -1,13 +1,5 @@
 const getServers = (data, name) => {
-  const {
-    wadoUriRoot,
-    qidoRoot,
-    wadoRoot,
-    dataset = '',
-    dicomStore = '',
-    location = '',
-    project = '',
-  } = data;
+  const { wadoUriRoot, qidoRoot, wadoRoot, dataset = '', dicomStore = '', location = '', project = '' } = data;
 
   return [
     {
@@ -29,14 +21,8 @@ const getServers = (data, name) => {
   ];
 };
 
-const isValidServer = server => {
-  return (
-    server &&
-    !!server.dataset &&
-    !!server.dicomStore &&
-    !!server.location &&
-    !!server.project
-  );
+const isValidServer = (server) => {
+  return server && !!server.dataset && !!server.dicomStore && !!server.location && !!server.project;
 };
 
 const isEqualServer = (server = {}, toCompare = {}) => {

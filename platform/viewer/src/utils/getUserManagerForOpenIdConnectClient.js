@@ -1,5 +1,5 @@
 // https://github.com/maxmantz/redux-oidc/blob/master/docs/API.md
-import { loadUser, createUserManager } from 'redux-oidc';
+import { createUserManager, loadUser } from 'redux-oidc';
 
 /**
  * Creates a userManager from oidcSettings;
@@ -15,7 +15,7 @@ import { loadUser, createUserManager } from 'redux-oidc';
  * @param {string} oidcSettings.responseType,
  * @param {string} oidcSettings.extraQueryParams,
  */
-export default function(store, oidcSettings) {
+export default function (store, oidcSettings) {
   if (!store || !oidcSettings) {
     return;
   }
