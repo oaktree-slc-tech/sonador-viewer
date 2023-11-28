@@ -131,7 +131,7 @@ export const useStudies = (params) => {
 
           return {
             ...acc,
-            [code.replace(',', '').toLowerCase()]: { type, value: tag },
+            [code?.replace(',', '').toLowerCase()]: { type, value: tag },
           };
         }, {});
 

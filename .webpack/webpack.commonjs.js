@@ -14,7 +14,7 @@ module.exports = (env, argv, { SRC_DIR, DIST_DIR }) => {
 
   return merge(baseConfig, {
     module: {
-      rules: [cssToJavaScriptRule, scssToCSS, stylusToJavaScriptRule],
+      rules: [...scssToCSS, cssToJavaScriptRule, stylusToJavaScriptRule],
     },
   });
 };
