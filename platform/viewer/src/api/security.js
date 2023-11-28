@@ -7,8 +7,9 @@ export const fetchTokens = (server) => {
   }).then((res) => res.json());
 };
 
-export const createToken = ({ server, description }) => {
+export const createToken = ({ server, description, csrfToken }) => {
   const headers = DICOMWeb.getAuthorizationHeader(server);
+  headers['X-CSRFToken'] = csrfToken;
 
   return fetch('https://imaging.gke.oak-tree.tech/auth/api/cred/token', {
     method: 'POST',
@@ -33,8 +34,9 @@ export const fetchAccesses = (server) => {
   }).then((res) => res.json());
 };
 
-export const createAccessIdAndSecretKey = ({ server, description }) => {
+export const createAccessIdAndSecretKey = ({ server, description, csrfToken }) => {
   const headers = DICOMWeb.getAuthorizationHeader(server);
+  headers['X-CSRFToken'] = csrfToken;
 
   return fetch('https://imaging.gke.oak-tree.tech/auth/api/cred/access', {
     method: 'POST',
@@ -50,4 +52,11 @@ export const createAccessIdAndSecretKey = ({ server, description }) => {
         status: res.status,
       };
     });
+};
+
+export const getCsrfToken = ({ server }) => {
+  return fetch('https://imaging.gke.oak-tree.tech/auth/api/cred/csrf-token', {
+    headers: DICOMWeb.getAuthorizationHeader(server),
+    credentials: 'include',
+  }).then((res) => res.json());
 };

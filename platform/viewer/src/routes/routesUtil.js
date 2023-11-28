@@ -20,14 +20,10 @@ const StudyListRoutingNG = asyncComponent(() =>
   retryImport(() => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG.js'))
 );
 const StandaloneRouting = asyncComponent(() =>
-  retryImport(() =>
-    import(/* webpackChunkName: "ConnectedStandaloneRouting" */ '../connectedComponents/ConnectedStandaloneRouting.js')
-  )
+  retryImport(() => import('../connectedComponents/ConnectedStandaloneRouting.js'))
 );
 const ViewerLocalFileData = asyncComponent(() =>
-  retryImport(() =>
-    import(/* webpackChunkName: "ViewerLocalFileData" */ '../connectedComponents/ViewerLocalFileData.js')
-  )
+  retryImport(() => import('../connectedComponents/ViewerLocalFileData.js'))
 );
 const UploadStudyPageNG = asyncComponent(() =>
   retryImport(() => import('../studylist/UploadStudyPageNG/UploadStudyPageNG.js'))

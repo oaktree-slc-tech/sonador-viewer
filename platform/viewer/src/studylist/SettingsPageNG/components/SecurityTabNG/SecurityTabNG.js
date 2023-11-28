@@ -17,7 +17,7 @@ import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/t
 
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 
-import { useAccesses, useCreateAccess, useCreateToken, useTokens } from './logic';
+import { useAccesses, useCreateAccess, useCreateToken, useCsrfToken, useTokens } from './logic';
 
 import styles from './SecurityTabNG.module.scss';
 
@@ -94,6 +94,7 @@ export default function SecurityTabNG({ title, description, type }) {
   });
   const { mutate: createToken, data: createdTokenData = {} } = useCreateToken();
   const { mutate: createAccess, data: createdAccessData = {} } = useCreateAccess();
+  const { data: csrfTokenData } = useCsrfToken({ server: activeServer });
 
   const isDataLoading = type === 'tokens' ? isLoadingTokens : isLoadingAccesses;
   const fetchingError = type === 'tokens' ? tokensError : idsError;
@@ -126,11 +127,11 @@ export default function SecurityTabNG({ title, description, type }) {
   const headers = getHeaderGroups();
 
   const handleGenerateToken = () => {
-    if (activeServer?.token) {
+    if (activeServer?.token && csrfTokenData?.csrf_token) {
       if (type === 'tokens') {
-        createToken({ server: activeServer, description: descriptionValue });
+        createToken({ server: activeServer, description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
       } else {
-        createAccess({ server: activeServer, description: descriptionValue });
+        createAccess({ server: activeServer, description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
       }
     }
   };

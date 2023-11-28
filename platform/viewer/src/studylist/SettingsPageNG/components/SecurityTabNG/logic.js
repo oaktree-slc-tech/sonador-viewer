@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { createAccessIdAndSecretKey, createToken, fetchAccesses, fetchTokens } from '../../../../api/security';
+import {
+  createAccessIdAndSecretKey,
+  createToken,
+  fetchAccesses,
+  fetchTokens,
+  getCsrfToken,
+} from '../../../../api/security';
 
 export const useTokens = ({ server, isEnabled }) => {
   return useQuery({
@@ -37,5 +43,12 @@ export const useCreateAccess = () => {
     onSuccess: async () => {
       await queryClint.invalidateQueries(['accessIdAndSecretKey']);
     },
+  });
+};
+
+export const useCsrfToken = ({ server }) => {
+  return useQuery({
+    queryKey: ['csrfToken'],
+    queryFn: () => getCsrfToken({ server }),
   });
 };
