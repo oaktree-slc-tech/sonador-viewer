@@ -1,173 +1,168 @@
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import { matchPath, withRouter } from 'react-router';
-import { Route, Switch } from 'react-router-dom';
-import { CSSTransition } from 'react-transition-group';
+import React, { lazy, Suspense, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import PropTypes from 'prop-types';
+import qs from 'query-string';
 import { SignoutCallbackComponent } from 'redux-oidc';
 
-import { asyncComponent, retryImport, ViewerbaseDragDropContext } from '@ohif/ui';
+import { redux } from '@ohif/core';
+import { ViewerbaseDragDropContext } from '@ohif/ui';
+import Loader from '@ohif/ui/src/components/Loader/Loader';
 
 // Contexts
 import AppContext from './context/AppContext';
-import NotFound from './routes/NotFound.js';
+import NotFound from './pages/NotFound/NotFound';
 import * as RoutesUtil from './routes/routesUtil';
 
 import './OHIFStandaloneViewer.css';
 import './variables.css';
 import './theme-tide.css';
-const CallbackPage = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "CallbackPage" */ './routes/CallbackPage.js'))
-);
 
-class OHIFStandaloneViewer extends Component {
-  static contextType = AppContext;
+const {
+  actions: { setActiveServer },
+} = redux;
 
-  static propTypes = {
-    history: PropTypes.object.isRequired,
-    user: PropTypes.object,
-    setContext: PropTypes.func,
-    userManager: PropTypes.object,
-    location: PropTypes.object,
-  };
+const CallbackPage = lazy(() => import(/* webpackChunkName: "CallbackPage" */ './pages/CallbackPage'));
 
-  componentDidMount() {
-    this.unlisten = this.props.history.listen(() => {
-      if (this.props.setContext) {
-        this.props.setContext(window.location.pathname);
-      }
-    });
-  }
+const OHIFStandaloneViewer = ({ userManager }) => {
+  const dispatch = useDispatch();
+  const location = useLocation();
 
-  componentWillUnmount() {
-    this.unlisten();
-  }
+  const user = useSelector((state) => state.oidc.user);
+  const servers = useSelector((state) => state.servers.servers);
 
-  render() {
-    const { user, userManager } = this.props;
-    const { appConfig = {} } = this.context;
-    const userNotLoggedIn = userManager && (!user || user.expired);
+  const { appConfig = {} } = React.useContext(AppContext);
+  const userNotLoggedIn = userManager && (!user || user.expired);
+  const { activeServerToken } = qs.parse(location.search.replace('?', ''));
+  const areServersPresent = servers.length > 0;
 
-    if (userNotLoggedIn) {
-      const { pathname, search } = this.props.location;
+  useEffect(() => {
+    if (activeServerToken && areServersPresent) {
+      dispatch(setActiveServer(activeServerToken));
+    }
+  }, [areServersPresent]);
 
-      if (pathname !== '/callback') {
-        sessionStorage.setItem('ohif-redirect-to', JSON.stringify({ pathname, search }));
-      }
+  if (userNotLoggedIn) {
+    const { pathname, search } = location;
 
-      return (
-        <Switch>
-          <Route exact path="/silent-refresh.html" onEnter={RoutesUtil.reload} />
-          <Route
-            exact
-            path="/logout-redirect"
-            render={() => (
-              <SignoutCallbackComponent
-                userManager={userManager}
-                successCallback={() => console.log('Signout successful')}
-                errorCallback={(error) => {
-                  console.warn(error);
-                  console.warn('Signout failed');
-                }}
-              />
-            )}
-          />
-          <Route path="/callback" render={() => <CallbackPage userManager={userManager} />} />
-          <Route
-            path="/login"
-            component={() => {
-              const queryParams = new URLSearchParams(this.props.location.search);
-              const iss = queryParams.get('iss');
-              const loginHint = queryParams.get('login_hint');
-              const targetLinkUri = queryParams.get('target_link_uri');
-              const oidcAuthority = appConfig.oidc !== null && appConfig.oidc[0].authority;
-              if (iss !== oidcAuthority) {
-                console.error('iss of /login does not match the oidc authority');
-                return null;
-              }
-
-              userManager.removeUser().then(() => {
-                if (targetLinkUri !== null) {
-                  const ohifRedirectTo = {
-                    pathname: new URL(targetLinkUri).pathname,
-                  };
-                  sessionStorage.setItem('ohif-redirect-to', JSON.stringify(ohifRedirectTo));
-                } else {
-                  const ohifRedirectTo = {
-                    pathname: '/',
-                  };
-                  sessionStorage.setItem('ohif-redirect-to', JSON.stringify(ohifRedirectTo));
-                }
-
-                if (loginHint !== null) {
-                  userManager.signinRedirect({ login_hint: loginHint });
-                } else {
-                  userManager.signinRedirect();
-                }
-              });
-
-              return null;
-            }}
-          />
-          <Route
-            component={() => {
-              userManager.getUser().then((user) => {
-                if (user) {
-                  userManager.signinSilent();
-                } else {
-                  userManager.signinRedirect();
-                }
-              });
-
-              return null;
-            }}
-          />
-        </Switch>
-      );
+    if (pathname !== '/callback') {
+      sessionStorage.setItem('ohif-redirect-to', JSON.stringify({ pathname, search }));
     }
 
-    /**
-     * Note: this approach for routing is caused by the conflict between
-     * react-transition-group and react-router's <Switch> component.
-     *
-     * See http://reactcommunity.org/react-transition-group/with-react-router/
-     */
-    const routes = RoutesUtil.getRoutes(appConfig);
-
-    const currentPath = this.props.location.pathname;
-    const noMatchingRoutes = !routes.find((r) =>
-      matchPath(currentPath, {
-        path: r.path,
-        exact: true,
-      })
-    );
-
     return (
-      <>
-        <Route exact path="/silent-refresh.html" onEnter={RoutesUtil.reload} />
-        <Route exact path="/logout-redirect.html" onEnter={RoutesUtil.reload} />
-        {!noMatchingRoutes &&
-          routes.map(({ path, Component }) => (
-            <Route key={path} exact path={path}>
-              {({ match }) => (
-                <CSSTransition in={match !== null} timeout={10000} classNames="fade" unmountOnExit>
-                  {match === null ? <></> : <Component match={match} location={this.props.location} />}
-                </CSSTransition>
-              )}
-            </Route>
-          ))}
-        {noMatchingRoutes && <NotFound />}
-      </>
+      <Routes>
+        <Route exact path="/silent-refresh.html" element={<RefreshRoute />} />
+        <Route
+          exact
+          path="/logout-redirect"
+          element={
+            <SignoutCallbackComponent
+              userManager={userManager}
+              successCallback={() => {}}
+              errorCallback={(error) => {
+                console.warn(error);
+                console.warn('Signout failed');
+              }}
+            />
+          }
+        />
+        <Route
+          path="/callback"
+          element={
+            <Suspense fallback={<Loader />}>
+              <CallbackPage userManager={userManager} />
+            </Suspense>
+          }
+        />
+        <Route path="/login" element={<LoginRoute />} />
+        <Route path="*" element={<SignInSilentOrRedirectRoute userManager={userManager} />} />
+      </Routes>
     );
   }
-}
 
-const mapStateToProps = (state) => {
-  return {
-    user: state.oidc.user,
-  };
+  const routes = RoutesUtil.getRoutes(appConfig);
+
+  return (
+    <Routes>
+      <Route exact path="/silent-refresh.html" element={<RefreshRoute />} />
+      <Route exact path="/logout-redirect.html" element={<RefreshRoute />} />
+      {routes.map(({ path, Component }) => (
+        <Route
+          exact
+          key={path}
+          path={path}
+          element={
+            <Suspense fallback={<Loader />}>
+              <Component location={location} />
+            </Suspense>
+          }
+        />
+      ))}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
 };
 
-const ConnectedOHIFStandaloneViewer = connect(mapStateToProps, null)(OHIFStandaloneViewer);
+OHIFStandaloneViewer.propTypes = {
+  userManager: PropTypes.object,
+};
 
-export default ViewerbaseDragDropContext(withRouter(ConnectedOHIFStandaloneViewer));
+export default ViewerbaseDragDropContext(OHIFStandaloneViewer);
+
+function RefreshRoute() {
+  useEffect(() => {
+    void RoutesUtil.reload();
+  }, []);
+
+  return null;
+}
+
+function LoginRoute({ appConfig, userManager }) {
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const iss = queryParams.get('iss');
+    const loginHint = queryParams.get('login_hint');
+    const targetLinkUri = queryParams.get('target_link_uri');
+    const oidcAuthority = appConfig.oidc !== null && appConfig.oidc[0].authority;
+    if (iss !== oidcAuthority) {
+      console.error('iss of /login does not match the oidc authority');
+      return null;
+    }
+
+    userManager.removeUser().then(() => {
+      if (targetLinkUri !== null) {
+        const ohifRedirectTo = {
+          pathname: new URL(targetLinkUri).pathname,
+        };
+        sessionStorage.setItem('ohif-redirect-to', JSON.stringify(ohifRedirectTo));
+      } else {
+        const ohifRedirectTo = {
+          pathname: '/',
+        };
+        sessionStorage.setItem('ohif-redirect-to', JSON.stringify(ohifRedirectTo));
+      }
+
+      if (loginHint !== null) {
+        void userManager.signinRedirect({ login_hint: loginHint });
+      } else {
+        void userManager.signinRedirect();
+      }
+    });
+  }, []);
+
+  return null;
+}
+
+function SignInSilentOrRedirectRoute({ userManager }) {
+  useEffect(() => {
+    void userManager.getUser().then((user) => {
+      if (user) {
+        void userManager.signinSilent();
+      } else {
+        void userManager.signinRedirect();
+      }
+    });
+  }, []);
+
+  return null;
+}

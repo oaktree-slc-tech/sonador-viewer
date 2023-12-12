@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useHistory, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useDebounce } from '@ohif/ui';
 
 export default function useStudiesTable() {
   const location = useLocation();
-  const history = useHistory();
+  const navigate = useNavigate();
 
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
 
@@ -22,12 +22,12 @@ export default function useStudiesTable() {
 
   const updateRowsPerPage = (rowsCount) => {
     filters.set('items', rowsCount);
-    history.push({ search: filters.toString() });
+    navigate({ search: filters.toString() });
   };
 
   const updatePageNumber = (page) => {
     filters.set('page', page + 1);
-    history.push({ search: filters.toString() });
+    navigate({ search: filters.toString() });
   };
 
   const handleSorting = (fieldName) => {

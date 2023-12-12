@@ -1,3 +1,5 @@
+import { SET_ACTIVE_SERVER } from '../constants/ActionTypes';
+
 var _ = require('lodash');
 
 export const defaultState = {
@@ -45,6 +47,18 @@ const servers = (state = defaultState, action) => {
         servers: allServers,
       };
 
+    case SET_ACTIVE_SERVER:
+      const updatedServers = state.servers.slice().map((server) => {
+        return {
+          ...server,
+          active: server.token === action.payload,
+        };
+      });
+
+      return {
+        ...state,
+        servers: updatedServers,
+      };
     default:
       return state;
   }

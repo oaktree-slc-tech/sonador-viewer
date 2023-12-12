@@ -4,12 +4,12 @@ import PropTypes from 'prop-types';
 import { log, metadata, studies, utils } from '@ohif/core';
 import { useSnackbarContext } from '@ohif/ui';
 
+import { extensionManager } from '../App';
 // Contexts
 import AppContext from '../context/AppContext';
-import usePrevious from '../customHooks/usePrevious';
-import NotFound from '../routes/NotFound';
+import usePrevious from '../hooks/usePrevious';
+import NotFound from '../pages/NotFound/NotFound';
 
-import { extensionManager } from '../App';
 import ConnectedViewer from './ConnectedViewer';
 
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;

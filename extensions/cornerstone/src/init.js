@@ -1,12 +1,14 @@
-import OHIF from '@ohif/core';
-import { SimpleDialog } from '@ohif/ui';
 import cornerstone from 'cornerstone-core';
 import csTools from 'cornerstone-tools';
 import merge from 'lodash.merge';
-import initCornerstoneTools from './initCornerstoneTools.js';
-import measurementServiceMappingsFactory from './utils/measurementServiceMappings/measurementServiceMappingsFactory';
-import dicomSRModule from './tools/modules/dicomSRModule';
+
+import OHIF from '@ohif/core';
+import { InputDialog } from '@ohif/ui';
+
 import srModuleId from './tools/id';
+import dicomSRModule from './tools/modules/dicomSRModule';
+import measurementServiceMappingsFactory from './utils/measurementServiceMappings/measurementServiceMappingsFactory';
+import initCornerstoneTools from './initCornerstoneTools.js';
 
 /**
  *
@@ -24,7 +26,7 @@ export default function init({ servicesManager, configuration }) {
       let dialogId = UIDialogService.create({
         centralize: true,
         isDraggable: false,
-        content: SimpleDialog.InputDialog,
+        content: InputDialog,
         useLastPosition: false,
         showOverlay: true,
         contentProps: {

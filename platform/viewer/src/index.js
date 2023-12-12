@@ -34,7 +34,7 @@ import 'regenerator-runtime/runtime';
 //import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 // Add this for Debugging purposes:
 //import OHIFDebuggingExtension from '@ohif/extension-debugging';
-import { version } from '../package.json';
+import viewerPackage from '../package.json';
 
 import App from './App.js';
 
@@ -45,7 +45,7 @@ let config = {};
 
 if (window) {
   config = window.config || {};
-  window.version = version;
+  window.version = viewerPackage.version;
 }
 
 const appProps = {

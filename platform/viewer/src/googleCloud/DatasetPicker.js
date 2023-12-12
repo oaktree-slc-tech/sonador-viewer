@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import api from './api/GoogleCloudApi';
@@ -6,53 +6,48 @@ import DatasetsList from './DatasetsList';
 
 import './googleCloud.css';
 
-export default class DatasetPicker extends Component {
-  state = {
-    error: null,
-    loading: true,
-    datasets: [],
-    filterStr: '',
-  };
+const DatasetPicker = ({ project, location, onSelect, accessToken }) => {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [datasets, setDatasets] = useState([]);
+  const [filterStr, setFilterStr] = useState('');
 
-  static propTypes = {
-    project: PropTypes.object,
-    location: PropTypes.object,
-    onSelect: PropTypes.func,
-    accessToken: PropTypes.string,
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      api.setAccessToken(accessToken);
 
-  async componentDidMount() {
-    api.setAccessToken(this.props.accessToken);
+      const response = await api.loadDatasets(project.projectId, location.locationId);
 
-    const response = await api.loadDatasets(this.props.project.projectId, this.props.location.locationId);
+      if (response.isError) {
+        setError(response.message);
+        return;
+      }
 
-    if (response.isError) {
-      this.setState({
-        error: response.message,
-      });
+      setDatasets(response.data.datasets || []);
+      setLoading(false);
+    };
 
-      return;
-    }
+    fetchData();
+  }, []);
 
-    this.setState({
-      datasets: response.data.datasets || [],
-      loading: false,
-    });
-  }
+  return (
+    <div>
+      <input
+        className="form-control gcp-input"
+        type="text"
+        value={filterStr}
+        onChange={(e) => setFilterStr(e.target.value)}
+      />
+      <DatasetsList datasets={datasets} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
+    </div>
+  );
+};
 
-  render() {
-    const { datasets, loading, error, filterStr } = this.state;
-    const { onSelect } = this.props;
-    return (
-      <div>
-        <input
-          className="form-control gcp-input"
-          type="text"
-          value={filterStr}
-          onChange={(e) => this.setState({ filterStr: e.target.value })}
-        />
-        <DatasetsList datasets={datasets} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
-      </div>
-    );
-  }
-}
+DatasetPicker.propTypes = {
+  project: PropTypes.object,
+  location: PropTypes.object,
+  onSelect: PropTypes.func,
+  accessToken: PropTypes.string,
+};
+
+export default DatasetPicker;

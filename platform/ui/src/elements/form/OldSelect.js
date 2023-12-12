@@ -1,36 +1,27 @@
-import React, { Component } from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 import './Select.css';
 
-class Select extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      value: this.props.value,
-    };
-  }
+const Select = ({ options, value, onChange }) => {
+  const [selected, setSelected] = useState(value);
 
-  handleChange = (event) => {
-    const value = event.target.value;
-    this.setState({ value });
-    if (this.props.onChange) this.props.onChange(value);
+  const handleChange = (event) => {
+    const newValue = event.target.value;
+    setSelected(newValue);
+    if (onChange) onChange(newValue);
   };
 
-  render() {
-    return (
-      <select className="select-ohif" value={this.state.selected} onChange={this.handleChange}>
-        {this.props.options.map(({ key, value }) => {
-          return (
-            <option key={key} value={value}>
-              {key}
-            </option>
-          );
-        })}
-      </select>
-    );
-  }
-}
+  return (
+    <select className="select-ohif" value={selected} onChange={handleChange}>
+      {options.map(({ key, value }) => (
+        <option key={key} value={value}>
+          {key}
+        </option>
+      ))}
+    </select>
+  );
+};
 
 Select.propTypes = {
   options: PropTypes.arrayOf(

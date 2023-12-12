@@ -1,13 +1,13 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import qs from 'querystring';
+import qs from 'query-string';
 
 import OHIF from '@ohif/core';
 
-import { extensionManager } from '../App.js';
+import { extensionManager } from '../App';
 import ConnectedViewer from '../connectedComponents/ConnectedViewer';
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
-import NotFound from '../routes/NotFound';
+import NotFound from '../pages/NotFound/NotFound';
 
 const { log, metadata, utils } = OHIF;
 const { studyMetadataManager } = utils;

@@ -1,17 +1,18 @@
 import React from 'react';
+import { useParams } from 'react-router-dom';
 import PropTypes from 'prop-types';
 
 import { user, utils } from '@ohif/core';
 
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
-import useQuery from '../customHooks/useQuery';
-import useServer from '../customHooks/useServer';
+import useQuery from '../hooks/useQuery';
+import useServer from '../hooks/useServer';
 const { urlUtil: UrlUtil } = utils;
 
 /**
  * Get array of seriesUIDs from param or from queryString
  * @param {*} seriesInstanceUIDs
- * @param {*} location
+ * @param {*} routeLocation
  */
 const getSeriesInstanceUIDs = (seriesInstanceUIDs, routeLocation) => {
   const queryFilters = UrlUtil.queryString.getQueryFilters(routeLocation);
@@ -21,8 +22,8 @@ const getSeriesInstanceUIDs = (seriesInstanceUIDs, routeLocation) => {
   return UrlUtil.paramString.parseParam(_seriesInstanceUIDs);
 };
 
-function ViewerRouting({ match: routeMatch, location: routeLocation }) {
-  const { project, location, dataset, dicomStore, studyInstanceUIDs, seriesInstanceUIDs } = routeMatch.params;
+function ViewerRouting({ location: routeLocation }) {
+  const { project, location, dataset, dicomStore, studyInstanceUIDs, seriesInstanceUIDs } = useParams();
 
   // Set the user's default authToken for outbound DICOMWeb requests.
   // Is only applied if target server does not set `requestOptions` property.
@@ -47,16 +48,6 @@ function ViewerRouting({ match: routeMatch, location: routeLocation }) {
 }
 
 ViewerRouting.propTypes = {
-  match: PropTypes.shape({
-    params: PropTypes.shape({
-      studyInstanceUIDs: PropTypes.string.isRequired,
-      seriesInstanceUIDs: PropTypes.string,
-      dataset: PropTypes.string,
-      dicomStore: PropTypes.string,
-      location: PropTypes.string,
-      project: PropTypes.string,
-    }),
-  }),
   location: PropTypes.any,
 };
 

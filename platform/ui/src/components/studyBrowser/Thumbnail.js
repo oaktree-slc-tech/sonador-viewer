@@ -6,9 +6,10 @@ import PropTypes from 'prop-types';
 
 import { classes } from '@ohif/core';
 
+import { OverlayTrigger } from '../overlayTrigger';
+import { Tooltip } from '../tooltip';
+
 import { Icon } from './../../elements/Icon';
-import { OverlayTrigger } from './../overlayTrigger';
-import { Tooltip } from './../tooltip';
 import ImageThumbnail from './ImageThumbnail';
 
 import './Thumbnail.styl';
@@ -167,18 +168,18 @@ function Thumbnail(props) {
     };
   }, [displaySetInstanceUID, stackPercentComplete]);
 
-  const [collectedProps, drag, dragPreview] = useDrag({
+  const [collectedProps, drag, dragPreview] = useDrag(() => ({
     // `droppedItem` in `dropTarget`
     // The only data it will have access to
+    type: 'thumbnail', // Has to match `dropTarget`'s type
     item: {
       StudyInstanceUID,
       displaySetInstanceUID,
-      type: 'thumbnail', // Has to match `dropTarget`'s type
     },
-    canDrag: function (monitor) {
+    canDrag: function () {
       return supportsDrag;
     },
-  });
+  }));
 
   const hasImage = imageSrc || imageId;
   const hasAltText = altImageText !== undefined;

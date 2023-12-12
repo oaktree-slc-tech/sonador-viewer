@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { withRouter } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 // Icons
 import { ArrowPathIcon } from '@heroicons/react/24/solid';
 import * as _ from 'lodash';
@@ -10,6 +10,8 @@ import PropTypes from 'prop-types';
 import OHIF from '@ohif/core';
 import { PageToolbar, StudyList, TablePagination, useDebounce, useMedia } from '@ohif/ui';
 
+// Sonador integration tools
+import ImageServerPicker from '../components/ImageServerPicker/ImageServerPicker';
 import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
 import AppContext from '../context/AppContext';
 // Contexts
@@ -17,10 +19,7 @@ import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
 // Google Health API
 import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
-import filesToStudies from '../lib/filesToStudies.js';
 import * as RoutesUtil from '../routes/routesUtil';
-// Sonador integration tools
-import ImageServerPicker from '../sonador/ImageServerPicker.js';
 
 // Studylist styling
 import '../styles/global-viewer.css';
@@ -28,14 +27,13 @@ import './styles/studylist.css';
 
 function getStudyUrlParams() {
   // Retrieve the currently active query parameters
-  let params = new URLSearchParams(location.search);
-  return params;
+  return new URLSearchParams(location.search);
 }
 
-function StudyListRoute(props) {
+function StudyListRoute({ server, user, studyListFunctionsEnabled, filters }) {
   // Sonador/OHIF Study List
 
-  const { history, server, user, studyListFunctionsEnabled, filters } = props;
+  const navigate = useNavigate();
 
   let dcmfilters = filters || {};
 
@@ -46,7 +44,7 @@ function StudyListRoute(props) {
   const updateServerUrl = (token) => {
     // Update history to point at the most recent
     if (!(window.location.pathname || '').includes(token)) {
-      history.push(
+      navigate(
         RoutesUtil.parseStudyListPath(appConfig, server, {
           token: token,
         })
@@ -102,7 +100,7 @@ function StudyListRoute(props) {
 
     let params = getStudyUrlParams();
     params.set('items', rows);
-    history.push({ search: params.toString() });
+    navigate({ search: params.toString() });
 
     setRowsPerPage(rows);
   };
@@ -111,7 +109,7 @@ function StudyListRoute(props) {
     // Update the page number, synchronize state and URL
     let params = getStudyUrlParams();
     params.set('page', pnumber + 1);
-    history.push({ search: params.toString() });
+    navigate({ search: params.toString() });
 
     setPageNumber(pnumber);
   };
@@ -144,7 +142,7 @@ function StudyListRoute(props) {
           rowsPerPage,
           pageNumber,
           displaySize,
-          history,
+          navigate,
           isForce
         );
         setStudies(response);
@@ -154,7 +152,7 @@ function StudyListRoute(props) {
         setSearchStatus({ error: true, isFetching: false });
       }
     },
-    [server, debouncedSort, rowsPerPage, pageNumber, displaySize, history, debouncedFilters]
+    [server, debouncedSort, rowsPerPage, pageNumber, displaySize, navigate, debouncedFilters]
   );
 
   useEffect(
@@ -179,15 +177,6 @@ function StudyListRoute(props) {
   //     studies: null,
   //   });
   // }
-
-  const onDrop = async (acceptedFiles) => {
-    try {
-      const studiesFromFiles = await filesToStudies(acceptedFiles);
-      setStudies(studiesFromFiles);
-    } catch (error) {
-      setSearchStatus({ isSearchingForStudies: false, error });
-    }
-  };
 
   if (searchStatus.error) {
     return <div>Error: {JSON.stringify(searchStatus.error)}</div>;
@@ -284,7 +273,7 @@ function StudyListRoute(props) {
           {/* Toolbar Buttons */}
           <div className="actions">
             {server.perms?.query && (
-              <span className="refreshApp action-icon" onClick={refreshApp}>
+              <span className="refreshApp action-icon" onClick={refreshApp} role="button" tabIndex={0}>
                 <ArrowPathIcon
                   className="icon-size-30 margin-top-0.25rem negspace-bottom-05rem spacer-right-015rem"
                   title="Reload Study List"
@@ -327,7 +316,7 @@ function StudyListRoute(props) {
               const viewerPath = RoutesUtil.parseViewerPath(appConfig, server, {
                 studyInstanceUIDs: studyInstanceUID,
               });
-              history.push(viewerPath);
+              navigate(viewerPath);
             }}
             // Table Header
             sort={sort}
@@ -370,29 +359,13 @@ StudyListRoute.propTypes = {
   PatientID: PropTypes.string,
   server: PropTypes.object,
   user: PropTypes.object,
-  history: PropTypes.object,
+  navigate: PropTypes.object,
   studyListFunctionsEnabled: PropTypes.bool,
 };
 
 StudyListRoute.defaultProps = {
   studyListFunctionsEnabled: true,
 };
-
-function updateURL(isModalOpen, appConfig, server, history) {
-  // Update viewer URL and history
-  if (isModalOpen) {
-    return;
-  }
-
-  const listPath = RoutesUtil.parseStudyListPath(appConfig, server);
-
-  if (UrlUtil.paramString.isValidPath(listPath)) {
-    const { location = {} } = history;
-    if (location.pathname !== listPath) {
-      history.replace(listPath);
-    }
-  }
-}
 
 /**
  * Not ideal, but we use displaySize to determine how the filters should be used
@@ -406,9 +379,11 @@ function updateURL(isModalOpen, appConfig, server, history) {
  * @param {number} rowsPerPage - Number of results to return
  * @param {number} pageNumber - Used to determine results offset
  * @param {string} displaySize - small, medium, large
+ * @param {function} navigate
+ * @param {boolean} isForce
  * @returns
  */
-async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, displaySize, history, isForce) {
+async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, displaySize, navigate, isForce) {
   const { allFields, patientNameOrId, accessionOrModalityOrDescription } = filters;
 
   const sortFieldName = sort.fieldName || 'PatientName';
@@ -454,7 +429,7 @@ async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, disp
 
   // Update URL parameters if there is a change in the search
   if (params.toString() != location.search) {
-    history.push({ search: params.toString() });
+    navigate({ search: params.toString() });
   }
 
   // Retrieve studies from server
@@ -471,7 +446,7 @@ async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, disp
 
     return {
       AccessionNumber: study.AccessionNumber, // "1"
-      modalities: study.modalities, // "SEG\\MR"  ​​
+      modalities: study.modalities,
       // numberOfStudyRelatedInstances: "3"
       // numberOfStudyRelatedSeries: "3"
       // PatientBirthdate: undefined
@@ -502,9 +477,7 @@ async function getStudyList(server, filters, sort, rowsPerPage, pageNumber, disp
   // our Rows per page. Let's `take` that number from our sorted array.
   // This "might" cause paging issues.
   const numToTake = sortedStudies.length < rowsPerPage ? sortedStudies.length : rowsPerPage;
-  const result = sortedStudies.slice(0, numToTake);
-
-  return result;
+  return sortedStudies.slice(0, numToTake);
 }
 
 /**
@@ -565,9 +538,10 @@ function _sortStudies(studies, field, order) {
  * @param {object} server
  * @param {Object} filters
  * @param {string} displaySize - small, medium, or large
- * @param {string} multi.allFields
- * @param {string} multi.patientNameOrId
- * @param {string} multi.accessionOrModalityOrDescription
+ * @param {string} allFields
+ * @param {string} patientNameOrId
+ * @param {string} accessionOrModalityOrDescription
+ * @param {boolean} isForce
  */
 async function _fetchStudies(
   server,
@@ -658,4 +632,4 @@ function _getQueryFiltersForValue(filters, fields, value) {
   return queryFilters;
 }
 
-export default withRouter(StudyListRoute);
+export default StudyListRoute;

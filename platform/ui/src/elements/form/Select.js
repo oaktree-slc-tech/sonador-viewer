@@ -1,50 +1,42 @@
-import React, { Component } from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
 
 import './Select.css';
 
-class Select extends Component {
-  constructor(props) {
-    super(props);
-  }
-
-  static propTypes = {
-    options: PropTypes.arrayOf(
-      PropTypes.shape({
-        key: PropTypes.string.isRequired,
-        value: PropTypes.string.isRequired,
-      })
-    ),
-    value: PropTypes.string,
-    onChange: PropTypes.func,
+const Select = ({ options, label, value, onChange, ...props }) => {
+  const handleChange = (event) => {
+    const selectedValue = event.target.value;
+    if (onChange) onChange(selectedValue);
   };
 
-  handleChange = (event) => {
-    const value = event.target.value;
-    this.setState({ value });
-    if (this.props.onChange) this.props.onChange(value);
-  };
+  return (
+    <div className="select-ohif-container">
+      {label && (
+        <label className="select-ohif-label" htmlFor={props.id}>
+          {label}
+        </label>
+      )}
+      <select className="form-control select-ohif" value={value} onChange={handleChange} {...props}>
+        {options.map(({ key, value }) => (
+          <option key={key} value={value}>
+            {key}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
-  render() {
-    return (
-      <div className="select-ohif-container">
-        {this.props.label && (
-          <label className="select-ohif-label" htmlFor={this.id}>
-            {this.props.label}
-          </label>
-        )}
-        <select className="form-control select-ohif" {...this.props}>
-          {this.props.options.map(({ key, value }) => {
-            return (
-              <option key={key} value={value}>
-                {key}
-              </option>
-            );
-          })}
-        </select>
-      </div>
-    );
-  }
-}
+Select.propTypes = {
+  options: PropTypes.arrayOf(
+    PropTypes.shape({
+      key: PropTypes.string.isRequired,
+      value: PropTypes.string.isRequired,
+    })
+  ),
+  label: PropTypes.string,
+  value: PropTypes.string,
+  onChange: PropTypes.func,
+};
 
 export { Select };

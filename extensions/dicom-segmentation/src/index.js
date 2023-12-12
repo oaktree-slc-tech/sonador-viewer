@@ -1,12 +1,14 @@
 import React from 'react';
+
 import OHIF from '@ohif/core';
 
+import dicomSegmentationPackage from '../package.json';
+
+import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.js';
+import commandsModule from './commandsModule.js';
+import getSopClassHandlerModule from './getOHIFDicomSegSopClassHandler.js';
 import init from './init.js';
 import toolbarModule from './toolbarModule.js';
-import getSopClassHandlerModule from './getOHIFDicomSegSopClassHandler.js';
-import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.js';
-import { version } from '../package.json';
-import commandsModule from './commandsModule.js';
 const { studyMetadataManager } = OHIF.utils;
 
 const SegmentationPanelTabUpdatedEvent = 'segmentation-panel-tab-updated';
@@ -20,7 +22,7 @@ const segmentationExtension = {
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'com.ohif.dicom-segmentation',
-  version,
+  version: dicomSegmentationPackage.version,
 
   /**
    *
@@ -41,8 +43,7 @@ const segmentationExtension = {
       const { activeContexts } = api.hooks.useAppContext();
       const onDisplaySetLoadFailureHandler = (error) => {
         const message =
-          error.message.includes('orthogonal') ||
-          error.message.includes('oblique')
+          error.message.includes('orthogonal') || error.message.includes('oblique')
             ? 'The segmentation has been detected as non coplanar,\
               If you really think it is coplanar,\
               please adjust the tolerance in the segmentation panel settings (at your own peril!)'
@@ -113,9 +114,7 @@ const segmentationExtension = {
 
     const onSegmentationsLoaded = ({ detail }) => {
       const { segDisplaySet, segMetadata } = detail;
-      const studyMetadata = studyMetadataManager.get(
-        segDisplaySet.StudyInstanceUID
-      );
+      const studyMetadata = studyMetadataManager.get(segDisplaySet.StudyInstanceUID);
       const referencedDisplaysets = studyMetadata.getDerivedDatasets({
         referencedSeriesInstanceUID: segMetadata.seriesInstanceUid,
         Modality: 'SEG',
@@ -130,15 +129,9 @@ const segmentationExtension = {
       commandsManager.runCommand('jumpToFirstSegment');
     };
 
-    document.addEventListener(
-      'segseriesselected',
-      onSegmentationsCompletelyLoaded
-    );
+    document.addEventListener('segseriesselected', onSegmentationsCompletelyLoaded);
 
-    document.addEventListener(
-      'extensiondicomsegmentationsegloaded',
-      onSegmentationsLoaded
-    );
+    document.addEventListener('extensiondicomsegmentationsegloaded', onSegmentationsLoaded);
 
     return {
       menuOptions: [
@@ -161,15 +154,12 @@ const segmentationExtension = {
 
                   if (series.Modality === 'SEG') {
                     if (activeViewport) {
-                      const studyMetadata = studyMetadataManager.get(
-                        activeViewport.StudyInstanceUID
-                      );
+                      const studyMetadata = studyMetadataManager.get(activeViewport.StudyInstanceUID);
                       if (!studyMetadata) {
                         return;
                       }
                       const referencedDS = studyMetadata.getDerivedDatasets({
-                        referencedSeriesInstanceUID:
-                          activeViewport.SeriesInstanceUID,
+                        referencedSeriesInstanceUID: activeViewport.SeriesInstanceUID,
                         Modality: 'SEG',
                       });
                       triggerSegmentationPanelTabUpdatedEvent({

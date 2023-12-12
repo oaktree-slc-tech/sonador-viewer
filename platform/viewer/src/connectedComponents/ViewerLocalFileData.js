@@ -1,13 +1,12 @@
-import React, { Component } from 'react';
+import React, { useState } from 'react';
 import Dropzone from 'react-dropzone';
-import { withTranslation } from 'react-i18next';
-import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 
 import { metadata, utils } from '@ohif/core';
 
+import { extensionManager } from '../App';
 import filesToStudies from '../lib/filesToStudies';
 
-import { extensionManager } from '../App';
 import ConnectedViewer from './ConnectedViewer';
 
 import './ViewerLocalFileData.css';
@@ -49,22 +48,16 @@ const linksDialogMessage = (onDrop, t) => {
   );
 };
 
-class ViewerLocalFileData extends Component {
-  static propTypes = {
-    studies: PropTypes.array,
-  };
+function ViewerLocalFileData() {
+  const { t } = useTranslation('Common');
 
-  state = {
-    studies: null,
-    loading: false,
-    error: null,
-  };
+  const [studies, setStudies] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  updateStudies = (studies) => {
-    // Render the viewer when the data is ready
+  const updateStudies = (studies) => {
     studyMetadataManager.purge();
 
-    // Map studies to new format, update metadata manager?
     const updatedStudies = studies.map((study) => {
       const studyMetadata = new OHIFStudyMetadata(study, study.StudyInstanceUID);
       const sopClassHandlerModules = extensionManager.modules['sopClassHandlerModule'];
@@ -80,57 +73,50 @@ class ViewerLocalFileData extends Component {
       return study;
     });
 
-    this.setState({
-      studies: updatedStudies,
-    });
+    setStudies(updatedStudies);
   };
 
-  render() {
-    const onDrop = async (acceptedFiles) => {
-      this.setState({ loading: true });
+  const onDrop = async (acceptedFiles) => {
+    setLoading(true);
 
+    try {
       const studies = await filesToStudies(acceptedFiles);
-      const updatedStudies = this.updateStudies(studies);
-
-      if (!updatedStudies) {
-        return;
-      }
-
-      this.setState({ studies: updatedStudies, loading: false });
-    };
-
-    if (this.state.error) {
-      return <div>Error: {JSON.stringify(this.state.error)}</div>;
+      updateStudies(studies);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return (
-      <Dropzone onDrop={onDrop} noClick>
-        {({ getRootProps }) => (
-          <div {...getRootProps()} style={{ width: '100%', height: '100%' }}>
-            {this.state.studies ? (
-              <ConnectedViewer
-                studies={this.state.studies}
-                studyInstanceUIDs={this.state.studies && this.state.studies.map((a) => a.StudyInstanceUID)}
-              />
-            ) : (
-              <div className={'drag-drop-instructions'}>
-                <div className={'drag-drop-contents'}>
-                  {this.state.loading ? (
-                    <h3>{this.props.t('Loading...')}</h3>
-                  ) : (
-                    <>
-                      <h3>{this.props.t('Drag and Drop DICOM files here to load them in the Viewer')}</h3>
-                      <h4>{linksDialogMessage(onDrop, this.props.t)}</h4>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Dropzone>
-    );
+  if (error) {
+    return <div>Error: {JSON.stringify(error)}</div>;
   }
+
+  return (
+    <Dropzone onDrop={onDrop} noClick>
+      {({ getRootProps }) => (
+        <div {...getRootProps()} style={{ width: '100%', height: '100%' }}>
+          {studies ? (
+            <ConnectedViewer studies={studies} studyInstanceUIDs={studies.map((a) => a.StudyInstanceUID)} />
+          ) : (
+            <div className={'drag-drop-instructions'}>
+              <div className={'drag-drop-contents'}>
+                {loading ? (
+                  <h3>{t('Loading...')}</h3>
+                ) : (
+                  <>
+                    <h3>{t('Drag and Drop DICOM files here to load them in the Viewer')}</h3>
+                    <h4>{linksDialogMessage(onDrop, t)}</h4>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Dropzone>
+  );
 }
 
-export default withTranslation('Common')(ViewerLocalFileData);
+export default ViewerLocalFileData;

@@ -1,88 +1,45 @@
-import React, { Component } from 'react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
-import { withTranslation } from '../../contextProviders';
+import { ScrollableArea } from '../../ScrollableArea/ScrollableArea';
+import { OverlayTrigger } from '../overlayTrigger';
+import { TableList } from '../tableList';
+import { Tooltip } from '../tooltip';
 
 import { Icon } from './../../elements/Icon';
-import { ScrollableArea } from './../../ScrollableArea/ScrollableArea.js';
-import { OverlayTrigger } from './../overlayTrigger';
-import { TableList } from './../tableList';
-import { Tooltip } from './../tooltip';
-import { MeasurementTableItem } from './MeasurementTableItem.js';
+import { MeasurementTableItem } from './MeasurementTableItem';
 
 import './MeasurementTable.styl';
 
-class MeasurementTable extends Component {
-  static propTypes = {
-    measurementCollection: PropTypes.array.isRequired,
-    timepoints: PropTypes.array.isRequired,
-    overallWarnings: PropTypes.object.isRequired,
-    readOnly: PropTypes.bool,
-    onItemClick: PropTypes.func,
-    onRelabelClick: PropTypes.func,
-    onDeleteClick: PropTypes.func,
-    onEditDescriptionClick: PropTypes.func,
-    selectedMeasurementNumber: PropTypes.number,
-    t: PropTypes.func,
-    saveFunction: PropTypes.func,
-    onSaveComplete: PropTypes.func,
+const MeasurementTable = ({
+  overallWarnings,
+  readOnly = false,
+  measurementCollection,
+  timepoints,
+  onItemClick,
+  onRelabelClick,
+  onDeleteClick,
+  onEditDescriptionClick,
+  selectedMeasurementNumber,
+  saveFunction,
+  onSaveComplete,
+}) => {
+  const { t } = useTranslation();
+
+  const [selectedKey, setSelectedKey] = useState(null);
+
+  const handleItemClick = (event, measurementData) => {
+    if (readOnly) return;
+
+    setSelectedKey(measurementData.measurementNumber);
+
+    if (onItemClick) {
+      onItemClick(event, measurementData);
+    }
   };
 
-  static defaultProps = {
-    overallWarnings: {
-      warningList: [],
-    },
-    readOnly: false,
-  };
-
-  state = {
-    selectedKey: null,
-  };
-
-  render() {
-    const { overallWarnings, saveFunction, t } = this.props;
-    const hasOverallWarnings = overallWarnings.warningList.length > 0;
-
-    return (
-      <div className="measurementTable">
-        <div className="measurementTableHeader">
-          {hasOverallWarnings && (
-            <OverlayTrigger
-              key={'overwall-warning'}
-              placement="left"
-              overlay={
-                <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left" style={{}}>
-                  <div className="warningTitle">{t('Criteria nonconformities')}</div>
-                  <div className="warningContent">{this.getWarningContent()}</div>
-                </Tooltip>
-              }
-            >
-              <span className="warning-status">
-                <span className="warning-border">
-                  <Icon name="exclamation-triangle" />
-                </span>
-              </span>
-            </OverlayTrigger>
-          )}
-          {this.getTimepointsHeader()}
-        </div>
-        <ScrollableArea>
-          <div>{this.getMeasurementsGroups()}</div>
-        </ScrollableArea>
-        <div className="measurementTableFooter">
-          {saveFunction && (
-            <button onClick={this.saveFunction} className="saveBtn" data-cy="save-measurements-btn">
-              <Icon name="save" width="14px" height="14px" />
-              Save measurements
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  saveFunction = async (event) => {
-    const { saveFunction, onSaveComplete } = this.props;
+  const handleSave = async () => {
     if (saveFunction) {
       try {
         const result = await saveFunction();
@@ -105,68 +62,54 @@ class MeasurementTable extends Component {
     }
   };
 
-  getMeasurementsGroups = () => {
-    return this.props.measurementCollection.map((measureGroup, index) => {
-      return (
-        <TableList key={index} customHeader={this.getCustomHeader(measureGroup)}>
-          {this.getMeasurements(measureGroup)}
-        </TableList>
-      );
-    });
-  };
+  const getMeasurements = (measureGroup) => {
+    const selectedKeyValue = selectedMeasurementNumber ? selectedMeasurementNumber : selectedKey;
 
-  getMeasurements = (measureGroup) => {
-    const selectedKey = this.props.selectedMeasurementNumber
-      ? this.props.selectedMeasurementNumber
-      : this.state.selectedKey;
     return measureGroup.measurements.map((measurement, index) => {
       const key = measurement.measurementNumber;
       const itemIndex = measurement.itemNumber || index + 1;
-      const itemClass = selectedKey === key && !this.props.readOnly ? 'selected' : '';
+      const itemClass = selectedKeyValue === key && !readOnly ? 'selected' : '';
+
       return (
         <MeasurementTableItem
           key={key}
           itemIndex={itemIndex}
           itemClass={itemClass}
           measurementData={measurement}
-          onItemClick={this.onItemClick}
-          onRelabel={this.props.onRelabelClick}
-          onDelete={this.props.onDeleteClick}
-          onEditDescription={this.props.onEditDescriptionClick}
+          onItemClick={handleItemClick}
+          onRelabel={onRelabelClick}
+          onDelete={onDeleteClick}
+          onEditDescription={onEditDescriptionClick}
         />
       );
     });
   };
 
-  onItemClick = (event, measurementData) => {
-    if (this.props.readOnly) return;
-
-    this.setState({
-      selectedKey: measurementData.measurementNumber,
-    });
-
-    if (this.props.onItemClick) {
-      this.props.onItemClick(event, measurementData);
-    }
-  };
-
-  getCustomHeader = (measureGroup) => {
+  const getCustomHeader = (measureGroup) => {
     return (
-      <React.Fragment>
-        <div className="tableListHeaderTitle">{this.props.t(measureGroup.groupName)}</div>
+      <>
+        <div className="tableListHeaderTitle">{t(measureGroup.groupName)}</div>
         {measureGroup.maxMeasurements && (
           <div className="maxMeasurements">
-            {this.props.t('MAX')} {measureGroup.maxMeasurements}
+            {t('MAX')} {measureGroup.maxMeasurements}
           </div>
         )}
         <div className="numberOfItems">{measureGroup.measurements.length}</div>
-      </React.Fragment>
+      </>
     );
   };
 
-  getTimepointsHeader = () => {
-    const { timepoints, t } = this.props;
+  const getMeasurementsGroups = () => {
+    return measurementCollection.map((measureGroup, index) => {
+      return (
+        <TableList key={index} customHeader={getCustomHeader(measureGroup)}>
+          {getMeasurements(measureGroup)}
+        </TableList>
+      );
+    });
+  };
 
+  const getTimepointsHeader = () => {
     return timepoints.map((timepoint, index) => {
       return (
         <div key={index} className="measurementTableHeaderItem">
@@ -177,8 +120,8 @@ class MeasurementTable extends Component {
     });
   };
 
-  getWarningContent = () => {
-    const { warningList = '' } = this.props.overallWarnings;
+  const getWarningContent = () => {
+    const { warningList = '' } = overallWarnings;
 
     if (Array.isArray(warningList)) {
       const listedWarnings = warningList.map((warn, index) => {
@@ -186,12 +129,68 @@ class MeasurementTable extends Component {
       });
 
       return <ol>{listedWarnings}</ol>;
-    } else {
-      return <React.Fragment>{warningList}</React.Fragment>;
     }
-  };
-}
 
-const connectedComponent = withTranslation(['MeasurementTable', 'Common'])(MeasurementTable);
-export { connectedComponent as MeasurementTable };
-export default connectedComponent;
+    return <>{warningList}</>;
+  };
+
+  const hasOverallWarnings = overallWarnings.warningList.length > 0;
+
+  return (
+    <div className="measurementTable">
+      <div className="measurementTableHeader">
+        {hasOverallWarnings && (
+          <OverlayTrigger
+            placement="left"
+            overlay={
+              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
+                <div className="warningTitle">{t('Criteria nonconformities')}</div>
+                <div className="warningContent">{getWarningContent()}</div>
+              </Tooltip>
+            }
+          >
+            <span className="warning-status">
+              <span className="warning-border">
+                <Icon name="exclamation-triangle" />
+              </span>
+            </span>
+          </OverlayTrigger>
+        )}
+        {getTimepointsHeader()}
+      </div>
+      <ScrollableArea>
+        <div>{getMeasurementsGroups()}</div>
+      </ScrollableArea>
+      <div className="measurementTableFooter">
+        {saveFunction && (
+          <button onClick={handleSave} className="saveBtn" data-cy="save-measurements-btn">
+            <Icon name="save" width="14px" height="14px" />
+            Save measurements
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+MeasurementTable.propTypes = {
+  measurementCollection: PropTypes.array.isRequired,
+  timepoints: PropTypes.array.isRequired,
+  overallWarnings: PropTypes.object.isRequired,
+  readOnly: PropTypes.bool,
+  onItemClick: PropTypes.func,
+  onRelabelClick: PropTypes.func,
+  onDeleteClick: PropTypes.func,
+  onEditDescriptionClick: PropTypes.func,
+  selectedMeasurementNumber: PropTypes.number,
+  saveFunction: PropTypes.func,
+  onSaveComplete: PropTypes.func,
+};
+
+MeasurementTable.defaultProps = {
+  overallWarnings: {
+    warningList: [],
+  },
+};
+
+export default MeasurementTable;

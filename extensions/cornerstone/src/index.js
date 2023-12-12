@@ -1,11 +1,12 @@
 import React from 'react';
-import init from './init.js';
-import commandsModule from './commandsModule.js';
-import toolbarModule from './toolbarModule.js';
-import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
-import { version } from '../package.json';
 
-import { setEnabledElement, getEnabledElement } from './state';
+import cornerstonePackage from '../package.json';
+
+import commandsModule from './commandsModule.js';
+import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
+import init from './init.js';
+import { getEnabledElement, setEnabledElement } from './state';
+import toolbarModule from './toolbarModule.js';
 
 const cornerstoneState = {
   setEnabledElement,
@@ -32,7 +33,7 @@ export default {
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'cornerstone',
-  version,
+  version: cornerstonePackage.version,
 
   /**
    *
@@ -57,8 +58,7 @@ export default {
       };
 
       const { studyPrefetcher } = appConfig;
-      const isStackPrefetchEnabled =
-        studyPrefetcher && !studyPrefetcher.enabled;
+      const isStackPrefetchEnabled = studyPrefetcher && !studyPrefetcher.enabled;
 
       return (
         <OHIFCornerstoneViewport

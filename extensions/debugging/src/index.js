@@ -1,8 +1,9 @@
-import { getDicomWebClientFromConfig } from './utils';
+import debuggingPackage from '../package.json';
+
 import { getCommands } from './commandsModule';
-import { version } from '../package.json';
-import toolbarModule from './toolbarModule';
 import state from './state';
+import toolbarModule from './toolbarModule';
+import { getDicomWebClientFromConfig } from './utils';
 
 /**
  * Constants
@@ -24,7 +25,7 @@ export default {
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'dicom-p10-downloader',
-  version,
+  version: debuggingPackage.version,
 
   /**
    * LIFECYCLE HOOKS

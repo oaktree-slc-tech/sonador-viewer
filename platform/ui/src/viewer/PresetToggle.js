@@ -1,74 +1,50 @@
-import { Component } from 'react';
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 import ToolbarButton from './ToolbarButton.js';
 
 const wLPresetIDs = ['setWLPresetSoftTissue', 'setWLPresetLung', 'setWLPresetLiver', 'setWLPresetBrain'];
 
-export default class PresetToggle extends Component {
-  static propTypes = {
-    buttons: PropTypes.arrayOf(
-      PropTypes.shape({
-        label: PropTypes.string.isRequired,
-        icon: PropTypes.oneOfType([
-          PropTypes.string,
-          PropTypes.shape({
-            name: PropTypes.string.isRequired,
-          }),
-        ]),
-      })
-    ).isRequired,
-    setToolActive: PropTypes.func.isRequired,
-  };
+function PresetToggle({ buttons }) {
+  const [selected, setSelected] = useState(null);
 
-  constructor(props) {
-    super(props);
+  const wlPresetItems = buttons
+    .filter((button) => wLPresetIDs.includes(button.command))
+    .map((button, index) => <ToolbarButton key={index} {...button} click={onClick} />);
 
-    this.state = {
-      presetSelected: null,
-    };
-  }
-  render() {
-    /*const items = this.props.buttons.map((item, index) => {
-      return <ToolbarButton key={index} {...item} click={this.onClick} />;
-    });*/
+  const toolItems = buttons
+    .filter((button) => !wLPresetIDs.includes(button.command))
+    .map((button, index) => <ToolbarButton key={index} {...button} click={onClick} />);
 
-    const wlPresetItems = this.props.buttons.map((button, index) => {
-      if (wLPresetIDs.includes(button.command)) {
-        return <ToolbarButton key={index} {...button} click={this.onClick} />;
-      }
-      return '';
-    });
+  const selectedButton = buttons.find((button) => button.id === selected);
 
-    const toolItems = this.props.buttons.map((button, index) => {
-      if (!wLPresetIDs.includes(button.command)) {
-        return <ToolbarButton key={index} {...button} click={this.onClick} />;
-      }
-      return '';
-    });
-
-    const selectedButton = this.props.buttons.find((button) => {
-      return button.id === this.state.selected;
-    });
-
-    return (
-      <div className="PresetToggle">
-        <div className="wlPresets">{wlPresetItems}</div>
-        <div className="tools">{toolItems}</div>
-        <span className="presetSelected">
-          LEVELS:
-          {selectedButton ? selectedButton.label : 'Manual'}
-        </span>
-      </div>
-    );
+  function onClick(id) {
+    const buttonItem = buttons.find((button) => button.command === id);
+    setSelected(buttonItem.id);
   }
 
-  onClick = (id) => {
-    const buttonItem = this.props.buttons.find((button) => button.command === id);
-
-    this.setState({
-      selected: buttonItem.id,
-    });
-  };
+  return (
+    <div className="PresetToggle">
+      <div className="wlPresets">{wlPresetItems}</div>
+      <div className="tools">{toolItems}</div>
+      <span className="presetSelected">LEVELS: {selectedButton ? selectedButton.label : 'Manual'}</span>
+    </div>
+  );
 }
+
+PresetToggle.propTypes = {
+  buttons: PropTypes.arrayOf(
+    PropTypes.shape({
+      label: PropTypes.string.isRequired,
+      icon: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.shape({
+          name: PropTypes.string.isRequired,
+        }),
+      ]),
+    })
+  ).isRequired,
+  setToolActive: PropTypes.func.isRequired,
+};
+
+export default PresetToggle;

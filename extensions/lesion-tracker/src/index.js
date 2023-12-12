@@ -1,12 +1,13 @@
+import lesionTrackerPackage from '../package.json';
+
 import MeasurementComparisonTable from './components/MeasurementComparisonTable';
-import { version } from '../package.json';
 
 export default {
   /**
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'lesion-tracker',
-  version,
+  version: lesionTrackerPackage.version,
 
   /**
    * @param {object} params

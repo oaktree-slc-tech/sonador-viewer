@@ -1,80 +1,67 @@
-import React, { Component } from 'react';
-import { withTranslation } from 'react-i18next';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { Icon } from '@ohif/ui';
 
 import './googleCloud.css';
 
-class DicomStoreList extends Component {
-  state = {
-    search: '',
+const DicomStoreList = ({ stores, loading = true, error, onSelect, filter }) => {
+  const { t } = useTranslation('Common');
+
+  const [highlightedItem, setHighlightedItem] = useState('');
+
+  const renderTableRow = (store) => (
+    <tr
+      key={store.name}
+      className={highlightedItem === store.name ? 'noselect active' : 'noselect'}
+      onMouseEnter={() => onHighlightItem(store.name)}
+      onClick={() => onSelect(store)}
+    >
+      <td className="project">{store.name.split('/')[7]}</td>
+    </tr>
+  );
+
+  const onHighlightItem = (store) => {
+    setHighlightedItem(store);
   };
 
-  static propTypes = {
-    stores: PropTypes.array,
-    loading: PropTypes.bool.isRequired,
-    error: PropTypes.string,
-    onSelect: PropTypes.func,
-  };
-
-  static defaultProps = {
-    loading: true,
-  };
-
-  renderTableRow = (store) => {
-    return (
-      <tr
-        key={store.name}
-        className={this.state.highlightedItem === store.name ? 'noselect active' : 'noselect'}
-        onMouseEnter={() => {
-          this.onHighlightItem(store.name);
-        }}
-        onClick={() => {
-          this.props.onSelect(store);
-        }}
-      >
-        <td className="project">{store.name.split('/')[7]}</td>
-      </tr>
-    );
-  };
-
-  onHighlightItem(store) {
-    this.setState({ highlightedItem: store });
+  if (error) {
+    return <p>{error}</p>;
   }
 
-  render() {
-    const { loading, stores, filter, error } = this.props;
+  const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
-    if (error) {
-      return <p>{error}</p>;
-    }
-
-    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
-
-    if (loading) {
-      return loadingIcon;
-    }
-
-    const body = (
-      <tbody id="StoreList">
-        {stores
-          .filter((store) => store.name.split('/')[7].toLowerCase().includes(filter.toLowerCase()) || filter == '')
-          .map(this.renderTableRow)}
-      </tbody>
-    );
-
-    return (
-      <table id="tblStoreList" className="gcp-table table noselect">
-        <thead>
-          <tr>
-            <th>{this.props.t('DICOM Store')}</th>
-          </tr>
-        </thead>
-        {stores && body}
-      </table>
-    );
+  if (loading) {
+    return loadingIcon;
   }
-}
 
-export default withTranslation('Common')(DicomStoreList);
+  const body = (
+    <tbody id="StoreList">
+      {stores
+        .filter((store) => store.name.split('/')[7].toLowerCase().includes(filter.toLowerCase()) || filter === '')
+        .map(renderTableRow)}
+    </tbody>
+  );
+
+  return (
+    <table id="tblStoreList" className="gcp-table table noselect">
+      <thead>
+        <tr>
+          <th>{t('DICOM Store')}</th>
+        </tr>
+      </thead>
+      {stores && body}
+    </table>
+  );
+};
+
+DicomStoreList.propTypes = {
+  stores: PropTypes.array,
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string,
+  onSelect: PropTypes.func,
+  filter: PropTypes.string,
+};
+
+export default DicomStoreList;

@@ -1,18 +1,14 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-
 import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
 import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
 import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
 import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
-
+import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
-
-import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
+import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import LoadingIndicator from './LoadingIndicator.js';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
@@ -79,28 +75,15 @@ class OHIFVtkBaseViewport extends Component {
     servicesManager: PropTypes.object.isRequired,
   };
 
-  static init() {
-    console.log('OHIF VTK viewport init()');
-  }
-
   static destroy() {
-    console.log('OHIF VTK viewport destroy()');
     StackManager.clearStacks();
   }
 
   static id = 'OHIFVtkBaseViewport';
 
-  static getCornerstoneStack(
-    studies,
-    StudyInstanceUID,
-    displaySetInstanceUID,
-    SOPInstanceUID,
-    frameIndex
-  ) {
+  static getCornerstoneStack(studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex) {
     // Create shortcut to displaySet
-    const study = studies.find(
-      (study) => study.StudyInstanceUID === StudyInstanceUID
-    );
+    const study = studies.find((study) => study.StudyInstanceUID === StudyInstanceUID);
 
     const displaySet = study.displaySets.find((set) => {
       return set.displaySetInstanceUID === displaySetInstanceUID;
@@ -116,10 +99,7 @@ class OHIFVtkBaseViewport extends Component {
       stack.currentImageIdIndex = frameIndex;
     } else if (SOPInstanceUID) {
       const index = stack.imageIds.findIndex((imageId) => {
-        const imageIdSOPInstanceUID = cornerstone.metaData.get(
-          'SOPInstanceUID',
-          imageId
-        );
+        const imageIdSOPInstanceUID = cornerstone.metaData.get('SOPInstanceUID', imageId);
         return imageIdSOPInstanceUID === SOPInstanceUID;
       });
 
@@ -133,14 +113,7 @@ class OHIFVtkBaseViewport extends Component {
     return stack;
   }
 
-  getViewportData = (
-    studies,
-    StudyInstanceUID,
-    displaySetInstanceUID,
-    SOPClassUID,
-    SOPInstanceUID,
-    frameIndex
-  ) => {
+  getViewportData = (studies, StudyInstanceUID, displaySetInstanceUID, SOPClassUID, SOPInstanceUID, frameIndex) => {
     // Load image and segmentation data from OHIF image service
 
     const { UINotificationService } = this.props.servicesManager.services;
@@ -167,23 +140,17 @@ class OHIFVtkBaseViewport extends Component {
       const { activeLabelmapIndex } = brushStackState;
       const labelmap3D = brushStackState.labelmaps3D[activeLabelmapIndex];
 
-      if (
-        brushStackState.labelmaps3D.length > 1 &&
-        this.props.viewportIndex === 0
-      ) {
+      if (brushStackState.labelmaps3D.length > 1 && this.props.viewportIndex === 0) {
         UINotificationService.show({
           title: 'Overlapping Segmentation Found',
-          message:
-            'Overlapping segmentations cannot be displayed when in MPR mode',
+          message: 'Overlapping segmentations cannot be displayed when in MPR mode',
           type: 'info',
         });
       }
 
-      this.segmentsDefaultProperties = labelmap3D.segmentsHidden.map(
-        (isHidden) => {
-          return { visible: !isHidden };
-        }
-      );
+      this.segmentsDefaultProperties = labelmap3D.segmentsHidden.map((isHidden) => {
+        return { visible: !isHidden };
+      });
 
       const vtkLabelmapID = `${firstImageId}_${activeLabelmapIndex}`;
 
@@ -203,15 +170,9 @@ class OHIFVtkBaseViewport extends Component {
 
         labelmapDataObject.getPointData().setScalars(dataArray);
         labelmapDataObject.setDimensions(...imageDataObject.dimensions);
-        labelmapDataObject.setSpacing(
-          ...imageDataObject.vtkImageData.getSpacing()
-        );
-        labelmapDataObject.setOrigin(
-          ...imageDataObject.vtkImageData.getOrigin()
-        );
-        labelmapDataObject.setDirection(
-          ...imageDataObject.vtkImageData.getDirection()
-        );
+        labelmapDataObject.setSpacing(...imageDataObject.vtkImageData.getSpacing());
+        labelmapDataObject.setOrigin(...imageDataObject.vtkImageData.getOrigin());
+        labelmapDataObject.setDirection(...imageDataObject.vtkImageData.getDirection());
 
         // Cache the labelmap volume.
         labelmapCache[vtkLabelmapID] = labelmapDataObject;
@@ -240,7 +201,7 @@ class OHIFVtkBaseViewport extends Component {
   }
 
   getOrCreateVolume(imageDataObject, displaySetInstanceUID) {
-    /**	Create volume from the provided image data object 
+    /**	Create volume from the provided image data object
 
 		* @param {object} imageDataObject
 		* @param {object} imageDataObject.vtkImageData
@@ -249,7 +210,7 @@ class OHIFVtkBaseViewport extends Component {
 		* @param {number} [imageDataObject.imageMetaData0.WindowCenter] - The volume's initial WindowCenter
 		* @param {string} imageDataObject.imageMetaData0.Modality - CT, MR, PT, etc
 		* @param {string} displaySetInstanceUID
-		* 
+		*
 		* @returns vtkVolumeActor
 		* @memberof OHIFVtkBaseViewport
 		*/
@@ -263,17 +224,9 @@ class OHIFVtkBaseViewport extends Component {
     const { vtkImageData, imageMetaData0 } = imageDataObject;
     // TODO -> Should update react-vtkjs-viewport and react-cornerstone-viewports
     // internals to use naturalized DICOM JSON names.
-    const {
-      windowWidth: WindowWidth,
-      windowCenter: WindowCenter,
-      modality: Modality,
-    } = imageMetaData0;
+    const { windowWidth: WindowWidth, windowCenter: WindowCenter, modality: Modality } = imageMetaData0;
 
-    const { lower, upper } = _getRangeFromWindowLevels(
-      WindowWidth,
-      WindowCenter,
-      Modality
-    );
+    const { lower, upper } = _getRangeFromWindowLevels(WindowWidth, WindowCenter, Modality);
     volumeActor = vtkVolume.newInstance();
     const volumeMapper = vtkVolumeMapper.newInstance();
 
@@ -297,9 +250,7 @@ class OHIFVtkBaseViewport extends Component {
   applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
     // Abstract Method: Apply transforms and VTK properties to VTK volume actor and mapper
 
-    throw new Error(
-      'applyVolumeTransforms must be implemented in child classes'
-    );
+    throw new Error('applyVolumeTransforms must be implemented in child classes');
   }
 
   loadProgressively(imageDataObject) {
@@ -317,9 +268,7 @@ class OHIFVtkBaseViewport extends Component {
     const NumberOfFrames = imageIds.length;
 
     const onPixelDataInsertedCallback = (numberProcessed) => {
-      const percentComplete = Math.floor(
-        (numberProcessed * 100) / NumberOfFrames
-      );
+      const percentComplete = Math.floor((numberProcessed * 100) / NumberOfFrames);
 
       if (percentComplete !== this.state.percentComplete) {
         this.setState({
@@ -329,8 +278,7 @@ class OHIFVtkBaseViewport extends Component {
     };
 
     const onPixelDataInsertedErrorCallback = (error) => {
-      const { UINotificationService, LoggerService } =
-        this.props.servicesManager.services;
+      const { UINotificationService, LoggerService } = this.props.servicesManager.services;
 
       if (!this.hasError) {
         if (this.props.viewportIndex === 0) {

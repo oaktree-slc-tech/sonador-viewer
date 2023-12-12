@@ -19,28 +19,12 @@ import OHIFVTKExtension from '@ohif/extension-vtk';
 import 'regenerator-runtime/runtime';
 
 //  Add version for debugging purposes
-import { version } from '../package.json';
+import viewerPackage from '../package.json';
 
 import App from './App.js';
 
 function installViewer(config, containerId = 'root', callback) {
   const container = document.getElementById(containerId);
-  const defaultExtensions = [
-    OHIFDicomHtmlExtension,
-    OHIFDicomMicroscopyExtension,
-    OHIFDicomPDFExtension,
-    OHIFDicomSegmentationExtension,
-    OHIFDicomRtExtension,
-    OHIFDicomECGExtension,
-
-    // 3D Volume Extensions
-    OHIFVTKExtension,
-    OHIF3DVolumeViewerExtension,
-    OHIFM3DViewerExtension,
-
-    // Metadata
-    OHIFDicomTagBrowserExtension,
-  ];
 
   if (!container) {
     throw new Error(
@@ -50,7 +34,7 @@ function installViewer(config, containerId = 'root', callback) {
 
   return ReactDOM.render(<App config={config} />, container, callback);
 }
-
+const version = viewerPackage.version;
 export {
   App,
   installViewer,

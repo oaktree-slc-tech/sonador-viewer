@@ -1,21 +1,18 @@
 import React from 'react';
-import classnames from 'classnames';
+import { useTranslation } from 'react-i18next';
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
-
-import { withTranslation } from '../contextProviders';
 
 import { Icon } from './../elements/Icon';
 
 import './toolbar-button.styl';
 
 export function ToolbarButton(props) {
-  const { isActive, icon, labelWhenActive, onClick, t } = props;
-  const className = classnames(props.className, { active: isActive });
+  const { t } = useTranslation('Buttons');
+
+  const { isActive, icon, labelWhenActive, onClick } = props;
   const iconProps = typeof icon === 'string' ? { name: icon } : icon;
   const label = isActive && labelWhenActive ? labelWhenActive : props.label;
-
-  const arrowIconName = props.isExpanded ? 'caret-up' : 'caret-down';
-  const arrowIcon = props.isExpandable && <Icon name={arrowIconName} className="expand-caret" />;
 
   const handleClick = (event) => {
     if (onClick) {
@@ -23,14 +20,16 @@ export function ToolbarButton(props) {
     }
   };
 
-  const cypressSelectorId = props.label.toLowerCase();
-
   return (
-    <div className={className} onClick={handleClick} data-cy={cypressSelectorId}>
+    <div
+      className={classNames(props.className, { active: isActive })}
+      onClick={handleClick}
+      data-cy={props.label.toLowerCase()}
+    >
       {iconProps && <Icon {...iconProps} />}
       <div className="toolbar-button-label">
         {t(label)}
-        {arrowIcon}
+        {props.isExpandable && <Icon name={props.isExpanded ? 'caret-up' : 'caret-down'} className="expand-caret" />}
       </div>
     </div>
   );
@@ -63,4 +62,4 @@ ToolbarButton.defaultProps = {
   className: 'toolbar-button',
 };
 
-export default withTranslation('Buttons')(ToolbarButton);
+export default ToolbarButton;

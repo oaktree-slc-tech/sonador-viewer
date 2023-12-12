@@ -1,6 +1,5 @@
 import React from 'react';
-import { withRouter } from 'react-router-dom';
-import PropTypes from 'prop-types';
+import { useLocation } from 'react-router-dom';
 
 import OHIF from '@ohif/core';
 
@@ -8,7 +7,8 @@ import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedVi
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
-function IHEInvokeImageDisplay({ location }) {
+function IHEInvokeImageDisplay() {
+  const location = useLocation();
   const {
     // patientID,
     requestType,
@@ -34,10 +34,4 @@ function IHEInvokeImageDisplay({ location }) {
   }
 }
 
-IHEInvokeImageDisplay.propTypes = {
-  location: PropTypes.shape({
-    search: PropTypes.string,
-  }).isRequired,
-};
-
-export default withRouter(IHEInvokeImageDisplay);
+export default IHEInvokeImageDisplay;

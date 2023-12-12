@@ -1,14 +1,13 @@
 import React, { useContext } from 'react';
 import { useSelector } from 'react-redux';
-import { withRouter } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import * as _ from 'lodash';
-import PropTypes from 'prop-types';
 
 import { DICOMWeb, OHIF } from '@ohif/core';
 
 import AppContext from '../context/AppContext';
-import useServer from '../customHooks/useServer';
-import NotFound from '../routes/NotFound.js';
+import useServer from '../hooks/useServer';
+import NotFound from '../pages/NotFound/NotFound';
 
 import ConnectedStudyList from './ConnectedStudyList';
 
@@ -16,10 +15,11 @@ const { urlUtil: UrlUtil } = OHIF.utils;
 
 // Contexts
 
-function StudyListRouting({ match: routeMatch, location: routeLocation }) {
+function StudyListRouting() {
+  const routeLocation = useLocation();
   // Manage routes for the Sonador study list
 
-  const { project, location, dataset, dicomStore, token } = routeMatch.params;
+  const { project, location, dataset, dicomStore, token } = useParams();
 
   // Determine which server to use: if unable to find active server, return 404
   const servers = useSelector((state) => state && state.servers);
@@ -47,11 +47,4 @@ function StudyListRouting({ match: routeMatch, location: routeLocation }) {
   return <ConnectedStudyList filters={filters} studyListFunctionsEnabled={studyListFunctionsEnabled} />;
 }
 
-StudyListRouting.propTypes = {
-  location: PropTypes.shape({
-    search: PropTypes.string,
-  }).isRequired,
-  match: PropTypes.object,
-};
-
-export default withRouter(StudyListRouting);
+export default StudyListRouting;

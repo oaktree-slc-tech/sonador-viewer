@@ -14,7 +14,7 @@ import { Overlay, OverlayTrigger } from './overlayTrigger';
 import { QuickSwitch } from './quickSwitch';
 import { RoundedButtonGroup } from './roundedButtonGroup';
 import { SelectTree } from './selectTree';
-import { SimpleDialog } from './simpleDialog';
+import { InputDialog, SimpleDialog } from './simpleDialog';
 import { StudyBrowser, Thumbnail } from './studyBrowser';
 import { PageToolbar, StudyList, TablePagination, TableSearchFilter } from './studyList';
 import { TabComponents, TabFooter } from './tabComponents';
@@ -38,6 +38,7 @@ export {
   PageToolbar,
   SelectTree,
   SimpleDialog,
+  InputDialog,
   StudyBrowser,
   StudyList,
   TableList,

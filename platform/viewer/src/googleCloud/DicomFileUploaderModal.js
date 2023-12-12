@@ -1,11 +1,14 @@
-import React, { Fragment } from 'react';
-import { withTranslation } from 'react-i18next';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { servicesManager } from '../App';
+
 import DicomUploader from './DicomUploader';
 
-function DicomFileUploaderModal({ isOpen = false, onClose, url, retrieveAuthHeaderFunction, t }) {
+function DicomFileUploaderModal({ isOpen = false, onClose, url, retrieveAuthHeaderFunction }) {
+  const { t } = useTranslation('Common');
+
   const { UIModalService } = servicesManager.services;
 
   const showDicomStorePickerModal = () => {
@@ -24,7 +27,7 @@ function DicomFileUploaderModal({ isOpen = false, onClose, url, retrieveAuthHead
     });
   };
 
-  return <Fragment>{isOpen && showDicomStorePickerModal()}</Fragment>;
+  return <>{isOpen && showDicomStorePickerModal()}</>;
 }
 
 DicomFileUploaderModal.propTypes = {
@@ -34,4 +37,4 @@ DicomFileUploaderModal.propTypes = {
   url: PropTypes.string,
 };
 
-export default withTranslation('Common')(DicomFileUploaderModal);
+export default DicomFileUploaderModal;

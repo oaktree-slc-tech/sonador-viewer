@@ -1,0 +1,266 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.tableToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  @include xs {
+    flex-direction: column;
+    row-gap: 10px;
+    justify-content: initial;
+    align-items: initial;
+  }
+
+  .tableActions {
+    display: flex;
+    align-items: center;
+    column-gap: 10px;
+
+    .action {
+      border: none;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      column-gap: 5px;
+      background-color: #60646d;
+      color: #fff;
+      padding: 5px 10px;
+      cursor: pointer;
+
+      &:disabled {
+        opacity: 0.2;
+        cursor: initial;
+      }
+    }
+
+    .noSelectedRows {
+      opacity: 0.2;
+    }
+
+    .selectedRows {
+      color: #fff;
+    }
+  }
+
+  .tablePagination {
+    display: flex;
+    align-items: center;
+    column-gap: 40px;
+
+    @include lg {
+      column-gap: 5px;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .rowsPerPage {
+      display: flex;
+      align-items: center;
+      column-gap: 5px;
+      background-color: transparent;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+
+      &__wrapper {
+        position: relative;
+      }
+
+      &__options {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+        padding: 8px;
+        position: absolute;
+        background-color: #000;
+        border-radius: 10px;
+        right: 0;
+        width: 60px;
+        z-index: 100;
+      }
+
+      &__chevroUp {
+        rotate: 180deg;
+      }
+
+      &__label {
+        display: flex;
+      }
+
+      &__option {
+        border: none;
+        background: none;
+        color: #fff;
+        cursor: pointer;
+      }
+    }
+
+    .nextWrapper {
+      margin-left: 20px;
+    }
+
+    .prevWrapper,
+    .nextWrapper {
+      background: none;
+      border: none;
+      cursor: pointer;
+
+      &:disabled {
+        opacity: 0.2;
+      }
+    }
+
+    .prev {
+      rotate: 90deg;
+    }
+
+    .next {
+      rotate: -90deg;
+    }
+  }
+}
+
+.studiesTableContainer {
+  overflow-x: auto;
+
+  &.disabledScroll {
+    overflow-x: hidden;
+  }
+
+  .studiesTable {
+    width: 100%;
+
+    .studiesTableHeaderItem {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      column-gap: 5px;
+
+      .studiesTableHeaderSorting {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        row-gap: 2px;
+        opacity: 0;
+      }
+
+      &:hover .studiesTableHeaderSorting {
+        opacity: 1;
+      }
+
+      .studiesTableHeaderSortingUpIcon {
+        rotate: 180deg;
+      }
+    }
+
+    .header th {
+      font-size: 12px;
+      line-height: 14px;
+      padding: 20px 10px;
+      color: #a9a9a9;
+      text-transform: uppercase;
+      background-color: #1e1f23;
+
+      &:first-of-type {
+        padding-left: 20px;
+        position: sticky;
+        left: 0;
+        z-index: 1;
+      }
+
+      &:last-of-type {
+        padding-right: 20px;
+        text-align: center;
+      }
+    }
+
+    .row {
+      td {
+        padding: 25px 10px 25px 25px;
+        background-color: #1e1f23;
+
+        &:first-of-type {
+          border-radius: 10px 0 0 10px;
+          width: 130px;
+          position: sticky;
+          left: 0;
+          z-index: 1;
+          padding-left: 20px;
+
+          @include lg {
+            width: 90px;
+          }
+        }
+
+        &:last-of-type {
+          border-radius: 0 10px 10px 0;
+          padding-right: 20px;
+        }
+      }
+
+      &.odd td {
+        background-color: #27292d;
+      }
+
+      &.expanded td {
+        background-color: #000;
+
+        &:first-of-type {
+          border-radius: 10px 0 0 0;
+        }
+
+        &:last-of-type {
+          border-radius: 0 10px 0 0;
+        }
+      }
+
+      &.withRightBorder {
+        td:first-of-type {
+          border-right: 2.5px solid #3c4247;
+        }
+      }
+
+      &:hover {
+        cursor: pointer;
+
+        .rowEyeIcon {
+          visibility: visible;
+        }
+      }
+    }
+
+    .expandedContainer {
+      padding: 0;
+    }
+  }
+}
+
+.noMatchingResults {
+  text-align: center;
+  font-size: 30px;
+  color: #d3d3d3;
+  font-weight: 500;
+}
+
+.loaderContainer {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+}
+
+.horizontalPadding {
+  padding-left: 75px;
+  padding-right: 75px;
+
+  @include lg {
+    padding-left: 50px;
+    padding-right: 50px;
+  }
+
+  @include xs {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
