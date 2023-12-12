@@ -1,32 +1,30 @@
-import React, { Component } from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
 
-import { StudiesItem } from './StudiesItem.js';
+import StudiesItem from './StudiesItem.js';
 
 import './StudiesList.styl';
 
-export class StudiesList extends Component {
-  static propTypes = {
-    class: PropTypes.string,
-    studyListData: PropTypes.array.isRequired,
-    onClick: PropTypes.func.isRequired,
-    activeStudyInstanceUID: PropTypes.string,
-  };
-
-  render() {
-    return <div className={`studiesList ${this.props.class}`}>{this.getBrowserItems()}</div>;
-  }
-
-  getBrowserItems = () => {
-    return this.props.studyListData.map((studyData, index) => {
-      return (
+function StudiesList({ className, studyListData, onClick, activeStudyInstanceUID }) {
+  return (
+    <div className={`studiesList ${className}`}>
+      {studyListData.map((studyData, index) => (
         <StudiesItem
           key={index}
           studyData={studyData}
-          active={studyData.StudyInstanceUID === this.props.activeStudyInstanceUID}
-          onClick={(event) => this.props.onClick(studyData)}
+          active={studyData.StudyInstanceUID === activeStudyInstanceUID}
+          onClick={() => onClick(studyData)}
         />
-      );
-    });
-  };
+      ))}
+    </div>
+  );
 }
+
+StudiesList.propTypes = {
+  className: PropTypes.string,
+  studyListData: PropTypes.array.isRequired,
+  onClick: PropTypes.func.isRequired,
+  activeStudyInstanceUID: PropTypes.string,
+};
+
+export default StudiesList;

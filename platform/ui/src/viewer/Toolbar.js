@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React from 'react';
 import PropTypes from 'prop-types';
 
 import { LayoutButton } from './../components/layoutButton';
@@ -102,51 +102,44 @@ function getDefaultButtonData() {
   return buttonData;
 }
 
-export default class Toolbar extends Component {
-  static propTypes = {
-    buttons: PropTypes.arrayOf(
-      PropTypes.shape({
-        id: PropTypes.string.isRequired,
-        title: PropTypes.string.isRequired,
-        icon: PropTypes.oneOfType([
-          PropTypes.string,
-          PropTypes.shape({
-            name: PropTypes.string.isRequired,
-          }),
-        ]),
-      })
-    ).isRequired,
-    includeLayoutButton: PropTypes.bool.isRequired,
-    includePlayClipButton: PropTypes.bool.isRequired,
-  };
+function Toolbar({ buttons, includeLayoutButton, includePlayClipButton }) {
+  const maybePlayClipButton = includePlayClipButton ? <PlayClipButton /> : null;
+  const maybeLayoutButton = includeLayoutButton ? <LayoutButton /> : null;
 
-  static defaultProps = {
-    buttons: getDefaultButtonData(),
-    includeLayoutButton: true,
-    includePlayClipButton: true,
-  };
-
-  render() {
-    var maybePlayClipButton;
-    if (this.props.includePlayClipButton) {
-      maybePlayClipButton = <PlayClipButton />;
-    }
-
-    var maybeLayoutButton;
-    if (this.props.includeLayoutButton) {
-      maybeLayoutButton = <LayoutButton />;
-    }
-
-    return (
-      <div id="toolbar">
-        <div className="btn-group">
-          {this.props.buttons.map((button, i) => {
-            return <SimpleToolbarButton {...button} key={i} />;
-          })}
-          {maybePlayClipButton}
-          {maybeLayoutButton}
-        </div>
+  return (
+    <div id="toolbar">
+      <div className="btn-group">
+        {buttons.map((button, i) => (
+          <SimpleToolbarButton {...button} key={i} />
+        ))}
+        {maybePlayClipButton}
+        {maybeLayoutButton}
       </div>
-    );
-  }
+    </div>
+  );
 }
+
+Toolbar.propTypes = {
+  buttons: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      title: PropTypes.string.isRequired,
+      icon: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.shape({
+          name: PropTypes.string.isRequired,
+        }),
+      ]),
+    })
+  ).isRequired,
+  includeLayoutButton: PropTypes.bool.isRequired,
+  includePlayClipButton: PropTypes.bool.isRequired,
+};
+
+Toolbar.defaultProps = {
+  buttons: getDefaultButtonData(),
+  includeLayoutButton: true,
+  includePlayClipButton: true,
+};
+
+export default Toolbar;

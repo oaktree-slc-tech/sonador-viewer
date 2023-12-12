@@ -6,7 +6,6 @@ function transpileJavaScript(mode) {
           'vtk.js',
           // 'dicomweb-client',
           // https://github.com/react-dnd/react-dnd/blob/master/babel.config.js
-          'react-dnd',
           'pdfjs-dist',
           // https://github.com/dcmjs-org/dcmjs/blob/master/.babelrc
           // https://github.com/react-dnd/react-dnd/issues/1342

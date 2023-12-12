@@ -1,9 +1,10 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 
-import { ScrollableArea } from './../../ScrollableArea/ScrollableArea.js';
+import { ScrollableArea } from '../../ScrollableArea/ScrollableArea';
+
 import { SeriesList } from './SeriesList.js';
-import { StudiesList } from './StudiesList.js';
+import StudiesList from './StudiesList.js';
 
 import './QuickSwitch.styl';
 

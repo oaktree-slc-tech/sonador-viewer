@@ -1,129 +1,140 @@
+import { lazy } from 'react';
 import { every, find, isArray, keys } from 'lodash';
 
 import OHIF from '@ohif/core';
-import { asyncComponent, retryImport } from '@ohif/ui';
 
 const { urlUtil: UrlUtil } = OHIF.utils;
 
 // Dynamic Import Routes (CodeSplitting)
-const IHEInvokeImageDisplay = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay.js'))
+const IHEInvokeImageDisplay = lazy(
+  () => import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay.js')
 );
-const ViewerRouting = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting.js'))
-);
+const ViewerRouting = lazy(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting.js'));
 
-const StudyListRouting = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting.js'))
+const StudyListRouting = lazy(
+  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting.js')
 );
-const StudyListRoutingNG = asyncComponent(() =>
-  retryImport(() => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG.js'))
+const StudyListRoutingNG = lazy(
+  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG.js')
 );
-const StandaloneRouting = asyncComponent(() =>
-  retryImport(() => import('../connectedComponents/ConnectedStandaloneRouting.js'))
-);
-const ViewerLocalFileData = asyncComponent(() =>
-  retryImport(() => import('../connectedComponents/ViewerLocalFileData.js'))
-);
-const UploadStudyPageNG = asyncComponent(() =>
-  retryImport(() => import('../studylist/UploadStudyPageNG/UploadStudyPageNG.js'))
-);
-const SettingsPageNG = asyncComponent(() => retryImport(() => import('../studylist/SettingsPageNG/SettingsPageNG')));
-const SharedWithMeNG = asyncComponent(() =>
-  retryImport(() => import('../studylist/SharedWithMePageNG/SharedWithMePageNG'))
-);
+const StandaloneRouting = lazy(() => import('../connectedComponents/ConnectedStandaloneRouting.js'));
+const ViewerLocalFileData = lazy(() => import('../connectedComponents/ViewerLocalFileData.js'));
+const UploadStudyPageNG = lazy(() => import('../pages/UploadStudyPageNG/UploadStudyPageNG.js'));
+const SettingsPageNG = lazy(() => import('../pages/SettingsPageNG/SettingsPageNG'));
+const SharedWithMeNG = lazy(() => import('../pages/SharedWithMePageNG/SharedWithMePageNG'));
 
 const reload = () => window.location.reload();
 
-const ROUTES_DEF = {
-  default: {
-    // Load viewer for specific studies
-    viewer: {
-      path: ['/server/:token/viewer/study/:studyInstanceUIDs', '/viewer/:studyInstanceUIDs'],
-      component: ViewerRouting,
-    },
-    standaloneViewer: {
-      path: '/viewer',
-      component: StandaloneRouting,
-    },
-    list: {
-      path: ['/server/:token', '/server/:token/viewer', '/studylist', '/'],
-      component: StudyListRouting,
-      condition: (appConfig) => {
-        return appConfig.showStudyList;
-      },
-    },
-    listNG: {
-      path: ['/ng/server/:token', '/ng/server/:token/viewer', '/ng/studylist', '/ng'],
-      component: StudyListRoutingNG,
-      condition: (appConfig) => {
-        return appConfig.showStudyList;
-      },
-    },
-    uploadNG: {
-      path: ['/ng/upload'],
-      component: UploadStudyPageNG,
-      condition: (appConfig) => {
-        return appConfig.showStudyList;
-      },
-    },
-    settingsNG: {
-      path: ['/ng/settings'],
-      component: SettingsPageNG,
-    },
-    sharedWithMeNG: {
-      path: ['/ng/shared-with-me'],
-      component: SharedWithMeNG,
-      condition: (appConfig) => {
-        return appConfig.showStudyList;
-      },
-    },
-    local: {
-      path: '/local',
-      component: ViewerLocalFileData,
-    },
-    IHEInvokeImageDisplay: {
-      path: '/IHEInvokeImageDisplay',
-      component: IHEInvokeImageDisplay,
+const ROUTES_DEF = [
+  // Load viewer for specific studies
+  {
+    path: '/server/:token/viewer/study/:studyInstanceUIDs',
+    component: ViewerRouting,
+  },
+  {
+    path: '/viewer/:studyInstanceUIDs',
+    component: ViewerRouting,
+  },
+  {
+    path: '/viewer',
+    component: StandaloneRouting,
+  },
+  {
+    path: '/server/:token',
+    component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/server/:token/viewer',
+    component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/studylist',
+    component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/',
+    component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/ng/server/:token',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/ng/server/:token/viewer',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/ng/studylist',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/ng',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/ng/upload',
+    component: UploadStudyPageNG,
+    condition: (appConfig) => {
+      return appConfig.showStudyList;
     },
   },
-  sonador: {
-    viewer: {
-      path: '/server/:token/viewer/study/:studyInstanceUIDs',
-      component: ViewerRouting,
-      condition: (appConfig) => {
-        return !!appConfig.enableGoogleCloudAdapter;
-      },
+  {
+    path: '/ng/settings',
+    component: SettingsPageNG,
+  },
+  {
+    path: '/ng/shared-with-me',
+    component: SharedWithMeNG,
+    condition: (appConfig) => {
+      return appConfig.showStudyList;
     },
-    list: {
-      path: '/server/:token/viewer',
-      component: StudyListRouting,
-      condition: (appConfig) => {
-        const showList = appConfig.showStudyList;
+  },
+  {
+    path: '/local',
+    component: ViewerLocalFileData,
+  },
+  {
+    path: '/IHEInvokeImageDisplay',
+    component: IHEInvokeImageDisplay,
+  },
+  {
+    path: '/server/:token/viewer/study/:studyInstanceUIDs',
+    component: ViewerRouting,
+    condition: (appConfig) => {
+      return !!appConfig.enableGoogleCloudAdapter;
+    },
+  },
+  {
+    path: '/server/:token/viewer',
+    component: StudyListRouting,
+    condition: (appConfig) => {
+      const showList = appConfig.showStudyList;
 
-        return showList && !!appConfig.enableGoogleCloudAdapter;
-      },
+      return showList && !!appConfig.enableGoogleCloudAdapter;
     },
   },
-};
+];
 
 const getRoutes = (appConfig) => {
   const routes = [];
-  for (let keyConfig in ROUTES_DEF) {
-    const routesConfig = ROUTES_DEF[keyConfig];
+  ROUTES_DEF.forEach((route) => {
+    const validRoute = typeof route.condition === 'function' ? route.condition(appConfig) : true;
 
-    for (let routeKey in routesConfig) {
-      const route = routesConfig[routeKey];
-      const validRoute = typeof route.condition === 'function' ? route.condition(appConfig) : true;
-
-      if (validRoute) {
-        routes.push({
-          path: route.path,
-          Component: route.component,
-        });
-      }
+    if (validRoute) {
+      routes.push({
+        path: route.path,
+        Component: route.component,
+      });
     }
-  }
+  });
 
   return routes;
 };
@@ -155,14 +166,19 @@ const parseViewerPath = (_ = {}, server = {}, params) => {
   // Create viewer URL from the provided configuration, server, and URL parameters.
   // Use the Sonador viewer path if there is a server token, otherwise use the default
   // viewer path.
-  let viewerPath = params.token || server.token ? ROUTES_DEF.sonador.viewer.path : ROUTES_DEF.default.viewer.path;
+  let viewerPath =
+    params.token || server.token
+      ? '/server/:token/viewer/study/:studyInstanceUIDs'
+      : ['/server/:token/viewer/study/:studyInstanceUIDs', '/viewer/:studyInstanceUIDs'];
   if (!params.token && server.token) params.token = server.token;
 
   return parsePath(viewerPath, server, params);
 };
 
 const parseStudyListPath = (_ = {}, server = {}, params) => {
-  let studyListPath = params.token ? ROUTES_DEF.sonador.list.path : ROUTES_DEF.default.list.path;
+  let studyListPath = params.token
+    ? '/server/:token/viewer'
+    : ['/server/:token', '/server/:token/viewer', '/studylist', '/'];
 
   return parsePath(studyListPath, server, params);
 };

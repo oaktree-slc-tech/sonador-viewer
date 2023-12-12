@@ -1,65 +1,46 @@
-import { Component } from 'react';
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 import SimpleDialog from '../SimpleDialog/SimpleDialog.js';
 
 import './EditDescriptionDialog.css';
 
-export default class EditDescriptionDialog extends Component {
-  static propTypes = {
-    description: PropTypes.string,
-    measurementData: PropTypes.object.isRequired,
-    onCancel: PropTypes.func.isRequired,
-    onUpdate: PropTypes.func.isRequired,
-  };
+const EditDescriptionDialog = ({ description: propDescription, onCancel, onUpdate }) => {
+  const [description, setDescription] = useState(propDescription || '');
 
-  constructor(props) {
-    super(props);
-
-    this.state = {
-      description: props.measurementData.description || '',
-    };
-  }
-
-  componentDidUpdate(prevProps) {
-    if (this.props.description !== prevProps.description) {
-      this.setState({
-        description: this.props.description,
-      });
-    }
-  }
-
-  render() {
-    return (
-      <SimpleDialog
-        headerTitle="Edit Description"
-        onClose={this.onClose}
-        onConfirm={this.onConfirm}
-        rootClass="editDescriptionDialog"
-      >
-        <input
-          value={this.state.description}
-          className="simpleDialogInput"
-          id="description"
-          autoComplete="off"
-          autoFocus
-          onChange={this.handleChange}
-        />
-      </SimpleDialog>
-    );
-  }
-
-  onClose = () => {
-    this.props.onCancel();
-  };
-
-  onConfirm = (e) => {
+  const onConfirm = (e) => {
     e.preventDefault();
-    this.props.onUpdate(this.state.description);
+    onUpdate(description);
   };
 
-  handleChange = (event) => {
-    this.setState({ description: event.target.value });
+  const handleChange = (event) => {
+    setDescription(event.target.value);
   };
-}
+
+  return (
+    <SimpleDialog
+      headerTitle="Edit Description"
+      onClose={onCancel}
+      onConfirm={onConfirm}
+      rootClass="editDescriptionDialog"
+    >
+      <input
+        value={description}
+        className="simpleDialogInput"
+        id="description"
+        autoComplete="off"
+        autoFocus
+        onChange={handleChange}
+      />
+    </SimpleDialog>
+  );
+};
+
+EditDescriptionDialog.propTypes = {
+  description: PropTypes.string,
+  measurementData: PropTypes.object.isRequired,
+  onCancel: PropTypes.func.isRequired,
+  onUpdate: PropTypes.func.isRequired,
+};
+
+export default EditDescriptionDialog;

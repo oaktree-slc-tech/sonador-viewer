@@ -36,7 +36,7 @@ import 'regenerator-runtime/runtime';
 
 // Add this for Debugging purposes:
 //import OHIFDebuggingExtension from '@ohif/extension-debugging';
-import { version } from '../package.json';
+import viewerPackage from '../package.json';
 
 import App from './App.js';
 import store from './store';
@@ -48,7 +48,7 @@ const initOHIFViewer = function () {
   // 3. Retrieve studies from PACS
   if (window) {
     config = window.config || {};
-    window.version = version;
+    window.version = viewerPackage.version;
     window.sonador = {
       ...window.sonador,
       home: {

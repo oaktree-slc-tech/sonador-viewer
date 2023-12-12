@@ -4,11 +4,6 @@ const cssToJavaScriptRule = require('./rules/cssToJavaScript.js');
 const stylusToJavaScriptRule = require('./rules/stylusToJavaScript.js');
 const scssToCSS = require('./rules/scssToCSS.js');
 
-/**
- * WebPack configuration for CommonJS Bundles. Extends rules of BaseConfig by making
- * sure we're bundling styles and other files that would normally be split in a
- * PWA.
- */
 module.exports = (env, argv, { SRC_DIR, DIST_DIR }) => {
   const baseConfig = webpackBase(env, argv, { SRC_DIR, DIST_DIR });
 

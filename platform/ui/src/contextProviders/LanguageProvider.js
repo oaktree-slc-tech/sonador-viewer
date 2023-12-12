@@ -3,7 +3,7 @@ import React from 'react';
 import { I18nextProvider, withTranslation as I18NextWithTranslation } from 'react-i18next';
 
 import i18n from '@ohif/i18n';
-
+// TODO probably we can remove this file
 const WrapperI18n = (Component) => {
   const WrapperComponent = (props) => (
     <I18nextProvider i18n={i18n}>

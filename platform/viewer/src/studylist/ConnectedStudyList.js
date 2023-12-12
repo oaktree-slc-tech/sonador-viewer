@@ -1,6 +1,6 @@
 import { connect } from 'react-redux';
 
-import StudyListRoute from './StudyListRoute.js';
+import StudyListRoute from './StudyListRoute';
 
 const isActive = (a) => a.active === true;
 

@@ -124,6 +124,12 @@
     cursor: pointer;
   }
 
+  .DayPicker {
+    @include xs {
+      margin-left: -178px !important;
+    }
+  }
+
   .DateRangePicker_picker,
   .DayPicker {
     border-radius: 10px;

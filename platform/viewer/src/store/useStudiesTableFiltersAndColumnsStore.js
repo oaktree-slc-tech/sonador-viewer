@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { DEFAULT_COLUMNS_IDS, DEFAULT_FILTERS } from '../studylist/StudyListNG/logic';
+import { DEFAULT_COLUMNS_IDS, DEFAULT_FILTERS } from '../lib/constants';
 
 export const useStudiesTableFiltersAndColumnsStore = create(
   persist(

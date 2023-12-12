@@ -1,8 +1,13 @@
 const path = require('path');
-const webpackCommon = require('./../../../.webpack/webpack.commonjs.js');
+const webpackBase = require('./../../../.webpack/webpack.base.js');
 const SRC_DIR = path.join(__dirname, '../src');
 const DIST_DIR = path.join(__dirname, '../dist');
 
+//TODO maybe we don't need it
+const ENTRY = {
+  app: `${SRC_DIR}/index.ts`,
+};
+
 module.exports = (env, argv) => {
-  return webpackCommon(env, argv, { SRC_DIR, DIST_DIR });
+  return webpackBase(env, argv, { SRC_DIR, DIST_DIR, ENTRY });
 };

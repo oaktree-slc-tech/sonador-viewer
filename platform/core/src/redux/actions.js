@@ -4,6 +4,7 @@
 
 import {
   CLEAR_VIEWPORT,
+  SET_ACTIVE_SERVER,
   SET_ACTIVE_SPECIFIC_DATA,
   SET_SERVERS,
   SET_USER_PREFERENCES,
@@ -104,6 +105,13 @@ export const setServers = (servers) => ({
   servers,
 });
 
+export const setActiveServer = (token) => {
+  return {
+    type: SET_ACTIVE_SERVER,
+    payload: token,
+  };
+};
+
 const actions = {
   /**
    * VIEWPORT
@@ -123,6 +131,7 @@ const actions = {
   setMeasurements,
   setStudyData,
   setServers,
+  setActiveServer,
 };
 
 export default actions;

@@ -1,5 +1,4 @@
 import { ScrollableArea } from './ScrollableArea/ScrollableArea.js';
-import { asyncComponent, retryImport } from './utils/asyncComponent';
 import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
 import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
 import { viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from './utils/viewerbaseDisplaySet.js';
@@ -17,6 +16,7 @@ import {
   CustomSelect,
   ErrorPage,
   HotkeyField,
+  InputDialog,
   LanguageSwitcher,
   LayoutButton,
   LayoutChooser,
@@ -121,6 +121,7 @@ export {
   OldSelect,
   SelectTree,
   SimpleDialog,
+  InputDialog,
   StudyBrowser,
   StudyList,
   TableList,
@@ -160,8 +161,6 @@ export {
 
   // Utils
   ViewerbaseDragDropContext,
-  asyncComponent,
-  retryImport,
   viewerbaseGetDisplaySet,
   viewerbaseDisplaySetReconstructable,
   setLayoutAndViewportData,

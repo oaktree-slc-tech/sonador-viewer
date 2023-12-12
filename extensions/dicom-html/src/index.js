@@ -1,12 +1,14 @@
 import React from 'react';
+
+import dicomHtmlVersion from '../package.json';
+
 import OHIFDicomHtmlSopClassHandler from './OHIFDicomHtmlSopClassHandler.js';
-import { version } from '../package.json';
 
 const Component = React.lazy(() => {
   return import('./OHIFDicomHtmlViewport');
 });
 
-const OHIFDicomHtmlViewport = props => {
+const OHIFDicomHtmlViewport = (props) => {
   return (
     <React.Suspense fallback={<div>Loading...</div>}>
       <Component {...props} />
@@ -19,7 +21,7 @@ export default {
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'html',
-  version,
+  version: dicomHtmlVersion.version,
 
   getViewportModule() {
     return OHIFDicomHtmlViewport;

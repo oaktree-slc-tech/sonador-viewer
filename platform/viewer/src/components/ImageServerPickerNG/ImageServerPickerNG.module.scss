@@ -1,0 +1,82 @@
+@import '@ohif/viewer/src/styles/breakpoints';
+
+.container {
+  position: relative;
+
+  @include xs {
+    flex-grow: 1;
+  }
+
+  .buttonMenu {
+    padding: 20px 15px;
+    background-color: #000000;
+    width: 100%;
+    border: 1px solid #60646d;
+    border-radius: 10px;
+    height: 64px;
+    color: #d3d3d3;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 21px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    min-width: 240px;
+
+    @include lg {
+      height: 50px;
+    }
+
+    @include xs {
+      padding: 10px 15px;
+      font-size: 16px;
+    }
+  }
+
+  .menu {
+    position: absolute;
+    background-color: #000000;
+    top: calc(100% + 10px);
+    border-radius: 5px;
+    padding: 10px;
+    max-height: 446px;
+    width: 100%;
+    z-index: 1000;
+  }
+
+  .serverIcon {
+    margin-right: 10px;
+  }
+
+  .caretIcon {
+    margin-left: auto;
+  }
+
+  .caretIcon.up {
+    rotate: 180deg;
+  }
+
+  .item {
+    padding: 10px;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    border: none;
+    text-align: left;
+  }
+
+  .itemName {
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 21px;
+    color: #d3d3d3;
+    margin: 0;
+  }
+
+  .itemType {
+    font-size: 12px;
+    line-height: 14px;
+    color: #d3d3d3;
+    margin: 0;
+  }
+}

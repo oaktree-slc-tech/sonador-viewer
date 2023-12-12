@@ -1,5 +1,5 @@
-import React, { Component } from 'react';
-import * as _ from 'lodash';
+import React, { useState } from 'react';
+import { cloneDeep } from 'lodash';
 import PropTypes from 'prop-types';
 
 import { Icon } from './../../elements/Icon';
@@ -8,185 +8,144 @@ import SelectTreeBreadcrumb from './SelectTreeBreadcrumb.js';
 
 import './SelectTree.styl';
 
-export class SelectTree extends Component {
-  static propTypes = {
-    autoFocus: PropTypes.bool,
-    searchEnabled: PropTypes.bool,
-    selectTreeFirstTitle: PropTypes.string,
-    selectTreeSecondTitle: PropTypes.string,
-    /** Called when 'componentDidUpdate' is triggered */
-    onComponentChange: PropTypes.func,
-    /** [{ label, value, items[]}] - An array of items than can be expanded to show child items */
-    items: PropTypes.array.isRequired,
-    /** fn(evt, item) - Called when a child item is selected; receives event and selected item */
-    onSelected: PropTypes.func.isRequired,
-  };
+function SelectTree({
+  autoFocus = true,
+  searchEnabled = true,
+  selectTreeFirstTitle = 'First Level itens',
+  selectTreeSecondTitle,
+  items,
+  onSelected,
+}) {
+  const [searchTerm, setSearchTerm] = useState(null);
+  const [currentNode, setCurrentNode] = useState(null);
 
-  static defaultProps = {
-    searchEnabled: true,
-    autoFocus: true,
-    selectTreeFirstTitle: 'First Level itens',
-    items: [],
-  };
+  const isLeafSelected = (item) => item && !Array.isArray(item.items);
 
-  constructor(props) {
-    super(props);
+  const handleSelected = (event, item) => {
+    if (isLeafSelected(item)) {
+      setSearchTerm(null);
+      setCurrentNode(null);
+    } else {
+      setCurrentNode(item);
+    }
 
-    this.state = {
-      searchTerm: null,
-      currentNode: null,
-      value: null,
-    };
-  }
-
-  render() {
-    const treeItems = this.getTreeItems();
-
-    return (
-      <div className="selectTree selectTreeRoot">
-        <div className="treeContent">
-          {this.headerItem()}
-          <div className="treeOptions">
-            {this.state.currentNode && (
-              <SelectTreeBreadcrumb
-                onSelected={this.onBreadcrumbSelected}
-                label={this.state.currentNode.label}
-                value={this.state.currentNode.value}
-              />
-            )}
-            <div className="treeInputsWrapper">
-              <div className="treeInputs">{treeItems}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  componentDidUpdate = () => {
-    if (this.props.onComponentChange) {
-      this.props.onComponentChange();
+    if (onSelected) {
+      onSelected(event, item);
     }
   };
 
-  isLeafSelected = (item) => item && !Array.isArray(item.items);
-
-  getLabelClass = (item) => {
+  const getLabelClass = (item) => {
     let labelClass = 'treeLeaf';
-    if (this.state.searchTerm || Array.isArray(item.items)) {
+    if (searchTerm || Array.isArray(item.items)) {
       labelClass = 'treeNode';
     }
     return labelClass;
   };
 
-  filterItems() {
+  const filterItems = () => {
     const filteredItems = [];
-    const rawItems = cloneDeep(this.props.items);
+    const rawItems = cloneDeep(items);
+
     rawItems.forEach((item) => {
       if (Array.isArray(item.items)) {
-        item.items.forEach((item) => {
-          const label = item.label.toLowerCase();
-          const searchTerm = this.state.searchTerm.toLowerCase();
-          if (label.indexOf(searchTerm) !== -1) {
-            filteredItems.push(item);
+        item.items.forEach((childItem) => {
+          const label = childItem.label.toLowerCase();
+          const lowercasedSearchTerm = searchTerm.toLowerCase();
+          if (label.indexOf(lowercasedSearchTerm) !== -1) {
+            filteredItems.push(childItem);
           }
         });
       } else {
         const label = item.label.toLowerCase();
-        const searchTerm = this.state.searchTerm.toLowerCase();
-        if (label.indexOf(searchTerm) !== -1) {
+        const lowercasedSearchTerm = searchTerm.toLowerCase();
+        if (label.indexOf(lowercasedSearchTerm) !== -1) {
           filteredItems.push(item);
         }
       }
     });
+
     return filteredItems;
+  };
+
+  let treeItems;
+
+  if (searchTerm) {
+    treeItems = filterItems();
+  } else if (currentNode) {
+    treeItems = cloneDeep(currentNode.items);
+  } else {
+    treeItems = cloneDeep(items);
   }
 
-  getTreeItems() {
-    const storageKey = 'SelectTree';
-    let treeItems;
+  const searchLocations = (evt) => {
+    setSearchTerm(evt.currentTarget.value);
+    setCurrentNode(null);
+  };
 
-    if (this.state.searchTerm) {
-      treeItems = this.filterItems();
-    } else if (this.state.currentNode) {
-      treeItems = _.cloneDeep(this.state.currentNode.items);
-    } else {
-      treeItems = _.cloneDeep(this.props.items);
-    }
+  const onBreadcrumbSelected = () => {
+    setCurrentNode(null);
+  };
 
-    return treeItems.map((item, index) => {
-      let itemKey = index;
-      if (this.state.currentNode) {
-        itemKey += `_${this.state.currentNode.value}`;
-      }
-      return (
-        <InputRadio
-          key={itemKey}
-          id={`${storageKey}_${item.value}`}
-          name={index}
-          itemData={item}
-          value={item.value}
-          label={item.label}
-          labelClass={this.getLabelClass(item)}
-          onSelected={this.onSelected}
-        />
-      );
-    });
-  }
-
-  headerItem = () => {
-    let title = this.props.selectTreeFirstTitle;
-    if (this.state.currentNode && this.props.selectTreeSecondTitle) {
-      title = this.props.selectTreeSecondTitle;
-    }
-
-    return (
-      <div className="wrapperLabel treeHeader">
-        <div className="wrapperText">{title}</div>
-        {this.props.searchEnabled && (
-          <div className="wrapperSearch">
-            <div className="searchIcon">
-              <Icon name="search" />
+  return (
+    <div className="selectTree selectTreeRoot">
+      <div className="treeContent">
+        <div className="wrapperLabel treeHeader">
+          <div className="wrapperText">{currentNode ? selectTreeSecondTitle : selectTreeFirstTitle}</div>
+          {searchEnabled && (
+            <div className="wrapperSearch">
+              <div className="searchIcon">
+                <Icon name="search" />
+              </div>
+              <input
+                type="text"
+                className="searchInput"
+                placeholder="Search labels"
+                autoFocus={autoFocus}
+                onChange={searchLocations}
+                value={searchTerm || ''}
+              />
             </div>
-            <input
-              type="text"
-              className="searchInput"
-              placeholder="Search labels"
-              autoFocus={this.props.autoFocus}
-              onChange={this.searchLocations}
-              value={this.state.searchTerm ? this.state.searchTerm : ''}
+          )}
+        </div>
+        <div className="treeOptions">
+          {currentNode && (
+            <SelectTreeBreadcrumb
+              onSelected={onBreadcrumbSelected}
+              label={currentNode.label}
+              value={currentNode.value}
             />
+          )}
+          <div className="treeInputsWrapper">
+            <div className="treeInputs">
+              {treeItems.map((item, index) => {
+                return (
+                  <InputRadio
+                    key={currentNode ? currentNode.value : index}
+                    id={`SelectTree_${item.value}`}
+                    name={index}
+                    itemData={item}
+                    value={item.value}
+                    label={item.label}
+                    labelClass={getLabelClass(item)}
+                    onSelected={handleSelected}
+                  />
+                );
+              })}
+            </div>
           </div>
-        )}
+        </div>
       </div>
-    );
-  };
-
-  searchLocations = (evt) => {
-    this.setState({
-      currentNode: null,
-      searchTerm: evt.currentTarget.value,
-    });
-  };
-
-  onSelected = (event, item) => {
-    if (this.isLeafSelected(item)) {
-      this.setState({
-        searchTerm: null,
-        currentNode: null,
-        value: null,
-      });
-    } else {
-      this.setState({
-        currentNode: item,
-      });
-    }
-    return this.props.onSelected(event, item);
-  };
-
-  onBreadcrumbSelected = () => {
-    this.setState({
-      currentNode: null,
-    });
-  };
+    </div>
+  );
 }
+
+SelectTree.propTypes = {
+  autoFocus: PropTypes.bool,
+  searchEnabled: PropTypes.bool,
+  selectTreeFirstTitle: PropTypes.string,
+  selectTreeSecondTitle: PropTypes.string,
+  items: PropTypes.array.isRequired,
+  onSelected: PropTypes.func.isRequired,
+};
+
+export default SelectTree;

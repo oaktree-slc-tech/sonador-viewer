@@ -1,12 +1,12 @@
-import React, { Component } from 'react';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
-import { withTranslation } from '../../contextProviders';
+import { OverlayTrigger } from '../overlayTrigger';
+import { TableListItem } from '../tableList';
+import { Tooltip } from '../tooltip';
 
 import { Icon } from './../../elements/Icon';
-import { OverlayTrigger } from './../overlayTrigger';
-import { TableListItem } from './../tableList/TableListItem.js';
-import { Tooltip } from './../tooltip';
 
 import './MeasurementTableItem.styl';
 
@@ -18,142 +18,121 @@ ColoredCircle.propTypes = {
   color: PropTypes.string.isRequired,
 };
 
-class MeasurementTableItem extends Component {
-  static propTypes = {
-    measurementData: PropTypes.object.isRequired,
-    onItemClick: PropTypes.func.isRequired,
-    onRelabel: PropTypes.func,
-    onDelete: PropTypes.func,
-    onEditDescription: PropTypes.func,
-    itemClass: PropTypes.string,
-    itemIndex: PropTypes.number,
-    t: PropTypes.func,
-  };
+const MeasurementTableItem = ({
+  onDelete,
+  itemIndex,
+  measurementData,
+  onRelabel,
+  onItemClick,
+  onEditDescription,
+  itemClass,
+}) => {
+  const { t } = useTranslation('MeasurementTable');
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      collapsed: true,
-      visible: true,
-    };
-  }
+  const [collapsed, setCollapsed] = useState(true);
+  const [visible, setVisible] = useState(true);
 
-  render() {
-    const { warningTitle = '', hasWarnings, isReadOnly } = this.props.measurementData;
-
-    return (
-      <React.Fragment>
-        {hasWarnings && !isReadOnly ? (
-          <OverlayTrigger
-            key={this.props.itemIndex}
-            placement="left"
-            overlay={
-              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
-                <div className="warningTitle">{this.props.t(warningTitle)}</div>
-                <div className="warningContent">{this.getWarningContent()}</div>
-              </Tooltip>
-            }
-          >
-            <div>{this.getTableListItem()}</div>
-          </OverlayTrigger>
-        ) : (
-          <React.Fragment>{this.getTableListItem()}</React.Fragment>
-        )}
-      </React.Fragment>
-    );
-  }
-
-  getActionButton = (btnLabel, onClickCallback) => {
+  const getActionButton = (btnLabel, onClickCallback) => {
     return (
       <button key={btnLabel} className="btnAction" onClick={onClickCallback}>
         <span style={{ marginRight: '4px' }}>
           <Icon name="edit" width="14px" height="14px" />
         </span>
-        {this.props.t(btnLabel)}
+        {t(btnLabel)}
       </button>
     );
   };
 
-  getTableListItem = () => {
-    const hasWarningClass =
-      this.props.measurementData.hasWarnings && !this.props.measurementData.isReadOnly ? 'hasWarnings' : '';
+  const onDeleteClick = (event) => {
+    event.stopPropagation();
+    onDelete(event, measurementData);
+  };
+
+  const onRelabelClick = (event) => {
+    event.stopPropagation();
+    onRelabel(event, measurementData);
+  };
+
+  const onEditDescriptionClick = (event) => {
+    event.stopPropagation();
+    onEditDescription(event, measurementData);
+  };
+
+  const handleItemClick = (event) => {
+    onItemClick(event, measurementData);
+  };
+
+  const getTableListItem = () => {
+    const hasWarningClass = measurementData.hasWarnings && !measurementData.isReadOnly ? 'hasWarnings' : '';
 
     const actionButtons = [];
 
-    if (typeof this.props.onRelabel === 'function') {
-      const relabelButton = this.getActionButton('Relabel', this.onRelabelClick);
+    if (typeof onRelabel === 'function') {
+      const relabelButton = getActionButton('Relabel', onRelabelClick);
       actionButtons.push(relabelButton);
     }
-    if (typeof this.props.onEditDescription === 'function') {
-      const descriptionButton = this.getActionButton('Description', this.onEditDescriptionClick);
+    if (typeof onEditDescription === 'function') {
+      const descriptionButton = getActionButton('Description', onEditDescriptionClick);
       actionButtons.push(descriptionButton);
     }
-    if (typeof this.props.onDelete === 'function') {
-      const deleteButton = this.getActionButton('Delete', this.onDeleteClick);
+    if (typeof onDelete === 'function') {
+      const deleteButton = getActionButton('Delete', onDeleteClick);
       actionButtons.push(deleteButton);
     }
 
-    if (
-      this.props.measurementData.isSRText === true &&
-      this.props.measurementData.labels &&
-      this.props.measurementData.labels.length > 0
-    ) {
+    if (measurementData.isSRText && measurementData.labels && measurementData.labels.length > 0) {
       return (
-        <React.Fragment>
+        <>
           <TableListItem
-            key={this.props.measurementData.measurementNumber}
-            itemKey={this.props.measurementData.measurementNumber}
-            itemClass={`measurementItem ${this.props.itemClass} ${hasWarningClass}`}
-            itemIndex={this.props.itemIndex}
-            onItemClick={this.onItemClick}
+            key={measurementData.measurementNumber}
+            itemKey={measurementData.measurementNumber}
+            itemClass={`measurementItem ${itemClass} ${hasWarningClass}`}
+            itemIndex={itemIndex}
+            onItemClick={handleItemClick}
           >
             <div>
               <div className="measurementLocation">
-                {this.props.t(this.props.measurementData.label, {
+                {t(measurementData.label, {
                   keySeparator: '>',
                   nsSeparator: '|',
                 })}
               </div>
             </div>
             <div className="icons">
-              <div className="displayTexts">{this.getDataDisplayText()}</div>
+              <div className="displayTexts">{getDataDisplayText()}</div>
               <Icon
                 className={`eye-icon`}
-                name={this.state.visible ? 'eye' : 'eye-closed'}
+                name={visible ? 'eye' : 'eye-closed'}
                 width="20px"
                 height="20px"
                 onClick={() => {
-                  this.props.measurementData.labels.forEach((label) => {
-                    label.visible = !this.state.visible;
+                  measurementData.labels.forEach((label) => {
+                    label.visible = !visible;
                   });
 
-                  this.setState({
-                    visible: !this.state.visible,
-                  });
+                  setVisible((prevState) => !prevState);
                 }}
               />
               <Icon
-                className={`angle-double-${this.state.collapsed ? 'down' : 'up'}`}
-                name={`angle-double-${this.state.collapsed ? 'down' : 'up'}`}
+                className={`angle-double-${collapsed ? 'down' : 'up'}`}
+                name={`angle-double-${collapsed ? 'down' : 'up'}`}
                 width="20px"
                 height="20px"
                 onClick={() => {
-                  this.setState({
-                    collapsed: !this.state.collapsed,
-                  });
+                  setCollapsed((prevState) => !prevState);
                 }}
               />
             </div>
           </TableListItem>
-          {this.state.collapsed &&
-            this.props.measurementData.labels.map((SRLabel, index) => {
+          {collapsed &&
+            measurementData.labels.map((SRLabel, index) => {
               return (
                 <TableListItem
                   key={index}
                   itemKey={index}
                   itemMeta={<ColoredCircle color={SRLabel.color} />}
                   itemMetaClass="item-color-section"
-                  onItemClick={this.onItemClick}
+                  onItemClick={handleItemClick}
                 >
                   <div>
                     <div className="icons">
@@ -172,59 +151,34 @@ class MeasurementTableItem extends Component {
                 </TableListItem>
               );
             })}
-        </React.Fragment>
+        </>
       );
     } else {
       return (
         <TableListItem
-          key={this.props.measurementData.measurementNumber}
-          itemKey={this.props.measurementData.measurementNumber}
-          itemClass={`measurementItem ${this.props.itemClass} ${hasWarningClass}`}
-          itemIndex={this.props.itemIndex}
-          onItemClick={this.onItemClick}
+          key={measurementData.measurementNumber}
+          itemKey={measurementData.measurementNumber}
+          itemClass={`measurementItem ${itemClass} ${hasWarningClass}`}
+          itemIndex={itemIndex}
+          onItemClick={handleItemClick}
         >
           <div>
             <div className="measurementLocation">
-              {this.props.t(this.props.measurementData.label, {
+              {t(measurementData.label, {
                 keySeparator: '>',
                 nsSeparator: '|',
               })}
             </div>
-            <div className="displayTexts">{this.getDataDisplayText()}</div>
-            {!this.props.measurementData.isReadOnly && <div className="rowActions">{actionButtons}</div>}
+            <div className="displayTexts">{getDataDisplayText()}</div>
+            {!measurementData.isReadOnly && <div className="rowActions">{actionButtons}</div>}
           </div>
         </TableListItem>
       );
     }
   };
 
-  onItemClick = (event) => {
-    this.props.onItemClick(event, this.props.measurementData);
-  };
-
-  onRelabelClick = (event) => {
-    // Prevent onItemClick from firing
-    event.stopPropagation();
-
-    this.props.onRelabel(event, this.props.measurementData);
-  };
-
-  onEditDescriptionClick = (event) => {
-    // Prevent onItemClick from firing
-    event.stopPropagation();
-
-    this.props.onEditDescription(event, this.props.measurementData);
-  };
-
-  onDeleteClick = (event) => {
-    // Prevent onItemClick from firing
-    event.stopPropagation();
-
-    this.props.onDelete(event, this.props.measurementData);
-  };
-
-  getDataDisplayText = () => {
-    return this.props.measurementData.data.map((data, index) => {
+  const getDataDisplayText = () => {
+    return measurementData.data.map((data, index) => {
       return (
         <div key={`displayText_${index}`} className="measurementDisplayText">
           {data.displayText ? data.displayText : '...'}
@@ -233,8 +187,8 @@ class MeasurementTableItem extends Component {
     });
   };
 
-  getWarningContent = () => {
-    const { warningList = '' } = this.props.measurementData;
+  const getWarningContent = () => {
+    const { warningList = '' } = measurementData;
 
     if (Array.isArray(warningList)) {
       const listedWarnings = warningList.map((warn, index) => {
@@ -243,11 +197,42 @@ class MeasurementTableItem extends Component {
 
       return <ol>{listedWarnings}</ol>;
     } else {
-      return <React.Fragment>{warningList}</React.Fragment>;
+      return <>{warningList}</>;
     }
   };
-}
 
-const connectedComponent = withTranslation('MeasurementTable')(MeasurementTableItem);
-export { connectedComponent as MeasurementTableItem };
-export default connectedComponent;
+  const { warningTitle = '', hasWarnings, isReadOnly } = measurementData;
+
+  return (
+    <>
+      {hasWarnings && !isReadOnly ? (
+        <OverlayTrigger
+          key={itemIndex}
+          placement="left"
+          overlay={
+            <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
+              <div className="warningTitle">{t(warningTitle)}</div>
+              <div className="warningContent">{getWarningContent()}</div>
+            </Tooltip>
+          }
+        >
+          <div>{getTableListItem()}</div>
+        </OverlayTrigger>
+      ) : (
+        <>{getTableListItem()}</>
+      )}
+    </>
+  );
+};
+
+MeasurementTableItem.propTypes = {
+  measurementData: PropTypes.object.isRequired,
+  onItemClick: PropTypes.func.isRequired,
+  onRelabel: PropTypes.func,
+  onDelete: PropTypes.func,
+  onEditDescription: PropTypes.func,
+  itemClass: PropTypes.string,
+  itemIndex: PropTypes.number,
+};
+
+export { MeasurementTableItem };

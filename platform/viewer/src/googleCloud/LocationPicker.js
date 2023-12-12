@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import api from './api/GoogleCloudApi';
@@ -6,52 +6,46 @@ import LocationsList from './LocationsList';
 
 import './googleCloud.css';
 
-export default class LocationPicker extends Component {
-  state = {
-    error: null,
-    loading: true,
-    locations: [],
-    filterStr: '',
-  };
+function LocationPicker({ project, onSelect, accessToken }) {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [locations, setLocations] = useState([]);
+  const [filterStr, setFilterStr] = useState('');
 
-  static propTypes = {
-    project: PropTypes.object,
-    onSelect: PropTypes.func,
-    accessToken: PropTypes.string,
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      api.setAccessToken(accessToken);
 
-  async componentDidMount() {
-    api.setAccessToken(this.props.accessToken);
+      const response = await api.loadLocations(project.projectId);
 
-    const response = await api.loadLocations(this.props.project.projectId);
+      if (response.isError) {
+        setError(response.message);
+      } else {
+        setLocations(response.data.locations || []);
+        setLoading(false);
+      }
+    };
 
-    if (response.isError) {
-      this.setState({
-        error: response.message,
-      });
+    fetchData();
+  }, []);
 
-      return;
-    }
-
-    this.setState({
-      locations: response.data.locations || [],
-      loading: false,
-    });
-  }
-
-  render() {
-    const { locations, loading, error, filterStr } = this.state;
-    const { onSelect } = this.props;
-    return (
-      <div>
-        <input
-          className="form-control gcp-input"
-          type="text"
-          value={filterStr}
-          onChange={(e) => this.setState({ filterStr: e.target.value })}
-        />
-        <LocationsList locations={locations} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
-      </div>
-    );
-  }
+  return (
+    <div>
+      <input
+        className="form-control gcp-input"
+        type="text"
+        value={filterStr}
+        onChange={(e) => setFilterStr(e.target.value)}
+      />
+      <LocationsList locations={locations} loading={loading} error={error} filter={filterStr} onSelect={onSelect} />
+    </div>
+  );
 }
+
+LocationPicker.propTypes = {
+  project: PropTypes.object,
+  onSelect: PropTypes.func,
+  accessToken: PropTypes.string,
+};
+
+export default LocationPicker;

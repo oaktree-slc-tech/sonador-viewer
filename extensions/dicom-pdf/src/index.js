@@ -1,6 +1,7 @@
 import React from 'react';
 
-import { version } from '../package.json';
+import dicomPdfVersion from '../package.json';
+
 import OHIFDicomPDFSopClassHandler from './OHIFDicomPDFSopClassHandler.js';
 
 const Component = React.lazy(() => {
@@ -20,7 +21,7 @@ export default {
    * Only required property. Should be a unique value across all extensions.
    */
   id: 'pdf',
-  version,
+  version: dicomPdfVersion.version,
   getSopClassHandlerModule() {
     return OHIFDicomPDFSopClassHandler;
   },

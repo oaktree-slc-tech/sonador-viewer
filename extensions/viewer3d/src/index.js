@@ -1,26 +1,21 @@
 // 3D File Viewer: STL and GLB
+import viewer3dPackage from '../package.json';
 
-import { asyncComponent, retryImport } from '@ohif/ui';
-
-import { version } from '../package.json';
-import OHIFDicom3DSopClassHandler from './OHIFDicom3DSopClassHandler.js';
 import commandsModule from './commandsModule.js';
-import toolbarModule from './toolbarModule.js';
-import withCommandsManager from './withCommandsManager.js';
-
-const ConnectedOHIFDicomM3DViewport = asyncComponent(() =>
-  retryImport(() => import('./ConnectedOHIFDicomM3DViewport.js'))
-);
+import ConnectedOHIFDicomM3DViewport from './ConnectedOHIFDicomM3DViewport';
+import OHIFDicom3DSopClassHandler from './OHIFDicom3DSopClassHandler';
+import toolbarModule from './toolbarModule';
+import withCommandsManager from './withCommandsManager';
 
 // 3D Model Viewer
 export default {
   id: 'viewerm3d',
-  version,
-  preRegistration({ servicesManager, commandsManager, appConfig }) {},
-  getSopClassHandlerModule({ servicesManager }) {
+  version: viewer3dPackage.version,
+  preRegistration() {},
+  getSopClassHandlerModule() {
     return OHIFDicom3DSopClassHandler;
   },
-  getViewportModule({ commandsManager, servicesManager }) {
+  getViewportModule({ commandsManager }) {
     return withCommandsManager(ConnectedOHIFDicomM3DViewport, commandsManager);
   },
   getToolbarModule() {

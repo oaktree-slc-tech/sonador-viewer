@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
+import SideBarNG from '../../components/SideBarNG/SideBarNG';
 import { useDeviceStore } from '../../store/useDeviceStore';
-import SideBarNG from '../../studylist/SideBarNG/SideBarNG';
 
 import TabletMobileHeader from './components/TabletMobileHeader/TabletMobileHeader';
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { withTranslation } from 'react-i18next';
-import { Link, withRouter } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Link, useLocation } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
@@ -12,7 +12,18 @@ import { UserPreferences } from '../UserPreferences';
 
 import './Header.css';
 
-function Header({ t, user, userManager, modal: { show }, useLargeLogo, linkPath, linkText, location, children }) {
+function Header({
+  user,
+  userManager,
+  modal: { show },
+  useLargeLogo = false,
+  linkPath,
+  linkText,
+  children = OHIFLogo(),
+}) {
+  const { t } = useTranslation(['Header', 'AboutModal']);
+
+  const location = useLocation();
   const hasLink = linkText && linkPath;
 
   const options = [
@@ -61,10 +72,8 @@ function Header({ t, user, userManager, modal: { show }, useLargeLogo, linkPath,
           {hasLink && (
             <Link
               className="header-btn header-studyListLinkSection"
-              to={{
-                pathname: linkPath,
-                state: { studyLink: location.pathname },
-              }}
+              to={linkPath}
+              state={{ stydyLink: location.pathname }}
             >
               {t(linkText)}
             </Link>
@@ -81,23 +90,14 @@ function Header({ t, user, userManager, modal: { show }, useLargeLogo, linkPath,
 }
 
 Header.propTypes = {
-  // Study list, /
   linkText: PropTypes.string,
   linkPath: PropTypes.string,
   useLargeLogo: PropTypes.bool,
-  //
-  location: PropTypes.object.isRequired,
   children: PropTypes.node,
-  t: PropTypes.func.isRequired,
   userManager: PropTypes.object,
   user: PropTypes.object,
   modal: PropTypes.object,
   servers: PropTypes.array,
 };
 
-Header.defaultProps = {
-  useLargeLogo: false,
-  children: OHIFLogo(),
-};
-
-export default withTranslation(['Header', 'AboutModal'])(withRouter(withModal(Header)));
+export default withModal(Header);

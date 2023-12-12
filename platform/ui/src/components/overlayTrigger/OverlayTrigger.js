@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 import warning from 'warning';
 
 import createChainedFunction from './createChainedFunction';
-import { Overlay } from './Overlay';
+import Overlay from './Overlay';
 
 /**
  * Check if value one is inside or equal to the of value

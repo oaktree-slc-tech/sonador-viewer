@@ -1,39 +1,32 @@
-import React, { Component } from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 import './Range.css';
 
-class Range extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { value: props.value || 0 };
-  }
+function Range({ value, min, max, step, onChange, id, showPercentage, showValue, valueRenderer }) {
+  const [state, setState] = useState({ value: value || 0 });
 
-  handleChange = (event) => {
-    this.setState({ value: event.target.value });
-    if (this.props.onChange) this.props.onChange(event);
+  const handleChange = (event) => {
+    setState({ value: event.target.value });
+    if (onChange) onChange(event);
   };
 
-  render() {
-    return (
-      <>
-        <input
-          type="range"
-          value={this.state.value}
-          min={this.props.min}
-          max={this.props.max}
-          step={this.props.step || 1}
-          onChange={this.handleChange}
-          id={this.props.id}
-          className="range"
-        />
-        {this.props.showPercentage && <span>{`${this.state.value}%`}</span>}
-        {this.props.showValue && (
-          <span>{this.props.valueRenderer ? this.props.valueRenderer(this.state.value) : this.state.value}</span>
-        )}
-      </>
-    );
-  }
+  return (
+    <>
+      <input
+        type="range"
+        value={state.value}
+        min={min}
+        max={max}
+        step={step || 1}
+        onChange={handleChange}
+        id={id}
+        className="range"
+      />
+      {showPercentage && <span>{`${state.value}%`}</span>}
+      {showValue && <span>{valueRenderer ? valueRenderer(state.value) : state.value}</span>}
+    </>
+  );
 }
 
 Range.propTypes = {

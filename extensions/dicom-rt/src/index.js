@@ -1,11 +1,13 @@
 import React from 'react';
+
 import { utils } from '@ohif/core';
 
+import dicomRtPackage from '../package.json';
+
+import RTPanel from './components/RTPanel/RTPanel';
+import id from './id.js';
 import init from './init.js';
 import sopClassHandlerModule from './OHIFDicomRTStructSopClassHandler';
-import id from './id.js';
-import RTPanel from './components/RTPanel/RTPanel';
-import { version } from '../package.json';
 
 const { studyMetadataManager } = utils;
 
@@ -14,7 +16,7 @@ export default {
    * Only required property. Should be a unique value across all extensions.
    */
   id,
-  version,
+  versions: dicomRtPackage.version,
 
   /**
    *
@@ -26,10 +28,10 @@ export default {
     init({ servicesManager, configuration });
   },
   getPanelModule({ commandsManager, servicesManager, api }) {
-    const ExtendedRTPanel = props => {
+    const ExtendedRTPanel = (props) => {
       const { activeContexts } = api.hooks.useAppContext();
 
-      const contourItemClickHandler = contourData => {
+      const contourItemClickHandler = (contourData) => {
         commandsManager.runCommand('jumpToImage', contourData);
       };
 
@@ -53,7 +55,7 @@ export default {
      *
      * @param {object} data
      */
-    const triggerRTPanelUpdatedEvent = data => {
+    const triggerRTPanelUpdatedEvent = (data) => {
       const event = new CustomEvent(RTPanelTabChangedEvent, {
         detail: data,
       });
@@ -63,9 +65,7 @@ export default {
     const onRTStructsLoaded = ({ detail }) => {
       const { rtStructDisplaySet, referencedDisplaySet } = detail;
 
-      const studyMetadata = studyMetadataManager.get(
-        rtStructDisplaySet.StudyInstanceUID
-      );
+      const studyMetadata = studyMetadataManager.get(rtStructDisplaySet.StudyInstanceUID);
       const referencedDisplaysets = studyMetadata.getDerivedDatasets({
         referencedSeriesInstanceUID: referencedDisplaySet.SeriesInstanceUID,
         Modality: 'RTSTRUCT',
@@ -91,9 +91,7 @@ export default {
             }
 
             if (activeViewport) {
-              const studyMetadata = studyMetadataManager.get(
-                activeViewport.StudyInstanceUID
-              );
+              const studyMetadata = studyMetadataManager.get(activeViewport.StudyInstanceUID);
               if (!studyMetadata) {
                 return;
               }
@@ -101,12 +99,7 @@ export default {
                 referencedSeriesInstanceUID: activeViewport.SeriesInstanceUID,
                 Modality: 'RTSTRUCT',
               });
-              if (
-                referencedDisplaySets &&
-                referencedDisplaySets.some(ds =>
-                  ['RTSTRUCT'].includes(ds.Modality)
-                )
-              ) {
+              if (referencedDisplaySets && referencedDisplaySets.some((ds) => ['RTSTRUCT'].includes(ds.Modality))) {
                 triggerRTPanelUpdatedEvent({
                   badgeNumber: referencedDisplaySets.length,
                   target: 'rt-panel',

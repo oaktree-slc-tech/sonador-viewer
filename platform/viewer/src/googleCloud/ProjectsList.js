@@ -1,40 +1,27 @@
-import React, { Component } from 'react';
-import { withTranslation } from 'react-i18next';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { Icon } from '@ohif/ui';
 
 import './googleCloud.css';
 
-class ProjectsList extends Component {
-  state = {
-    search: '',
-    highlightedItem: null,
-  };
+const ProjectsList = ({ projects, loading = true, filter, error, onSelect }) => {
+  const { t } = useTranslation('Common');
 
-  static propTypes = {
-    projects: PropTypes.array,
-    loading: PropTypes.bool.isRequired,
-    error: PropTypes.string,
-    onSelect: PropTypes.func.isRequired,
-    t: PropTypes.func,
-  };
+  const [highlightedItem, setHighlightedItem] = useState(null);
 
-  static defaultProps = {
-    loading: true,
-  };
-
-  renderTableRow = (project) => {
+  const renderTableRow = (project) => {
     return (
       <tr
         key={project.projectId}
-        className={this.state.highlightedItem === project.projectId ? 'noselect active' : 'noselect'}
+        className={highlightedItem === project.projectId ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
-          this.onHighlightItem(project.projectId);
+          onHighlightItem(project.projectId);
         }}
         onClick={() => {
-          this.onHighlightItem(project.projectId);
-          this.props.onSelect(project);
+          onHighlightItem(project.projectId);
+          onSelect(project);
         }}
       >
         <td>{project.name}</td>
@@ -43,43 +30,46 @@ class ProjectsList extends Component {
     );
   };
 
-  onHighlightItem(project) {
-    this.setState({ highlightedItem: project });
+  const onHighlightItem = (projectId) => {
+    setHighlightedItem(projectId);
+  };
+
+  if (error) {
+    return <p>{error}</p>;
   }
 
-  render() {
-    const { loading, projects, filter, error } = this.props;
+  const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
-    if (error) {
-      return <p>{error}</p>;
-    }
-
-    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
-
-    if (loading) {
-      return loadingIcon;
-    }
-
-    const lowerCaseFilter = filter.toLowerCase();
-    const filteredProjects = projects.filter(
-      (project) =>
-        typeof project.name === 'string' && (filter === '' || project.name.toLowerCase().includes(lowerCaseFilter))
-    );
-
-    const body = <tbody id="ProjectList">{filteredProjects.map(this.renderTableRow)}</tbody>;
-
-    return (
-      <table id="tblProjectList" className="gcp-table table noselect">
-        <thead>
-          <tr>
-            <th>{this.props.t('Project')}</th>
-            <th>{this.props.t('ID')}</th>
-          </tr>
-        </thead>
-        {projects && body}
-      </table>
-    );
+  if (loading) {
+    return loadingIcon;
   }
-}
 
-export default withTranslation('Common')(ProjectsList);
+  const lowerCaseFilter = filter.toLowerCase();
+  const filteredProjects = projects.filter(
+    (project) =>
+      typeof project.name === 'string' && (filter === '' || project.name.toLowerCase().includes(lowerCaseFilter))
+  );
+
+  const body = <tbody id="ProjectList">{filteredProjects.map(renderTableRow)}</tbody>;
+
+  return (
+    <table id="tblProjectList" className="gcp-table table noselect">
+      <thead>
+        <tr>
+          <th>{t('Project')}</th>
+          <th>{t('ID')}</th>
+        </tr>
+      </thead>
+      {projects && body}
+    </table>
+  );
+};
+
+ProjectsList.propTypes = {
+  projects: PropTypes.array,
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string,
+  onSelect: PropTypes.func.isRequired,
+};
+
+export default ProjectsList;

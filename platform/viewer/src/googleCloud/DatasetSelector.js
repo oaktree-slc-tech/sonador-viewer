@@ -1,5 +1,5 @@
-import React, { Component } from 'react';
-import { withTranslation } from 'react-i18next';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import GoogleCloudApi from './api/GoogleCloudApi';
@@ -10,62 +10,41 @@ import ProjectPicker from './ProjectPicker';
 
 import './googleCloud.css';
 
-class DatasetSelector extends Component {
-  state = {
-    project: null,
-    location: null,
-    dataset: null,
-    unloading: false,
+const DatasetSelector = ({ user, setServers }) => {
+  const { t } = useTranslation('Common');
+
+  const [project, setProject] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [dataset, setDataset] = useState(null);
+
+  const onProjectSelect = (project) => {
+    setProject(project);
   };
 
-  static propTypes = {
-    id: PropTypes.string,
-    event: PropTypes.string,
-    user: PropTypes.object,
-    canClose: PropTypes.string,
-    setServers: PropTypes.func.isRequired,
+  const onLocationSelect = (location) => {
+    setLocation(location);
   };
 
-  onProjectSelect = (project) => {
-    this.setState({
-      project,
-    });
+  const onDatasetSelect = (dataset) => {
+    setDataset(dataset);
   };
 
-  onLocationSelect = (location) => {
-    this.setState({
-      location,
-    });
+  const onProjectClick = () => {
+    setDataset(null);
+    setLocation(null);
+    setProject(null);
   };
 
-  onDatasetSelect = (dataset) => {
-    this.setState({
-      dataset,
-    });
+  const onLocationClick = () => {
+    setDataset(null);
+    setLocation(null);
   };
 
-  onProjectClick = () => {
-    this.setState({
-      dataset: null,
-      location: null,
-      project: null,
-    });
+  const onDatasetClick = () => {
+    setDataset(null);
   };
 
-  onLocationClick = () => {
-    this.setState({
-      dataset: null,
-      location: null,
-    });
-  };
-
-  onDatasetClick = () => {
-    this.setState({
-      dataset: null,
-    });
-  };
-
-  onDicomStoreSelect = (dicomStoreJson) => {
+  const onDicomStoreSelect = (dicomStoreJson) => {
     const dicomStore = dicomStoreJson.name;
     const parts = dicomStore.split('/');
     const result = {
@@ -77,56 +56,51 @@ class DatasetSelector extends Component {
       dataset: parts[5],
       dicomStore: parts[7],
     };
-    this.props.setServers(result);
+    setServers(result);
   };
 
-  render() {
-    const accessToken = this.props.user.access_token;
+  let projectBreadcrumbs = (
+    <div className="gcp-picker--path">
+      <span>{t('Select a Project')}</span>
+    </div>
+  );
 
-    const { project, location, dataset } = this.state;
-    const {
-      onProjectClick,
-      onLocationClick,
-      onDatasetClick,
-      onProjectSelect,
-      onLocationSelect,
-      onDatasetSelect,
-      onDicomStoreSelect,
-    } = this;
-
-    let projectBreadcrumbs = (
+  if (project) {
+    projectBreadcrumbs = (
       <div className="gcp-picker--path">
-        <span>{this.props.t('Select a Project')}</span>
+        <span onClick={onProjectClick}>{project.name}</span>
+        {project && location && <span onClick={onLocationClick}> -> {location.name.split('/')[3]}</span>}
+        {project && location && dataset && <span onClick={onDatasetClick}> -> {dataset.name.split('/')[5]}</span>}
       </div>
     );
-
-    if (project) {
-      projectBreadcrumbs = (
-        <div className="gcp-picker--path">
-          <span onClick={onProjectClick}>{project.name}</span>
-          {project && location && <span onClick={onLocationClick}> -> {location.name.split('/')[3]}</span>}
-          {project && location && dataset && <span onClick={onDatasetClick}> -> {dataset.name.split('/')[5]}</span>}
-        </div>
-      );
-    }
-
-    return (
-      <>
-        {projectBreadcrumbs}
-        {!project && <ProjectPicker accessToken={accessToken} onSelect={onProjectSelect} />}
-
-        {project && !location && (
-          <LocationPicker accessToken={accessToken} project={project} onSelect={onLocationSelect} />
-        )}
-        {project && location && !dataset && (
-          <DatasetPicker accessToken={accessToken} project={project} location={location} onSelect={onDatasetSelect} />
-        )}
-        {project && location && dataset && (
-          <DicomStorePicker accessToken={accessToken} dataset={dataset} onSelect={onDicomStoreSelect} />
-        )}
-      </>
-    );
   }
-}
 
-export default withTranslation('Common')(DatasetSelector);
+  return (
+    <>
+      {projectBreadcrumbs}
+      {!project && <ProjectPicker accessToken={user.access_token} onSelect={onProjectSelect} />}
+
+      {project && !location && (
+        <LocationPicker accessToken={user.access_token} project={project} onSelect={onLocationSelect} />
+      )}
+      {project && location && !dataset && (
+        <DatasetPicker
+          accessToken={user.access_token}
+          project={project}
+          location={location}
+          onSelect={onDatasetSelect}
+        />
+      )}
+      {project && location && dataset && (
+        <DicomStorePicker accessToken={user.access_token} dataset={dataset} onSelect={onDicomStoreSelect} />
+      )}
+    </>
+  );
+};
+
+DatasetSelector.propTypes = {
+  user: PropTypes.object.isRequired,
+  setServers: PropTypes.func.isRequired,
+};
+
+export default DatasetSelector;

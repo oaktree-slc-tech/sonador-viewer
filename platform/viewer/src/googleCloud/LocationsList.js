@@ -1,37 +1,26 @@
-import React, { Component } from 'react';
-import { withTranslation } from 'react-i18next';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { Icon } from '@ohif/ui';
 
 import './googleCloud.css';
 
-class LocationsList extends Component {
-  state = {
-    search: '',
-  };
+const LocationsList = ({ locations, loading = true, filter, error, onSelect }) => {
+  const { t } = useTranslation('Common');
 
-  static propTypes = {
-    locations: PropTypes.array,
-    loading: PropTypes.bool.isRequired,
-    error: PropTypes.string,
-    onSelect: PropTypes.func,
-  };
+  const [highlightedItem, setHighlightedItem] = useState(null);
 
-  static defaultProps = {
-    loading: true,
-  };
-
-  renderTableRow = (location) => {
+  const renderTableRow = (location) => {
     return (
       <tr
         key={location.locationId}
-        className={this.state.highlightedItem === location.locationId ? 'noselect active' : 'noselect'}
+        className={highlightedItem === location.locationId ? 'noselect active' : 'noselect'}
         onMouseEnter={() => {
-          this.onHighlightItem(location.locationId);
+          onHighlightItem(location.locationId);
         }}
         onClick={() => {
-          this.props.onSelect(location);
+          onSelect(location);
         }}
       >
         <td>{location.name.split('/')[3]}</td>
@@ -39,44 +28,45 @@ class LocationsList extends Component {
     );
   };
 
-  onHighlightItem(locationId) {
-    this.setState({ highlightedItem: locationId });
+  const onHighlightItem = (locationId) => {
+    setHighlightedItem(locationId);
+  };
+
+  if (error) {
+    return <p>{error}</p>;
   }
 
-  render() {
-    const { loading, locations, filter, error } = this.props;
+  const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
 
-    if (error) {
-      return <p>{error}</p>;
-    }
-
-    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
-
-    if (loading) {
-      return loadingIcon;
-    }
-
-    const body = (
-      <tbody id="LocationList">
-        {locations
-          .filter(
-            (location) => location.name.split('/')[3].toLowerCase().includes(filter.toLowerCase()) || filter == ''
-          )
-          .map(this.renderTableRow)}
-      </tbody>
-    );
-
-    return (
-      <table id="tblLocationList" className="gcp-table table noselect">
-        <thead>
-          <tr>
-            <th>{this.props.t('Location')}</th>
-          </tr>
-        </thead>
-        {locations && body}
-      </table>
-    );
+  if (loading) {
+    return loadingIcon;
   }
-}
 
-export default withTranslation('Common')(LocationsList);
+  const body = (
+    <tbody id="LocationList">
+      {locations
+        .filter((location) => location.name.split('/')[3].toLowerCase().includes(filter.toLowerCase()) || filter === '')
+        .map(renderTableRow)}
+    </tbody>
+  );
+
+  return (
+    <table id="tblLocationList" className="gcp-table table noselect">
+      <thead>
+        <tr>
+          <th>{t('Location')}</th>
+        </tr>
+      </thead>
+      {locations && body}
+    </table>
+  );
+};
+
+LocationsList.propTypes = {
+  locations: PropTypes.array,
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string,
+  onSelect: PropTypes.func,
+};
+
+export default LocationsList;

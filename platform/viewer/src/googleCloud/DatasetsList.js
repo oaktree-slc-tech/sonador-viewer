@@ -1,80 +1,58 @@
-import React, { Component } from 'react';
-import { withTranslation } from 'react-i18next';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { Icon } from '@ohif/ui';
 
 import './googleCloud.css';
 
-class DatasetsList extends Component {
-  state = {
-    search: '',
+const DatasetsList = ({ datasets, loading = true, error, onSelect }) => {
+  const { t } = useTranslation('Common');
+
+  const [highlightedItem, setHighlightedItem] = useState('');
+
+  const onHighlightItem = (dataset) => {
+    setHighlightedItem(dataset);
   };
 
-  static propTypes = {
-    datasets: PropTypes.array,
-    loading: PropTypes.bool,
-    error: PropTypes.string,
-    onSelect: PropTypes.func,
-  };
-
-  static defaultProps = {
-    loading: true,
-  };
-
-  renderTableRow = (dataset) => {
-    return (
-      <tr
-        key={dataset.name}
-        className={this.state.highlightedItem === dataset.name ? 'noselect active' : 'noselect'}
-        onMouseEnter={() => {
-          this.onHighlightItem(dataset.name);
-        }}
-        onClick={() => {
-          this.props.onSelect(dataset);
-        }}
-      >
-        <td>{dataset.name.split('/')[5]}</td>
-      </tr>
-    );
-  };
-
-  onHighlightItem(dataset) {
-    this.setState({ highlightedItem: dataset });
+  if (error) {
+    return <p>{error}</p>;
   }
 
-  render() {
-    const { loading, datasets, filter, error } = this.props;
-
-    if (error) {
-      return <p>{error}</p>;
-    }
-
-    const loadingIcon = <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
-
-    if (loading) {
-      return loadingIcon;
-    }
-
-    const body = (
-      <tbody id="DatasetList">
-        {datasets
-          .filter((dataset) => dataset.name.split('/')[5].toLowerCase().includes(filter.toLowerCase()) || filter == '')
-          .map(this.renderTableRow)}
-      </tbody>
-    );
-
-    return (
-      <table id="tblDatasetList" className="gcp-table table noselect">
-        <thead>
-          <tr>
-            <th>{this.props.t('Dataset')}</th>
-          </tr>
-        </thead>
-        {datasets && body}
-      </table>
-    );
+  if (loading) {
+    return <Icon name="circle-notch" className="loading-icon-spin loading-icon" />;
   }
-}
 
-export default withTranslation('Common')(DatasetsList);
+  return (
+    <table id="tblDatasetList" className="gcp-table table noselect">
+      <thead>
+        <tr>
+          <th>{t('Dataset')}</th>
+        </tr>
+      </thead>
+      {datasets && (
+        <tbody id="DatasetList">
+          {datasets.map((dataset) => (
+            <tr
+              key={dataset.name}
+              className={highlightedItem === dataset.name ? 'noselect active' : 'noselect'}
+              onMouseEnter={() => onHighlightItem(dataset.name)}
+              onClick={() => onSelect(dataset)}
+            >
+              <td>{dataset.name.split('/')[5]}</td>
+            </tr>
+          ))}
+        </tbody>
+      )}
+    </table>
+  );
+};
+
+DatasetsList.propTypes = {
+  datasets: PropTypes.array,
+  loading: PropTypes.bool,
+  error: PropTypes.string,
+  onSelect: PropTypes.func,
+};
+
+export default DatasetsList;

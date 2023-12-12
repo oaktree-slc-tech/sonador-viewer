@@ -4,23 +4,23 @@ import moment from 'moment';
 import PropTypes from 'prop-types';
 
 import OHIF, { DICOMSR, MODULE_TYPES } from '@ohif/core';
+import { ReconstructionIssues } from '@ohif/core/src/enums';
 import { withDialog } from '@ohif/ui';
 
+import { extensionManager, servicesManager } from '../App';
 import StudyLoadingMonitor from '../components/StudyLoadingMonitor';
-import StudyPrefetcher from '../components/StudyPrefetcher.js';
+import StudyPrefetcher from '../components/StudyPrefetcher/StudyPrefetcher';
 import AppContext from '../context/AppContext';
 import UserManagerContext from '../context/UserManagerContext';
 // Contexts
-import WhiteLabelingContext from '../context/WhiteLabelingContext.js';
+import WhiteLabelingContext from '../context/WhiteLabelingContext';
 
-import { ReconstructionIssues } from '@ohif/core/src/enums';
-import { extensionManager, servicesManager } from '../App';
 import ErrorBoundaryDialog from './../components/ErrorBoundaryDialog';
-import SidePanel from './../components/SidePanel.js';
-import ConnectedHeader from './ConnectedHeader.js';
-import ConnectedStudyBrowser from './ConnectedStudyBrowser.js';
-import ConnectedViewerMain from './ConnectedViewerMain.js';
-import ToolbarRow from './ToolbarRow.js';
+import SidePanel from './../components/SidePanel/SidePanel';
+import ConnectedHeader from './ConnectedHeader';
+import ConnectedStudyBrowser from './ConnectedStudyBrowser';
+import ConnectedViewerMain from './ConnectedViewerMain';
+import ToolbarRow from './ToolbarRow';
 
 import './Viewer.css';
 
