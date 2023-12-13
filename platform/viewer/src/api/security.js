@@ -2,6 +2,8 @@ import DICOMWeb from '@ohif/core/src/DICOMWeb';
 import { sonadorUrl } from './sonador.js';
 
 export const fetchTokens = (server) => {
+  // Retrieve access tokens from the Sonador server
+
   return fetch(sonadorUrl('auth/api/cred/token').href, {
     headers: DICOMWeb.getAuthorizationHeader(server),
     credentials: 'include',
@@ -9,6 +11,8 @@ export const fetchTokens = (server) => {
 };
 
 export const createToken = ({ server, description, csrfToken }) => {
+  // Create an API access token
+
   const headers = DICOMWeb.getAuthorizationHeader(server);
   headers['X-CSRFToken'] = csrfToken;
 
@@ -29,6 +33,8 @@ export const createToken = ({ server, description, csrfToken }) => {
 };
 
 export const fetchAccesses = (server) => {
+  // Fetch secure API access credentials from the Sonadoer server
+
   return fetch(sonadorUrl('auth/api/cred/token').href, {
     headers: DICOMWeb.getAuthorizationHeader(server),
     credentials: 'include',
@@ -36,6 +42,8 @@ export const fetchAccesses = (server) => {
 };
 
 export const createAccessIdAndSecretKey = ({ server, description, csrfToken }) => {
+  // Create Sonador secure authorization credentials (access ID and secret key)
+
   const headers = DICOMWeb.getAuthorizationHeader(server);
   headers['X-CSRFToken'] = csrfToken;
 
@@ -56,6 +64,8 @@ export const createAccessIdAndSecretKey = ({ server, description, csrfToken }) =
 };
 
 export const getCsrfToken = ({ server }) => {
+  // Retrieve a CSRF token from Sonador to allow
+
   return fetch(sonadorUrl('auth/api/cred/csrf-token').href, {
     headers: DICOMWeb.getAuthorizationHeader(server),
     credentials: 'include',
