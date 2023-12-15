@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useContext, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import PropTypes from 'prop-types';
@@ -31,7 +31,7 @@ const OHIFStandaloneViewer = ({ userManager }) => {
   const user = useSelector((state) => state.oidc.user);
   const servers = useSelector((state) => state.servers.servers);
 
-  const { appConfig = {} } = React.useContext(AppContext);
+  const { appConfig = {} } = useContext(AppContext);
   const userNotLoggedIn = userManager && (!user || user.expired);
   const { activeServerToken } = qs.parse(location.search.replace('?', ''));
   const areServersPresent = servers.length > 0;
@@ -63,7 +63,9 @@ const OHIFStandaloneViewer = ({ userManager }) => {
                 console.warn(error);
                 console.warn('Signout failed');
               }}
-            />
+            >
+              <div />
+            </SignoutCallbackComponent>
           }
         />
         <Route

@@ -41,7 +41,7 @@ SidePanel.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   children: PropTypes.node,
   width: PropTypes.string,
-  transitionDelay: PropTypes.number.isRequired,
+  transitionDelay: PropTypes.number,
 };
 
 export default SidePanel;

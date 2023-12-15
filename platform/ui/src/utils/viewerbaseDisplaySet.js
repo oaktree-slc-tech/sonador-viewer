@@ -34,7 +34,7 @@ const viewerbaseDisplaySetReconstructable = (viewportSpecificData = {}, activeVi
     // Determine if the displayset supports 3D reconstruction
     return displaySet.isReconstructable;
   } catch (err) {
-    console.log('Unable to determine if the display set was reconstructable due to an error. ', err);
+    console.error('Unable to determine if the display set was reconstructable due to an error. ', err);
   }
 
   return false;

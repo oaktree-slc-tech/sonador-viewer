@@ -1,24 +1,30 @@
-import DICOMWeb from '@ohif/core/src/DICOMWeb';
-import { sonadorUrl } from './sonador.js';
+import user from '@ohif/core/src/user';
+import { urlUtil } from '@ohif/core/src/utils';
 
-export const fetchTokens = (server) => {
+import { sonadorUrl } from './sonador';
+
+const getAccessToken = () => user && user.getAccessToken && user.getAccessToken();
+
+export const fetchTokens = () => {
   // Retrieve access tokens from the Sonador server
 
   return fetch(sonadorUrl('auth/api/cred/token').href, {
-    headers: DICOMWeb.getAuthorizationHeader(server),
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+    },
     credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const createToken = ({ server, description, csrfToken }) => {
+export const createToken = ({ description, csrfToken }) => {
   // Create an API access token
-
-  const headers = DICOMWeb.getAuthorizationHeader(server);
-  headers['X-CSRFToken'] = csrfToken;
 
   return fetch(sonadorUrl('auth/api/cred/token').href, {
     method: 'POST',
-    headers,
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+      'X-CSRFToken': csrfToken,
+    },
     body: JSON.stringify({ description }),
     credentials: 'include',
   })
@@ -32,24 +38,26 @@ export const createToken = ({ server, description, csrfToken }) => {
     });
 };
 
-export const fetchAccesses = (server) => {
+export const fetchAccesses = () => {
   // Fetch secure API access credentials from the Sonadoer server
 
-  return fetch(sonadorUrl('auth/api/cred/token').href, {
-    headers: DICOMWeb.getAuthorizationHeader(server),
+  return fetch(sonadorUrl('auth/api/cred/access').href, {
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+    },
     credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const createAccessIdAndSecretKey = ({ server, description, csrfToken }) => {
+export const createAccessIdAndSecretKey = ({ description, csrfToken }) => {
   // Create Sonador secure authorization credentials (access ID and secret key)
-
-  const headers = DICOMWeb.getAuthorizationHeader(server);
-  headers['X-CSRFToken'] = csrfToken;
 
   return fetch(sonadorUrl('auth/api/cred/access').href, {
     method: 'POST',
-    headers,
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+      'X-CSRFToken': csrfToken,
+    },
     body: JSON.stringify({ description }),
     credentials: 'include',
   })
@@ -63,11 +71,40 @@ export const createAccessIdAndSecretKey = ({ server, description, csrfToken }) =
     });
 };
 
-export const getCsrfToken = ({ server }) => {
+export const getCsrfToken = () => {
   // Retrieve a CSRF token from Sonador to allow
 
   return fetch(sonadorUrl('auth/api/cred/csrf-token').href, {
-    headers: DICOMWeb.getAuthorizationHeader(server),
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+    },
+    credentials: 'include',
+  }).then((res) => res.json());
+};
+
+export const deleteToken = ({ token, csrfToken }) => {
+  // Delete an API access token
+
+  return fetch(sonadorUrl('auth/api/cred/token').href, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+      'X-CSRFToken': csrfToken,
+    },
+    body: JSON.stringify({ token }),
+    credentials: 'include',
+  }).then((res) => res.json());
+};
+
+export const deleteAccessIdAndSecretKey = ({ token, csrfToken }) => {
+  // Delete Sonador secure authorization credentials (access ID and secret key)
+
+  return fetch(urlUtil.urlJoin(sonadorUrl('auth/api/cred/access').href, token), {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${getAccessToken()}`,
+      'X-CSRFToken': csrfToken,
+    },
     credentials: 'include',
   }).then((res) => res.json());
 };

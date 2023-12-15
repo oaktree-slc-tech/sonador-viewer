@@ -1,6 +1,5 @@
-import dcmjs from 'dcmjs';
-import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
+import dcmjs from 'dcmjs';
 
 export default async function loadSegmentation(
   imageIds,
@@ -35,9 +34,7 @@ export default async function loadSegmentation(
    * This data is used to determine the active label map when a given segment is activated/clicked.
    */
   segDisplaySet.labelmapSegments[labelmapIndex] = labelmapSegments.length
-    ? Array.from(
-        new Set(labelmapSegments.filter(a => !!a).reduce((a, b) => a.concat(b)))
-      )
+    ? Array.from(new Set(labelmapSegments.filter((a) => !!a).reduce((a, b) => a.concat(b))))
     : [];
   segDisplaySet.labelmapIndex = labelmapIndex;
 
@@ -58,7 +55,6 @@ export default async function loadSegmentation(
    * allows us to easily watch the module or the segmentations loading process in any other component
    * without subscribing to external events.
    */
-  console.log('Segmentation loaded.');
   const event = new CustomEvent('extensiondicomsegmentationsegloaded', {
     detail: {
       imageIds,
@@ -102,13 +98,7 @@ function _makeColorLUTAndGetIndex(segMetadata) {
 
   const { data } = segMetadata;
 
-  if (
-    !data.some(
-      segment =>
-        segment &&
-        (segment.ROIDisplayColor || segment.RecommendedDisplayCIELabValue)
-    )
-  ) {
+  if (!data.some((segment) => segment && (segment.ROIDisplayColor || segment.RecommendedDisplayCIELabValue))) {
     // Use default cornerstoneTools colorLUT.
     return 0;
   }
@@ -124,9 +114,7 @@ function _makeColorLUTAndGetIndex(segMetadata) {
     const { ROIDisplayColor, RecommendedDisplayCIELabValue } = segment;
 
     if (RecommendedDisplayCIELabValue) {
-      const rgb = dcmjs.data.Colors.dicomlab2RGB(
-        RecommendedDisplayCIELabValue
-      ).map(x => Math.round(x * 255));
+      const rgb = dcmjs.data.Colors.dicomlab2RGB(RecommendedDisplayCIELabValue).map((x) => Math.round(x * 255));
 
       colorLUT[i] = [...rgb, 255];
     } else if (ROIDisplayColor) {

@@ -9,6 +9,7 @@ function toLowerCaseFirstLetter(word) {
 }
 
 const getQueryFilters = (location = {}, skipCaseTransform = []) => {
+  // Retrieve the query filters from the location string
   const { search } = location;
   if (!search) {
     return;
@@ -27,6 +28,7 @@ const getQueryFilters = (location = {}, skipCaseTransform = []) => {
 };
 
 const decode = (strToDecode = '') => {
+  // Decode URL components
   try {
     const decoded = window.atob(strToDecode);
     return decoded;
@@ -36,6 +38,8 @@ const decode = (strToDecode = '') => {
 };
 
 const parse = (toParse) => {
+  // Parse URL to components
+
   if (toParse) {
     return lib.parse(toParse);
   }
@@ -73,4 +77,14 @@ const paramString = {
   replaceParam,
 };
 
-export { parse, queryString, paramString };
+const urlJoin = (...args) =>
+  args
+    .join('/')
+    .replace(/[\/]+/g, '/')
+    .replace(/^(.+):\//, '$1://')
+    .replace(/^file:/, 'file:/')
+    .replace(/\/(\?|&|#[^!])/g, '$1')
+    .replace(/\?/g, '&')
+    .replace('&', '?');
+
+export { parse, queryString, paramString, urlJoin };

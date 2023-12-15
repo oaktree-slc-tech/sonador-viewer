@@ -23,7 +23,7 @@ export default function VtkVolumeColorPresetSelector({ button, toolbarClickCallb
     const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
     cmodality = displaySet.Modality;
   } catch (err) {
-    console.log('Unable to locate study and series for currently active viewport');
+    console.error('Unable to locate study and series for currently active viewport');
   }
 
   // Filter color presets by modality
