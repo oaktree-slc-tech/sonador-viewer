@@ -71,7 +71,7 @@ export default function SelectDropdownNG({
 
   return (
     <div className={classNames(styles.selectDropdownNgContainer, classes.container)} ref={ref}>
-      <div onClick={() => setIsOpen((prevState) => !prevState)} className={styles.selectDropdownNgBtn}>
+      <div onClick={() => setIsOpen(!isOpen)} className={styles.selectDropdownNgBtn}>
         <Button />
       </div>
       {isOpen &&

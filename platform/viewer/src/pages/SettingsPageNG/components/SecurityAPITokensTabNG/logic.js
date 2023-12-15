@@ -1,22 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { createToken, fetchTokens } from '../../../../api/security';
+import { createToken, deleteToken, fetchTokens } from '../../../../api/security';
 
-export const useTokens = ({ server }) => {
+export const useTokens = () => {
   return useQuery({
-    queryKey: ['apiTokens', server?.token],
-    queryFn: () => fetchTokens(server),
-    enabled: !!server?.token,
+    queryKey: ['apiTokens'],
+    queryFn: () => fetchTokens(),
   });
 };
 
 export const useCreateToken = () => {
-  const queryClint = useQueryClient();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data) => createToken(data),
     onSuccess: async () => {
-      await queryClint.invalidateQueries(['apiTokens']);
+      await queryClient.invalidateQueries(['apiTokens']);
+    },
+  });
+};
+
+export const useDeleteToken = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => deleteToken(data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries(['apiTokens']);
     },
   });
 };

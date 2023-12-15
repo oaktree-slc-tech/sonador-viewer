@@ -68,8 +68,9 @@ export default function DateRangePickerNG({
         </div>
         <div className="start-end-dates">
           <div className="start-date-wrapper">
-            <label htmlFor="">Start date</label>
+            <label htmlFor="start-date">Start date</label>
             <input
+              id="start-date"
               type="text"
               placeholder="MM/DD/YYYY"
               value={startDate ? moment(startDate).format('MM/DD/YYYY') : ''}
@@ -77,8 +78,9 @@ export default function DateRangePickerNG({
             />
           </div>
           <div className="end-date-wrapper">
-            <label htmlFor="">End Date</label>
+            <label htmlFor="end-date">End Date</label>
             <input
+              id="end-date"
               type="text"
               placeholder="MM/DD/YYYY"
               value={endDate ? moment(endDate).format('MM/DD/YYYY') : ''}
@@ -103,8 +105,8 @@ export default function DateRangePickerNG({
             onFocusChange(updateVal);
           }}
           anchorDirection={isRightAnchor ? 'right' : 'left'}
-          startDate={startDate}
-          endDate={endDate}
+          startDate={startDate || null}
+          endDate={endDate || null}
           renderCalendarInfo={renderDatePresets}
           onDatesChange={onDatesChange}
           renderMonthElement={renderMonthElement}

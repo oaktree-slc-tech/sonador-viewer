@@ -35,6 +35,7 @@ export default function DatePickerNG({ onCloseCalendar, onFocusChange, ...datePi
     <div className="singleDatePickerNG">
       <SingleDatePicker
         {...datePickerProps}
+        date={datePickerProps.date || null}
         onFocusChange={(updateVal) => {
           const body = document.getElementById('body');
 

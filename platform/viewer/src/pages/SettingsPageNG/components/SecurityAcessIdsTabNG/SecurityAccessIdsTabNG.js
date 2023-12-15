@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSelector } from 'react-redux';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import classNames from 'classnames';
 import moment from 'moment';
@@ -16,16 +15,17 @@ import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/t
 import { useCsrfToken } from '../../../../hooks/useCsrfToken';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 
-import { useAccesses, useCreateAccess } from './logic';
+import { useAccesses, useCreateAccess, useDeleteAccess } from './logic';
 
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
 
 /**
  *
  * @param {boolean} isMobile
+ * @param {function} onDeleteAccess
  * @returns {[{header: (function({table: *}): *), id: string, cell: (function({row: *}): *)},{header: string, id: string, cell: (function({getValue: *}): string), accessorKey: string},{header: string, id: string, accessorKey: string},{header: string, id: string, cell: (function({getValue: *}): string), accessorKey: string}]}
  */
-const getColumns = (isMobile) => {
+const getColumns = (isMobile, onDeleteAccess) => {
   const columns = [
     {
       header: 'Access ID',
@@ -41,11 +41,11 @@ const getColumns = (isMobile) => {
       header: 'Created',
       id: 'ctime',
       accessorKey: 'ctime',
-      cell: ({ getValue }) => {
+      cell: ({ getValue, row }) => {
         return (
           <div className={styles.createdColumn}>
             <p>{moment(getValue()).format('MMM DD, YYYY, hh:mm a')}</p>
-            <button className={styles.deleteBtn}>
+            <button className={styles.deleteBtn} onClick={() => onDeleteAccess(row.original.access_id)}>
               <TrashBinIcon />
             </button>
           </div>
@@ -64,23 +64,16 @@ const getColumns = (isMobile) => {
 export default function SecurityAccessIdsTabNG() {
   const { t } = useTranslation();
 
-  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
-
   const [searchValue, setSearchValue] = useState('');
   const [isOpenModal, setIsOpenModal] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState('');
 
   const { isDesktop, isMobile } = useDeviceStore();
 
-  const { data: csrfTokenData } = useCsrfToken({ server: activeServer });
-  const {
-    data: accesses = [],
-    isLoading: isLoadingAccesses,
-    error: idsError,
-  } = useAccesses({
-    server: activeServer,
-  });
+  const { data: csrfTokenData } = useCsrfToken();
+  const { data: accesses = [], isLoading: isLoadingAccesses, error: idsError } = useAccesses();
   const { mutate: createAccess, data: createdAccessData = {} } = useCreateAccess();
+  const { mutate: deleteAccess } = useDeleteAccess();
 
   const snackbar = useSnackbarContext();
 
@@ -89,21 +82,30 @@ export default function SecurityAccessIdsTabNG() {
 
     return (
       item.description?.toLowerCase().includes(lowerCasedSearch) ||
-      item.access_id.toLowerCase().includes(lowerCasedSearch)
+      item.access_id?.toLowerCase().includes(lowerCasedSearch) ||
+      (item.ctime
+        ? moment(item.ctime)?.format('MMM DD, YYYY, hh:mm a')?.toLowerCase().includes(lowerCasedSearch)
+        : false)
     );
   });
 
+  const handleDeleteAccess = (accessId) => {
+    if (csrfTokenData?.csrf_token) {
+      deleteAccess({ token: accessId, csrfToken: csrfTokenData.csrf_token });
+    }
+  };
+
   const { getHeaderGroups, getRowModel } = useReactTable({
     data: tableData,
-    columns: getColumns(isMobile),
+    columns: getColumns(isMobile, handleDeleteAccess),
     getCoreRowModel: getCoreRowModel(),
   });
 
   const headers = getHeaderGroups();
 
   const handleGenerateToken = () => {
-    if (activeServer?.token && csrfTokenData?.csrf_token) {
-      createAccess({ server: activeServer, description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
+    if (csrfTokenData?.csrf_token) {
+      createAccess({ description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
     }
   };
 

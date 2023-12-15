@@ -61,13 +61,14 @@ async function getStudyList({
   filters = {},
 }) {
   const sortField = sort.fieldName ? { OrderBy: `${sort.direction === 'desc' ? '-' : ''}${sort.fieldName}` } : {};
-  const modifiedFilters = Object.entries(filters).reduce(
-    (acc, [key, value]) => ({
+  const modifiedFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+    const filterName = key === 'Modality' ? 'ModalitiesInStudy' : key;
+
+    return {
       ...acc,
-      [key]: convertValueToString(value),
-    }),
-    {}
-  );
+      [filterName]: convertValueToString(value),
+    };
+  }, {});
 
   const mappedFilters = {
     allFields,
@@ -122,7 +123,7 @@ export default function useStudies(params) {
     select: (response) => {
       const mapped = Object.entries(params.tags || {})
         .filter(([key]) => key !== 'Instance')
-        .map(([_, value]) => Object.values(value));
+        .map(([, value]) => Object.values(value));
 
       const requiredTags = flatten(mapped)
         .filter((filter) => filter.vr?.name !== 'Time') // TODO remove once time data is actual to display
@@ -136,7 +137,7 @@ export default function useStudies(params) {
         }, {});
 
       return response.map((study) => {
-        const result = Object.entries(study).reduce((acc, [key, value]) => {
+        return Object.entries(study).reduce((acc, [key, value]) => {
           const res = requiredTags[key.toLowerCase()];
 
           if (key === '00080061') {
@@ -164,8 +165,6 @@ export default function useStudies(params) {
             [res.value]: { type: res.type, value: property },
           };
         }, {});
-
-        return result;
       });
     },
   });

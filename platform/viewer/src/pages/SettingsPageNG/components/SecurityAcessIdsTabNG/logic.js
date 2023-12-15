@@ -1,12 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { createAccessIdAndSecretKey, fetchAccesses } from '../../../../api/security';
+import { createAccessIdAndSecretKey, deleteAccessIdAndSecretKey, fetchAccesses } from '../../../../api/security';
 
-export const useAccesses = ({ server }) => {
+export const useAccesses = () => {
   return useQuery({
-    queryKey: ['accessIdAndSecretKey', server?.token],
-    queryFn: () => fetchAccesses(server),
-    enabled: !!server?.token,
+    queryKey: ['accessIdAndSecretKey'],
+    queryFn: () => fetchAccesses(),
   });
 };
 
@@ -15,6 +14,17 @@ export const useCreateAccess = () => {
 
   return useMutation({
     mutationFn: (data) => createAccessIdAndSecretKey(data),
+    onSuccess: async () => {
+      await queryClint.invalidateQueries(['accessIdAndSecretKey']);
+    },
+  });
+};
+
+export const useDeleteAccess = () => {
+  const queryClint = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data) => deleteAccessIdAndSecretKey(data),
     onSuccess: async () => {
       await queryClint.invalidateQueries(['accessIdAndSecretKey']);
     },
