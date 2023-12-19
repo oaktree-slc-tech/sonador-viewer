@@ -1,9 +1,17 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useState } from 'react';
+import {
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  useClick,
+  useDismiss,
+  useFloating,
+  useInteractions,
+} from '@floating-ui/react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
-
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
 import { ReactComponent as CloseIcon } from '../../elements/Svg/svgs/close.svg';
 import { ReactComponent as SearchIcon } from '../../elements/Svg/svgs/search.svg';
@@ -28,21 +36,26 @@ export default function SelectDropdownNG({
     dropdown: '',
     container: '',
   },
-  position = 'left',
 }) {
   const [search, setSearch] = useState('');
   const [filteredOptions, setFilteredOptions] = useState(options);
+
+  const { refs, floatingStyles, context } = useFloating({
+    open: isOpen,
+    onOpenChange: setIsOpen,
+    middleware: [offset(10), flip({ fallbackAxisSideDirection: 'end' }), shift()],
+    whileElementsMounted: autoUpdate,
+    placement: 'bottom-start',
+  });
+
+  const click = useClick(context);
+  const dismiss = useDismiss(context);
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss]);
 
   const handleChangeSearch = (event) => {
     setSearch(event.target.value);
   };
   const debouncedSearch = useDebounce(search, 500);
-
-  const callback = useCallback(() => setIsOpen(false), [setIsOpen]);
-
-  const ref = useRef(null);
-  const dropdownRef = useRef(null);
-  useClickOutside([ref, dropdownRef], callback);
 
   useEffect(() => {
     if (debouncedSearch) {
@@ -52,31 +65,24 @@ export default function SelectDropdownNG({
     }
   }, [debouncedSearch, options]);
 
-  const { top = 0, height = 0, right = 0, left = 0 } = ref.current?.getBoundingClientRect() || {};
-  const { width: dropdownWidth = 0 } = dropdownRef.current?.getBoundingClientRect() || {};
-
-  const style = {
-    top: height + top + window.scrollY + 10,
-  };
-
-  if (position === 'left') {
-    if (left + dropdownWidth > window.innerWidth) {
-      style.left = left - (left + dropdownWidth - window.innerWidth);
-    } else {
-      style.left = left;
-    }
-  } else {
-    style.right = window.innerWidth - right;
-  }
-
   return (
-    <div className={classNames(styles.selectDropdownNgContainer, classes.container)} ref={ref}>
-      <div onClick={() => setIsOpen(!isOpen)} className={styles.selectDropdownNgBtn}>
+    <div className={classNames(styles.selectDropdownNgContainer, classes.container)}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className={styles.selectDropdownNgBtn}
+        ref={refs.setReference}
+        {...getReferenceProps()}
+      >
         <Button />
       </div>
-      {isOpen &&
-        createPortal(
-          <div className={classNames(styles.selectDropdownNg, classes.dropdown)} style={style} ref={dropdownRef}>
+      {isOpen && (
+        <FloatingPortal root={document.getElementById('root')}>
+          <div
+            className={classNames(styles.selectDropdownNg, classes.dropdown)}
+            ref={refs.setFloating}
+            style={floatingStyles}
+            {...getFloatingProps()}
+          >
             <div className={styles.header}>
               <p className={styles.selectTitle}>{title}</p>
               <CloseIcon fill="#ffffff" onClick={() => setIsOpen(false)} className={styles.selectCloseIcon} />
@@ -132,9 +138,9 @@ export default function SelectDropdownNG({
                 {actionType === 'reset' ? 'Reset' : actionType === 'submit' ? 'Submit' : ''}
               </button>
             </div>
-          </div>,
-          document.getElementById('body')
-        )}
+          </div>
+        </FloatingPortal>
+      )}
     </div>
   );
 }
@@ -160,5 +166,4 @@ SelectDropdownNG.propTypes = {
     dropdown: PropTypes.string,
     container: PropTypes.string,
   }),
-  position: PropTypes.oneOf(['left', 'right']),
 };

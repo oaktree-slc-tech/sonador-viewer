@@ -1,8 +1,6 @@
 @import '@ohif/viewer/src/styles/breakpoints';
 
 .selectDropdownNgContainer {
-  position: relative;
-
   .selectDropdownNgBtn {
     cursor: pointer;
   }
@@ -13,9 +11,8 @@
   border-radius: 10px;
   border: 1px solid #27292d;
   padding: 20px;
-  position: absolute;
   min-width: 390px;
-  z-index: 1000;
+  z-index: 100000;
   max-height: 500px;
   overflow-y: auto;
 

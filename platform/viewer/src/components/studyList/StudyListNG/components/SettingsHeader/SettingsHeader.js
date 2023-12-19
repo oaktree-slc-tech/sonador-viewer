@@ -9,7 +9,6 @@ import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_COLUMNS, DEFAULT_COLUMNS_IDS, FILTER_TYPES } from '../../../../../lib/constants';
 import { useColumnsSelectStore } from '../../../../../store/useColumnsSelectStore';
 import { useStudiesTableFiltersAndColumnsStore } from '../../../../../store/useStudiesTableFiltersAndColumnsStore';
-import { pascalCaseToWordsWithCases } from '../../../../../utils/string';
 
 import styles from './SettingsHeader.module.scss';
 
@@ -32,8 +31,7 @@ export default function SettingsHeader({ server }) {
               return {
                 id: filter.tag === 'Modality' ? 'modalities' : filter.tag,
                 type,
-                // TODO Replace with label once it's added
-                label: pascalCaseToWordsWithCases(filter.tag),
+                label: filter.label,
               };
             });
         });

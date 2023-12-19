@@ -127,12 +127,12 @@ export default function useStudies(params) {
 
       const requiredTags = flatten(mapped)
         .filter((filter) => filter.vr?.name !== 'Time') // TODO remove once time data is actual to display
-        .reduce((acc, { code, tag, vr, options }) => {
+        .reduce((acc, { code, tag, vr, options, label }) => {
           const type = options ? 'string' : DISPLAY_TYPES[vr?.name];
 
           return {
             ...acc,
-            [code?.replace(',', '').toLowerCase()]: { type, value: tag },
+            [code?.replace(',', '').toLowerCase()]: { type, value: tag, label },
           };
         }, {});
 
@@ -146,6 +146,7 @@ export default function useStudies(params) {
               modalities: {
                 value: DICOMWeb.getString(DICOMWeb.getModalities(study['00080060'], study['00080061'])),
                 type: 'string',
+                label: 'Modalities',
               },
             };
           }
@@ -162,7 +163,7 @@ export default function useStudies(params) {
 
           return {
             ...acc,
-            [res.value]: { type: res.type, value: property },
+            [res.value]: { type: res.type, value: property, label: res.label },
           };
         }, {});
       });

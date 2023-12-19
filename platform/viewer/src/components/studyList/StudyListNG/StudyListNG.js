@@ -48,8 +48,11 @@ export default function StudyListNG({
       },
       ...selectedColumns.map((id) => {
         return {
-          // TODO replace with label when ROb will add
-          header: id,
+          header: ({ header }) => {
+            const currentIndex = header.index - 1;
+
+            return studies[currentIndex]?.[id]?.label ?? id;
+          },
           id,
           accessorKey: id,
           cell: ({ getValue }) => {
