@@ -57,7 +57,7 @@ export default function Filters({
           const result = {
             tag: filter.tag,
             type,
-            label: filter.tag,
+            label: filter.label,
           };
 
           if (filter.options) {
