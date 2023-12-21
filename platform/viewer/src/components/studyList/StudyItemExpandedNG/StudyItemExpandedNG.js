@@ -63,8 +63,9 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
               <div
                 key={index}
                 className={classNames(styles.item, {
-                  [styles.active]: selectedThumbnail?.imageId === thumbnail.imageId,
+                  [styles.active]: selectedThumbnail?.SeriesInstanceUID === thumbnail.SeriesInstanceUID,
                 })}
+                onClick={() => setSelectedThumbnail(thumbnail)}
               >
                 <ImageThumbnailNG
                   key={thumbnail.imageId}
@@ -74,12 +75,9 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
                   error={false}
                   width={120}
                   height={120}
-                  onClick={() => {
-                    setSelectedThumbnail(thumbnail);
-                  }}
+                  altImageText={thumbnail.altImageText}
                 />
                 <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}</p>
-                {/*<p className={styles.thumbnailDate}>Jan 5, 2020 15:22:01</p>*/}
               </div>
             );
           })
@@ -106,6 +104,7 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
                   error={false}
                   width={240}
                   height={240}
+                  altImageText={selectedThumbnail?.altImageText}
                 />
                 {openInViewerButton}
               </div>

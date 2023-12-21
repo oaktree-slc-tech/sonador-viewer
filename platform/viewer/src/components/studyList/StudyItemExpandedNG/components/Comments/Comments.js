@@ -38,8 +38,8 @@ export default function Comments({ server, series }) {
           return (
             <div key={index} className={styles.commentItem}>
               <div className={styles.commentItemHeader}>
-                <div className={styles.commentItemAvatar} />
                 {/* TODO there is no author in response */}
+                {/*<div className={styles.commentItemAvatar} />*/}
                 {/*<p className={styles.commentItemAuthor}>{author}</p>*/}
                 <p className={styles.commentItemDate}>{LastUpdate.split('.')[0]}</p>
               </div>
@@ -49,7 +49,8 @@ export default function Comments({ server, series }) {
         })
       )}
       <div className={styles.commentsNewCommentForm}>
-        {isDesktop && <div className={styles.commentsNewCommentAvatar} />}
+        {/* TODO: Add back avatar styling when author added to response. className={styles.commentsNewCommentAvatar} */}
+        {isDesktop && <div />}
         <textarea
           value={newCommentText}
           onChange={handleChangeNewComment}
