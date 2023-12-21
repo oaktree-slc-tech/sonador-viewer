@@ -16,7 +16,6 @@ import { useCsrfToken } from '../../../../hooks/useCsrfToken';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 
 import { useCreateToken, useDeleteToken, useTokens } from './logic';
-
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
 
 /**

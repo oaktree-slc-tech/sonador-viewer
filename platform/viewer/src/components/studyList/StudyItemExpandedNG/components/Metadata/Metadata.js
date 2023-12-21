@@ -13,6 +13,8 @@ import { useMetadataSettingsStore } from '../../../../../store/useMetadataSettin
 import styles from './Metadata.module.scss';
 
 export default function Metadata({ study }) {
+  // Display study and series metadata
+
   const [isMetadataDropdownOpen, setIsMetadataDropdownOpen] = useState(false);
 
   const { metadataSettings, toggleMetadataSetting } = useMetadataSettingsStore();

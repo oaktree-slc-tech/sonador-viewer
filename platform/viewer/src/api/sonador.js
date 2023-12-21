@@ -1,3 +1,8 @@
+import user from '@ohif/core/src/user';
+import { urlUtil } from '@ohif/core/src/utils';
+
+const getAuthToken = () => user && user.getAccessToken && user.getAccessToken();
+
 const sonadorUrl = (resource) => {
   // Create a fully qualified domain resource (FQDN) URL for the provided path. If the URL
   // is a relative URL, it will be combined with the Sonador connection host (taken from the)
@@ -13,4 +18,4 @@ const sonadorUrl = (resource) => {
   return new URL(resource, window.sonador.host);
 };
 
-export { sonadorUrl };
+export { sonadorUrl, getAuthToken };

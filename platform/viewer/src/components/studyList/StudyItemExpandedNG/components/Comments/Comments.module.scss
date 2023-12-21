@@ -3,6 +3,13 @@
 .contentComments {
   flex: 1;
 
+  .loaderWrapper {
+    min-height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
   .commentItem {
     margin-bottom: 20px;
 

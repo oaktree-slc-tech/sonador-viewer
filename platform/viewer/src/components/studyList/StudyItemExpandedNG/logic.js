@@ -10,6 +10,8 @@ const { retrieveStudiesMetadata } = studies;
 const { studyMetadataManager } = utils;
 
 const loadStudies = async (studyId, server, appConfig) => {
+  // Retrieve study data from application store
+
   try {
     const retrieveParams = [server, [studyId]];
 
@@ -58,9 +60,12 @@ export const useSeriesMetadata = ({ studyId, server }) => {
 };
 
 const processThumbnail = (study, displaySet) => {
+  // Filter display set properties to those required for display in the item drawer
+
   const {
     displaySetInstanceUID,
     SeriesDescription,
+    SeriesInstanceUID,
     numImageFrames,
     SeriesNumber,
     Modality,
@@ -88,6 +93,7 @@ const processThumbnail = (study, displaySet) => {
     imageId,
     altImageText,
     displaySetInstanceUID,
+    SeriesInstanceUID,
     SeriesDescription,
     numImageFrames,
     SeriesNumber,
@@ -108,6 +114,8 @@ const mapStudiesToThumbnails = (studies = []) => {
 };
 
 const addSeriesToStudy = (studyMetadata, series) => {
+  // Retrieve the metadata for a series and add it to the study instance
+
   const sopClassHandlerModules = extensionManager.modules['sopClassHandlerModule'];
   const study = studyMetadata.getData();
   const seriesMetadata = new OHIFSeriesMetadata(series, study);
