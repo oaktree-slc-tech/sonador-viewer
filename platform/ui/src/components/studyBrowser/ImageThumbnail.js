@@ -1,5 +1,5 @@
 /* global cornerstone */
-import React, { createRef, useCallback, useEffect, useState } from 'react';
+import React, { createRef, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
@@ -33,9 +33,7 @@ function ImageThumbnail(props) {
 
   const showStackLoadingProgressBar = showProgressBar && stackPercentComplete !== undefined;
 
-  const shouldRenderToCanvas = () => {
-    return imageId && !imageSrc;
-  };
+  const shouldRenderToCanvas = imageId && !imageSrc;
 
   const fetchImagePromise = () => {
     if (!cancelablePromise) {
@@ -56,16 +54,16 @@ function ImageThumbnail(props) {
   };
 
   const setImagePromise = () => {
-    if (shouldRenderToCanvas()) {
+    if (shouldRenderToCanvas) {
       cancelablePromise = utils.makeCancelable(cornerstone.loadAndCacheImage(imageId));
     }
   };
 
-  const purgeCancelablePromise = useCallback(() => {
+  const purgeCancelablePromise = () => {
     if (cancelablePromise) {
       cancelablePromise.cancel();
     }
-  });
+  };
 
   useEffect(() => {
     return () => {
@@ -91,16 +89,10 @@ function ImageThumbnail(props) {
   return (
     <div className={classNames('ImageThumbnail', { active: active })}>
       <div className="image-thumbnail-canvas">
-        {shouldRenderToCanvas() ? (
+        {shouldRenderToCanvas ? (
           <canvas ref={canvasRef} width={width} height={height} />
         ) : (
-          <img
-            className="static-image"
-            src={imageSrc}
-            //width={this.props.width}
-            height={height}
-            alt={''}
-          />
+          <img className="static-image" src={imageSrc} height={height} alt={''} />
         )}
       </div>
       {loadingOrError}

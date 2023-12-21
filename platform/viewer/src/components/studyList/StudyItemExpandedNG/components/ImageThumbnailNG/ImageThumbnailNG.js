@@ -10,7 +10,7 @@ import { useImageThumbnail } from './logic';
 
 import styles from './ImageThumbnailNG.module.scss';
 
-function ImageThumbnailNG({ width, height, imageSrc, imageId, error = false, onClick }) {
+function ImageThumbnailNG({ width, height, imageSrc, imageId, error = false, onClick, altImageText }) {
   const canvasRef = useRef();
 
   const { data, isLoading } = useImageThumbnail({ imageId, imageSrc });
@@ -30,17 +30,25 @@ function ImageThumbnailNG({ width, height, imageSrc, imageId, error = false, onC
     }
   }, [thumbnail]);
 
-  return (
-    <div className={classNames(styles.container, { clickable: !!onClick })} onClick={() => onClick?.()}>
-      <div className={styles.thumbnailWrapper}>
-        {imageId && !imageSrc ? (
-          <canvas ref={canvasRef} width={width} height={height} className={styles.canvas} />
-        ) : (
-          <img className={styles.staticImage} src={imageSrc} height={height} alt="static" />
-        )}
+  if (imageSrc || imageId) {
+    return (
+      <div className={classNames(styles.container, { clickable: !!onClick })} onClick={() => onClick?.()}>
+        <div className={styles.thumbnailWrapper}>
+          {imageId && !imageSrc ? (
+            <canvas ref={canvasRef} width={width} height={height} className={styles.canvas} />
+          ) : (
+            <img className={styles.staticImage} src={imageSrc} height={height} alt="static" />
+          )}
+        </div>
+        {loadingOrError}
+        {isLoading && <div className={styles.loading} />}
       </div>
-      {loadingOrError}
-      {isLoading && <div className={styles.loading} />}
+    );
+  }
+
+  return (
+    <div className={styles.altImageTextWrapper}>
+      <h1>{altImageText}</h1>
     </div>
   );
 }
@@ -52,6 +60,7 @@ ImageThumbnailNG.propTypes = {
   width: PropTypes.number.isRequired,
   height: PropTypes.number.isRequired,
   onClick: PropTypes.func,
+  altImageText: PropTypes.string,
 };
 
 export default ImageThumbnailNG;
