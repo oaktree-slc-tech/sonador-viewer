@@ -1,14 +1,25 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
+
+import Loader from '@ohif/ui/src/components/Loader/Loader';
 
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 
-import { commentsArr } from './mocks';
+import { useCreateComment, useSeriesComments } from './logic';
 
 import styles from './Comments.module.scss';
 
-export default function Comments() {
-  const [newCommentText, setNewCommentText] = useState('');
+export default function Comments({ server, series }) {
+  // Manage and display series comments
 
+  // State management: comments array and new comment text
+  const [newCommentText, setNewCommentText] = useState('');
+  const {
+    data: commentsArr = [],
+    isLoading: isLoadingComments,
+    error: commentsError,
+  } = useSeriesComments(server, series);
+  const { mutate: createComment } = useCreateComment(server, series, () => setNewCommentText(''));
   const { isDesktop } = useDeviceStore();
 
   const handleChangeNewComment = (event) => {
@@ -17,19 +28,27 @@ export default function Comments() {
 
   return (
     <div className={styles.contentComments}>
-      {commentsArr.map(({ author, date, comment }, index) => {
-        return (
-          <div key={index} className={styles.commentItem}>
-            <div className={styles.commentItemHeader}>
-              <div className={styles.commentItemAvatar} />
-              <p className={styles.commentItemAuthor}>{author}</p>
-              <p className={styles.commentItemDate}>{date}</p>
+      {commentsError && <p>{JSON.stringify(commentsError)}</p>}
+      {isLoadingComments ? (
+        <div className={styles.loaderWrapper}>
+          <Loader />
+        </div>
+      ) : (
+        commentsArr.map(({ LastUpdate, Text }, index) => {
+          return (
+            <div key={index} className={styles.commentItem}>
+              <div className={styles.commentItemHeader}>
+                <div className={styles.commentItemAvatar} />
+                {/* TODO there is no author in response */}
+                {/*<p className={styles.commentItemAuthor}>{author}</p>*/}
+                <p className={styles.commentItemDate}>{LastUpdate.split('.')[0]}</p>
+              </div>
+              <p className={styles.commentItemText}>{Text}</p>
             </div>
-            <p className={styles.commentItemText}>{comment}</p>
-          </div>
-        );
-      })}
-      <form className={styles.commentsNewCommentForm}>
+          );
+        })
+      )}
+      <div className={styles.commentsNewCommentForm}>
         {isDesktop && <div className={styles.commentsNewCommentAvatar} />}
         <textarea
           value={newCommentText}
@@ -37,10 +56,19 @@ export default function Comments() {
           placeholder="Write a comment..."
           className={styles.commentsNewCommentTextarea}
         />
-        <button type="submit" className={styles.commentsNewCommentSubmit}>
+        <button
+          onClick={() => createComment(newCommentText)}
+          className={styles.commentsNewCommentSubmit}
+          disabled={isLoadingComments}
+        >
           Submit
         </button>
-      </form>
+      </div>
     </div>
   );
 }
+
+Comments.propTypes = {
+  server: PropTypes.object.isRequired,
+  series: PropTypes.object,
+};

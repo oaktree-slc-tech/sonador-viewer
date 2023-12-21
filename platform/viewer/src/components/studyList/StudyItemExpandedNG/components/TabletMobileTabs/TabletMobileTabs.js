@@ -7,18 +7,18 @@ import Metadata from '../Metadata/Metadata';
 
 import styles from './TabletMobileTabs.module.scss';
 
-const TAB_CONTENT = {
-  comments: () => <Comments />,
-  metadata: (study) => <Metadata study={study} />,
-};
-
-export default function TabletMobileTabs({ study }) {
+export default function TabletMobileTabs({ study, series, server }) {
   const [selectedTab, setSelectedTab] = useState('comments');
 
   const handleChangeTab = (tab) => {
     if (selectedTab !== tab) {
       setSelectedTab(tab);
     }
+  };
+
+  const TAB_CONTENT = {
+    comments: () => <Comments server={server} series={series} />,
+    metadata: () => <Metadata study={study} />,
   };
 
   return (
@@ -42,11 +42,13 @@ export default function TabletMobileTabs({ study }) {
         </button>
         <hr className={styles.indicator} />
       </div>
-      {TAB_CONTENT[selectedTab](study)}
+      {TAB_CONTENT[selectedTab]()}
     </>
   );
 }
 
 TabletMobileTabs.propTypes = {
   study: PropTypes.object.isRequired,
+  server: PropTypes.object.isRequired,
+  series: PropTypes.object,
 };

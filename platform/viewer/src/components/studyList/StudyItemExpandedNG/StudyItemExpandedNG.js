@@ -20,11 +20,14 @@ import { useSeriesMetadata } from './logic';
 import styles from './StudyItemExpandedNG.module.scss';
 
 export default function StudyItemExpandedNG({ studyId, server, study }) {
+  // Show details for the currently selected study
+
   const { appConfig } = useContext(AppContext);
 
   const { data } = useSeriesMetadata({ studyId, server });
   const { isDesktop, isLarge } = useDeviceStore();
 
+  // Selected thumbnail and series
   const [selectedThumbnail, setSelectedThumbnail] = useState(null);
 
   const handleClickOpenInViewer = () => {
@@ -36,6 +39,7 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
   };
 
   useEffect(() => {
+    // Set the currently active thumbnail and series
     if (data?.[0]?.thumbnails.length && !selectedThumbnail) {
       setSelectedThumbnail(data[0].thumbnails[0]);
     }
@@ -70,7 +74,9 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
                   error={false}
                   width={120}
                   height={120}
-                  onClick={() => setSelectedThumbnail(thumbnail)}
+                  onClick={() => {
+                    setSelectedThumbnail(thumbnail);
+                  }}
                 />
                 <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}</p>
                 {/*<p className={styles.thumbnailDate}>Jan 5, 2020 15:22:01</p>*/}
@@ -105,10 +111,10 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
               </div>
             )}
             <Metadata study={study} />
-            <Comments />
+            <Comments server={server} series={selectedThumbnail} />
           </div>
         ) : (
-          <TabletMobileTabs study={study} />
+          <TabletMobileTabs server={server} study={study} series={selectedThumbnail} />
         )}
       </div>
     </div>

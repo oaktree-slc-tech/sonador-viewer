@@ -5,6 +5,8 @@ const TABLET_WIDTH = 833;
 const LARGE_WIDTH = 1411;
 
 export const useDeviceStore = create((set) => ({
+  // Determine the type of viewing device: desktop, tablet, moblie
+
   isDesktop: window.innerWidth > TABLET_WIDTH,
   isLarge: window.innerWidth <= LARGE_WIDTH && window.innerWidth > TABLET_WIDTH,
   isTablet: window.innerWidth <= TABLET_WIDTH && window.innerWidth > MOBILE_WIDTH,
