@@ -11,9 +11,9 @@ const viewerbaseGetDisplaySet = (viewportSpecificData = {}, activeViewportIndex)
 
   const study = studies.find((study) => study.studyInstanceUID === StudyInstanceUID);
 
-  const displaySet = study._displaySets.find((set) => set.displaySetInstanceUID === displaySetInstanceUID);
+  const displaySet = study?._displaySets.find((set) => set.displaySetInstanceUID === displaySetInstanceUID);
 
-  return { study: study, displaySet: displaySet };
+  return { study, displaySet };
 };
 
 const viewerbaseDisplaySetReconstructable = (viewportSpecificData = {}, activeViewportIndex) => {

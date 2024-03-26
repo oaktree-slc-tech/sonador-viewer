@@ -1,6 +1,8 @@
 import React from 'react';
 
 import OHIF from '@ohif/core';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import dicomSegmentationPackage from '../package.json';
 
@@ -49,8 +51,17 @@ const segmentationExtension = {
               please adjust the tolerance in the segmentation panel settings (at your own peril!)'
             : error.message;
         LoggerService.error({ error, message });
+
+        const studyId = extractStudyIdFromURL();
+        const errorTitle = 'DICOM Segmentation Loader';
+
+        if (studyId) {
+          // Will be called only on Viewer study page
+          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+        }
+
         UINotificationService.show({
-          title: 'DICOM Segmentation Loader',
+          title: errorTitle,
           message,
           type: 'error',
           autoClose: false,

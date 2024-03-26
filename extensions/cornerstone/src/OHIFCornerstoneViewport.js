@@ -172,7 +172,7 @@ class OHIFCornerstoneViewport extends Component {
       // If this comes from the instance, would be a better default
       // `FrameTime` in the instance
       // frameRate = 0,
-    } = this.state.viewportData.stack;
+    } = this.state.viewportData.stack || {};
 
     // TODO: Does it make more sense to use Context?
     if (this.props.children && this.props.children.length) {

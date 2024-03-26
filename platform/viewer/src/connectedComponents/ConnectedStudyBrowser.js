@@ -1,10 +1,12 @@
 import { connect } from 'react-redux';
 
 import OHIF from '@ohif/core';
-
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 import { StudyBrowser } from '@ohif/ui';
 
 import { servicesManager } from '../App';
+
 import findDisplaySetByUID from './findDisplaySetByUID';
 
 const { setActiveViewportSpecificData } = OHIF.redux.actions;
@@ -26,10 +28,16 @@ const mapDispatchToProps = (dispatch, ownProps) => {
                 If you really think it is coplanar,\
                 please adjust the tolerance in the segmentation panel settings (at your own peril!)'
                 : error.message;
+            const studyId = extractStudyIdFromURL();
+            const errorTitle = 'DICOM Segmentation Loader';
+
+            if (studyId) {
+              useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+            }
 
             LoggerService.error({ error, message });
             UINotificationService.show({
-              title: 'DICOM Segmentation Loader',
+              title: errorTitle,
               message,
               type: 'error',
               autoClose: false,
@@ -59,9 +67,17 @@ const mapDispatchToProps = (dispatch, ownProps) => {
           const error = new Error(`Referenced series for ${Modality} dataset not present.`);
           const message = `Referenced series for ${Modality} dataset not present.`;
           LoggerService.error({ error, message });
+
+          const studyId = extractStudyIdFromURL();
+          const errorTitle = 'Fail to load series';
+
+          if (studyId) {
+            useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+          }
+
           UINotificationService.show({
             autoClose: false,
-            title: 'Fail to load series',
+            title: errorTitle,
             message,
             type: 'error',
           });
@@ -72,9 +88,17 @@ const mapDispatchToProps = (dispatch, ownProps) => {
         const error = new Error('Source data not present');
         const message = 'Source data not present';
         LoggerService.error({ error, message });
+
+        const studyId = extractStudyIdFromURL();
+        const errorTitle = 'Fail to load series';
+
+        if (studyId) {
+          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+        }
+
         UINotificationService.show({
           autoClose: false,
-          title: 'Fail to load series',
+          title: errorTitle,
           message,
           type: 'error',
         });
@@ -84,9 +108,17 @@ const mapDispatchToProps = (dispatch, ownProps) => {
         const error = new Error('Modality not supported');
         const message = 'Modality not supported';
         LoggerService.error({ error, message });
+
+        const studyId = extractStudyIdFromURL();
+        const errorTitle = 'Fail to load series';
+
+        if (studyId) {
+          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+        }
+
         UINotificationService.show({
           autoClose: false,
-          title: 'Fail to load series',
+          title: errorTitle,
           message,
           type: 'error',
         });

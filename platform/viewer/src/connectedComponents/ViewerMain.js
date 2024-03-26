@@ -1,51 +1,48 @@
-import { Component } from 'react';
-import React from 'react';
-import memoize from 'lodash/memoize';
-import _values from 'lodash/values';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useParams } from 'react-router-dom';
+import values from 'lodash/values';
 import PropTypes from 'prop-types';
 
+import OHIF from '@ohif/core';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { eventTypes as uiEvents } from '@ohif/ui';
 
 import { servicesManager } from '../App';
-import { ConnectedViewportGrid } from './../components/ViewportGrid/index.js';
+
+import ViewportGrid from './../components/ViewportGrid/ViewportGrid';
 
 import './ViewerMain.css';
 
-var values = memoize(_values);
+const { setViewportSpecificData, clearViewportSpecificData } = OHIF.redux.actions;
 
-class ViewerMain extends Component {
-  static propTypes = {
-    activeViewportIndex: PropTypes.number.isRequired,
-    studies: PropTypes.array,
-    viewportSpecificData: PropTypes.object.isRequired,
-    layout: PropTypes.object.isRequired,
-    setViewportSpecificData: PropTypes.func.isRequired,
-    clearViewportSpecificData: PropTypes.func.isRequired,
-  };
+export default function ViewerMain({ studies, isStudyLoaded }) {
+  const dispatch = useDispatch();
+  const { studyInstanceUIDs } = useParams();
 
-  constructor(props) {
-    super(props);
+  const { layout, viewportSpecificData } = useSelector((state) => state.viewports);
 
-    this.state = {
-      displaySets: [],
-    };
-  }
+  const [displaySets, setDisplaySets] = useState([]);
 
-  getDisplaySets(studies) {
-    const displaySets = [];
+  const { addError } = useViewerStudyErrors();
+
+  const viewportData = useMemo(() => values(viewportSpecificData), [viewportSpecificData]);
+
+  const getDisplaySets = (studies) => {
+    const newDisplaySets = [];
     studies.forEach((study) => {
       study.displaySets.forEach((dSet) => {
         if (!dSet.plugin) {
           dSet.plugin = 'cornerstone';
         }
-        displaySets.push(dSet);
+        newDisplaySets.push(dSet);
       });
     });
 
-    return displaySets;
-  }
+    return newDisplaySets;
+  };
 
-  findDisplaySet(studies, StudyInstanceUID, displaySetInstanceUID) {
+  const findDisplaySet = (studies, StudyInstanceUID, displaySetInstanceUID) => {
     const study = studies.find((study) => {
       return study.StudyInstanceUID === StudyInstanceUID;
     });
@@ -57,35 +54,110 @@ class ViewerMain extends Component {
     return study.displaySets.find((displaySet) => {
       return displaySet.displaySetInstanceUID === displaySetInstanceUID;
     });
-  }
+  };
 
-  componentDidMount() {
-    // Add beforeUnload event handler to check for unsaved changes
-    //window.addEventListener('beforeunload', unloadHandlers.beforeUnload);
+  const setViewportData = ({ viewportIndex, StudyInstanceUID, displaySetInstanceUID }) => {
+    let displaySet = findDisplaySet(studies, StudyInstanceUID, displaySetInstanceUID);
 
-    // Get all the display sets for the viewer studies
-    if (this.props.studies) {
-      const displaySets = this.getDisplaySets(this.props.studies);
-      this.setState({ displaySets }, this.fillEmptyViewportPanes);
+    const { LoggerService, UINotificationService } = servicesManager.services;
+
+    if (displaySet?.isDerived) {
+      const { Modality } = displaySet;
+      if (Modality === 'SEG' && servicesManager) {
+        const onDisplaySetLoadFailureHandler = (error) => {
+          const message =
+            error.message.includes('orthogonal') || error.message.includes('oblique')
+              ? 'The segmentation has been detected as non coplanar,\
+              If you really think it is coplanar,\
+              please adjust the tolerance in the segmentation panel settings (at your own peril!)'
+              : error.message;
+          LoggerService.error({ error, message });
+
+          const errorTitle = 'DICOM Segmentation Loader';
+
+          if (studyInstanceUIDs) {
+            addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+          }
+
+          UINotificationService.show({
+            title: errorTitle,
+            message,
+            type: 'error',
+            autoClose: false,
+          });
+        };
+
+        const { referencedDisplaySet, activatedLabelmapPromise } = displaySet.getSourceDisplaySet(
+          studies,
+          true,
+          onDisplaySetLoadFailureHandler
+        );
+        displaySet = referencedDisplaySet;
+
+        activatedLabelmapPromise.then((activatedLabelmapIndex) => {
+          const selectionFired = new CustomEvent('extensiondicomsegmentationsegselected', {
+            detail: { activatedLabelmapIndex: activatedLabelmapIndex },
+          });
+          document.dispatchEvent(selectionFired);
+        });
+      } else if (Modality !== 'SR') {
+        displaySet = displaySet.getSourceDisplaySet(studies);
+      }
+
+      if (!displaySet) {
+        const error = new Error('Source data not present');
+        const message = 'Source data not present';
+        const errorTitle = 'Fail to load series';
+
+        LoggerService.error({ error, message });
+
+        if (studyInstanceUIDs) {
+          addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+        }
+
+        UINotificationService.show({
+          autoClose: false,
+          title: errorTitle,
+          message,
+          type: 'error',
+        });
+      }
     }
-  }
 
-  componentDidUpdate(prevProps) {
-    const prevViewportAmount = prevProps.layout.viewports.length;
-    const viewportAmount = this.props.layout.viewports.length;
-    const isVtk = this.props.layout.viewports.some((vp) => !!vp.vtk);
+    if (displaySet?.isSOPClassUIDSupported === false) {
+      const error = new Error('Modality not supported');
+      const message = 'Modality not supported';
+      const errorTitle = 'Fail to load series';
 
-    if (this.props.studies !== prevProps.studies || (viewportAmount !== prevViewportAmount && !isVtk)) {
-      const displaySets = this.getDisplaySets(this.props.studies);
-      this.setState({ displaySets }, this.fillEmptyViewportPanes);
+      LoggerService.error({ error, message });
+
+      if (studyInstanceUIDs) {
+        addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+      }
+
+      UINotificationService.show({
+        autoClose: false,
+        title: errorTitle,
+        message,
+        type: 'error',
+      });
     }
-  }
 
-  fillEmptyViewportPanes = () => {
-    // TODO: Here is the entry point for filling viewports on load.
+    if (displaySet) {
+      dispatch(setViewportSpecificData(viewportIndex, displaySet));
+
+      // Trigger viewport event
+      const e = new CustomEvent(uiEvents.viewport.update, {
+        viewportIndex,
+        StudyInstanceUID,
+        displaySet,
+      });
+      document.dispatchEvent(e);
+    }
+  };
+
+  const fillEmptyViewportPanes = () => {
     const dirtyViewportPanes = [];
-    const { layout, viewportSpecificData } = this.props;
-    const { displaySets } = this.state;
 
     if (!displaySets || !displaySets.length) {
       return;
@@ -114,7 +186,7 @@ class ViewerMain extends Component {
 
     dirtyViewportPanes.forEach((vp, i) => {
       if (vp && vp.StudyInstanceUID) {
-        this.setViewportData({
+        setViewportData({
           viewportIndex: i,
           StudyInstanceUID: vp.StudyInstanceUID,
           displaySetInstanceUID: vp.displaySetInstanceUID,
@@ -123,129 +195,48 @@ class ViewerMain extends Component {
     });
   };
 
-  setViewportData = ({ viewportIndex, StudyInstanceUID, displaySetInstanceUID }) => {
-    let displaySet = this.findDisplaySet(this.props.studies, StudyInstanceUID, displaySetInstanceUID);
-
-    const { LoggerService, UINotificationService } = servicesManager.services;
-
-    if (displaySet.isDerived) {
-      const { Modality } = displaySet;
-      if (Modality === 'SEG' && servicesManager) {
-        const onDisplaySetLoadFailureHandler = (error) => {
-          const message =
-            error.message.includes('orthogonal') || error.message.includes('oblique')
-              ? 'The segmentation has been detected as non coplanar,\
-              If you really think it is coplanar,\
-              please adjust the tolerance in the segmentation panel settings (at your own peril!)'
-              : error.message;
-          LoggerService.error({ error, message });
-          UINotificationService.show({
-            title: 'DICOM Segmentation Loader',
-            message,
-            type: 'error',
-            autoClose: false,
-          });
-        };
-
-        const { referencedDisplaySet, activatedLabelmapPromise } = displaySet.getSourceDisplaySet(
-          this.props.studies,
-          true,
-          onDisplaySetLoadFailureHandler
-        );
-        displaySet = referencedDisplaySet;
-
-        activatedLabelmapPromise.then((activatedLabelmapIndex) => {
-          const selectionFired = new CustomEvent('extensiondicomsegmentationsegselected', {
-            detail: { activatedLabelmapIndex: activatedLabelmapIndex },
-          });
-          document.dispatchEvent(selectionFired);
-        });
-      } else if (Modality !== 'SR') {
-        displaySet = displaySet.getSourceDisplaySet(this.props.studies);
-      }
-
-      if (!displaySet) {
-        const error = new Error('Source data not present');
-        const message = 'Source data not present';
-        LoggerService.error({ error, message });
-        UINotificationService.show({
-          autoClose: false,
-          title: 'Fail to load series',
-          message,
-          type: 'error',
-        });
-      }
+  useEffect(() => {
+    if (studies) {
+      setDisplaySets(getDisplaySets(studies));
     }
+  }, [studies]);
 
-    if (displaySet.isSOPClassUIDSupported === false) {
-      const error = new Error('Modality not supported');
-      const message = 'Modality not supported';
-      LoggerService.error({ error, message });
-      UINotificationService.show({
-        autoClose: false,
-        title: 'Fail to load series',
-        message,
-        type: 'error',
+  useEffect(() => {
+    const isVtk = layout.viewports.some((vp) => !!vp.vtk);
+
+    if (!isVtk && studies) {
+      setDisplaySets(getDisplaySets(studies));
+    }
+  }, [layout.viewports.length]);
+
+  useEffect(() => {
+    fillEmptyViewportPanes();
+  }, [displaySets]);
+
+  useEffect(() => {
+    return () => {
+      // Clear the entire viewport specific data
+      Object.keys(viewportSpecificData).forEach((viewportIndex) => {
+        dispatch(clearViewportSpecificData(viewportIndex));
       });
-    }
+    };
+  }, []);
 
-    this.props.setViewportSpecificData(viewportIndex, displaySet);
-
-    // Trigger viewport event
-    const e = new CustomEvent(uiEvents.viewport.update, {
-      viewportIndex,
-      StudyInstanceUID,
-      displaySet,
-    });
-    document.dispatchEvent(e);
-  };
-
-  render() {
-    const { viewportSpecificData } = this.props;
-    const viewportData = values(viewportSpecificData);
-
-    return (
-      <div className="ViewerMain">
-        {this.state.displaySets.length && (
-          <ConnectedViewportGrid
-            isStudyLoaded={this.props.isStudyLoaded}
-            studies={this.props.studies}
-            viewportData={viewportData}
-            setViewportData={this.setViewportData}
-          >
-            {/* Children to add to each viewport that support children */}
-          </ConnectedViewportGrid>
-        )}
-      </div>
-    );
-  }
-
-  componentWillUnmount() {
-    // Clear the entire viewport specific data
-    const { viewportSpecificData } = this.props;
-    Object.keys(viewportSpecificData).forEach((viewportIndex) => {
-      this.props.clearViewportSpecificData(viewportIndex);
-    });
-
-    // TODO: These don't have to be viewer specific?
-    // Could qualify for other routes?
-    // hotkeys.destroy();
-
-    // Remove beforeUnload event handler...
-    //window.removeEventListener('beforeunload', unloadHandlers.beforeUnload);
-    // Destroy the synchronizer used to update reference lines
-    //OHIF.viewer.updateImageSynchronizer.destroy();
-    // TODO: Instruct all plugins to clean up themselves
-    //
-    // Clear references to all stacks in the StackManager
-    //StackManager.clearStacks();
-    // @TypeSafeStudies
-    // Clears OHIF.viewer.Studies collection
-    //OHIF.viewer.Studies.removeAll();
-    // @TypeSafeStudies
-    // Clears OHIF.viewer.StudyMetadataList collection
-    //OHIF.viewer.StudyMetadataList.removeAll();
-  }
+  return (
+    <div className="ViewerMain">
+      {displaySets.length && (
+        <ViewportGrid
+          isStudyLoaded={isStudyLoaded}
+          studies={studies}
+          viewportData={viewportData}
+          setViewportData={setViewportData}
+        />
+      )}
+    </div>
+  );
 }
 
-export default ViewerMain;
+ViewerMain.propTypes = {
+  studies: PropTypes.array,
+  isStudyLoaded: PropTypes.bool,
+};

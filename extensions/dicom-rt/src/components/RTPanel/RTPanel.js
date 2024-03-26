@@ -1,25 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
-import cornerstoneTools from 'cornerstone-tools';
+import React, { useEffect, useState } from 'react';
 import cornerstone from 'cornerstone-core';
-
-import { ScrollableArea, TableList, Icon } from '@ohif/ui';
+import cornerstoneTools from 'cornerstone-tools';
+import PropTypes from 'prop-types';
 
 import { utils } from '@ohif/core';
+import { Icon, ScrollableArea, TableList } from '@ohif/ui';
+
+import TOOL_NAMES from '../../utils/toolNames';
+import LoadingIndicator from '../LoadingIndicator/LoadingIndicator';
+import PanelSection from '../PanelSection/PanelSection';
+import RTPanelSettings from '../RTSettings/RTSettings';
+import StructureSetItem from '../StructureSetItem/StructureSetItem';
 
 import './RTPanel.css';
-import StructureSetItem from '../StructureSetItem/StructureSetItem';
-import RTPanelSettings from '../RTSettings/RTSettings';
-import PanelSection from '../PanelSection/PanelSection';
-import LoadingIndicator from '../LoadingIndicator/LoadingIndicator';
-import TOOL_NAMES from '../../utils/toolNames';
 
 const { RTSTRUCT_DISPLAY_TOOL } = TOOL_NAMES;
 
 const { studyMetadataManager } = utils;
 
 const refreshViewport = () => {
-  cornerstone.getEnabledElements().forEach(enabledElement => {
+  cornerstone.getEnabledElements().forEach((enabledElement) => {
     if (enabledElement.image) {
       cornerstone.updateImage(enabledElement.element);
     }
@@ -89,14 +89,12 @@ const RTPanel = ({
   }, []);
 
   useEffect(() => {
-    const studyMetadata = studyMetadataManager.get(
-      activeViewport.StudyInstanceUID
-    );
+    const studyMetadata = studyMetadataManager.get(activeViewport.StudyInstanceUID);
     const referencedDisplaysets = studyMetadata.getDerivedDatasets({
       referencedSeriesInstanceUID: activeViewport.SeriesInstanceUID,
       Modality: 'RTSTRUCT',
     });
-    setState(state => ({ ...state, isLocked: !referencedDisplaysets.length }));
+    setState((state) => ({ ...state, isLocked: !referencedDisplaysets.length }));
   }, [activeViewport]);
 
   const updateStructureSets = () => {
@@ -105,9 +103,7 @@ const RTPanel = ({
     const StructureSets = module.state.StructureSets;
 
     if (StructureSets && StructureSets.length) {
-      const viewportSets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(
-        viewport.SeriesInstanceUID
-      );
+      const viewportSets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(viewport.SeriesInstanceUID);
 
       const studyMetadata = studyMetadataManager.get(viewport.StudyInstanceUID);
       const referencedDisplaysets = studyMetadata.getDerivedDatasets({
@@ -132,10 +128,7 @@ const RTPanel = ({
     setShowSettings(showSettings && !isOpen);
   }, [isOpen]);
 
-  const toContourItem = (
-    { ROINumber, ROIName, RTROIObservations, colorArray, visible, isSupported },
-    loadedSet
-  ) => {
+  const toContourItem = ({ ROINumber, ROIName, RTROIObservations, colorArray, visible, isSupported }, loadedSet) => {
     let interpretedType = '';
     if (RTROIObservations && RTROIObservations.RTROIInterpretedType) {
       interpretedType = `(${RTROIObservations.RTROIInterpretedType})`;
@@ -153,10 +146,7 @@ const RTPanel = ({
           if (isCornerstone()) {
             const enabledElements = cornerstone.getEnabledElements();
             const element = enabledElements[activeIndex].element;
-            const stackToolState = cornerstoneTools.getToolState(
-              element,
-              'stack'
-            );
+            const stackToolState = cornerstoneTools.getToolState(element, 'stack');
 
             if (!stackToolState) {
               return;
@@ -174,24 +164,15 @@ const RTPanel = ({
             const toolState = cornerstoneTools.globalImageIdSpecificToolStateManager.saveToolState();
             const imageIdSpecificToolState = toolState[imageId];
 
-            const rtstructData =
-              imageIdSpecificToolState[RTSTRUCT_DISPLAY_TOOL];
+            const rtstructData = imageIdSpecificToolState[RTSTRUCT_DISPLAY_TOOL];
 
-            const specificData = rtstructData.data.find(
-              rtData => rtData.ROINumber === ROINumber
-            );
+            const specificData = rtstructData.data.find((rtData) => rtData.ROINumber === ROINumber);
 
             specificData.highlight = true;
 
             const frameIndex = imageIds.indexOf(imageId);
-            const SOPInstanceUID = cornerstone.metaData.get(
-              'SOPInstanceUID',
-              imageId
-            );
-            const StudyInstanceUID = cornerstone.metaData.get(
-              'StudyInstanceUID',
-              imageId
-            );
+            const SOPInstanceUID = cornerstone.metaData.get('SOPInstanceUID', imageId);
+            const StudyInstanceUID = cornerstone.metaData.get('StudyInstanceUID', imageId);
 
             onContourItemClick({
               StudyInstanceUID,
@@ -207,16 +188,13 @@ const RTPanel = ({
         visible={visible}
         onVisibilityChange={() => {
           const module = cornerstoneTools.getModule('rtstruct');
-          module.setters.toggleROIContour(
-            state.selectedSet.SeriesInstanceUID,
-            ROINumber
-          );
+          module.setters.toggleROIContour(state.selectedSet.SeriesInstanceUID, ROINumber);
         }}
       />
     );
   };
 
-  const configurationChangeHandler = newConfiguration => {
+  const configurationChangeHandler = (newConfiguration) => {
     const module = cornerstoneTools.getModule('rtstruct');
     module.configuration.lineWidth = newConfiguration.lineWidth;
     module.configuration.opacity = newConfiguration.opacity;
@@ -239,31 +217,19 @@ const RTPanel = ({
       <div className="dcmrt-panel-header">
         {' '}
         {!state.isLocked && (
-          <Icon
-            className="cog-icon"
-            name="cog"
-            width="25px"
-            height="25px"
-            onClick={() => setShowSettings(true)}
-          />
+          <Icon className="cog-icon" name="cog" width="25px" height="25px" onClick={() => setShowSettings(true)} />
         )}
         <h3>RT Structure Sets</h3>
       </div>
-      {!state.isLocked && !state.referencedDisplaysets.length && (
-        <LoadingIndicator expand height="70px" width="70px" />
-      )}
+      {!state.isLocked && !state.referencedDisplaysets.length && <LoadingIndicator expand height="70px" width="70px" />}
       {state.sets &&
-        state.referencedDisplaysets.map(displaySet => {
+        state.referencedDisplaysets.map((displaySet) => {
           const { SeriesInstanceUID, metadata, isLoaded } = displaySet;
 
           const module = cornerstoneTools.getModule('rtstruct');
-          const sets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(
-            activeViewport.SeriesInstanceUID
-          );
+          const sets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(activeViewport.SeriesInstanceUID);
 
-          const loadedSet = sets.find(
-            set => set.SeriesInstanceUID === SeriesInstanceUID
-          );
+          const loadedSet = sets.find((set) => set.SeriesInstanceUID === SeriesInstanceUID);
 
           if (!loadedSet) return null;
 
@@ -274,12 +240,8 @@ const RTPanel = ({
               loading={!isLoaded || !loadedSet}
               visible={isLoaded && loadedSet && loadedSet.visible}
               hideVisibleButton={!isLoaded}
-              expanded={
-                isLoaded &&
-                loadedSet.SeriesInstanceUID ===
-                  state.selectedSet.SeriesInstanceUID
-              }
-              onVisibilityChange={newVisibility => {
+              expanded={isLoaded && loadedSet.SeriesInstanceUID === state.selectedSet.SeriesInstanceUID}
+              onVisibilityChange={(newVisibility) => {
                 const module = cornerstoneTools.getModule('rtstruct');
 
                 if (newVisibility) {
@@ -290,7 +252,7 @@ const RTPanel = ({
                 const sets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(
                   activeViewport.SeriesInstanceUID
                 );
-                setState(state => ({ ...state, sets }));
+                setState((state) => ({ ...state, sets }));
                 refreshViewport();
               }}
               onExpandChange={async () => {
@@ -300,17 +262,14 @@ const RTPanel = ({
                   const sets = module.getters.structuresSetsWhichReferenceSeriesInstanceUid(
                     activeViewport.SeriesInstanceUID
                   );
-                  const selectedSet = sets.find(
-                    set => set.SeriesInstanceUID === SeriesInstanceUID
-                  );
-                  setState(state => ({ ...state, selectedSet, sets }));
+                  const selectedSet = sets.find((set) => set.SeriesInstanceUID === SeriesInstanceUID);
+                  setState((state) => ({ ...state, selectedSet, sets }));
                 }
               }}
             >
               <ScrollableArea>
                 <TableList headless>
-                  {isLoaded &&
-                    loadedSet.ROIContours.map(c => toContourItem(c, loadedSet))}
+                  {isLoaded && loadedSet.ROIContours.map((c) => toContourItem(c, loadedSet))}
                 </TableList>
               </ScrollableArea>
             </PanelSection>

@@ -54,7 +54,6 @@ ToolbarButton.propTypes = {
   isExpandable: PropTypes.bool,
   /** Direction of expandable 'caret' symbol */
   isExpanded: PropTypes.bool,
-  t: PropTypes.func.isRequired,
 };
 
 ToolbarButton.defaultProps = {

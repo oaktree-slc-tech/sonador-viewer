@@ -1,10 +1,10 @@
 // Temp
-import OldSelect from './OldSelect.js';
+import OldSelect from './OldSelect';
 
-export { Select } from './Select.js';
-export { Label } from './Label.js';
-export { Range } from './Range.js';
-export { TextArea } from './TextArea.js';
-export { TextInput } from './TextInput.js';
-export { DropdownMenu } from './DropdownMenu.js';
+export { Select } from './Select';
+export { Label } from './Label';
+export { Range } from './Range';
+export { TextArea } from './TextArea';
+export { TextInput } from './TextInput';
+export { DropdownMenu } from './DropdownMenu';
 export { OldSelect };

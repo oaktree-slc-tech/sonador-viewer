@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+
 import { Icon } from '@ohif/ui';
 
-import './PanelSection.css';
 import LoadingIndicator from '../LoadingIndicator/LoadingIndicator';
+
+import './PanelSection.css';
 
 const PanelSection = ({
   title,
@@ -12,8 +14,8 @@ const PanelSection = ({
   expanded = false,
   loading = false,
   hideVisibleButton = false,
-  onVisibilityChange = () => { },
-  onExpandChange = () => { }
+  onVisibilityChange = () => {},
+  onExpandChange = () => {},
 }) => {
   const [isExpanded, setIsExpanded] = useState(expanded);
   const [isVisible, setIsVisible] = useState(visible);
@@ -27,7 +29,7 @@ const PanelSection = ({
       className="dcmrt-panel-section"
       style={{
         marginBottom: isExpanded ? 0 : 2,
-        height: isExpanded ? '100%' : 'unset'
+        height: isExpanded ? '100%' : 'unset',
       }}
     >
       <div className="header">
@@ -36,7 +38,7 @@ const PanelSection = ({
           {!hideVisibleButton && (
             <Icon
               className={`eye-icon ${isVisible && 'expanded'}`}
-              name={isVisible ? "eye" : "eye-closed"}
+              name={isVisible ? 'eye' : 'eye-closed'}
               width="20px"
               height="20px"
               onClick={() => {
@@ -70,13 +72,13 @@ PanelSection.propTypes = {
   children: PropTypes.oneOfType([PropTypes.node, PropTypes.func]).isRequired,
   visible: PropTypes.bool,
   expanded: PropTypes.bool,
-  onVisibilityChange: PropTypes.func
+  onVisibilityChange: PropTypes.func,
 };
 
 PanelSection.defaultProps = {
   visible: false,
   expanded: false,
-  onVisibilityChange: () => { }
+  onVisibilityChange: () => {},
 };
 
 export default PanelSection;

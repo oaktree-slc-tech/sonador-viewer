@@ -212,7 +212,7 @@ export default class MeasurementApi {
     this.options.onMeasurementsUpdated(Object.assign({}, this.tools));
   }
 
-  retrieveMeasurements(PatientID, timepointIds) {
+  retrieveMeasurements() {
     const retrievalFn = configuration.dataExchange.retrieve;
     const { server } = configuration;
     if (typeof retrievalFn !== 'function') {

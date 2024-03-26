@@ -1,15 +1,16 @@
-import throttle from 'lodash.throttle';
-import { vec3 } from 'gl-matrix';
-
+import Constants from '@kitware/vtk.js/Rendering/Core/VolumeMapper/Constants.js';
 import {
   getImageData,
+  vtkInteractorStyleMPRRotate,
   vtkInteractorStyleMPRWindowLevel,
   vtkInteractorStyleRotatableMPRCrosshairs,
   vtkSVGRotatableCrosshairsWidget,
-  vtkInteractorStyleMPRRotate,
 } from '@sonador/react-vtkjs-viewport';
+import { vec3 } from 'gl-matrix';
+import throttle from 'lodash.throttle';
 
-import Constants from '@kitware/vtk.js/Rendering/Core/VolumeMapper/Constants.js';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import setMPRLayout from './utils/setMPRLayout.js';
 import setViewportToVTK from './utils/setViewportToVTK.js';
@@ -25,13 +26,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
   let defaultVOI;
 
   async function _getActiveViewportVTKApi(viewports) {
-    const {
-      numRows,
-      numColumns,
-      layout,
-      viewportSpecificData,
-      activeViewportIndex,
-    } = viewports;
+    const { numRows, numColumns, layout, viewportSpecificData, activeViewportIndex } = viewports;
 
     const currentData = layout.viewports[activeViewportIndex];
     if (currentData && currentData.plugin === 'vtk') {
@@ -95,9 +90,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     const lower = windowCenter - windowWidth / 2.0;
     const upper = windowCenter + windowWidth / 2.0;
 
-    const rgbTransferFunction = apis[0].volumes[0]
-      .getProperty()
-      .getRGBTransferFunction(0);
+    const rgbTransferFunction = apis[0].volumes[0].getProperty().getRGBTransferFunction(0);
 
     rgbTransferFunction.setRange(lower, upper);
 
@@ -198,10 +191,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         frameIndex
       );
 
-      const imageDataObject = getImageData(
-        stack.imageIds,
-        displaySetInstanceUID
-      );
+      const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
 
       let pixelIndex = 0;
       let x = 0;
@@ -227,21 +217,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       y /= count;
 
       const position = [x, y, frameIndex];
-      const worldPos = _convertModelToWorldSpace(
-        position,
-        imageDataObject.vtkImageData
-      );
+      const worldPos = _convertModelToWorldSpace(position, imageDataObject.vtkImageData);
 
       api.svgWidgets.rotatableCrosshairsWidget.moveCrosshairs(worldPos, apis);
       done();
     },
-    setSegmentationConfiguration: async ({
-      viewports,
-      globalOpacity,
-      visible,
-      renderOutline,
-      outlineThickness,
-    }) => {
+    setSegmentationConfiguration: async ({ viewports, globalOpacity, visible, renderOutline, outlineThickness }) => {
       const allViewports = Object.values(viewports.viewportSpecificData);
       const promises = allViewports.map(async (viewport, viewportIndex) => {
         let api = apis[viewportIndex];
@@ -298,8 +279,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         });
       });
 
-      const rotatableCrosshairsWidget =
-        apis[0].svgWidgets.rotatableCrosshairsWidget;
+      const rotatableCrosshairsWidget = apis[0].svgWidgets.rotatableCrosshairsWidget;
 
       const referenceLines = rotatableCrosshairsWidget.getReferenceLines();
 
@@ -393,8 +373,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       // layouts of the same volume.
 
       // Retrieve currently active display set.
-      const displaySet =
-        viewports.viewportSpecificData[viewports.activeViewportIndex];
+      const displaySet = viewports.viewportSpecificData[viewports.activeViewportIndex];
 
       // Get current VOI if cornerstone viewport.
       const cornerstoneVOI = getVOIFromCornerstoneViewport();
@@ -436,10 +415,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       // Add widgets and set default interactorStyle of each viewport.
       apis.forEach((api, apiIndex) => {
-        api.addSVGWidget(
-          vtkSVGRotatableCrosshairsWidget.newInstance(),
-          'rotatableCrosshairsWidget'
-        );
+        api.addSVGWidget(vtkSVGRotatableCrosshairsWidget.newInstance(), 'rotatableCrosshairsWidget');
 
         const uid = api.uid;
         const istyle = vtkInteractorStyleRotatableMPRCrosshairs.newInstance();
@@ -459,25 +435,18 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       apis[0].svgWidgets.rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
 
       // Check if we have full WebGL 2 support
-      const openGLRenderWindow =
-        apis[0].genericRenderWindow.getOpenGLRenderWindow();
+      const openGLRenderWindow = apis[0].genericRenderWindow.getOpenGLRenderWindow();
 
       if (!openGLRenderWindow.getWebgl2()) {
         // Throw a warning if we don't have WebGL 2 support,
         // And the volume is too big to fit in a 2D texture
 
         const openGLContext = openGLRenderWindow.getContext();
-        const maxTextureSizeInBytes = openGLContext.getParameter(
-          openGLContext.MAX_TEXTURE_SIZE
-        );
+        const maxTextureSizeInBytes = openGLContext.getParameter(openGLContext.MAX_TEXTURE_SIZE);
 
-        const maxBufferLengthFloat32 =
-          (maxTextureSizeInBytes * maxTextureSizeInBytes) / 4;
+        const maxBufferLengthFloat32 = (maxTextureSizeInBytes * maxTextureSizeInBytes) / 4;
 
-        const dimensions = firstApi.volumes[0]
-          .getMapper()
-          .getInputData()
-          .getDimensions();
+        const dimensions = firstApi.volumes[0].getMapper().getInputData().getDimensions();
 
         const volumeLength = dimensions[0] * dimensions[1] * dimensions[2];
 
@@ -485,8 +454,17 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
           const message =
             'This volume is too large to fit in WebGL 1 textures and will display incorrectly. Please use a different browser to view this data';
           LoggerService.error({ message });
+
+          const studyId = extractStudyIdFromURL();
+          const errorTitle = 'Browser does not support WebGL 2';
+
+          if (studyId) {
+            // Will be called only on Viewer study page
+            useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+          }
+
           UINotificationService.show({
-            title: 'Browser does not support WebGL 2',
+            title: errorTitle,
             message,
             type: 'error',
             autoClose: false,

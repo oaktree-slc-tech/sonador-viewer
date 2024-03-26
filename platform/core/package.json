@@ -44,6 +44,7 @@
     "mathjs": "11.8.2",
     "mousetrap": "^1.6.5",
     "retry": "^0.13.1",
+    "uuid": "^9.0.1",
     "validate.js": "^0.13.1"
   },
   "devDependencies": {

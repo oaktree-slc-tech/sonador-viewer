@@ -1,4 +1,6 @@
 import { measurements, utils } from '@ohif/core';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import { servicesManager } from '../../App';
 const { MeasurementApi } = measurements;
@@ -27,8 +29,17 @@ export default function jumpToRowItem(
     const error = new Error('Measurements are not supported by the MPR mode.');
     const { UINotificationService, LoggerService } = servicesManager.services;
     LoggerService.error({ error, message: error.message });
+
+    const studyId = extractStudyIdFromURL();
+    const errorTitle = 'Measurements panel';
+
+    if (studyId) {
+      // Will be called only on Viewer study page
+      useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
+    }
+
     UINotificationService.show({
-      title: 'Measurements panel',
+      title: errorTitle,
       message: error.message,
       type: 'warning',
       autoClose: true,

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+
 import { Range } from '@ohif/ui';
 
 import './SegmentationSettings.css';
@@ -21,23 +22,25 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
     onChange(state);
   }, [state]);
 
-  const check = field => {
-    setState(state => ({ ...state, [field]: !state[field] }));
+  const check = (field) => {
+    setState((state) => ({ ...state, [field]: !state[field] }));
   };
 
   const save = (field, value) => {
-    setState(state => ({ ...state, [field]: value }));
+    setState((state) => ({ ...state, [field]: value }));
   };
 
-  const once = fn => (...args) => {
-    if (!fn) return;
-    fn(...args);
-    fn = null;
-  };
+  const once =
+    (fn) =>
+    (...args) => {
+      if (!fn) return;
+      fn(...args);
+      fn = null;
+    };
 
   const segTolValue = document.getElementById('segToleranceValue');
   if (segTolValue) {
-    segTolValue.onchange = once(function() {
+    segTolValue.onchange = once(function () {
       const { UINotificationService, LoggerService } = servicesManager.services;
 
       const error = new Error(
@@ -52,10 +55,10 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
         type: 'warning',
         autoClose: true,
       });
-  });
-}
+    });
+  }
 
-  const toFloat = value => parseFloat(value / 100).toFixed(2);
+  const toFloat = (value) => parseFloat(value / 100).toFixed(2);
 
   return (
     <div className="dcmseg-segmentation-settings">
@@ -65,15 +68,8 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
           Back
         </button>
       </div>
-      <div
-        className="settings-group"
-        style={{ marginBottom: state.renderFill ? 15 : 0 }}
-      >
-        <CustomCheck
-          label="Segment Fill"
-          checked={state.renderFill}
-          onChange={() => check('renderFill')}
-        />
+      <div className="settings-group" style={{ marginBottom: state.renderFill ? 15 : 0 }}>
+        <CustomCheck label="Segment Fill" checked={state.renderFill} onChange={() => check('renderFill')} />
         {state.renderFill && (
           <CustomRange
             label="Opacity"
@@ -81,20 +77,13 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
             min={0}
             max={100}
             value={state.fillAlpha * 100}
-            onChange={event => save('fillAlpha', toFloat(event.target.value))}
+            onChange={(event) => save('fillAlpha', toFloat(event.target.value))}
             showPercentage
           />
         )}
       </div>
-      <div
-        className="settings-group"
-        style={{ marginBottom: state.renderOutline ? 15 : 0 }}
-      >
-        <CustomCheck
-          label="Segment Outline"
-          checked={state.renderOutline}
-          onChange={() => check('renderOutline')}
-        />
+      <div className="settings-group" style={{ marginBottom: state.renderOutline ? 15 : 0 }}>
+        <CustomCheck label="Segment Outline" checked={state.renderOutline} onChange={() => check('renderOutline')} />
         {state.renderOutline && (
           <>
             {!disabledFields.includes('outlineAlpha') && (
@@ -105,7 +94,7 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
                 step={1}
                 min={0}
                 max={100}
-                onChange={event => save('outlineAlpha', toFloat(event.target.value))}
+                onChange={(event) => save('outlineAlpha', toFloat(event.target.value))}
               />
             )}
             {!disabledFields.includes('outlineWidth') && (
@@ -116,17 +105,14 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
                 step={1}
                 min={0}
                 max={5}
-                onChange={event => save('outlineWidth', parseInt(event.target.value))}
+                onChange={(event) => save('outlineWidth', parseInt(event.target.value))}
               />
             )}
           </>
         )}
       </div>
       {(state.renderFill || state.renderOutline) && !disabledFields.includes('shouldRenderInactiveLabelmaps') && (
-        <div
-          className="settings-group"
-          style={{ marginBottom: state.shouldRenderInactiveLabelmaps ? 15 : 0 }}
-        >
+        <div className="settings-group" style={{ marginBottom: state.shouldRenderInactiveLabelmaps ? 15 : 0 }}>
           <CustomCheck
             label="Render inactive segmentations"
             checked={state.shouldRenderInactiveLabelmaps}
@@ -142,7 +128,7 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
                   min={0}
                   max={100}
                   value={state.fillAlphaInactive * 100}
-                  onChange={event => save('fillAlphaInactive', toFloat(event.target.value))}
+                  onChange={(event) => save('fillAlphaInactive', toFloat(event.target.value))}
                 />
               )}
               {state.renderOutline && !disabledFields.includes('outlineAlphaInactive') && (
@@ -153,7 +139,7 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
                   min={0}
                   max={100}
                   value={state.outlineAlphaInactive * 100}
-                  onChange={event => save('outlineAlphaInactive', toFloat(event.target.value))}
+                  onChange={(event) => save('outlineAlphaInactive', toFloat(event.target.value))}
                 />
               )}
             </>
@@ -167,18 +153,17 @@ const SegmentationSettings = ({ configuration, onBack, onChange, servicesManager
             id="segToleranceValue"
             style={{ margin: '0 15px' }}
             label="Tolerance"
-            onKeyPress={event => {
-                const validate = string => {
-                  let rgx = /[^-.e0-9]+/g;
-                  return string.match(rgx);
-                };
+            onKeyPress={(event) => {
+              const validate = (string) => {
+                let rgx = /[^-.e0-9]+/g;
+                return string.match(rgx);
+              };
 
-                if (validate(event.key)) {
-                  event.preventDefault();
-                }
+              if (validate(event.key)) {
+                event.preventDefault();
               }
-            }
-            onChange={event => {
+            }}
+            onChange={(event) => {
               save('segsTolerance', event.target.value);
             }}
             value={state.segsTolerance}
@@ -200,14 +185,14 @@ const CustomCheck = ({ label, checked, onChange }) => {
   );
 };
 
-const CustomRange = props => {
+const CustomRange = (props) => {
   const { label, onChange } = props;
   return (
     <div className="range">
       <label htmlFor="range">{label}</label>
       <Range
         {...props}
-        onChange={event => {
+        onChange={(event) => {
           event.persist();
           onChange(event);
         }}
