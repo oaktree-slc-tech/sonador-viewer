@@ -1,17 +1,21 @@
 import React, { Component } from 'react';
 import { withTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
+import classnames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { MODULE_TYPES } from '@ohif/core';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { ExpandableToolMenu, RoundedButtonGroup, ToolbarButton, withDialog, withModal } from '@ohif/ui';
-
-import { withAppContext } from '../context/AppContext';
+import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/issues.svg';
 
 import { commandsManager, extensionManager } from '../App';
+import { withAppContext } from '../context/AppContext';
+
 import ConnectedCineDialog from './ConnectedCineDialog';
 import ConnectedLayoutButton from './ConnectedLayoutButton';
 
-import './ToolbarRow.css';
+import styles from './ToolbarRow.module.scss';
 
 class ToolbarRow extends Component {
   // TODO: Simplify these? isOpen can be computed if we say "any" value for selected,
@@ -21,7 +25,7 @@ class ToolbarRow extends Component {
     isRightSidePanelOpen: PropTypes.bool.isRequired,
     selectedLeftSidePanel: PropTypes.string.isRequired,
     selectedRightSidePanel: PropTypes.string.isRequired,
-    handleSidePanelChange: PropTypes.func.isRequired,
+    onSidePanelChange: PropTypes.func.isRequired,
     activeContexts: PropTypes.arrayOf(PropTypes.string).isRequired,
     studies: PropTypes.array,
     t: PropTypes.func.isRequired,
@@ -37,7 +41,7 @@ class ToolbarRow extends Component {
   constructor(props) {
     super(props);
 
-    const toolbarButtonDefinitions = _getVisibleToolbarButtons.call(this);
+    const toolbarButtonDefinitions = getVisibleToolbarButtons.call(this);
     // TODO:
     // If it's a tool that can be active... Mark it as active?
     // - Tools that are on/off?
@@ -53,8 +57,8 @@ class ToolbarRow extends Component {
 
     this.seriesPerStudyCount = [];
 
-    this._handleBuiltIn = _handleBuiltIn.bind(this);
-    this._onDerivedDisplaySetsLoadedAndCached = this._onDerivedDisplaySetsLoadedAndCached.bind(this);
+    this.handleBuiltIn = handleBuiltIn.bind(this);
+    this.onDerivedDisplaySetsLoadedAndCached = this.onDerivedDisplaySetsLoadedAndCached.bind(this);
 
     this.updateButtonGroups();
   }
@@ -111,52 +115,29 @@ class ToolbarRow extends Component {
      * that depends on derived display sets to be loaded.
      * (Implement pubsub for better tracking of derived display sets)
      */
-    document.addEventListener('deriveddisplaysetsloadedandcached', this._onDerivedDisplaySetsLoadedAndCached);
+    document.addEventListener('deriveddisplaysetsloadedandcached', this.onDerivedDisplaySetsLoadedAndCached);
   }
 
   componentWillUnmount() {
-    document.removeEventListener('deriveddisplaysetsloadedandcached', this._onDerivedDisplaySetsLoadedAndCached);
+    document.removeEventListener('deriveddisplaysetsloadedandcached', this.onDerivedDisplaySetsLoadedAndCached);
   }
 
-  _onDerivedDisplaySetsLoadedAndCached() {
+  onDerivedDisplaySetsLoadedAndCached() {
     this.updateButtonGroups();
     this.setState({
-      toolbarButtons: _getVisibleToolbarButtons.call(this),
+      toolbarButtons: getVisibleToolbarButtons.call(this),
     });
   }
 
   componentDidUpdate(prevProps) {
     const activeContextsChanged = prevProps.activeContexts !== this.props.activeContexts;
 
-    const prevStudies = prevProps.studies;
-    const prevActiveViewport = prevProps.activeViewport;
-    const activeViewport = this.props.activeViewport;
-    const studies = this.props.studies;
-    const seriesPerStudyCount = this.seriesPerStudyCount;
-
-    let shouldUpdate = false;
-
-    if (prevStudies.length !== studies.length || prevActiveViewport !== activeViewport) {
-      shouldUpdate = true;
-    } else {
-      for (let i = 0; i < studies.length; i++) {
-        if (studies[i].series.length !== seriesPerStudyCount[i]) {
-          seriesPerStudyCount[i] = studies[i].series.length;
-
-          shouldUpdate = true;
-          break;
-        }
-      }
-    }
-
-    if (shouldUpdate) {
-      this.updateButtonGroups();
-    }
+    this.updateButtonGroups();
 
     if (activeContextsChanged) {
       this.setState(
         {
-          toolbarButtons: _getVisibleToolbarButtons.call(this),
+          toolbarButtons: getVisibleToolbarButtons.call(this),
         },
         this.closeCineDialogIfNotApplicable
       );
@@ -177,18 +158,18 @@ class ToolbarRow extends Component {
   };
 
   render() {
-    const buttonComponents = _getButtonComponents.call(this, this.state.toolbarButtons, this.state.activeButtons);
+    const buttonComponents = getButtonComponents.call(this, this.state.toolbarButtons, this.state.activeButtons);
 
     const onPress = (side, value) => {
-      this.props.handleSidePanelChange(side, value);
+      this.props.onSidePanelChange(side, value);
     };
     const onPressLeft = onPress.bind(this, 'left');
     const onPressRight = onPress.bind(this, 'right');
 
     return (
-      <>
-        <div className="ToolbarRow">
-          <div className="pull-left m-t-1 p-y-1" style={{ padding: '10px' }}>
+      <div className={styles.toolbarRow}>
+        <div className={styles.left}>
+          <div className={styles.leftRoundedContainer}>
             <RoundedButtonGroup
               options={this.buttonGroups.left}
               value={this.props.selectedLeftSidePanel || ''}
@@ -197,22 +178,55 @@ class ToolbarRow extends Component {
           </div>
           {buttonComponents}
           <ConnectedLayoutButton />
-          <div className="pull-right m-t-1 rm-x-1" style={{ marginLeft: 'auto' }}>
-            {this.buttonGroups.right.length && (
-              <RoundedButtonGroup
-                options={this.buttonGroups.right}
-                value={this.props.selectedRightSidePanel || ''}
-                onValueChanged={onPressRight}
-              />
-            )}
-          </div>
         </div>
-      </>
+        <div className={styles.right}>
+          {this.buttonGroups.right.length && (
+            <RoundedButtonGroup
+              options={this.buttonGroups.right}
+              value={this.props.selectedRightSidePanel || ''}
+              onValueChanged={(values) => {
+                onPressRight(values);
+                this.props.setIsIssuesContentRightSidePanel(false);
+              }}
+            />
+          )}
+          <IssuesButton
+            setIsIssuesContentRightSidePanel={this.props.setIsIssuesContentRightSidePanel}
+            onPress={onPress}
+            isIssuesContentRightSidePanel={this.props.isIssuesContentRightSidePanel}
+          />
+        </div>
+      </div>
     );
   }
 }
 
-function _getCustomButtonComponent(button, activeButtons) {
+function IssuesButton({ setIsIssuesContentRightSidePanel, onPress, isIssuesContentRightSidePanel }) {
+  const { studyInstanceUIDs } = useParams();
+
+  const errors = useViewerStudyErrors((state) => {
+    return state.errors[studyInstanceUIDs];
+  });
+
+  if (!errors) return null;
+
+  return (
+    <button
+      className={styles.issuesBtn}
+      onClick={() => {
+        setIsIssuesContentRightSidePanel((prev) => !prev);
+        onPress('right', 'issues');
+      }}
+    >
+      <div className={classnames(isIssuesContentRightSidePanel && styles.active, styles.iconWrapper)}>
+        <IssuesIcon />
+      </div>
+      <span>Issues</span>
+    </button>
+  );
+}
+
+function getCustomButtonComponent(button, activeButtons) {
   const CustomComponent = button.CustomComponent;
   const isValidComponent = typeof CustomComponent === 'function';
 
@@ -225,7 +239,7 @@ function _getCustomButtonComponent(button, activeButtons) {
     return (
       <CustomComponent
         parentContext={parentContext}
-        toolbarClickCallback={_handleToolbarButtonClick.bind(this)}
+        toolbarClickCallback={handleToolbarButtonClick.bind(this)}
         button={button}
         key={button.id}
         activeButtons={activeButtonsIds}
@@ -235,11 +249,11 @@ function _getCustomButtonComponent(button, activeButtons) {
   }
 }
 
-function _getExpandableButtonComponent(button, activeButtons) {
+function getExpandableButtonComponent(button, activeButtons) {
   // Iterate over button definitions and update `onClick` behavior
   let activeCommand;
   const childButtons = button.buttons.map((childButton) => {
-    childButton.onClick = _handleToolbarButtonClick.bind(this, childButton);
+    childButton.onClick = handleToolbarButtonClick.bind(this, childButton);
 
     if (activeButtons.map((button) => button.id).indexOf(childButton.id) > -1) {
       activeCommand = childButton.id;
@@ -259,13 +273,13 @@ function _getExpandableButtonComponent(button, activeButtons) {
   );
 }
 
-function _getDefaultButtonComponent(button, activeButtons) {
+function getDefaultButtonComponent(button, activeButtons) {
   return (
     <ToolbarButton
       key={button.id}
       label={button.label}
       icon={button.icon}
-      onClick={_handleToolbarButtonClick.bind(this, button)}
+      onClick={handleToolbarButtonClick.bind(this, button)}
       isActive={activeButtons.map((button) => button.id).includes(button.id)}
     />
   );
@@ -274,21 +288,20 @@ function _getDefaultButtonComponent(button, activeButtons) {
  * Determine which extension buttons should be showing, if they're
  * active, and what their onClick behavior should be.
  */
-function _getButtonComponents(toolbarButtons, activeButtons) {
-  const _this = this;
+function getButtonComponents(toolbarButtons, activeButtons) {
   return toolbarButtons.map((button) => {
     const hasCustomComponent = button.CustomComponent;
     const hasNestedButtonDefinitions = button.buttons && button.buttons.length;
 
     if (hasCustomComponent) {
-      return _getCustomButtonComponent.call(_this, button, activeButtons);
+      return getCustomButtonComponent.call(this, button, activeButtons);
     }
 
     if (hasNestedButtonDefinitions) {
-      return _getExpandableButtonComponent.call(_this, button, activeButtons);
+      return getExpandableButtonComponent.call(this, button, activeButtons);
     }
 
-    return _getDefaultButtonComponent.call(_this, button, activeButtons);
+    return getDefaultButtonComponent.call(this, button, activeButtons);
   });
 }
 
@@ -304,7 +317,7 @@ function _getButtonComponents(toolbarButtons, activeButtons) {
  * @param {*} evt
  * @param {*} props
  */
-function _handleToolbarButtonClick(button, evt) {
+function handleToolbarButtonClick(button, evt) {
   const { activeButtons } = this.state;
 
   if (button.commandName) {
@@ -319,14 +332,14 @@ function _handleToolbarButtonClick(button, evt) {
     const toggables = activeButtons.filter(({ options }) => options && !options.togglable);
     this.setState({ activeButtons: [...toggables, button] });
   } else if (button.type === 'builtIn') {
-    this._handleBuiltIn(button);
+    this.handleBuiltIn(button);
   }
 }
 
 /**
  *
  */
-function _getVisibleToolbarButtons() {
+function getVisibleToolbarButtons() {
   const toolbarModules = extensionManager.modules[MODULE_TYPES.TOOLBAR];
   const toolbarButtonDefinitions = [];
 
@@ -344,7 +357,7 @@ function _getVisibleToolbarButtons() {
   return toolbarButtonDefinitions;
 }
 
-function _handleBuiltIn(button) {
+function handleBuiltIn(button) {
   /* TODO: Keep cine button active until its unselected. */
   const { dialog, t } = this.props;
   const { dialogId } = this.state;

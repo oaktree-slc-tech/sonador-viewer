@@ -2,6 +2,9 @@ import React, { Component } from 'react';
 import ReactResizeDetector from 'react-resize-detector';
 import debounce from 'lodash.debounce';
 
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
+
 class DicomMicroscopyViewport extends Component {
   state = {
     error: null,
@@ -70,9 +73,18 @@ class DicomMicroscopyViewport extends Component {
           if (UINotificationService) {
             const message = 'Failed to load viewport. Please check that you have hardware acceleration enabled.';
             LoggerService.error({ error, message });
+
+            const studyId = extractStudyIdFromURL();
+            const errorTitle = 'Microscopy Viewport';
+
+            if (studyId) {
+              // Will be called only on Viewer study page
+              useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+            }
+
             UINotificationService.show({
               autoClose: false,
-              title: 'Microscopy Viewport',
+              title: errorTitle,
               message,
               type: 'error',
             });

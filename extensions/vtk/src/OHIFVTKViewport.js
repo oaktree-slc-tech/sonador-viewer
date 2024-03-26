@@ -1,58 +1,20 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-
+import React from 'react';
+// DO not Remove cornerstone, without it can be broken
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 
-import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
-import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
-import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
-import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
-
-import OHIF from '@ohif/core';
-import { eventTypes as uiEvents } from '@ohif/ui';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 import { eventTypes as segmentationEventTypes } from '@ohif/extension-dicom-segmentation';
+import { eventTypes as uiEvents } from '@ohif/ui';
 
-import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
-
-import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import LoadingIndicator from './ohifComponents/LoadingIndicator.js';
-
+import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import ConnectedVTKViewport from './ConnectedVTKViewport';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
-const { StackManager } = OHIF.utils;
-
 const volumeCache = {};
-
-// TODO: Figure out where we plan to put this long term
-
-/**
- * Create a labelmap image with the same dimensions as our background volume.
- *
- * @param backgroundImageData vtkImageData
- */
-/* TODO: Not currently used until we have drawing tools in vtkjs.
-function createLabelMapImageData(backgroundImageData) {
-  // TODO => Need to do something like this if we start drawing a new segmentation
-  // On a vtkjs viewport.
-
-  const labelMapData = vtkImageData.newInstance(
-    backgroundImageData.get('spacing', 'origin', 'direction')
-  );
-  labelMapData.setDimensions(backgroundImageData.getDimensions());
-  labelMapData.computeTransforms();
-
-  const values = new Uint8Array(backgroundImageData.getNumberOfPoints());
-  const dataArray = vtkDataArray.newInstance({
-    numberOfComponents: 1, // labelmap with single component
-    values,
-  });
-  labelMapData.getPointData().setScalars(dataArray);
-
-  return labelMapData;
-} */
 
 class OHIFVTKViewport extends OHIFVtkBaseViewport {
   // OHIF VTK viewport which can be used to retrieve image volumes for use by the OHIF MPR tool
@@ -77,10 +39,7 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     options = options || {};
 
     if (options.lower && options.upper) {
-      volumeActor
-        .getProperty()
-        .getRGBTransferFunction(0)
-        .setRange(options.lower, options.upper);
+      volumeActor.getProperty().getRGBTransferFunction(0).setRange(options.lower, options.upper);
     }
 
     // Set the sample distance to half the mean length of one side. This is where the divide by 6 comes from.
@@ -90,29 +49,18 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     volumeMapper.setSampleDistance(sampleDistance);
 
     // Be generous to suppress warnings, as the logging really hurts performance.
-    // TODO: maybe we should auto adjust samples to 1000.
     volumeMapper.setMaximumSamplesPerRay(4000);
   }
 
   setStateFromProps() {
     const { studies, displaySet } = this.props.viewportData;
-    const {
-      StudyInstanceUID,
-      displaySetInstanceUID,
-      sopClassUIDs,
-      SOPInstanceUID,
-      frameIndex,
-    } = displaySet;
+    const { StudyInstanceUID, displaySetInstanceUID, sopClassUIDs, SOPInstanceUID, frameIndex } = displaySet;
 
     if (sopClassUIDs.length > 1) {
-      console.warn(
-        'More than one SOPClassUID in the same series is not yet supported.'
-      );
+      console.warn('More than one SOPClassUID in the same series is not yet supported.');
     }
 
-    const study = studies.find(
-      (study) => study.StudyInstanceUID === StudyInstanceUID
-    );
+    const study = studies.find((study) => study.StudyInstanceUID === StudyInstanceUID);
 
     const dataDetails = {
       studyDate: study.studyDate,
@@ -125,26 +73,17 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     };
 
     try {
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT } =
-        this.getViewportData(
-          studies,
-          StudyInstanceUID,
-          displaySetInstanceUID,
-          SOPInstanceUID,
-          frameIndex
-        );
+      const { imageDataObject, labelmapDataObject, labelmapColorLUT } = this.getViewportData(
+        studies,
+        StudyInstanceUID,
+        displaySetInstanceUID,
+        SOPInstanceUID,
+        frameIndex
+      );
 
       this.imageDataObject = imageDataObject;
 
-      /* TODO: Not currently used until we have drawing tools in vtkjs.
-      if (!labelmap) {
-        labelmap = createLabelMapImageData(data);
-      } */
-
-      const volumeActor = this.getOrCreateVolume(
-        imageDataObject,
-        displaySetInstanceUID
-      );
+      const volumeActor = this.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
 
       this.setState(
         {
@@ -154,10 +93,6 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
         () => {
           this.loadProgressively(imageDataObject);
 
-          // TODO: There must be a better way to do this.
-          // We do this so that if all the data is available the react-vtkjs-viewport
-          // Will render _something_ before the volumes are set and the volume
-          // Construction that happens in react-vtkjs-viewport locks up the CPU.
           setTimeout(() => {
             this.setState({
               volumes: [volumeActor],
@@ -174,13 +109,18 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
       console.error(errorTitle, error);
 
       // Retrieve UI notification and logging service
-      const { UINotificationService, LoggerService } =
-        this.props.servicesManager.services;
+      const { UINotificationService, LoggerService } = this.props.servicesManager.services;
       if (this.props.viewportIndex === 0) {
-        const message = error.message.includes('buffer')
-          ? 'Dataset is too big to display in MPR'
-          : error.message;
+        const message = error.message.includes('buffer') ? 'Dataset is too big to display in MPR' : error.message;
         LoggerService.error({ error, message });
+
+        const studyId = extractStudyIdFromURL();
+
+        if (studyId) {
+          // Will be called only on Viewer study page
+          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+        }
+
         UINotificationService.show({
           title: errorTitle,
           message,
@@ -211,28 +151,21 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     this.boundResizeViewport = this.resizeViewport.bind(this);
 
     // Subscribe to VTK tab events in order update component after UI changes
-    document.addEventListener(
-      segmentationEventTypes.SegmentationPanelTabUpdatedEvent,
-      this.boundResizeViewport
-    );
-    document.addEventListener(
-      uiEvents.sidebar.toggle,
-      this.boundResizeViewport
-    );
+    document.addEventListener(segmentationEventTypes.SegmentationPanelTabUpdatedEvent, this.boundResizeViewport);
+    document.addEventListener(uiEvents.sidebar.toggle, this.boundResizeViewport);
 
     // Load images to VTK.js viewport
     this.setStateFromProps();
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  componentDidUpdate(prevProps) {
     // Update component after change
 
     const { displaySet } = this.props.viewportData;
     const prevDisplaySet = prevProps.viewportData.displaySet;
 
     if (
-      displaySet.displaySetInstanceUID !==
-        prevDisplaySet.displaySetInstanceUID ||
+      displaySet.displaySetInstanceUID !== prevDisplaySet.displaySetInstanceUID ||
       displaySet.SOPInstanceUID !== prevDisplaySet.SOPInstanceUID ||
       displaySet.frameIndex !== prevDisplaySet.frameIndex
     ) {
@@ -244,14 +177,8 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     // Remove event handlers and reactive logic for viewport
 
     // Unsubscribe from VTK tab events
-    document.removeEventListener(
-      segmentationEventTypes.SegmentationPanelTabUpdatedEvent,
-      this.boundResizeViewport
-    );
-    document.removeEventListener(
-      uiEvents.sidebar.toggle,
-      this.boundResizeViewport
-    );
+    document.removeEventListener(segmentationEventTypes.SegmentationPanelTabUpdatedEvent, this.boundResizeViewport);
+    document.removeEventListener(uiEvents.sidebar.toggle, this.boundResizeViewport);
   }
 
   render() {
@@ -276,18 +203,12 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     return (
       <>
         <div style={style}>
-          {!this.state.isLoaded && (
-            <LoadingIndicator percentComplete={this.state.percentComplete} />
-          )}
+          {!this.state.isLoaded && <LoadingIndicator percentComplete={this.state.percentComplete} />}
           {this.state.volumes && (
             <ConnectedVTKViewport
               volumes={this.state.volumes}
-              paintFilterLabelMapImageData={
-                this.state.paintFilterLabelMapImageData
-              }
-              paintFilterBackgroundImageData={
-                this.state.paintFilterBackgroundImageData
-              }
+              paintFilterLabelMapImageData={this.state.paintFilterLabelMapImageData}
+              paintFilterBackgroundImageData={this.state.paintFilterBackgroundImageData}
               viewportIndex={this.props.viewportIndex}
               dataDetails={this.state.dataDetails}
               labelmapRenderingOptions={{
@@ -306,7 +227,6 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
             />
           )}
         </div>
-        )}
         {childrenWithProps}
       </>
     );

@@ -69,6 +69,8 @@
   color: var(--text-color-active);
   padding: 10px 15px;
   border-bottom: 1px solid #ccc;
+  column-gap: 10px;
+  align-items: center;
 }
 
 .dd-item:hover {
@@ -81,6 +83,5 @@
 }
 
 .dd-item-icon {
-  margin-right: 10px;
   margin-top: 2px;
 }

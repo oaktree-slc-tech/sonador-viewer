@@ -1,13 +1,16 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import { Thumbnail } from './Thumbnail.js';
+import { Thumbnail } from './Thumbnail';
 
 import './StudyBrowser.styl';
 
-function StudyBrowser(props) {
-  const { studies, onThumbnailClick, onThumbnailDoubleClick, supportsDrag, showThumbnailProgressBar } = props;
-
+function StudyBrowser({
+  studies = [],
+  onThumbnailClick = () => {},
+  supportsDrag = true,
+  showThumbnailProgressBar = true,
+}) {
   return (
     <div className="study-browser">
       <div className="scrollable-study-thumbnails">
@@ -50,7 +53,6 @@ function StudyBrowser(props) {
                     hasDerivedDisplaySets={hasDerivedDisplaySets}
                     // Events
                     onClick={onThumbnailClick.bind(undefined, displaySetInstanceUID)}
-                    onDoubleClick={onThumbnailDoubleClick}
                     showProgressBar={showThumbnailProgressBar}
                   />
                 </div>
@@ -62,8 +64,6 @@ function StudyBrowser(props) {
     </div>
   );
 }
-
-const noop = () => {};
 
 StudyBrowser.propTypes = {
   studies: PropTypes.arrayOf(
@@ -85,16 +85,7 @@ StudyBrowser.propTypes = {
   ).isRequired,
   supportsDrag: PropTypes.bool,
   onThumbnailClick: PropTypes.func,
-  onThumbnailDoubleClick: PropTypes.func,
   showThumbnailProgressBar: PropTypes.bool,
-};
-
-StudyBrowser.defaultProps = {
-  studies: [],
-  supportsDrag: true,
-  onThumbnailClick: noop,
-  onThumbnailDoubleClick: noop,
-  showThumbnailProgressBar: true,
 };
 
 export { StudyBrowser };

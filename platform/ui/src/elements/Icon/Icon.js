@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-import getIcon from './getIcon.js';
+import getIcon from './getIcon';
 
 import './Icon.styl';
 

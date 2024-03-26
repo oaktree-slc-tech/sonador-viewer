@@ -91,14 +91,13 @@
     "redux": "^4.2.1",
     "redux-oidc": "3.1.x",
     "redux-thunk": "^2.3.0",
-    "vtk.js": "^11.14.0",
-    "zustand": "^4.4.6"
+    "vtk.js": "^11.14.0"
   },
   "devDependencies": {
     "@babel/runtime": "^7.5.5",
     "@percy/cypress": "^3.1.2",
-    "@types/lodash": "^4.14.202",
     "@types/hammerjs": "^2.0.45",
+    "@types/lodash": "^4.14.202",
     "cypress": "^13.5.0",
     "cypress-file-upload": "^5.0.8"
   }

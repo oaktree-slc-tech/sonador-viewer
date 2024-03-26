@@ -1,11 +1,10 @@
 import dcmjs from 'dcmjs';
 
-import classes from '../classes';
+import { useViewerStudyErrors } from '../store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '../utils/extractStudyIdFromURL';
 
 import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
-
-const { LogManager } = classes;
 
 /**
  * Function to parse the part10 array buffer that comes from a DICOM Structured report into measurementData
@@ -29,8 +28,15 @@ const parseDicomStructuredReport = (part10SRArrayBuffer, displaySets, external) 
     } catch (error) {
       const seriesDescription = dataset.SeriesDescription || '';
       LoggerService.error({ error, message: error.message });
+      const studyId = extractStudyIdFromURL();
+      const errorTitle = `Failed to parse ${seriesDescription} SR display set`;
+
+      if (studyId) {
+        useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
+      }
+
       UINotificationService.show({
-        title: `Failed to parse ${seriesDescription} SR display set`,
+        title: errorTitle,
         message: error.message,
         type: 'error',
         autoClose: false,
@@ -47,8 +53,15 @@ const parseDicomStructuredReport = (part10SRArrayBuffer, displaySets, external) 
   } catch (error) {
     const seriesDescription = dataset.SeriesDescription || '';
     LoggerService.error({ error, message: error.message });
+    const studyId = extractStudyIdFromURL();
+    const errorTitle = `Failed to parse ${seriesDescription} measurement report`;
+
+    if (studyId) {
+      useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
+    }
+
     UINotificationService.show({
-      title: `Failed to parse ${seriesDescription} measurement report`,
+      title: errorTitle,
       message: error.message,
       type: 'error',
       autoClose: false,

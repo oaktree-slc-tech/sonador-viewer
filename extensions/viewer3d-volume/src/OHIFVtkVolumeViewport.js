@@ -1,37 +1,16 @@
-import _ from 'lodash';
-
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-
+import React from 'react';
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 
-import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
-import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
-import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
-import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
-import vtkBoundingBox from '@kitware/vtk.js/Common/DataModel/BoundingBox';
-
-import vtkColorTransferFunction from '@kitware/vtk.js/Rendering/Core/ColorTransferFunction';
-import vtkPiecewiseFunction from '@kitware/vtk.js/Common/DataModel/PiecewiseFunction';
-
-import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
-
-import OHIF from '@ohif/core';
-import { eventTypes as uiEvents } from '@ohif/ui';
+import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
+import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 import { eventTypes as segmentationEventTypes } from '@ohif/extension-dicom-segmentation';
-
-import {
-  vtkUtils,
-  OHIFVtkBaseViewport,
-  LoadingIndicator,
-} from '@ohif/extension-vtk';
+import { LoadingIndicator, OHIFVtkBaseViewport, vtkUtils } from '@ohif/extension-vtk';
+import { eventTypes as uiEvents } from '@ohif/ui';
 
 import ConnectedVTKVolumeViewport from './ConnectedVTKVolumeViewport.js';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
-
-const { StackManager } = OHIF.utils;
 
 const volumeCache = {};
 
@@ -42,8 +21,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
   state = {
     ...OHIFVtkBaseViewport.state,
-    defaultColorPreset:
-      vtkUtils.volumeColorPresetsConstants.VTK_VOLUME_CPROFILE_CT_BONE,
+    defaultColorPreset: vtkUtils.volumeColorPresetsConstants.VTK_VOLUME_CPROFILE_CT_BONE,
     activeColorPreset: '',
   };
 
@@ -68,12 +46,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     const { activeColorPreset, defaultColorPreset } = this.state;
     options.vtkColorPreset = activeColorPreset || defaultColorPreset;
 
-    vtkUtils.applyVtkVolumeRenderOptions(
-      vtkImage,
-      volumeActor,
-      volumeMapper,
-      options
-    );
+    vtkUtils.applyVtkVolumeRenderOptions(vtkImage, volumeActor, volumeMapper, options);
   }
 
   setStateFromProps() {
@@ -83,23 +56,13 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
     // Retrieve study metadata
     const { studies, displaySet } = this.props.viewportData;
-    const {
-      StudyInstanceUID,
-      displaySetInstanceUID,
-      sopClassUIDs,
-      SOPInstanceUID,
-      frameIndex,
-    } = displaySet;
+    const { StudyInstanceUID, displaySetInstanceUID, sopClassUIDs, SOPInstanceUID, frameIndex } = displaySet;
 
     if (sopClassUIDs.length > 1) {
-      console.warn(
-        'More than one SOPClassUID in the same series is not yet supported'
-      );
+      console.warn('More than one SOPClassUID in the same series is not yet supported');
     }
 
-    const study = studies.find(
-      (study) => study.StudyInstanceUID == StudyInstanceUID
-    );
+    const study = studies.find((study) => study.StudyInstanceUID == StudyInstanceUID);
 
     const dataDetails = {
       studyDate: study.studyDate,
@@ -113,21 +76,17 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
     try {
       // Retrieve image data, labelmaps, and color settings
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT } =
-        this.getViewportData(
-          studies,
-          StudyInstanceUID,
-          displaySetInstanceUID,
-          SOPInstanceUID,
-          frameIndex
-        );
+      const { imageDataObject, labelmapDataObject, labelmapColorLUT } = this.getViewportData(
+        studies,
+        StudyInstanceUID,
+        displaySetInstanceUID,
+        SOPInstanceUID,
+        frameIndex
+      );
 
       this.imageDataObject = imageDataObject;
 
-      const volumeActor = this.getOrCreateVolume(
-        imageDataObject,
-        displaySetInstanceUID
-      );
+      const volumeActor = this.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
 
       // Begin progressively loading data
       this.setState({ percentComplee: 0, dataDetails }, () => {
@@ -149,13 +108,20 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
       console.error(errorTitle, err);
 
       // Retrieve UI notification and logging service
-      const { UINotificationService, LoggerService } =
-        this.props.servicesManager.services;
+      const { UINotificationService, LoggerService } = this.props.servicesManager.services;
       if (this.props.viewportIndex === 0) {
-        const message = error.message.includes('buffer')
+        const message = err.message.includes('buffer')
           ? 'Dataset is too large to display in volume rendering view'
-          : error.message;
-        LoggerService.error({ error, message });
+          : err.message;
+        LoggerService.error({ err, message });
+
+        const studyId = extractStudyIdFromURL();
+
+        if (studyId) {
+          // Will be called only on Viewer study page
+          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
+        }
+
         UINotificationService.show({
           title: errorTitle,
           message,
@@ -195,29 +161,17 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     if (
       displaySet &&
       displaySet.Modality &&
-      defaultColorPreset !=
-        vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
-          displaySet.Modality
-        )
+      defaultColorPreset != vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(displaySet.Modality)
     ) {
       loadAsync = true;
       this.setState({
-        defaultColorPreset:
-          vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
-            displaySet.Modality
-          ),
+        defaultColorPreset: vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(displaySet.Modality),
       });
     }
 
     // Subscribe to OHIF tab events in order update component after UI changes
-    document.addEventListener(
-      segmentationEventTypes.SegmentationPanelTabUpdatedEvent,
-      this.boundResizeViewport
-    );
-    document.addEventListener(
-      uiEvents.sidebar.toggle,
-      this.boundResizeViewport
-    );
+    document.addEventListener(segmentationEventTypes.SegmentationPanelTabUpdatedEvent, this.boundResizeViewport);
+    document.addEventListener(uiEvents.sidebar.toggle, this.boundResizeViewport);
 
     // Load volumetric data: if state properties were changed, loadVolumeData needs
     // to be called asynchronously.
@@ -235,8 +189,7 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
     // Display set changed, re-render component
     if (
-      displaySet.displaySetInstanceUID !==
-        prevDisplaySet.displaySetInstanceUID ||
+      displaySet.displaySetInstanceUID !== prevDisplaySet.displaySetInstanceUID ||
       displaySet.SOPInstanceUID !== prevDisplaySet.SOPInstanceUID ||
       displaySet.frameIndex !== prevDisplaySet.frameIndex
     ) {
@@ -248,27 +201,18 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     // Remove event handlers and reactive logic for viewport
 
     // Unsubscribe from VTK tab events
-    document.removeEventListener(
-      segmentationEventTypes.SegmentationPanelTabUpdatedEvent,
-      this.boundResizeViewport
-    );
-    document.removeEventListener(
-      uiEvents.sidebar.toggle,
-      this.boundResizeViewport
-    );
+    document.removeEventListener(segmentationEventTypes.SegmentationPanelTabUpdatedEvent, this.boundResizeViewport);
+    document.removeEventListener(uiEvents.sidebar.toggle, this.boundResizeViewport);
     this.api = null;
   }
 
   render() {
-    const { configuration } = segmentationModule;
     const style = { width: '100%', height: '100%', position: 'relative' };
 
     return (
       <>
         <div className="ohif-vtk-volume" style={style}>
-          {!this.state.isLoaded && (
-            <LoadingIndicator percentComplete={this.state.percentComplete} />
-          )}
+          {!this.state.isLoaded && <LoadingIndicator percentComplete={this.state.percentComplete} />}
           {this.state.volumes && (
             <ConnectedVTKVolumeViewport
               volumes={this.state.volumes}

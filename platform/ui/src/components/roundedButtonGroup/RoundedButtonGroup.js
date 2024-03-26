@@ -70,7 +70,7 @@ class RoundedButtonGroup extends Component {
     });
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  componentDidUpdate(prevProps) {
     this.props.options.forEach((option, index) => {
       if (
         option.stateEvent &&
@@ -91,44 +91,44 @@ class RoundedButtonGroup extends Component {
   }
 
   render() {
-    let className = classnames(RoundedButtonGroup.className, 'clearfix center-table');
+    return (
+      <div className={classnames(RoundedButtonGroup.className, 'clearfix center-table')}>
+        {this.props.options.map((option, index) => {
+          const optionText = option.label && <span>{option.label}</span>;
+          const iconProps = typeof option.icon === 'string' ? { name: option.icon } : option.icon;
 
-    const buttons = this.props.options.map((option, index) => {
-      const className = classnames({
-        roundedButtonWrapper: true,
-        noselect: true,
-        active: this.props.value === option.value,
-      });
+          const bottomLabel = option.bottomLabel && <div className="bottomLabel">{option.bottomLabel}</div>;
 
-      const optionText = option.label && <span>{option.label}</span>;
-      const iconProps = typeof option.icon === 'string' ? { name: option.icon } : option.icon;
+          let badgeNumber = this.state.badgeNumbers[index];
+          const badgeNumberOverflow = String(badgeNumber).length > 2;
+          badgeNumber = badgeNumber ? (badgeNumberOverflow ? 99 : badgeNumber) : null;
 
-      const bottomLabel = option.bottomLabel && <div className="bottomLabel">{option.bottomLabel}</div>;
-
-      let badgeNumber = this.state.badgeNumbers[index];
-      const badgeNumberOverflow = String(badgeNumber).length > 2;
-      badgeNumber = badgeNumber ? (badgeNumberOverflow ? 99 : badgeNumber) : null;
-
-      return (
-        <div key={index} className={className} onClick={() => this.onClickOption(option.value)}>
-          <div className="roundedButton">
-            {optionText}
-            {badgeNumber && (
-              <div className="badgeNumber-container">
-                <span className="badgeNumber">
-                  {badgeNumber}
-                  {badgeNumberOverflow && '+'}
-                </span>
+          return (
+            <div
+              key={index}
+              className={classnames('roundedButtonWrapper noselect', {
+                active: this.props.value === option.value,
+              })}
+              onClick={() => this.onClickOption(option.value)}
+            >
+              <div className="roundedButton">
+                {optionText}
+                {badgeNumber && (
+                  <div className="badgeNumber-container">
+                    <span className="badgeNumber">
+                      {badgeNumber}
+                      {badgeNumberOverflow && '+'}
+                    </span>
+                  </div>
+                )}
+                {iconProps && <Icon {...iconProps} />}
               </div>
-            )}
-            {iconProps && <Icon {...iconProps} />}
-          </div>
-          {bottomLabel}
-        </div>
-      );
-    });
-
-    return <div className={className}>{buttons}</div>;
+              {bottomLabel}
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 }
 

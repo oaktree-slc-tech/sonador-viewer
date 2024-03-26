@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { AboutContent, Dropdown, withModal } from '@ohif/ui';
+import { ReactComponent as ListIcon } from '@ohif/ui/src/elements/Svg/svgs/list.svg';
 
+import DevicesListModal from '../DevicesListModal/DevicesListModal';
 import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
-//
 import { UserPreferences } from '../UserPreferences';
 
 import './Header.css';
@@ -22,9 +23,9 @@ function Header({
   children = OHIFLogo(),
 }) {
   const { t } = useTranslation(['Header', 'AboutModal']);
-
   const location = useLocation();
-  const hasLink = linkText && linkPath;
+
+  const [isOpenDevicesList, setIsOpenDevicesList] = useState(false);
 
   const options = [
     {
@@ -36,6 +37,11 @@ function Header({
           title: t('OHIF Viewer - About'),
         }),
     },
+    // {
+    //   title: t('Device List'),
+    //   IconComponent: ListIcon,
+    //   onClick: () => setIsOpenDevicesList(true),
+    // },
     {
       title: t('Preferences'),
       icon: {
@@ -69,7 +75,7 @@ function Header({
           )}
 
           {children}
-          {hasLink && (
+          {linkText && linkPath && (
             <Link
               className="header-btn header-studyListLinkSection"
               to={linkPath}
@@ -85,6 +91,7 @@ function Header({
           <Dropdown title={t('Options')} list={options} align="right" />
         </div>
       </div>
+      {isOpenDevicesList && <DevicesListModal setIsOpen={setIsOpenDevicesList} />}
     </>
   );
 }
