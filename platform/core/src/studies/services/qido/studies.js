@@ -36,6 +36,8 @@ function getQIDOQueryParams(filter, serverSupportsQIDOIncludeField) {
   const commaSeparatedFields = [
     '00081030', // Study Description
     '00080060', // Modality
+    '00120040', // ClinicalTrialSubjectID
+    '00380060', // ServiceEpisodeID or InternalCaseID
     // Add more fields here if you want them in the result
   ].join(',');
 
@@ -104,6 +106,8 @@ function resultDataToStudies(resultData) {
       // Modality: DICOMWeb.getString(study['00080060']),
       // ModalitiesInStudy: DICOMWeb.getString(study['00080061']),
       modalities: DICOMWeb.getString(DICOMWeb.getModalities(study['00080060'], study['00080061'])),
+      InternalCaseID: DICOMWeb.getString(study['00380060']), // maybe this is ServiceEpisodeID,
+      ClinicalTrialSubjectID: DICOMWeb.getString(study['00120040']),
     })
   );
 
@@ -119,7 +123,6 @@ export default function Studies(server, filter, shouldReturnRow) {
     errorInterceptor: errorHandler.getHTTPErrorHandler(),
     requestHooks: [getXHRRetryRequestHook()],
   };
-
   const dicomWeb = staticWado ? new StaticWadoClient(config) : new api.DICOMwebClient(config);
   server.qidoSupportsIncludeField =
     server.qidoSupportsIncludeField === undefined ? true : server.qidoSupportsIncludeField;

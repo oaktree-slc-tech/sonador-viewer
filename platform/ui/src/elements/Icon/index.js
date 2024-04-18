@@ -1,4 +1,4 @@
-import { ICONS } from './getIcon.js';
-import Icon from './Icon.js';
+import { ICONS } from './getIcon';
+import Icon from './Icon';
 
 export { Icon, ICONS };

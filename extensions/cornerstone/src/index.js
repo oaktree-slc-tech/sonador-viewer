@@ -5,6 +5,7 @@ import cornerstonePackage from '../package.json';
 import commandsModule from './commandsModule.js';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import init from './init.js';
+import OHIFCornerstoneViewport from './OHIFCornerstoneViewport';
 import { getEnabledElement, setEnabledElement } from './state';
 import toolbarModule from './toolbarModule.js';
 
@@ -13,21 +14,6 @@ const cornerstoneState = {
   getEnabledElement,
 };
 
-const Component = React.lazy(() => {
-  return import('./OHIFCornerstoneViewport');
-});
-
-const OHIFCornerstoneViewport = (props) => {
-  return (
-    <React.Suspense fallback={<div>Loading...</div>}>
-      <Component {...props} />
-    </React.Suspense>
-  );
-};
-
-/**
- *
- */
 export default {
   /**
    * Only required property. Should be a unique value across all extensions.
@@ -37,7 +23,7 @@ export default {
 
   /**
    *
-   *
+   * @param {object} [servicesManager={}]
    * @param {object} [configuration={}]
    * @param {object|array} [configuration.csToolsConfig] - Passed directly to `initCornerstoneTools`
    */
@@ -45,7 +31,7 @@ export default {
     init({ servicesManager, configuration });
   },
   getViewportModule({ commandsManager, appConfig }) {
-    const ExtendedOHIFCornerstoneViewport = (props) => {
+    return (props) => {
       /**
        * TODO: This appears to be used to set the redux parameters for
        * the viewport when new images are loaded. It's very ugly
@@ -68,8 +54,6 @@ export default {
         />
       );
     };
-
-    return ExtendedOHIFCornerstoneViewport;
   },
   getToolbarModule() {
     return toolbarModule;

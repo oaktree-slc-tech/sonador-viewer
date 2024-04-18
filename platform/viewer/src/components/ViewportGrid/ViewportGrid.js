@@ -102,18 +102,6 @@ function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStud
           studies,
         };
 
-        // JAMES TODO:
-
-        // Use whichever plugin is currently in use in the panel
-        // unless nothing is specified. If nothing is specified
-        // and the display set has a plugin specified, use that.
-        //
-        // TODO: Change this logic to:
-        // - Plugins define how capable they are of displaying a SopClass
-        // - When updating a panel, ensure that the currently enabled plugin
-        // in the viewport is capable of rendering this display set. If not
-        // then use the most capable available plugin
-
         const pluginName = !layout.plugin && displaySet && displaySet.plugin ? displaySet.plugin : layout.plugin;
 
         return (

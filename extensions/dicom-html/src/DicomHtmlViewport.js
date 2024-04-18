@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
 import dcmjs from 'dcmjs';
+import PropTypes from 'prop-types';
+
 import TypedArrayProp from './TypedArrayProp';
 
 import './DicomHtmlViewport.css';
@@ -16,7 +17,7 @@ function getRelationshipString(data) {
   }
 }
 
-const getMeaningString = data => {
+const getMeaningString = (data) => {
   if (data.ConceptNameCodeSequence) {
     const { CodeMeaning } = data.ConceptNameCodeSequence;
 
@@ -27,14 +28,12 @@ const getMeaningString = data => {
 };
 
 function getValueString(data) {
+  const { CodeMeaning, CodeValue, CodingSchemeDesignator, MeasuredValueSequence } = data.ConceptNameCodeSequence;
+  const numValue = MeasuredValueSequence.NumericValue;
+  const codeValue = MeasuredValueSequence.MeasurementUnitsCodeSequence.CodeValue;
+
   switch (data.ValueType) {
     case 'CODE':
-      const {
-        CodeMeaning,
-        CodeValue,
-        CodingSchemeDesignator,
-      } = data.ConceptNameCodeSequence;
-
       return `${CodeMeaning} (${CodeValue}, ${CodingSchemeDesignator})`;
 
     case 'PNAME':
@@ -47,10 +46,6 @@ function getValueString(data) {
       return data.UID;
 
     case 'NUM':
-      const { MeasuredValueSequence } = data;
-      const numValue = MeasuredValueSequence.NumericValue;
-      const codeValue =
-        MeasuredValueSequence.MeasurementUnitsCodeSequence.CodeValue;
       return `${numValue} ${codeValue}`;
   }
 }
@@ -68,9 +63,7 @@ function constructContentSequence(data, header) {
     return;
   }
 
-  const items = data.ContentSequence.map(item => parseContent(item)).filter(
-    item => item
-  );
+  const items = data.ContentSequence.map((item) => parseContent(item)).filter((item) => item);
 
   if (!items.length) {
     return;
@@ -126,7 +119,7 @@ function getMainData(data) {
     VerificationFlag: 'Verification flag',
   };
 
-  Object.keys(mainDataObjects).forEach(key => {
+  Object.keys(mainDataObjects).forEach((key) => {
     if (!data[key]) {
       return;
     }
@@ -140,8 +133,6 @@ function getMainData(data) {
   const contentDateTimeValue = `${data.ContentDate} ${data.ContentTime}`;
   root.push(getMainDataItem('Content Date/Time', contentDateTimeValue));
 
-  root.push();
-
   return <div>{root}</div>;
 }
 
@@ -149,11 +140,7 @@ const getContentSequence = (data, level = 1) => {
   let header;
 
   if (data.ConceptNameCodeSequence) {
-    const {
-      CodeMeaning,
-      CodeValue,
-      CodingSchemeDesignator,
-    } = data.ConceptNameCodeSequence;
+    const { CodeMeaning, CodeValue, CodingSchemeDesignator } = data.ConceptNameCodeSequence;
 
     header = `${CodeMeaning} (${CodeValue} - ${CodingSchemeDesignator})`;
   }
@@ -165,17 +152,13 @@ const getContentSequence = (data, level = 1) => {
     root.push(<HeaderDynamicLevel key={header}>{header}</HeaderDynamicLevel>);
   }
 
-  Object.keys(data).forEach(key => {
+  Object.keys(data).forEach((key) => {
     const value = data[key];
 
     if (key === '_meta') {
       const HeaderDynamicLevel = `h3`;
       root.push(<hr key={root.length} />);
-      root.push(
-        <HeaderDynamicLevel key="Metadata">
-          DICOM File Meta Information
-        </HeaderDynamicLevel>
-      );
+      root.push(<HeaderDynamicLevel key="Metadata">DICOM File Meta Information</HeaderDynamicLevel>);
     }
 
     let content;
@@ -242,11 +225,7 @@ class DicomHtmlViewport extends Component {
   }
 
   setViewportActiveHandler = () => {
-    const {
-      setViewportActive,
-      viewportIndex,
-      activeViewportIndex,
-    } = this.props;
+    const { setViewportActive, viewportIndex, activeViewportIndex } = this.props;
 
     if (viewportIndex !== activeViewportIndex) {
       setViewportActive(viewportIndex);

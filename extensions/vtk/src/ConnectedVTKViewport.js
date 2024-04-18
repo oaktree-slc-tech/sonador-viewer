@@ -1,7 +1,8 @@
+import { connect } from 'react-redux';
 import _ from 'lodash';
 
 import OHIF from '@ohif/core';
-import { connect } from 'react-redux';
+
 import VTKViewport from './VTKViewport';
 
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
@@ -55,7 +56,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   const { afterCreation } = propsFromState;
   const { afterCreation: componentAfterCreation } = ownProps;
 
-  const props = {
+  return {
     ...propsFromState,
     ...propsFromDispatch,
     ..._.omit(ownProps, 'afterCreation'),
@@ -81,13 +82,8 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       }
     },
   };
-  return props;
 };
 
-const ConnectedVTKViewport = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps
-)(VTKViewport);
+const ConnectedVTKViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKViewport);
 
 export default ConnectedVTKViewport;

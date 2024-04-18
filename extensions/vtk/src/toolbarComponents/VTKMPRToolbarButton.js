@@ -2,41 +2,28 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
-import { utils, redux } from '@ohif/core';
+import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseDisplaySetReconstructable } from '@ohif/ui';
 
-const { studyMetadataManager } = utils;
-
-function VTKMPRToolbarButton({
-  parentContext,
-  toolbarClickCallback,
-  button,
-  activeButtons,
-  isActive,
-  className,
-}) {
+function VTKMPRToolbarButton({ toolbarClickCallback, button, isActive }) {
   const { id, label, icon } = button;
-  const { viewportSpecificData, activeViewportIndex } = useSelector(
-    redux.selectors.getActiveViewportData
-  );
+  const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 
-  const isVisible = viewerbaseDisplaySetReconstructable(
-    viewportSpecificData,
-    activeViewportIndex
-  );
+  const isVisible = viewerbaseDisplaySetReconstructable(viewportSpecificData, activeViewportIndex);
 
   return (
-    <React.Fragment>
+    <>
       {isVisible && (
         <ToolbarButton
           key={id}
+          id={id}
           label={label}
           icon={icon}
           onClick={(evt) => toolbarClickCallback(button, evt)}
           isActive={isActive}
         />
       )}
-    </React.Fragment>
+    </>
   );
 }
 

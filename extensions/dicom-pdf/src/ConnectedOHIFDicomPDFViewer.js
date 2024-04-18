@@ -1,10 +1,12 @@
-import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
+
+import OHIF from '@ohif/core';
+
 import OHIFDicomPDFViewport from './OHIFDicomPDFViewport';
 
 const { setViewportActive } = OHIF.redux.actions;
 
-const mapStateToProps = (state, ownProps) => {
+const mapStateToProps = (state) => {
   const { activeViewportIndex } = state.viewports;
   return { activeViewportIndex };
 };
@@ -19,9 +21,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
   };
 };
 
-const ConnectedOHIFDicomPDFViewer = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(OHIFDicomPDFViewport);
+const ConnectedOHIFDicomPDFViewer = connect(mapStateToProps, mapDispatchToProps)(OHIFDicomPDFViewport);
 
 export default ConnectedOHIFDicomPDFViewer;

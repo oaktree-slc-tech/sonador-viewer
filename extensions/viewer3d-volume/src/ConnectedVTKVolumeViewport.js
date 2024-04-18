@@ -1,7 +1,8 @@
-import _ from 'lodash';
 import { connect } from 'react-redux';
+import _ from 'lodash';
 
 import OHIF from '@ohif/core';
+
 import VTKVolumeViewport from './VTKVolumeViewport.js';
 
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
@@ -21,7 +22,7 @@ const mapStateToProps = (state, ownProps) => {
   const viewportLayout = state.viewports.layout.viewports[viewportIndex];
   const pluginDetails = viewportLayout.viewer3dvol || viewportLayout.vtk || {};
 
-  const cprops = {
+  return {
     activeViewportIndex: state.viewports.activeViewportIndex,
     layout: state.viewports.layout,
     isActive,
@@ -29,7 +30,6 @@ const mapStateToProps = (state, ownProps) => {
     ...dataFromStore,
     enableStackPrefetch: isActive,
   };
-  return cprops;
 };
 
 const mapDispatchToProps = (dispatch, ownProps) => {
@@ -54,7 +54,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   const { afterCreation } = propsFromState;
   const { afterCreation: componentAfterCreation } = ownProps;
 
-  const props = {
+  return {
     ...propsFromState,
     ...propsFromDispatch,
     ..._.omit(ownProps, 'afterCreation'),
@@ -75,13 +75,8 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       }
     },
   };
-  return props;
 };
 
-const ConnectedVTKVolumeViewport = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-  mergeProps
-)(VTKVolumeViewport);
+const ConnectedVTKVolumeViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKVolumeViewport);
 
 export default ConnectedVTKVolumeViewport;

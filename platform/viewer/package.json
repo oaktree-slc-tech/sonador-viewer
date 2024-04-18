@@ -49,6 +49,7 @@
     "react-dom": "^16.8.6"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.26.10",
     "@heroicons/react": "^2.0.18",
     "@ohif/core": "^2.16.35",
     "@ohif/extension-cornerstone": "^2.12.16",

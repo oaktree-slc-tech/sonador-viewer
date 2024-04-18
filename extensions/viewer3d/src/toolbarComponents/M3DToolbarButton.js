@@ -14,7 +14,7 @@ const _isM3DModality = (viewportSpecificData = {}, activeViewportIndex) => {
     const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
 
     // Check if the modality is M3D
-    return displaySet && displaySet.Modality == 'M3D';
+    return displaySet && displaySet.Modality === 'M3D';
   } catch (err) {
     console.error(err);
   }
@@ -44,7 +44,7 @@ function M3DToolbarButton({ toolbarClickCallback, button, isActive, className })
   const isVisible = _isM3DModality(viewportSpecificData, activeViewportIndex);
 
   return (
-    <React.Fragment>
+    <>
       {isVisible && (
         <ToolbarButton
           key={id}
@@ -55,7 +55,7 @@ function M3DToolbarButton({ toolbarClickCallback, button, isActive, className })
           isActive={isActive}
         />
       )}
-    </React.Fragment>
+    </>
   );
 }
 
@@ -76,10 +76,11 @@ function M3DAnimationControlToolbarButton({ toolbarClickCallback, button, isActi
   const isVisible = _isM3DAnimated(viewportSpecificData, activeViewportIndex);
 
   return (
-    <React.Fragment>
+    <>
       {isVisible && (
         <ToolbarButton
           key={id}
+          id={id}
           className={className}
           label={label}
           icon={icon}
@@ -87,7 +88,7 @@ function M3DAnimationControlToolbarButton({ toolbarClickCallback, button, isActi
           isActive={isActive}
         />
       )}
-    </React.Fragment>
+    </>
   );
 }
 

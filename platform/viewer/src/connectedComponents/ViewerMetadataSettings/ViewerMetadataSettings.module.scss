@@ -1,0 +1,148 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+
+  .settingsBtn {
+    background: none;
+    border: none;
+    padding: 0;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .settingsText {
+    color: #94B2C4;
+    font-size: 12px;
+    margin: 0;
+  }
+}
+
+.modal {
+  width: 80dvw;
+  height: 90dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.blocks {
+  display: flex;
+  background-color: black;
+  padding: 20px;
+  gap: 16px;
+  max-height: 70%;
+  overflow: auto;
+  border-radius: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+
+  .block {
+    display: flex;
+    flex-direction: column;
+    row-gap: 8px;
+    width: calc(50% - 8px);
+  }
+
+  .topRightBlock {
+    align-items: flex-end;
+  }
+
+  .bottomLeftBlock {
+    justify-content: flex-end;
+  }
+
+  .bottomRightBlock {
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+}
+
+.subtitle {
+  font-size: 24px;
+}
+
+.description {
+  font-size: 16px;
+}
+
+.subtitle, .description {
+  color: #ffffff;
+  margin: 20px 0;
+}
+
+.divider {
+  height: 1px;
+  margin-bottom: 20px;
+  color: #d9d9d9;
+  width: 100%;
+}
+
+.addBtn {
+  background-color: #2E46E9;
+  width: fit-content;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #ffffff;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 8px;
+  column-gap: 4px;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  column-gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+
+  .cancelBtn, .saveBtn {
+    padding: 8px 12px;
+    color: #ffffff;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 20px;
+    border-radius: 8px;
+  }
+
+  .cancelBtn {
+    background-color: #89898B;
+  }
+
+  .saveBtn {
+    background-color: #2E46E9;
+    display: flex;
+    align-items: center;
+    column-gap: 4px;
+  }
+}
+
+.blocksSpaceDivider {
+  margin-top: auto;
+  width: 100%;
+}
+
+.select {
+  display: flex;
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+
+  .deleteIcon {
+    cursor: pointer;
+  }
+}

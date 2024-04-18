@@ -1,60 +1,48 @@
-import React, { PureComponent } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import ToolbarButton from '../../viewer/ToolbarButton';
 
-import { LayoutChooser } from './LayoutChooser.js';
+import { LayoutChooser } from './LayoutChooser';
 
-export class LayoutButton extends PureComponent {
-  static defaultProps = {
-    dropdownVisible: false,
-  };
+export function LayoutButton({ dropdownVisible = false, onChange, selectedCell }) {
+  const [isDropdownVisible, setIsDropdownVisible] = useState(dropdownVisible);
 
-  static propTypes = {
-    dropdownVisible: PropTypes.bool.isRequired,
-    /** Called with the selectedCell number when grid sell is selected */
-    onChange: PropTypes.func,
-    /** The cell to show as selected */
-    selectedCell: PropTypes.object,
-  };
-
-  state = {
-    dropdownVisible: this.props.dropdownVisible,
-  };
-
-  componentDidUpdate(prevProps) {
-    if (this.props.dropdownVisible !== prevProps.dropdownVisible) {
-      this.setState({
-        dropdownVisible: this.props.dropdownVisible,
-      });
+  useEffect(() => {
+    if (dropdownVisible !== isDropdownVisible) {
+      setIsDropdownVisible(dropdownVisible);
     }
-  }
+  }, [dropdownVisible]);
 
-  onClick = () => {
-    this.setState({
-      dropdownVisible: !this.state.dropdownVisible,
-    });
+  const handleClick = () => {
+    setIsDropdownVisible((prevState) => !prevState);
   };
 
-  onChange = (selectedCell) => {
-    if (this.props.onChange) {
-      this.props.onChange(selectedCell);
+  const handleChange = (newSelectedCell) => {
+    if (onChange) {
+      onChange(newSelectedCell);
     }
   };
 
-  render() {
-    return (
-      <div className="btn-group">
-        <ToolbarButton isActive={this.state.dropdownVisible} label={'Layout'} icon="th" onClick={this.onClick} />
-        <LayoutChooser
-          visible={this.state.dropdownVisible}
-          onChange={this.onChange}
-          onClick={this.onClick}
-          selectedCell={this.props.selectedCell}
-        />
-      </div>
-    );
-  }
+  return (
+    <div className="btn-group">
+      <ToolbarButton id="layout" isActive={isDropdownVisible} label="Layout" icon="th" onClick={handleClick} />
+      <LayoutChooser
+        visible={isDropdownVisible}
+        onChange={handleChange}
+        onClick={handleClick}
+        selectedCell={selectedCell}
+      />
+    </div>
+  );
 }
+
+LayoutButton.propTypes = {
+  dropdownVisible: PropTypes.bool,
+  /** Called with the selectedCell number when grid sell is selected */
+  onChange: PropTypes.func,
+  /** The cell to show as selected */
+  selectedCell: PropTypes.object,
+};
 
 export default LayoutButton;
