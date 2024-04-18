@@ -97,7 +97,7 @@ const initOHIFViewer = function () {
           utils.addServers(window.config.servers, store);
         })
         .catch(function (err) {
-          console.log(
+          console.error(
             'Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.',
             err
           );
@@ -147,7 +147,7 @@ if (window && window.sonador && window.sonador.host) {
       initOHIFViewer();
     })
     .catch(function (err) {
-      console.log('Unable to load OHIF configuration from remote config: ', window.sonador.config, err);
+      console.error('Unable to load OHIF configuration from remote config: ', window.sonador.config, err);
     });
 } else {
   initOHIFViewer();

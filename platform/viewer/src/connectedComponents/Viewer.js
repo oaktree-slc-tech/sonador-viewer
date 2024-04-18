@@ -63,8 +63,6 @@ export default function Viewer({
   };
 
   const retrieveTimepoints = (filter) => {
-    OHIF.log.info('retrieveTimepoints');
-
     // Get the earliest and latest study date
     let earliestDate = new Date().toISOString();
     let latestDate = new Date().toISOString();
@@ -271,16 +269,7 @@ export default function Viewer({
         {/* MAIN */}
         <div className="main-content">
           <ErrorBoundaryDialog context="ViewerMain">
-            <AppContext.Consumer>
-              {(appContext) => {
-                const { appConfig } = appContext;
-                const { studyPrefetcher } = appConfig;
-                return (
-                  studyPrefetcher &&
-                  studyPrefetcher.enabled && <StudyPrefetcher studies={studies} options={studyPrefetcher} />
-                );
-              }}
-            </AppContext.Consumer>
+            <StudyPrefetcher studies={studies} />
             <ViewerMain studies={studies} isStudyLoaded={isStudyLoaded} />
           </ErrorBoundaryDialog>
         </div>

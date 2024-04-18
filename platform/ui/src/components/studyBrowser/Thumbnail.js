@@ -55,74 +55,61 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
       });
 
       return <ol>{listedWarnings}</ol>;
-    } else {
-      return <React.Fragment>{inconsistencyWarnings}</React.Fragment>;
     }
+
+    return <>{inconsistencyWarnings}</>;
   };
 
   const getWarningInfo = (SeriesNumber, inconsistencyWarnings) => {
+    if (!inconsistencyWarnings || !inconsistencyWarnings.length === 0) {
+      return null;
+    }
+
     return (
-      <React.Fragment>
-        {inconsistencyWarnings && inconsistencyWarnings.length != 0 ? (
-          <OverlayTrigger
-            key={SeriesNumber}
-            placement="left"
-            overlay={
-              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
-                <div className="warningTitle">Series Inconsistencies</div>
-                <div className="warningContent">{getWarningContent(inconsistencyWarnings)}</div>
-              </Tooltip>
-            }
-          >
-            <div className={classNames('warning')}>
-              <span className="warning-icon">
-                <Icon name="exclamation-triangle" />
-              </span>
-            </div>
-          </OverlayTrigger>
-        ) : (
-          <React.Fragment></React.Fragment>
-        )}
-      </React.Fragment>
+      <OverlayTrigger
+        key={SeriesNumber}
+        placement="left"
+        overlay={
+          <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
+            <div className="warningTitle">Series Inconsistencies</div>
+            <div className="warningContent">{getWarningContent(inconsistencyWarnings)}</div>
+          </Tooltip>
+        }
+      >
+        <div className={classNames('warning')}>
+          <span className="warning-icon">
+            <Icon name="exclamation-triangle" />
+          </span>
+        </div>
+      </OverlayTrigger>
     );
   };
 
   const getDerivedInfo = (derivedDisplaySetsActive) => {
+    if (!derivedDisplaySetsActive) {
+      return null;
+    }
+
     return (
-      <React.Fragment>
-        {derivedDisplaySetsActive ? (
-          <div className="derived">
-            <Icon name="link" />
-          </div>
-        ) : (
-          <React.Fragment></React.Fragment>
-        )}
-      </React.Fragment>
+      <div className="derived">
+        <Icon name="link" />
+      </div>
     );
   };
 
   const getSeriesInformation = (SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive) => {
     if (!SeriesNumber && !numImageFrames) {
-      return;
+      return null;
     }
-    const seriesInformation = (
+
+    return (
       <div className="series-information">
-        <React.Fragment>
-          {SeriesNumber !== undefined ? getInfo(SeriesNumber, 'S:') : <React.Fragment></React.Fragment>}
-        </React.Fragment>
-        <React.Fragment>
-          {numImageFrames !== undefined ? (
-            getInfo(numImageFrames, '', 'image-frames')
-          ) : (
-            <React.Fragment></React.Fragment>
-          )}
-        </React.Fragment>
+        {SeriesNumber !== undefined && getInfo(SeriesNumber, 'S:')}
+        {numImageFrames !== undefined && getInfo(numImageFrames, '', 'image-frames')}
         {getDerivedInfo(derivedDisplaySetsActive)}
         {getWarningInfo(SeriesNumber, inconsistencyWarnings)}
       </div>
     );
-
-    return seriesInformation;
   };
 
   return (
@@ -168,7 +155,7 @@ function Thumbnail(props) {
     };
   }, [displaySetInstanceUID, stackPercentComplete]);
 
-  const [collectedProps, drag, dragPreview] = useDrag(() => ({
+  const [, drag] = useDrag(() => ({
     // `droppedItem` in `dropTarget`
     // The only data it will have access to
     type: 'thumbnail', // Has to match `dropTarget`'s type
@@ -209,7 +196,7 @@ function Thumbnail(props) {
           <h1>{altImageText}</h1>
         </div>
       )}
-      <ThumbnailFooter {...props} />
+      {ThumbnailFooter(props)}
     </div>
   );
 }
@@ -227,10 +214,10 @@ Thumbnail.propTypes = {
   active: PropTypes.bool,
   stackPercentComplete: PropTypes.number,
   /**
-  altImageText will be used when no imageId or imageSrc is provided.
-  It will be displayed inside the <div>. This is useful when it is difficult
-  to make a preview for a type of DICOM series (e.g. DICOM-SR)
-  */
+   altImageText will be used when no imageId or imageSrc is provided.
+   It will be displayed inside the <div>. This is useful when it is difficult
+   to make a preview for a type of DICOM series (e.g. DICOM-SR)
+   */
   altImageText: PropTypes.string,
   SeriesDescription: PropTypes.string,
   SeriesNumber: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

@@ -1,23 +1,21 @@
 import CornerstoneViewport from 'react-cornerstone-viewport';
-import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
 import throttle from 'lodash.throttle';
-import { setEnabledElement } from './state';
+
+import OHIF from '@ohif/core';
+
 import initSRTools from './tools/initSRTools';
+import { setEnabledElement } from './state';
 
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
-const {
-  onAdded,
-  onRemoved,
-  onModified,
-} = OHIF.measurements.MeasurementHandlers;
+const { onAdded, onRemoved, onModified } = OHIF.measurements.MeasurementHandlers;
 
 // TODO: Transition to enums for the action names so that we can ensure they stay up to date
 // everywhere they're used.
 const MEASUREMENT_ACTION_MAP = {
   added: onAdded,
   removed: onRemoved,
-  modified: throttle(event => {
+  modified: throttle((event) => {
     return onModified(event);
   }, 300),
 };
@@ -33,8 +31,7 @@ const mapStateToProps = (state, ownProps) => {
   // If this is the active viewport, enable prefetching.
   const { viewportIndex } = ownProps; //.viewportData;
   const isActive = viewportIndex === state.viewports.activeViewportIndex;
-  const viewportSpecificData =
-    state.viewports.viewportSpecificData[viewportIndex] || {};
+  const viewportSpecificData = state.viewports.viewportSpecificData[viewportIndex] || {};
 
   // CINE
   let isPlaying = false;
@@ -57,8 +54,8 @@ const mapStateToProps = (state, ownProps) => {
     isStackPrefetchEnabled: ownProps.hasOwnProperty('isStackPrefetchEnabled')
       ? ownProps.isStackPrefetchEnabled
       : ownProps.stackPrefetch
-      ? ownProps.stackPrefetch.enabled
-      : isActive,
+        ? ownProps.stackPrefetch.enabled
+        : isActive,
     isPlaying,
     frameRate,
     //stack: viewportSpecificData.stack,
@@ -74,7 +71,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
       dispatch(setViewportActive(viewportIndex));
     },
 
-    setViewportSpecificData: data => {
+    setViewportSpecificData: (data) => {
       dispatch(setViewportSpecificData(viewportIndex, data));
     },
 
@@ -84,7 +81,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
      * a reference to it here, to make playing with cornerstone's native methods
      * easier.
      */
-    onElementEnabled: event => {
+    onElementEnabled: (event) => {
       const enabledElement = event.detail.element;
       setEnabledElement(viewportIndex, enabledElement);
       dispatch(
@@ -102,9 +99,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
   };
 };
 
-const ConnectedCornerstoneViewport = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(CornerstoneViewport);
+const ConnectedCornerstoneViewport = connect(mapStateToProps, mapDispatchToProps)(CornerstoneViewport);
 
 export default ConnectedCornerstoneViewport;

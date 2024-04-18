@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React from 'react';
 import { View3D } from '@sonador/react-vtkjs-viewport';
 import PropTypes from 'prop-types';
 
@@ -7,20 +7,16 @@ const VTKVolumeViewport = (props) => {
 
   const style = { width: '100%', height: '100%', position: 'relative' };
 
-  const setViewportActiveHandler = useCallback(() => {
+  const setViewportActiveHandler = () => {
     const { setViewportActive, viewportIndex, activeViewportIndex } = props;
 
     if (viewportIndex !== activeViewportIndex) {
       setViewportActive();
     }
-  });
+  };
 
   return (
-    <div
-      className="vtk-view3d-handler"
-      style={style}
-      onClick={setViewportActiveHandler}
-    >
+    <div className="vtk-view3d-handler" style={style} onClick={setViewportActiveHandler}>
       <View3D {...props} />
     </div>
   );

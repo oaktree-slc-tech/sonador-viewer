@@ -11,7 +11,9 @@ import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/iss
 
 import { commandsManager, extensionManager } from '../App';
 import { withAppContext } from '../context/AppContext';
+import { useLayoutButton } from '../store/useLayoutButton';
 
+import ViewerMetadataSettings from './ViewerMetadataSettings/ViewerMetadataSettings';
 import ConnectedCineDialog from './ConnectedCineDialog';
 import ConnectedLayoutButton from './ConnectedLayoutButton';
 
@@ -159,6 +161,7 @@ class ToolbarRow extends Component {
 
   render() {
     const buttonComponents = getButtonComponents.call(this, this.state.toolbarButtons, this.state.activeButtons);
+    const { isDisplayedLayoutButton } = useLayoutButton.getState();
 
     const onPress = (side, value) => {
       this.props.onSidePanelChange(side, value);
@@ -177,7 +180,7 @@ class ToolbarRow extends Component {
             />
           </div>
           {buttonComponents}
-          <ConnectedLayoutButton />
+          {isDisplayedLayoutButton && <ConnectedLayoutButton />}
         </div>
         <div className={styles.right}>
           {this.buttonGroups.right.length && (
@@ -195,6 +198,7 @@ class ToolbarRow extends Component {
             onPress={onPress}
             isIssuesContentRightSidePanel={this.props.isIssuesContentRightSidePanel}
           />
+          <ViewerMetadataSettings />
         </div>
       </div>
     );
@@ -218,9 +222,13 @@ function IssuesButton({ setIsIssuesContentRightSidePanel, onPress, isIssuesConte
         onPress('right', 'issues');
       }}
     >
-      <div className={classnames(isIssuesContentRightSidePanel && styles.active, styles.iconWrapper)}>
+      <span
+        className={classnames(styles.iconWrapper, {
+          [styles.active]: isIssuesContentRightSidePanel,
+        })}
+      >
         <IssuesIcon />
-      </div>
+      </span>
       <span>Issues</span>
     </button>
   );
@@ -277,6 +285,7 @@ function getDefaultButtonComponent(button, activeButtons) {
   return (
     <ToolbarButton
       key={button.id}
+      id={button.id}
       label={button.label}
       icon={button.icon}
       onClick={handleToolbarButtonClick.bind(this, button)}
@@ -315,10 +324,16 @@ function getButtonComponents(toolbarButtons, activeButtons) {
  *
  * @param {*} button
  * @param {*} evt
- * @param {*} props
  */
 function handleToolbarButtonClick(button, evt) {
   const { activeButtons } = this.state;
+  const { setIsDisplayedLayoutButton } = useLayoutButton.getState();
+
+  if (button.id === '2DMPR' || button.id === 'CT3DVolumeViewer') {
+    setIsDisplayedLayoutButton(false);
+  } else if (button.id === 'Exit2DMPR' || button.id === 'Exit3DVolumeViewer') {
+    setIsDisplayedLayoutButton(true);
+  }
 
   if (button.commandName) {
     const options = Object.assign({ evt }, button.commandOptions);

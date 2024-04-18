@@ -24,7 +24,7 @@ export default function Metadata({ study }) {
     setIsMetadataDropdownOpen(false);
   });
 
-  const studyDate = moment(study.StudyDate.value, 'YYYYMMDD').format('MM/DD/YYYY');
+  const studyDate = study?.StudyDate?.value ? moment(study.StudyDate.value, 'YYYYMMDD').format('MM/DD/YYYY') : '';
 
   return (
     <div className={styles.contentMetadata}>

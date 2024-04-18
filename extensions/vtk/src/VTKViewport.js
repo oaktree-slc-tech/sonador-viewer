@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { View2D } from '@sonador/react-vtkjs-viewport';
 import PropTypes from 'prop-types';
 
@@ -28,16 +28,11 @@ const VTKViewport = (props) => {
     };
 
     window.addEventListener('vtkscrollevent', handleScrollEvent);
-    return () =>
-      window.removeEventListener('vtkscrollevent', handleScrollEvent);
+    return () => window.removeEventListener('vtkscrollevent', handleScrollEvent);
   }, [props, props.onScroll, props.viewportIndex, setViewportActiveHandler]);
 
   return (
-    <div
-      className="vtk-viewport-handler"
-      style={style}
-      onClick={setViewportActiveHandler}
-    >
+    <div className="vtk-viewport-handler" style={style} onClick={setViewportActiveHandler}>
       <View2D {...props} />
     </div>
   );

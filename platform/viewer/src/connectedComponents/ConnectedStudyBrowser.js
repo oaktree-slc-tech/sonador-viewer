@@ -6,17 +6,52 @@ import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromUR
 import { StudyBrowser } from '@ohif/ui';
 
 import { servicesManager } from '../App';
+import { useLayoutButton } from '../store/useLayoutButton';
 
 import findDisplaySetByUID from './findDisplaySetByUID';
 
-const { setActiveViewportSpecificData } = OHIF.redux.actions;
+const { setActiveViewportSpecificData, setLayout, setViewportActive } = OHIF.redux.actions;
+
+const mapStateToProps = (state) => {
+  return {
+    currentLayout: state.viewports.layout,
+    activeViewportIndex: state.viewports.activeViewportIndex,
+  };
+};
 
 const mapDispatchToProps = (dispatch, ownProps) => {
   return {
-    onThumbnailClick: (displaySetInstanceUID) => {
+    onThumbnailClick: (displaySetInstanceUID, currentLayout, activeViewportIndex) => {
+      const { setIsDisplayedLayoutButton } = useLayoutButton.getState();
+
       let displaySet = findDisplaySetByUID(ownProps.studyMetadata, displaySetInstanceUID);
 
       const { LoggerService, UINotificationService } = servicesManager.services;
+
+      const viewports = [];
+
+      // Hacky way to allow users to exit MPR "mode"
+      const viewport = currentLayout.viewports[0];
+      let plugin = viewport && viewport.plugin;
+      if (viewport && viewport.vtk) {
+        plugin = 'cornerstone';
+      }
+
+      viewports.push({ plugin });
+
+      if (activeViewportIndex > 0) {
+        dispatch(setViewportActive(0));
+      }
+
+      dispatch(
+        setLayout({
+          numRows: 1,
+          numColumns: 1,
+          viewports,
+        })
+      );
+
+      setIsDisplayedLayoutButton(true);
 
       if (displaySet.isDerived) {
         const { Modality } = displaySet;
@@ -129,6 +164,17 @@ const mapDispatchToProps = (dispatch, ownProps) => {
   };
 };
 
-const ConnectedStudyBrowser = connect(null, mapDispatchToProps)(StudyBrowser);
+const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
+  const onThumbnailClickFromDispatch = propsFromDispatch.onThumbnailClick;
+  const { currentLayout, activeViewportIndex } = propsFromState;
+
+  return {
+    ...ownProps,
+    onThumbnailClick: (displaySetInstanceUID) =>
+      onThumbnailClickFromDispatch(displaySetInstanceUID, currentLayout, activeViewportIndex),
+  };
+};
+
+const ConnectedStudyBrowser = connect(mapStateToProps, mapDispatchToProps, mergeProps)(StudyBrowser);
 
 export default ConnectedStudyBrowser;

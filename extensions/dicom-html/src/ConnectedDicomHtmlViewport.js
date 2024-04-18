@@ -1,5 +1,7 @@
-import OHIF from '@ohif/core';
 import { connect } from 'react-redux';
+
+import OHIF from '@ohif/core';
+
 import DicomHtmlViewport from './DicomHtmlViewport';
 
 const { setViewportActive } = OHIF.redux.actions;
@@ -25,9 +27,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
   };
 };
 
-const ConnectedDicomHtmlViewport = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(DicomHtmlViewport);
+const ConnectedDicomHtmlViewport = connect(mapStateToProps, mapDispatchToProps)(DicomHtmlViewport);
 
 export default ConnectedDicomHtmlViewport;

@@ -14,11 +14,7 @@ export default function Comments({ server, series }) {
 
   // State management: comments array and new comment text
   const [newCommentText, setNewCommentText] = useState('');
-  const {
-    data: commentsArr = [],
-    isLoading: isLoadingComments,
-    error: commentsError,
-  } = useSeriesComments(server, series);
+  const { data: commentsArr = [], isLoading: isLoadingComments } = useSeriesComments(server, series);
   const { mutate: createComment } = useCreateComment(server, series, () => setNewCommentText(''));
   const { isDesktop } = useDeviceStore();
 
@@ -28,12 +24,11 @@ export default function Comments({ server, series }) {
 
   return (
     <div className={styles.contentComments}>
-      {commentsError && <p>{JSON.stringify(commentsError)}</p>}
       {isLoadingComments ? (
         <div className={styles.loaderWrapper}>
           <Loader />
         </div>
-      ) : (
+      ) : Array.isArray(commentsArr) ? (
         commentsArr.map(({ LastUpdate, Text }, index) => {
           return (
             <div key={index} className={styles.commentItem}>
@@ -47,7 +42,7 @@ export default function Comments({ server, series }) {
             </div>
           );
         })
-      )}
+      ) : null}
       <div className={styles.commentsNewCommentForm}>
         {/* TODO: Add back avatar styling when author added to response. className={styles.commentsNewCommentAvatar} */}
         {isDesktop && <div />}
