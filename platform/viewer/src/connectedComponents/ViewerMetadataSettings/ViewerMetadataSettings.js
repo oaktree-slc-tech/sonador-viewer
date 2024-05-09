@@ -82,12 +82,10 @@ export default function ViewerMetadataSettings() {
 
   return (
     <>
-      <div className={styles.settings}>
-        <button className={styles.settingsBtn} onClick={() => setIsOpen(true)}>
-          <SettingsIcon />
-        </button>
+      <button className={styles.settingsBtn} onClick={() => setIsOpen(true)}>
+        <SettingsIcon />
         <p className={styles.settingsText}>Settings</p>
-      </div>
+      </button>
       {isOpen && (
         <ModalNG
           onClose={handleCancel}

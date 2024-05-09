@@ -4,6 +4,7 @@
 
 import {
   CLEAR_VIEWPORT,
+  CLEAR_VIEWPORT_SPECIFIC_DATA,
   SET_ACTIVE_SERVER,
   SET_ACTIVE_SPECIFIC_DATA,
   SET_SERVERS,
@@ -60,9 +61,14 @@ export const setViewportLayoutAndData = ({ numRows, numColumns, viewports }, vie
   viewportSpecificData,
 });
 
+// TODO probably we don't need this action, and need to use only 'clearEntireViewportSpecificData'
 export const clearViewportSpecificData = (viewportIndex) => ({
   type: CLEAR_VIEWPORT,
   viewportIndex,
+});
+
+export const clearEntireViewportSpecificData = () => ({
+  type: CLEAR_VIEWPORT_SPECIFIC_DATA,
 });
 
 export const setActiveViewportSpecificData = (viewportSpecificData) => ({
@@ -121,6 +127,7 @@ const actions = {
   setViewportLayoutAndData,
   setLayout,
   clearViewportSpecificData,
+  clearEntireViewportSpecificData,
   setActiveViewportSpecificData,
   /**
    * NOT-VIEWPORT

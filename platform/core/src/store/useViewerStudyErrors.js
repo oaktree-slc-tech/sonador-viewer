@@ -21,7 +21,16 @@ export const useViewerStudyErrors = create(
       errors: {},
       addError: ({ studyId, error, title }) =>
         set((prevState) => {
-          const prevStudyErrors = prevState.errors[studyId] || [];
+          const studyErrors = prevState.errors[studyId];
+          const hasThisError = studyErrors
+            ? studyErrors.some((currentError) => currentError.error === error && currentError.title === title)
+            : false;
+
+          if (hasThisError) {
+            return prevState;
+          }
+
+          const prevStudyErrors = studyErrors || [];
 
           return {
             errors: { ...prevState.errors, [studyId]: [{ title, error, errorId: uuidv4() }, ...prevStudyErrors] },

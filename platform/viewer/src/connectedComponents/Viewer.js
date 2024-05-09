@@ -12,6 +12,7 @@ import AppContext from '../context/AppContext';
 import UserManagerContext from '../context/UserManagerContext';
 // Contexts
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
+import { useViewerSidePanels } from '../store/useViewerSidePanels';
 import {
   disassociateStudy,
   mapStudiesToThumbnails,
@@ -44,11 +45,13 @@ export default function Viewer({
   activeViewportIndex,
 }) {
   const [thumbnails, setThumbnails] = useState([]);
-  const [isLeftSidePanelOpen, setIsLeftSidePanelOpen] = useState(true);
-  const [isRightSidePanelOpen, setIsRightSidePanelOpen] = useState(false);
-  const [selectedRightSidePanel, setSelectedRightSidePanel] = useState('');
-  const [selectedLeftSidePanel, setSelectedLeftSidePanel] = useState('studies'); // TODO: Don't hardcode this
-  const [isIssuesContentRightSidePanel, setIsIssuesContentRightSidePanel] = useState(false);
+  const {
+    isIssuesContentRightSidePanel,
+    isLeftSidePanelOpen,
+    isRightSidePanelOpen,
+    selectedLeftSidePanel,
+    selectedRightSidePanel,
+  } = useViewerSidePanels();
 
   const timepointApi = useMemo(() => new TimepointApi(currentTimepointId, { onTimepointsUpdated }), []);
   const measurementApi = useMemo(() => new MeasurementApi(timepointApi, { onMeasurementsUpdated }), []);
@@ -91,28 +94,6 @@ export default function Viewer({
         isLocked: false,
       },
     ]);
-  };
-
-  const handleChangeSidePanel = (side, selectedPanel) => {
-    const isOpen = side === 'left' ? isLeftSidePanelOpen : isRightSidePanelOpen;
-    const prevSelectedPanel = side === 'left' ? selectedLeftSidePanel : selectedRightSidePanel;
-    // RoundedButtonGroup returns `null` if selected button is clicked
-    const isSameSelectedPanel = prevSelectedPanel === selectedPanel || selectedPanel === null;
-
-    if (side === 'left') {
-      setSelectedLeftSidePanel(selectedPanel || prevSelectedPanel);
-    } else {
-      setSelectedRightSidePanel(selectedPanel || prevSelectedPanel);
-    }
-
-    const isClosedOrShouldClose = !isOpen || isSameSelectedPanel;
-    if (isClosedOrShouldClose) {
-      if (side === 'left') {
-        setIsLeftSidePanelOpen((prevState) => !prevState);
-      } else {
-        setIsRightSidePanelOpen((prevState) => !prevState);
-      }
-    }
   };
 
   useEffect(() => {
@@ -225,17 +206,7 @@ export default function Viewer({
       </WhiteLabelingContext.Consumer>
       {/* TOOLBAR */}
       <ErrorBoundaryDialog context="ToolbarRow">
-        <ToolbarRow
-          activeViewport={viewports[activeViewportIndex]}
-          isLeftSidePanelOpen={isLeftSidePanelOpen}
-          isRightSidePanelOpen={isRightSidePanelOpen}
-          selectedLeftSidePanel={isLeftSidePanelOpen ? selectedLeftSidePanel : ''}
-          selectedRightSidePanel={isRightSidePanelOpen ? selectedRightSidePanel : ''}
-          onSidePanelChange={handleChangeSidePanel}
-          studies={studies}
-          setIsIssuesContentRightSidePanel={setIsIssuesContentRightSidePanel}
-          isIssuesContentRightSidePanel={isIssuesContentRightSidePanel}
-        />
+        <ToolbarRow activeViewport={viewports[activeViewportIndex]} studies={studies} />
       </ErrorBoundaryDialog>
       <AppContext.Consumer>{() => <StudyLoadingMonitor studies={studies} />}</AppContext.Consumer>
       {/* VIEWPORTS + SIDEPANELS */}
