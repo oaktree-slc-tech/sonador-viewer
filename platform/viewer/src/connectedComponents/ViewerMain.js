@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams } from 'react-router-dom';
 import values from 'lodash/values';
@@ -14,7 +14,7 @@ import ViewportGrid from './../components/ViewportGrid/ViewportGrid';
 
 import './ViewerMain.css';
 
-const { setViewportSpecificData, clearViewportSpecificData } = OHIF.redux.actions;
+const { setViewportSpecificData, clearEntireViewportSpecificData } = OHIF.redux.actions;
 
 export default function ViewerMain({ studies, isStudyLoaded }) {
   const dispatch = useDispatch();
@@ -26,7 +26,7 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 
   const { addError } = useViewerStudyErrors();
 
-  const viewportData = useMemo(() => values(viewportSpecificData), [viewportSpecificData]);
+  const viewportData = values(viewportSpecificData);
 
   const getDisplaySets = (studies) => {
     const newDisplaySets = [];
@@ -215,10 +215,7 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 
   useEffect(() => {
     return () => {
-      // Clear the entire viewport specific data
-      Object.keys(viewportSpecificData).forEach((viewportIndex) => {
-        dispatch(clearViewportSpecificData(viewportIndex));
-      });
+      dispatch(clearEntireViewportSpecificData());
     };
   }, []);
 

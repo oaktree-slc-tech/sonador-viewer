@@ -2,12 +2,12 @@ import React from 'react';
 
 import cornerstonePackage from '../package.json';
 
-import commandsModule from './commandsModule.js';
+import commandsModule from './commandsModule';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
-import init from './init.js';
+import init from './init';
 import OHIFCornerstoneViewport from './OHIFCornerstoneViewport';
 import { getEnabledElement, setEnabledElement } from './state';
-import toolbarModule from './toolbarModule.js';
+import toolbarModule from './toolbarModule';
 
 const cornerstoneState = {
   setEnabledElement,

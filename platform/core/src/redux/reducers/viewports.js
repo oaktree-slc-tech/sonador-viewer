@@ -3,13 +3,14 @@ import * as _ from 'lodash';
 
 import {
   CLEAR_VIEWPORT,
+  CLEAR_VIEWPORT_SPECIFIC_DATA,
   SET_ACTIVE_SPECIFIC_DATA,
   SET_SPECIFIC_DATA,
   SET_VIEWPORT,
   SET_VIEWPORT_ACTIVE,
   SET_VIEWPORT_LAYOUT,
   SET_VIEWPORT_LAYOUT_AND_DATA,
-} from './../constants/ActionTypes';
+} from '../constants/ActionTypes';
 
 setAutoFreeze(false);
 
@@ -196,6 +197,12 @@ const viewports = (state = DEFAULT_STATE, action) => {
         return DEFAULT_STATE;
       }
     }
+
+    case CLEAR_VIEWPORT_SPECIFIC_DATA:
+      return {
+        ...state,
+        viewportSpecificData: {},
+      };
 
     /**
      * Returns the current application state.

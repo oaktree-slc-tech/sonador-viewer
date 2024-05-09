@@ -61,7 +61,7 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
   };
 
   const getWarningInfo = (SeriesNumber, inconsistencyWarnings) => {
-    if (!inconsistencyWarnings || !inconsistencyWarnings.length === 0) {
+    if (!inconsistencyWarnings?.length) {
       return null;
     }
 

@@ -24,29 +24,4 @@
   .right {
     gap: 20px;
   }
-
-  .issuesBtn {
-    all: unset;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    font-size: 12px;
-    line-height: 15px;
-    color: #94B2C4;
-    cursor: pointer;
-    font-weight: 500;
-    padding-top: 3px;
-
-    .iconWrapper {
-      border-radius: 25px;
-      padding: 4px 22px;
-    }
-
-    .active {
-      background-color: var(--active-color);
-      border-color: var(--ui-border-color-active);
-      color: var(--ui-gray-dark);
-    }
-  }
 }

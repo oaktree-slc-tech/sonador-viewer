@@ -28,9 +28,7 @@ import UserManagerContext from './context/UserManagerContext';
 /** Contexts */
 import WhiteLabelingContext from './context/WhiteLabelingContext';
 /** Store */
-import { getActiveContexts } from './store/layout/selectors.js';
-/** Utils */
-import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils/index.js';
+import { getActiveContexts } from './store/layout/selectors';
 /** Extensions */
 import { GenericViewerCommands, MeasurementsPanel } from './appExtensions';
 // TODO: This should not be here
@@ -39,6 +37,8 @@ import { setConfiguration } from './config';
 /** Viewer */
 import OHIFStandaloneViewer from './OHIFStandaloneViewer';
 import store from './store';
+/** Utils */
+import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils';
 
 /** ~~~~~~~~~~~~~ Application Setup */
 const commandsManagerConfig = {

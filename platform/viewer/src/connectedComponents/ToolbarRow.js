@@ -1,19 +1,15 @@
 import React, { Component } from 'react';
 import { withTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
-import classnames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { MODULE_TYPES } from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { ExpandableToolMenu, RoundedButtonGroup, ToolbarButton, withDialog, withModal } from '@ohif/ui';
-import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/issues.svg';
 
 import { commandsManager, extensionManager } from '../App';
 import { withAppContext } from '../context/AppContext';
 import { useLayoutButton } from '../store/useLayoutButton';
+import { useViewerSidePanels } from '../store/useViewerSidePanels';
 
-import ViewerMetadataSettings from './ViewerMetadataSettings/ViewerMetadataSettings';
 import ConnectedCineDialog from './ConnectedCineDialog';
 import ConnectedLayoutButton from './ConnectedLayoutButton';
 
@@ -23,11 +19,6 @@ class ToolbarRow extends Component {
   // TODO: Simplify these? isOpen can be computed if we say "any" value for selected,
   // closed if selected is null/undefined
   static propTypes = {
-    isLeftSidePanelOpen: PropTypes.bool.isRequired,
-    isRightSidePanelOpen: PropTypes.bool.isRequired,
-    selectedLeftSidePanel: PropTypes.string.isRequired,
-    selectedRightSidePanel: PropTypes.string.isRequired,
-    onSidePanelChange: PropTypes.func.isRequired,
     activeContexts: PropTypes.arrayOf(PropTypes.string).isRequired,
     studies: PropTypes.array,
     t: PropTypes.func.isRequired,
@@ -162,12 +153,17 @@ class ToolbarRow extends Component {
   render() {
     const buttonComponents = getButtonComponents.call(this, this.state.toolbarButtons, this.state.activeButtons);
     const { isDisplayedLayoutButton } = useLayoutButton.getState();
+    const {
+      setIsIssuesContentRightSidePanel,
+      selectedRightSidePanel,
+      isRightSidePanelOpen,
+      isLeftSidePanelOpen,
+      selectedLeftSidePanel,
+      onChangeSidePanel,
+    } = useViewerSidePanels.getState();
 
-    const onPress = (side, value) => {
-      this.props.onSidePanelChange(side, value);
-    };
-    const onPressLeft = onPress.bind(this, 'left');
-    const onPressRight = onPress.bind(this, 'right');
+    const onPressLeft = onChangeSidePanel.bind(this, 'left');
+    const onPressRight = onChangeSidePanel.bind(this, 'right');
 
     return (
       <div className={styles.toolbarRow}>
@@ -175,7 +171,7 @@ class ToolbarRow extends Component {
           <div className={styles.leftRoundedContainer}>
             <RoundedButtonGroup
               options={this.buttonGroups.left}
-              value={this.props.selectedLeftSidePanel || ''}
+              value={isLeftSidePanelOpen ? selectedLeftSidePanel : ''}
               onValueChanged={onPressLeft}
             />
           </div>
@@ -186,52 +182,17 @@ class ToolbarRow extends Component {
           {this.buttonGroups.right.length && (
             <RoundedButtonGroup
               options={this.buttonGroups.right}
-              value={this.props.selectedRightSidePanel || ''}
+              value={isRightSidePanelOpen ? selectedRightSidePanel : ''}
               onValueChanged={(values) => {
                 onPressRight(values);
-                this.props.setIsIssuesContentRightSidePanel(false);
+                setIsIssuesContentRightSidePanel(false);
               }}
             />
           )}
-          <IssuesButton
-            setIsIssuesContentRightSidePanel={this.props.setIsIssuesContentRightSidePanel}
-            onPress={onPress}
-            isIssuesContentRightSidePanel={this.props.isIssuesContentRightSidePanel}
-          />
-          <ViewerMetadataSettings />
         </div>
       </div>
     );
   }
-}
-
-function IssuesButton({ setIsIssuesContentRightSidePanel, onPress, isIssuesContentRightSidePanel }) {
-  const { studyInstanceUIDs } = useParams();
-
-  const errors = useViewerStudyErrors((state) => {
-    return state.errors[studyInstanceUIDs];
-  });
-
-  if (!errors) return null;
-
-  return (
-    <button
-      className={styles.issuesBtn}
-      onClick={() => {
-        setIsIssuesContentRightSidePanel((prev) => !prev);
-        onPress('right', 'issues');
-      }}
-    >
-      <span
-        className={classnames(styles.iconWrapper, {
-          [styles.active]: isIssuesContentRightSidePanel,
-        })}
-      >
-        <IssuesIcon />
-      </span>
-      <span>Issues</span>
-    </button>
-  );
 }
 
 function getCustomButtonComponent(button, activeButtons) {

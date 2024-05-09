@@ -27,7 +27,7 @@ const SnackbarContainer = () => {
       bottomRight: [],
     };
 
-    snackbarItems.map((item) => {
+    snackbarItems.forEach((item) => {
       items[item.position].push(item);
     });
 
