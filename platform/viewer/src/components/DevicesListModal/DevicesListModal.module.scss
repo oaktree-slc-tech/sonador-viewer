@@ -88,57 +88,47 @@
     display: flex;
     align-items: center;
     column-gap: 8px;
-
-    p {
-      margin: 0;
-      color: #60646D;
-      font-size: 18px;
-      line-height: 21px;
-    }
-
-    .headerName, .headerModel {
-      flex: 2;
-    }
-
-    .headerModel, .headerType {
-      text-align: center;
-    }
-
-    .headerType {
-      flex: 1;
-    }
-
-    .listHeaderFirstItem {
-      width: 25px;
-    }
-
-    .listHeaderLastItem {
-      width: 18px;
-    }
+    border-bottom: 2px solid #D9D9D9;
+    border-top: 2px solid #D9D9D9;
   }
 
-  .list {
-    display: flex;
-    flex-direction: column;
-    row-gap: 8px;
+  table {
+    color: #FFFFFF;
 
-    .listItem {
-      display: flex;
-      align-items: center;
-      column-gap: 8px;
+    th {
+      font-size: 16px;
+      line-height: 18px;
+      white-space: nowrap;
+      border-bottom: 2px solid #D9D9D9;
+      border-top: 2px solid #D9D9D9;
 
-      .listItemNumber {
+      .listHeaderFirstItem {
         width: 25px;
-        font-weight: 500;
-        color: #FFFFFF;
-        font-size: 18px;
-        line-height: 21px;
-        margin: 0;
+      }
+
+      .listHeaderLastItem {
+        width: 28px;
+      }
+    }
+
+    td {
+      border-bottom: 1px solid #D9D9D9;
+
+      .rowActions {
+        display: flex;
+        align-items: center;
+        column-gap: 5px;
+        padding: 0 5px;
+
+        button {
+          all: unset;
+          cursor: pointer;
+        }
       }
 
       input {
-        font-size: 18px;
-        line-height: 22px;
+        font-size: 16px;
+        line-height: 20px;
         padding: 10px 12px;
         border-radius: 5px;
         border: 1px solid #60646D;
@@ -147,18 +137,28 @@
         outline: none;
       }
 
-      .nameInput, .modelInput {
-        flex: 2;
-      }
-
-      .typeInput {
+      p {
+        margin: 0;
+        padding: 0 5px;
         flex: 1;
       }
 
-      .remove {
-        all: unset;
-        cursor: pointer;
+      input, p {
+        min-width: 196px;
+        max-width: 196px;
       }
+
+      .listItemNumber {
+        width: 25px;
+        font-weight: 500;
+        color: #FFFFFF;
+        font-size: 16px;
+        line-height: 18px;
+      }
+    }
+
+    th, td {
+      padding: 15px 5px;
     }
   }
 }

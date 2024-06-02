@@ -7,6 +7,7 @@ import PropTypes from 'prop-types';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { AboutContent, Dropdown, withModal } from '@ohif/ui';
 import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/issues.svg';
+import { ReactComponent as ListIcon } from '@ohif/ui/src/elements/Svg/svgs/list.svg';
 
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import { useViewerSidePanels } from '../../store/useViewerSidePanels';
@@ -42,11 +43,11 @@ function Header({
           title: t('OHIF Viewer - About'),
         }),
     },
-    // {
-    //   title: t('Device List'),
-    //   IconComponent: ListIcon,
-    //   onClick: () => setIsOpenDevicesList(true),
-    // },
+    {
+      title: t('Device List'),
+      IconComponent: ListIcon,
+      onClick: () => setIsOpenDevicesList(true),
+    },
     {
       title: t('Preferences'),
       icon: {

@@ -1,5 +1,4 @@
 import user from '@ohif/core/src/user';
-import { urlUtil } from '@ohif/core/src/utils';
 
 const getAuthToken = () => user && user.getAccessToken && user.getAccessToken();
 

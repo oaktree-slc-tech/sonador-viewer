@@ -12,7 +12,6 @@ import { ReactComponent as CopyIcon } from '@ohif/ui/src/elements/Svg/svgs/copy.
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
-import { useCsrfToken } from '../../../../hooks/useCsrfToken';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 
 import { useAccesses, useCreateAccess, useDeleteAccess } from './logic';
@@ -70,7 +69,6 @@ export default function SecurityAccessIdsTabNG() {
 
   const { isDesktop, isMobile } = useDeviceStore();
 
-  const { data: csrfTokenData } = useCsrfToken();
   const { data: accesses = [], isLoading: isLoadingAccesses, error: idsError } = useAccesses();
   const { mutate: createAccess, data: createdAccessData = {} } = useCreateAccess();
   const { mutate: deleteAccess } = useDeleteAccess();
@@ -90,9 +88,7 @@ export default function SecurityAccessIdsTabNG() {
   });
 
   const handleDeleteAccess = (accessId) => {
-    if (csrfTokenData?.csrf_token) {
-      deleteAccess({ token: accessId, csrfToken: csrfTokenData.csrf_token });
-    }
+    deleteAccess(accessId);
   };
 
   const { getHeaderGroups, getRowModel } = useReactTable({
@@ -104,9 +100,7 @@ export default function SecurityAccessIdsTabNG() {
   const headers = getHeaderGroups();
 
   const handleGenerateToken = () => {
-    if (csrfTokenData?.csrf_token) {
-      createAccess({ description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
-    }
+    createAccess(descriptionValue);
   };
 
   const handleChangeSearch = (e) => {
