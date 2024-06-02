@@ -12,10 +12,10 @@ import { ReactComponent as CopyIcon } from '@ohif/ui/src/elements/Svg/svgs/copy.
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
-import { useCsrfToken } from '../../../../hooks/useCsrfToken';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 
 import { useCreateToken, useDeleteToken, useTokens } from './logic';
+
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
 
 /**
@@ -69,7 +69,6 @@ export default function SecurityAPITokensTabNG() {
 
   const { isDesktop, isMobile } = useDeviceStore();
 
-  const { data: csrfTokenData } = useCsrfToken();
   const { data: tokens = [], isLoading: isLoadingTokens, error: tokensError } = useTokens();
   const { mutate: createToken, data: createdTokenData = {} } = useCreateToken();
   const { mutate: deleteToken } = useDeleteToken();
@@ -89,9 +88,7 @@ export default function SecurityAPITokensTabNG() {
   });
 
   const handleDeleteToken = (token) => {
-    if (csrfTokenData?.csrf_token) {
-      deleteToken({ token, csrfToken: csrfTokenData.csrf_token });
-    }
+    deleteToken(token);
   };
 
   const { getHeaderGroups, getRowModel } = useReactTable({
@@ -103,9 +100,7 @@ export default function SecurityAPITokensTabNG() {
   const headers = getHeaderGroups();
 
   const handleGenerateToken = () => {
-    if (csrfTokenData?.csrf_token) {
-      createToken({ description: descriptionValue, csrfToken: csrfTokenData.csrf_token });
-    }
+    createToken(descriptionValue);
   };
 
   const handleChangeSearch = (e) => {

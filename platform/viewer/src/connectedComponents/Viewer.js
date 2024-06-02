@@ -1,10 +1,12 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import moment from 'moment';
 import PropTypes from 'prop-types';
 
 import OHIF, { DICOMSR, MODULE_TYPES } from '@ohif/core';
-import { useDialog } from '@ohif/ui';
+import { useDialog, useSnackbarContext } from '@ohif/ui';
 
+import { getDistortionCheck } from '../api/deviceList';
 import { extensionManager, servicesManager } from '../App';
 import StudyLoadingMonitor from '../components/StudyLoadingMonitor';
 import StudyPrefetcher from '../components/StudyPrefetcher/StudyPrefetcher';
@@ -57,6 +59,13 @@ export default function Viewer({
   const measurementApi = useMemo(() => new MeasurementApi(timepointApi, { onMeasurementsUpdated }), []);
 
   const dialog = useDialog();
+  const snackbar = useSnackbarContext();
+
+  const { data: distortionCheckResponse } = useQuery({
+    queryKey: ['distortionCheck'],
+    queryFn: () => getDistortionCheck(activeServer, studyInstanceUIDs),
+    enabled: !!activeServer && !!studyInstanceUIDs,
+  });
 
   const updateThumbnails = () => {
     const activeViewport = viewports[activeViewportIndex];
@@ -164,6 +173,31 @@ export default function Viewer({
       measurementApi.retrieveMeasurements(PatientID, [currentTimepointId]).then(updateThumbnails);
     }
   }, [isStudyLoaded]);
+
+  useEffect(() => {
+    if (distortionCheckResponse) {
+      const devicesWithErrors = [];
+
+      Object.values(distortionCheckResponse).forEach(({ results }) => {
+        results.forEach((device) => {
+          if (device.error) {
+            devicesWithErrors.push(device);
+          }
+        });
+      });
+
+      if (devicesWithErrors.length) {
+        devicesWithErrors.forEach((device) => {
+          snackbar.show({
+            title: '',
+            message: `Error for device id ${device.device_id} device name ${device['Device Model']} error - ${device.error}`,
+            type: 'error',
+            autoClose: false,
+          });
+        });
+      }
+    }
+  }, [distortionCheckResponse]);
 
   const getActiveViewport = () => {
     return viewports[activeViewportIndex];

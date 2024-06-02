@@ -1,7 +1,6 @@
-import user from '@ohif/core/src/user';
 import { urlUtil } from '@ohif/core/src/utils';
 
-import { sonadorUrl, getAuthToken } from './sonador';
+import { getAuthToken, sonadorUrl } from './sonador';
 
 export const fetchTokens = () => {
   // Retrieve access tokens from the Sonador server
@@ -10,21 +9,18 @@ export const fetchTokens = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
-    credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const createToken = ({ description, csrfToken }) => {
+export const createToken = (description) => {
   // Create an API access token
 
   return fetch(sonadorUrl('auth/api/cred/token').href, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
-      'X-CSRFToken': csrfToken,
     },
     body: JSON.stringify({ description }),
-    credentials: 'include',
   })
     .then((res) => res.json())
     .then((res) => {
@@ -43,21 +39,18 @@ export const fetchAccesses = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
-    credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const createAccessIdAndSecretKey = ({ description, csrfToken }) => {
+export const createAccessIdAndSecretKey = (description) => {
   // Create Sonador secure authorization credentials (access ID and secret key)
 
   return fetch(sonadorUrl('auth/api/cred/access').href, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
-      'X-CSRFToken': csrfToken,
     },
     body: JSON.stringify({ description }),
-    credentials: 'include',
   })
     .then((res) => res.json())
     .then((res) => {
@@ -76,33 +69,28 @@ export const getCsrfToken = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
-    credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const deleteToken = ({ token, csrfToken }) => {
+export const deleteToken = (token) => {
   // Delete an API access token
 
   return fetch(sonadorUrl('auth/api/cred/token').href, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
-      'X-CSRFToken': csrfToken,
     },
     body: JSON.stringify({ token }),
-    credentials: 'include',
   }).then((res) => res.json());
 };
 
-export const deleteAccessIdAndSecretKey = ({ token, csrfToken }) => {
+export const deleteAccessIdAndSecretKey = (token) => {
   // Delete Sonador secure authorization credentials (access ID and secret key)
 
   return fetch(urlUtil.urlJoin(sonadorUrl('auth/api/cred/access').href, token), {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
-      'X-CSRFToken': csrfToken,
     },
-    credentials: 'include',
   }).then((res) => res.json());
 };
