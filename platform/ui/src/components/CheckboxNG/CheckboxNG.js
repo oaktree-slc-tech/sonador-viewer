@@ -16,10 +16,14 @@ export default function CheckboxNG({ checked, onChange, indeterminate, id, label
   return (
     <label
       onClick={(event) => event.stopPropagation()}
-      className={classNames(styles.container, {
-        [styles.withLabel]: !!label,
-        [styles.indeterminate]: indeterminate,
-      })}
+      className={classNames(
+        styles.container,
+        {
+          [styles.withLabel]: !!label,
+          [styles.indeterminate]: indeterminate,
+        },
+        classes.label
+      )}
     >
       {label && <span className={styles.label}>{label}</span>}
       <input
