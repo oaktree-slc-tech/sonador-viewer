@@ -12,37 +12,6 @@
     align-items: initial;
   }
 
-  .tableActions {
-    display: flex;
-    align-items: center;
-    column-gap: 10px;
-
-    .action {
-      border: none;
-      border-radius: 30px;
-      display: flex;
-      align-items: center;
-      column-gap: 5px;
-      background-color: #60646d;
-      color: #fff;
-      padding: 5px 10px;
-      cursor: pointer;
-
-      &:disabled {
-        opacity: 0.2;
-        cursor: initial;
-      }
-    }
-
-    .noSelectedRows {
-      opacity: 0.2;
-    }
-
-    .selectedRows {
-      color: #fff;
-    }
-  }
-
   .tablePagination {
     display: flex;
     align-items: center;

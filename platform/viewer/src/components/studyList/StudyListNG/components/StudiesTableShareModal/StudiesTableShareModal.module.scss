@@ -1,0 +1,199 @@
+.trashIcon {
+  width: 35px;
+  height: 35px;
+  fill: red;
+  cursor: pointer;
+}
+
+.userIcon, .groupIcon {
+  width: 25px;
+  height: 25px;
+}
+
+.modal {
+  min-width: 750px;
+  color: #FFFFFF;
+
+  .blockWithAccess {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    column-gap: 20px;
+
+    p {
+      margin: 0;
+    }
+
+    .aclPolicy {
+      display: flex;
+      column-gap: 10px;
+      height: 38px;
+      align-items: center;
+
+      .avatar, .avatarGroup {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+      }
+
+      .avatar {
+        background-color: #D9D9D9;
+
+        .avatarName {
+          color: #000000;
+          font-size: 18px;
+          font-weight: 500;
+        }
+      }
+
+      .avatarGroup {
+        background-color: transparent;
+      }
+
+      .userFirstLastName, .groupName {
+        font-size: 16px;
+        line-height: 18px;
+        font-weight: 600;
+      }
+      .groupName{
+        display: flex;
+        align-items: center;
+      }
+
+      .userEmail {
+        font-size: 14px;
+        line-height: 16px;
+        color: #60646D;
+      }
+    }
+  }
+
+  .autoComplete {
+    position: relative;
+
+    .autoCompleteInput {
+      width: 100%;
+      background-color: transparent;
+      border: 1px solid #60646D;
+      border-radius: 5px;
+      padding: 11px 12px;
+      font-size: 18px;
+      line-height: 21px;
+      font-weight: 500;
+      outline: none;
+      color: #FFFFFF;
+
+      &::placeholder {
+        color: #60646D;
+      }
+    }
+
+    .autoCompleteList {
+      position: absolute;
+      top: calc(100% + 10px);
+      background-color: #60646D;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      border-radius: 5px;
+      max-height: 240px;
+      overflow-y: auto;
+      width: 100%;
+      z-index: 10;
+
+      .autoCompleteListItem {
+        all: unset;
+        padding: 12px 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
+
+        .userGroupLabel {
+          margin-left: 1rem;
+          font-weight: 500;
+        }
+        .userEmail {
+          margin-left: 1rem;
+          color: #96a2f4;
+        }
+
+        &:hover {
+          background-color: #e2e2e2;
+          color: #545457;
+
+          .groupIcon { fill: #545457; }
+          .userIcon path { stroke: #545457; }
+          .userEmail { color: #172375; }
+        }
+      }
+
+    }
+  }
+
+  .table {
+    th {
+      padding: 0 10px 10px;
+      font-size: 16px;
+      line-height: 18px;
+    }
+
+    td {
+      padding: 10px;
+      height: 54px;
+    }
+
+    td, th {
+      &:first-of-type {
+        padding-left: 0;
+      }
+
+      &:last-of-type {
+        padding-right: 0;
+      }
+    }
+
+    .checkbox {
+      width: 16px;
+      height: 16px;
+    }
+
+    .checkmark {
+      top: 0;
+    }
+  }
+
+  .blockWithAccessLeft {
+    display: flex;
+    flex-direction: column;
+    row-gap: 20px;
+  }
+
+  .bottom {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 50px;
+
+    .saveBtn {
+      all: unset;
+      cursor: pointer;
+      background-color: #2E46E9;
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      line-height: 21px;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+  }
+
+  .loaderContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+  }
+}

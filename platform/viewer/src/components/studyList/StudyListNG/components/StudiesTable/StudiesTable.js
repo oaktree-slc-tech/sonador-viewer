@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flexRender } from '@tanstack/react-table';
 import classNames from 'classnames';
@@ -7,15 +7,11 @@ import PropTypes from 'prop-types';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as CaretIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
 import { ReactComponent as ChevronDown } from '@ohif/ui/src/elements/Svg/svgs/chevron-down.svg';
-import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
-import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
-import { ReactComponent as ShareIcon } from '@ohif/ui/src/elements/Svg/svgs/share.svg';
-import AppContext from '@ohif/viewer/src/context/AppContext';
 import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
-import { parseViewerPath } from '../../../../../routes/routesUtil';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import StudyItemExpandedNG from '../../../StudyItemExpandedNG/StudyItemExpandedNG';
+import StudiesTableActions from '../StudiesTableActions/StudiesTableActions';
 
 import styles from './StudiesTable.module.scss';
 
@@ -48,21 +44,9 @@ export default function StudiesTable({
   const perPageRef = useRef(null);
   useClickOutside(perPageRef, callback);
 
-  const { appConfig } = useContext(AppContext);
-
   const handleClickRowPerPageOption = (count) => {
     setIsOpenedRowsPerPage(false);
     onChangeRowsPerPage(count);
-  };
-
-  const handleViewAllSelectedStudies = () => {
-    selectedRows.forEach(({ id }) => {
-      const link = parseViewerPath(appConfig, server, {
-        studyInstanceUIDs: id,
-      });
-
-      window.open(link, '_blank');
-    });
   };
 
   useEffect(() => {
@@ -78,31 +62,7 @@ export default function StudiesTable({
       })}
     >
       <div className={styles.tableToolbar}>
-        {isDesktop && (
-          <div className={styles.tableActions}>
-            <span
-              className={classNames(styles.selectedRows, {
-                [styles.noSelectedRows]: !selectedRows.length,
-              })}
-            >
-              {selectedRows.length} Studies Selected
-            </span>
-            {server?.perms?.view && (
-              <button className={styles.action} disabled={!selectedRows.length} onClick={handleViewAllSelectedStudies}>
-                <EyeIcon />
-                View
-              </button>
-            )}
-            <button className={styles.action} disabled={!selectedRows.length}>
-              <DownloadIcon />
-              Download
-            </button>
-            <button className={styles.action} disabled={!selectedRows.length}>
-              <ShareIcon />
-              Share
-            </button>
-          </div>
-        )}
+        {isDesktop && <StudiesTableActions server={server} selectedRows={selectedRows} />}
         <div className={styles.tablePagination}>
           <div className={styles.rowsPerPage__wrapper} ref={perPageRef}>
             <div className={styles.rowsPerPage__label}>

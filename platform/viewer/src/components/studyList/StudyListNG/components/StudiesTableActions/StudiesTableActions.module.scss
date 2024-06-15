@@ -1,0 +1,52 @@
+.tableActions {
+  display: flex;
+  align-items: center;
+  column-gap: 10px;
+
+  .action {
+    border: none;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    column-gap: 5px;
+    background-color: #60646d;
+    color: #fff;
+    padding: 5px 10px;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.2;
+      cursor: initial;
+    }
+  }
+
+  .shareContainer {
+    position: relative;
+
+    .tooltipText {
+      visibility: hidden;
+      background-color: black;
+      color: #fff;
+      text-align: center;
+      padding: 5px 0;
+      border-radius: 6px;
+      position: absolute;
+      z-index: 1;
+      transform: translate(-50%, calc(-100% - 40px));
+      width: 280px;
+      left: 50%
+    }
+
+    &:hover .tooltipText {
+      visibility: visible;
+    }
+  }
+
+  .noSelectedRows {
+    opacity: 0.2;
+  }
+
+  .selectedRows {
+    color: #fff;
+  }
+}
