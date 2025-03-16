@@ -1,3 +1,6 @@
+// Toolbar row component for editor. Manages which tools are visible based on active context
+// and viewport.
+
 import _ from 'lodash';
 
 import React, { Component } from 'react';
@@ -6,10 +9,10 @@ import PropTypes from 'prop-types';
 
 import { MODULE_TYPES } from '@ohif/core';
 import { ExpandableToolMenu, RoundedButtonGroup, ToolbarButton, withDialog, withModal } from '@ohif/ui';
+import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
 import { commandsManager, extensionManager } from '../App';
 import { withAppContext } from '../context/AppContext';
-import { useLayoutButton } from '../store/useLayoutButton';
 import { useViewerSidePanels } from '../store/useViewerSidePanels';
 
 import ConnectedCineDialog from './ConnectedCineDialog';
@@ -296,7 +299,7 @@ function handleToolbarButtonClick(button, evt) {
 
   const uiOptions = button.uiOptions || {};
 
-  // Toggle layout button on/off based on the button UI options
+  // Toggle layout button on/off based on the provided UI options of the button
   if (uiOptions && _.isBoolean(uiOptions.layoutButtonVisible)) {
     setIsDisplayedLayoutButton(uiOptions.layoutButtonVisible);
   }

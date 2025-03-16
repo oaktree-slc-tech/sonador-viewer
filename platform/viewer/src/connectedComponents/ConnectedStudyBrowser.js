@@ -4,9 +4,9 @@ import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 import { StudyBrowser } from '@ohif/ui';
+import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
 import { servicesManager } from '../App';
-import { useLayoutButton } from '../store/useLayoutButton';
 
 import findDisplaySetByUID from './findDisplaySetByUID';
 
