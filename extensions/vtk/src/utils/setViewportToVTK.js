@@ -1,25 +1,15 @@
 import { setLayoutAndViewportData } from '@ohif/ui';
 
-export default function setViewportToVTK(
-  displaySet,
-  viewportIndex,
-  numRows,
-  numColumns,
-  layout,
-  viewportSpecificData
-) {
+export default function setViewportToVTK(displaySet, viewportIndex, numRows, numColumns, layout, viewportSpecificData) {
   return new Promise((resolve, reject) => {
-    /*const currentData = layout.viewports[viewportIndex];
-    if (currentData && currentData.plugin === 'vtk') {
-      reject(new Error('Should not have reached this point??'));
-    }*/
+    // Set the active viewport to the VTK viewer
 
     const viewports = layout.viewports.slice();
 
     viewports[viewportIndex] = Object.assign({}, viewports[viewportIndex], {
       // plugin: 'vtk',
       vtk: {
-        mode: 'mpr', // TODO: not used
+        mode: 'mpr',
         afterCreation: (api) => {
           resolve(api);
         },

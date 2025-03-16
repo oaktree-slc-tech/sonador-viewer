@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import React, { Component } from 'react';
 import { withTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
@@ -287,13 +289,16 @@ function getButtonComponents(toolbarButtons, activeButtons) {
  * @param {*} evt
  */
 function handleToolbarButtonClick(button, evt) {
+  // Handle a toolbar click event
+
   const { activeButtons } = this.state;
   const { setIsDisplayedLayoutButton } = useLayoutButton.getState();
 
-  if (button.id === '2DMPR' || button.id === 'CT3DVolumeViewer') {
-    setIsDisplayedLayoutButton(false);
-  } else if (button.id === 'Exit2DMPR' || button.id === 'Exit3DVolumeViewer') {
-    setIsDisplayedLayoutButton(true);
+  const uiOptions = button.uiOptions || {};
+
+  // Toggle layout button on/off based on the button UI options
+  if (uiOptions && _.isBoolean(uiOptions.layoutButtonVisible)) {
+    setIsDisplayedLayoutButton(uiOptions.layoutButtonVisible);
   }
 
   if (button.commandName) {

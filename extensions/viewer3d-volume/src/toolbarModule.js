@@ -14,6 +14,7 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'closeViewer3d',
     commandOptions: {},
+    uiOptions: { layoutButtonVisible: true },
   },
   {
     id: 'CTVolumePresetSelector',
@@ -62,6 +63,7 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'viewer3dCT',
     context: 'ACTIVE_VIEWPORT::CORNERSTONE',
+    uiOptions: { layoutButtonVisible: false },
   },
 ];
 

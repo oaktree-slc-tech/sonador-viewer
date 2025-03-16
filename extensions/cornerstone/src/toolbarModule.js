@@ -226,6 +226,7 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'setCornerstoneLayout',
     context: 'ACTIVE_VIEWPORT::VTK',
+    uiOptions: { layoutButtonVisible: true },
   },
 ];
 

@@ -133,6 +133,7 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'mpr2d',
     context: 'ACTIVE_VIEWPORT::CORNERSTONE',
+    uiOptions: { layoutButtonVisible: false },
   },
 ];
 
