@@ -435,7 +435,8 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       apis[0].svgWidgets.rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
 
       // Check if we have full WebGL 2 support
-      const openGLRenderWindow = apis[0].genericRenderWindow.getOpenGLRenderWindow();
+      const renderWindow = apis[0].genericRenderWindow.getRenderWindow();
+      const [openGLRenderWindow] = renderWindow.getViews();
 
       if (!openGLRenderWindow.getWebgl2()) {
         // Throw a warning if we don't have WebGL 2 support,

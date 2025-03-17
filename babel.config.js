@@ -1,7 +1,12 @@
 // https://babeljs.io/docs/en/options#babelrcroots
 module.exports = {
   babelrcRoots: ['./platform/*', './extensions/*'],
-  plugins: ['inline-react-svg', '@babel/transform-class-properties', '@babel/plugin-proposal-export-default-from'],
+  plugins: [
+    'inline-react-svg',
+    '@babel/transform-class-properties',
+    '@babel/plugin-proposal-export-default-from',
+    '@babel/plugin-transform-private-methods',
+  ],
   env: {
     test: {
       presets: [

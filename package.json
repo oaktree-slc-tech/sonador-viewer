@@ -112,7 +112,7 @@
     "webpack-dev-server": "^4.15.1",
     "webpack-hot-middleware": "^2.25.4",
     "webpack-merge": "^5.10.0",
-    "worker-loader": "^2.0.0"
+    "worker-loader": "^3.0.8"
   },
   "resolutions": {
     "**/node-gyp": "8.4.1",
