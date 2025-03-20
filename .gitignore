@@ -10,6 +10,7 @@ junit.xml
 coverage/
 *.js.map
 .yarn
+yarn.lock
 platform/docs/.docusaurus
 platform/ui/storybook-static
 

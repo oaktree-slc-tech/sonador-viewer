@@ -6,7 +6,7 @@ import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromUR
 import { StudyBrowser } from '@ohif/ui';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
-import { servicesManager } from '../App';
+import { servicesManager, commandsManager } from '../App';
 
 import findDisplaySetByUID from './findDisplaySetByUID';
 
@@ -26,37 +26,38 @@ const mapDispatchToProps = (dispatch, ownProps) => {
 
       let displaySet = findDisplaySetByUID(ownProps.studyMetadata, displaySetInstanceUID);
 
-      const { LoggerService, UINotificationService } = servicesManager.services;
+      const { LoggerService, UINotificationService, viewportGridService } = servicesManager.services;
 
       const viewports = [];
 
-      // Hacky way to allow users to exit MPR "mode"
-      const viewport = currentLayout.viewports[0];
-      let plugin = viewport && viewport.plugin;
-      if (viewport && viewport.vtk) {
-        plugin = 'cornerstone';
+      // Restore Cornerstone layout
+      if (currentLayout.viewports.length) {
+        const viewport = currentLayout.viewports[0];
+        let plugin = viewport && viewport.plugin;
+
+        if (viewport && viewport.vtk) {
+          plugin = 'cornerstone';
+          viewports.push({ plugin });
+
+          // Reset viewports to Cornerstone
+          if (activeViewportIndex > 0) {
+            dispatch(setViewportActive(0));
+          }
+
+          dispatch(setLayout({ numRows: 1, numCols: 1, viewports }));
+        }
       }
 
-      viewports.push({ plugin });
-
-      if (activeViewportIndex > 0) {
-        dispatch(setViewportActive(0));
-      }
-
-      dispatch(
-        setLayout({
-          numRows: 1,
-          numColumns: 1,
-          viewports,
-        })
-      );
-
+      // Display the layout button
       setIsDisplayedLayoutButton(true);
 
       if (displaySet.isDerived) {
+        // Apply special formatting to derived formats
         const { Modality } = displaySet;
+
         if (Modality === 'SEG' && servicesManager) {
           const onDisplaySetLoadFailureHandler = (error) => {
+            // Display error messages for faillure to load segmentation
             const message =
               error.message.includes('orthogonal') || error.message.includes('oblique')
                 ? 'The segmentation has been detected as non coplanar,\
