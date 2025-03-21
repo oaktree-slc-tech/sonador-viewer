@@ -20,6 +20,7 @@ module.exports = (env, argv) => {
   const baseConfig = webpackCommon(env, argv, { SRC_DIR, DIST_DIR });
 
   const mergedConfig = merge(baseConfig, {
+    cache: false,
     entry: {
       app: `${SRC_DIR}/index-umd.js`,
     },
@@ -28,6 +29,15 @@ module.exports = (env, argv) => {
       library: 'OHIFViewer',
       libraryTarget: 'umd',
       filename: 'index.umd.js',
+      chunkFilename: '[name].js',
+    },
+    optimization: {
+      splitChunks: false,
+      runtimeChunk: false,
+      removeAvailableModules: false,
+      removeEmptyChunks: false,
+      mergeDuplicateChunks: true,
+      sideEffects: true,
     },
     module: {
       rules: [fontsToJavaScriptRule],
@@ -52,9 +62,6 @@ module.exports = (env, argv) => {
         templateParameters: {
           PUBLIC_URL: PUBLIC_URL,
         },
-      }),
-      new webpack.optimize.LimitChunkCountPlugin({
-        maxChunks: 1,
       }),
     ],
   });

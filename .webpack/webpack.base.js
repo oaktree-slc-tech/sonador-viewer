@@ -47,6 +47,7 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
     mode: isProdBuild ? 'production' : 'development',
     devtool: isProdBuild ? 'source-map' : 'eval-cheap-module-source-map',
     entry: SRC_DIR,
+    output: { clean: true },
     optimization: {
       minimize: isProdBuild,
       sideEffects: false,
