@@ -133,16 +133,19 @@ class OHIFVtkBaseViewport extends Component {
     const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
     let labelmapDataObject;
     let labelmapColorLUT;
+    let labelmapInstanceUID;
 
     const firstImageId = stack.imageIds[0];
     const { state } = segmentationModule;
     const brushStackState = state.series[firstImageId];
 
+    // Retrieve segmentations
     if (brushStackState) {
       const { activeLabelmapIndex } = brushStackState;
       const labelmap3D = brushStackState.labelmaps3D[activeLabelmapIndex];
 
       if (brushStackState.labelmaps3D.length > 1 && this.props.viewportIndex === 0) {
+        
         UINotificationService.show({
           title: 'Overlapping Segmentation Found',
           message: 'Overlapping segmentations cannot be displayed when in MPR mode',
@@ -155,14 +158,16 @@ class OHIFVtkBaseViewport extends Component {
       });
 
       const vtkLabelmapID = `${firstImageId}_${activeLabelmapIndex}`;
+      labelmapInstanceUID = vtkLabelmapID;
 
       if (labelmapCache[vtkLabelmapID]) {
         labelmapDataObject = labelmapCache[vtkLabelmapID];
       } else {
+        
         // TODO -> We need an imageId based getter in cornerstoneTools
         const labelmapBuffer = labelmap3D.buffer;
 
-        // Create VTK Image Data with buffer as input
+        // Create VTK Image Data with buffer as input, attach labelmap UID
         labelmapDataObject = vtkImageData.newInstance();
 
         const dataArray = vtkDataArray.newInstance({
@@ -186,6 +191,7 @@ class OHIFVtkBaseViewport extends Component {
       imageDataObject,
       labelmapDataObject,
       labelmapColorLUT,
+      labelmapDetails: { labelmapInstanceUID, }
     };
   };
 
@@ -224,6 +230,7 @@ class OHIFVtkBaseViewport extends Component {
     }
 
     const { vtkImageData, imageMetaData0 } = imageDataObject;
+    
     // TODO -> Should update react-vtkjs-viewport and react-cornerstone-viewports
     // internals to use naturalized DICOM JSON names.
     const { windowWidth: WindowWidth, windowCenter: WindowCenter, modality: Modality } = imageMetaData0;

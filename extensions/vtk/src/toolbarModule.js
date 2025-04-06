@@ -31,7 +31,6 @@ const definitions = [
     commandName: 'resetMPRView',
     commandOptions: {},
   },
-  /*
   {
     id: 'Rotate',
     label: 'Rotate',
@@ -40,8 +39,7 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'enableRotateTool',
     commandOptions: {},
-  },
-  */
+  },  
   /*
   {
     id: 'setBlendModeToComposite',

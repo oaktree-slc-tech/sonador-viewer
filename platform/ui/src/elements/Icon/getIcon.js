@@ -3,6 +3,7 @@ import React from 'react';
 import d3Rotate from './icons/3d-rotate.svg';
 import viewer3d01 from './icons/3d-viewer-alt1.svg';
 import adjust from './icons/adjust.svg';
+
 // Icons
 import angleDoubleDown from './icons/angle-double-down.svg';
 import angleDoubleUp from './icons/angle-double-up.svg';
@@ -28,6 +29,7 @@ import createComment from './icons/create-comment.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
+import cube3dSolid from './icons/cube-3d-solid.svg';
 import database from './icons/database.svg';
 import dotCircle from './icons/dot-circle.svg';
 import edit from './icons/edit.svg';
@@ -92,6 +94,11 @@ import unlink from './icons/unlink.svg';
 import user from './icons/user.svg';
 import youtube from './icons/youtube.svg';
 
+// Grid and 3D icons
+import gridMulti from './icons/grid-multi.svg';
+import compassDrafting from './icons/compass-regular.svg';
+import cobbAngle from './icons/cobb-angle-tool.svg';
+
 const ICONS = {
   eye,
   'eye-closed': eyeClosed,
@@ -106,6 +113,7 @@ const ICONS = {
   'sort-down': sortDown,
   info,
   cube,
+  'cube-3d-solid': cube3dSolid,
   viewer3d01,
   crosshairs,
   'dot-circle': dotCircle,
@@ -183,6 +191,9 @@ const ICONS = {
   liver,
   save: saveRegular,
   'envelope-square': envelopeSquare,
+  'grid-multi': gridMulti,
+  'compass-drafting': compassDrafting,
+  'cobb-angle': cobbAngle,
 };
 
 /**
