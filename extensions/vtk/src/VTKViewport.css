@@ -1,3 +1,14 @@
 .vtk-viewport-handler svg {
   pointer-events: none;
 }
+
+.zoomButton {
+  position: absolute;
+  z-index: 1000;
+  bottom: 8px;
+  left: 8px;
+  background: transparent;
+  color: var(--default-color);
+  padding: 12px;
+  cursor: pointer;
+}

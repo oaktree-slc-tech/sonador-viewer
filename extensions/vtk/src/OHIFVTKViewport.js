@@ -3,11 +3,18 @@ import React from 'react';
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 
+import {
+  Enums as C3dEnums,
+} from "@cornerstonejs/core";
+
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
-import { eventTypes as segmentationEventTypes } from '@ohif/extension-dicom-segmentation';
-import { eventTypes as uiEvents } from '@ohif/ui';
 
+import { eventTypes as uiEvents, Icon } from '@ohif/ui';
+
+import { eventTypes as segmentationEventTypes } from '@ohif/extension-dicom-segmentation';
+
+import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView.js';
 import LoadingIndicator from './ohifComponents/LoadingIndicator.js';
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import ConnectedVTKViewport from './ConnectedVTKViewport';
@@ -16,14 +23,21 @@ const segmentationModule = cornerstoneTools.getModule('segmentation');
 
 const volumeCache = {};
 
-class OHIFVTKViewport extends OHIFVtkBaseViewport {
-  // OHIF VTK viewport which can be used to retrieve image volumes for use by the OHIF MPR tool
+
+class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
+  // OHIF VTK viewport used to retrieve images for the VTK MPR viewport.
+  // Also manages interactions with the Cornerstone3D inspection ("details") view.
 
   static defaultProps = {
     onScroll: () => {},
   };
 
   static id = 'OHIFVTKViewport';
+
+  state = {
+    ...super.state,
+    isInpsectionViewOpen: false,
+  };
 
   getVolume(displaySetInstanceUID) {
     // Retrieve volume for the provided display set instance UID
@@ -73,13 +87,10 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
     };
 
     try {
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT } = this.getViewportData(
-        studies,
-        StudyInstanceUID,
-        displaySetInstanceUID,
-        SOPInstanceUID,
-        frameIndex
-      );
+
+      // Retrieve image and labelmap from viewport data
+      const { imageDataObject, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
+        studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
 
       this.imageDataObject = imageDataObject;
 
@@ -97,6 +108,7 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
             this.setState({
               volumes: [volumeActor],
               paintFilterLabelMapImageData: labelmapDataObject,
+              paintFilterLabelMapDetails: labelmapDetails,
               paintFilterBackgroundImageData: imageDataObject.vtkImageData,
               labelmapColorLUT,
             });
@@ -108,8 +120,9 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
       const errorTitle = 'Failed to load image data.';
       console.error(errorTitle, error);
 
-      // Retrieve UI notification and logging service
-      const { UINotificationService, LoggerService } = this.props.servicesManager.services;
+      // Retrieve UI notification, logging, and UIModalService
+      const { UINotificationService, LoggerService, UIModalService } = this.props.servicesManager.services;
+
       if (this.props.viewportIndex === 0) {
         const message = error.message.includes('buffer') ? 'Dataset is too big to display in MPR' : error.message;
         LoggerService.error({ error, message });
@@ -182,8 +195,72 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
   }
 
   render() {
+    const component = this;
+    const { configuration: segmentationConfiguration } = segmentationModule;
+    const { UINotificationService, LoggerService, UIModalService } = this.props.servicesManager.services;
+    
     let childrenWithProps = null;
-    const { configuration } = segmentationModule;
+
+    const handleToggleInspectionView = () => {
+      // Display Cornerstone 3D tools inspection view for the volume
+      
+      const { viewportData, servicesManager } = component.props;
+      const { 
+        isInpsectionViewOpen, isLoaded, paintFilterBackgroundImageData, 
+        paintFilterLabelMapImageData, paintFilterLabelMapDetails
+      } = component.state;
+      const { displaySet } = component.props.viewportData;
+      const { SeriesDescription, SeriesInstanceUID, displaySetInstanceUID } = displaySet;
+
+      const _api = component.props.commandsManager.runCommand('getVtkApiForViewportIndex', {
+        index: component.props.viewportIndex,
+      });
+
+      let _o;
+      if (component.props.viewportIndex == 1) {
+        _o = C3dEnums.OrientationAxis.SAGITTAL;
+      } else if (component.props.viewportIndex == 2) {
+        _o = C3dEnums.OrientationAxis.CORONAL
+      } else {
+        _o = C3dEnums.OrientationAxis.AXIAL;
+      }
+
+      component.setState((prevState) => ({        
+        isInpsectionViewOpen: !prevState.isEnlargedViewOpen,
+      }));
+
+      // Display detail view in modal
+      const WrappedSeriesInspectionView = function() {
+        return (
+          <Cornerstone3DInspectionView
+            viewportData={viewportData} isLoaded={isLoaded} volumes={component.state.volumes}
+            onClose={() => component.setState({ isInpsectionViewOpen: false })}
+            servicesManager={servicesManager} orientation={_o}
+            paintFilterBackgroundImageData={paintFilterBackgroundImageData} 
+            paintFilterLabelMapImageData={paintFilterLabelMapImageData}
+            paintFilterLabelMapDetails={paintFilterLabelMapDetails}
+            labelmapRenderingOptions={{
+              colorLUT: component.state.labelmapColorLUT,
+              globalOpacity: segmentationConfiguration.fillAlpha,
+              visible: segmentationConfiguration.renderFill,
+              outlineThickness: segmentationConfiguration.outlineWidth,
+              renderOutline: segmentationConfiguration.renderOutline,
+              segmentsDefaultProperties: component.segmentsDefaultProperties,
+              onNewSegmentationRequested: () => {
+                component.setStateFromProps();
+              },
+            }}
+          />
+        );
+      }
+
+      UIModalService.show({
+        content: WrappedSeriesInspectionView,
+        title: SeriesDescription ? SeriesDescription : 'Details for Series '+(SeriesInstanceUID || displaySetInstanceUID),
+        fullscreen: true,
+        noScroll: true,
+      });
+    };
 
     // TODO: Does it make more sense to use Context?
     if (this.props.children && this.props.children.length) {
@@ -213,10 +290,10 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
               dataDetails={this.state.dataDetails}
               labelmapRenderingOptions={{
                 colorLUT: this.state.labelmapColorLUT,
-                globalOpacity: configuration.fillAlpha,
-                visible: configuration.renderFill,
-                outlineThickness: configuration.outlineWidth,
-                renderOutline: configuration.renderOutline,
+                globalOpacity: segmentationConfiguration.fillAlpha,
+                visible: segmentationConfiguration.renderFill,
+                outlineThickness: segmentationConfiguration.outlineWidth,
+                renderOutline: segmentationConfiguration.renderOutline,
                 segmentsDefaultProperties: this.segmentsDefaultProperties,
                 onNewSegmentationRequested: () => {
                   this.setStateFromProps();
@@ -227,10 +304,16 @@ class OHIFVTKViewport extends OHIFVtkBaseViewport {
             />
           )}
         </div>
+        {this.state.isLoaded && (
+          <div className="zoomButton" onClick={handleToggleInspectionView} >
+            <Icon name="search-plus" width="18px" height="18px" />
+          </div>
+        )}
         {childrenWithProps}
       </>
     );
   }
 }
 
-export default OHIFVTKViewport;
+
+export default OHIFVTKMprViewport;

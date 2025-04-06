@@ -7,11 +7,21 @@ import { Icon } from './../elements/Icon';
 
 import './toolbar-button.styl';
 
+
 export function ToolbarButton(props) {
   const { t } = useTranslation('Buttons');
 
-  const { isActive, icon, labelWhenActive, onClick } = props;
-  const iconProps = typeof icon === 'string' ? { name: icon } : icon;
+  const { isActive, icon, iconWhenActive, labelWhenActive, onClick } = props;
+
+  // Determine icon display properties
+  let iconProps;
+  if (isActive && iconWhenActive) {
+    iconProps = typeof iconWhenActive === 'string' ? { name: iconWhenActive } : iconWhenActive;
+  } else {
+    iconProps = typeof icon === 'string' ? { name: icon } : icon;
+  }
+
+  // Icon label
   const label = isActive && labelWhenActive ? labelWhenActive : props.label;
 
   const handleClick = (event) => {
@@ -35,11 +45,14 @@ export function ToolbarButton(props) {
   );
 }
 
+
 ToolbarButton.propTypes = {
   id: PropTypes.string,
   isActive: PropTypes.bool,
+  
   /** Display label for button */
   label: PropTypes.string.isRequired,
+  
   /** Alternative text to show when button is active */
   labelWhenActive: PropTypes.string,
   className: PropTypes.string.isRequired,
@@ -49,9 +62,17 @@ ToolbarButton.propTypes = {
       name: PropTypes.string.isRequired,
     }),
   ]),
+  iconWhenActive: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.shape({
+      name: PropTypes.string.isRequired,
+    }),
+  ]),
   onClick: PropTypes.func,
+  
   /** Determines if we show expandable 'caret' symbol */
   isExpandable: PropTypes.bool,
+  
   /** Direction of expandable 'caret' symbol */
   isExpanded: PropTypes.bool,
 };
@@ -59,6 +80,8 @@ ToolbarButton.propTypes = {
 ToolbarButton.defaultProps = {
   isActive: false,
   className: 'toolbar-button',
+  label: '',
 };
+
 
 export default ToolbarButton;

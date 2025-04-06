@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect } from 'react';
-import { View2D } from '@sonador/react-vtkjs-viewport';
 import PropTypes from 'prop-types';
 
+import { View2D } from '@sonador/react-vtkjs-viewport';
+
 import './VTKViewport.css';
+
 
 const VTKViewport = (props) => {
   const style = { width: '100%', height: '100%', position: 'relative' };
@@ -38,6 +40,7 @@ const VTKViewport = (props) => {
   );
 };
 
+
 VTKViewport.propTypes = {
   setViewportActive: PropTypes.func.isRequired,
   viewportIndex: PropTypes.number.isRequired,
@@ -45,9 +48,9 @@ VTKViewport.propTypes = {
   /* Receives viewportIndex */
   onScroll: PropTypes.func,
 };
-
 VTKViewport.defaultProps = {
   onScroll: () => {},
 };
+
 
 export default VTKViewport;

@@ -14,11 +14,9 @@ export default function getCommandsModule(servicesManager) {
       // Open the DICOM tag viewer for the currently active study
 
       const { activeViewportIndex, viewportSpecificData } = viewports;
-      const activeViewportSpecificData =
-        viewportSpecificData[activeViewportIndex];
+      const activeViewportSpecificData = viewportSpecificData[activeViewportIndex];
 
-      const { StudyInstanceUID, displaySetInstanceUID } =
-        activeViewportSpecificData;
+      const { StudyInstanceUID, displaySetInstanceUID } = activeViewportSpecificData;
 
       const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
       const displaySets = studyMetadata.getDisplaySets();
