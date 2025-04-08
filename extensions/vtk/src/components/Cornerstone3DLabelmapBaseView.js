@@ -67,7 +67,8 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
   }
 
   static defaultProps = {
-  	...Cornerstone3DBaseView.defaultProps,
+  	..._.omit(Cornerstone3DBaseView.defaultProps, 'renderId'),
+    renderId: 'sonadorCornerstone3dLabelmapBaseViewport',
   }
 
   async loadSegImageVolume() {
@@ -134,8 +135,29 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
     }
   }
 
-  async renderSegImageData() {
-    // Render image volume and segmentation data
+  async _activateSegmentationRepresentation() {
+    // Activate the segmentation representation
+
+    const component = this;
+    const { paintFilterLabelMapImageData, paintFilterLabelMapDetails } = component.props;
+    const { uiInit } = component.state;
+
+    if (uiInit && paintFilterLabelMapImageData) {
+
+      // Retrieve viewport instance
+      const { viewportId: _v3d_id } = component._checkViewportActive();
+      const _rep = component._getSegmentationRepresentation();
+
+      if (_v3d_id && _rep) {
+
+        // Set segmentation volume to viewport
+        await c3dSegmentations.addSegmentationRepresentations(_v3d_id, [_rep]);
+      }
+    }
+  }
+
+  _applyColorLUT() {
+    // Apply the color lookup table (LUT) for the labelmap
 
     const component = this;
 
@@ -143,30 +165,75 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
     const { uiInit, imgRenderInit } = component.state;
 
     if (uiInit && paintFilterLabelMapImageData) {
+      const { viewportId: _v3d_id } = component._checkViewportActive();
+      const { colorLUT } = labelmapRenderingOptions;
       const { labelmapInstanceUID } = paintFilterLabelMapDetails;
-      const { colorLUT, segmentsDefaultProperties } = labelmapRenderingOptions;
+
+      if (_v3d_id && colorLUT && labelmapInstanceUID) {
+
+        // Add color LUT to Cornerstone
+        component.lutIdx = c3dSegmentations.config.color.addColorLUT(colorLUT);
+        c3dSegmentations.config.color.setColorLUT(_v3d_id, labelmapInstanceUID, component.lutIdx);
+      }
+    }
+  }
+
+  _clearColorLUT() {
+    // Remove the color lookup table (LUT) for the labelmap. Called during cleanup.
+
+    const component = this;
+
+    // Unset the colorLUT (if defined)
+    if (component.lutIdx) {
+      c3dSegmentations.state.removeColorLUT(component.lutIdx);
+    }
+  }
+
+  _getSegmentationRepresentation(options) {
+    // Retrieve the segmentation representation for the view labelmap.
+    //
+    //  @returns If a labelmap for the viewport is defined, it will retrieve the type and UID.
+    //    If no labelmap is provided, or there aren't any details associated with it
+    //    an empty object is returned.
+    options = options || {};
+    _.defaults(options, {
+      type: c3dToolsEnums.SegmentationRepresentations.Labelmap
+    });
+
+    const component = this;
+
+    const { paintFilterLabelMapDetails } = component.props;
+    if (paintFilterLabelMapDetails) {
+      const { labelmapInstanceUID } = paintFilterLabelMapDetails;
+
+      // Add labelmap instance UID to the options for the segmentation ID
+      _.defaults(options, { segmentationId: labelmapInstanceUID });
+
+      if (labelmapInstanceUID) {
+        return _.pick(options, 'segmentationId', 'type');
+      }
+    }
+
+    return {};
+  }
+
+  async renderSegImageData() {
+    // Render labelmap
+
+    const component = this;
+
+    const { paintFilterLabelMapImageData } = component.props;
+    const { uiInit, imgRenderInit, segInit } = component.state;
+
+    if (uiInit && imgRenderInit && segInit && paintFilterLabelMapImageData) {
 
       // Retrieve viewport instance
-      const _v3d_id = component.getViewportId();
-      const _view3d = component.renderEngine.getViewport(_v3d_id);
-
-      if (_view3d) {
-        
-        // Create segmentation representation
-        const _rep = { 
-          segmentationId: labelmapInstanceUID, 
-          type: c3dToolsEnums.SegmentationRepresentations.Labelmap,
-        }
+      const { viewportId: _v3d_id } = component._checkViewportActive();
+      if (_v3d_id) {
 
         // Set segmentation volume to viewport
-        await c3dSegmentations.addSegmentationRepresentations(_v3d_id, [_rep ]);
-
-        if (colorLUT) {
-
-          // Add color LUT to Cornerstone
-          component.lutIdx = c3dSegmentations.config.color.addColorLUT(colorLUT);
-          c3dSegmentations.config.color.setColorLUT(_v3d_id, labelmapInstanceUID, component.lutIdx);
-        }
+        await component._activateSegmentationRepresentation();
+        component._applyColorLUT();
 
         // Render
         component.renderEngine.render();
@@ -175,11 +242,23 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
     }
   }
 
+  triggerSegmentationUpdate() {
+    const { paintFilterLabelMapDetails } = this.props;
+
+    if (paintFilterLabelMapDetails) {
+      const { labelmapInstanceUID } = paintFilterLabelMapDetails;
+
+      if (labelmapInstanceUID) {
+        c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(labelmapInstanceUID);
+      }
+    }
+  }
+
   async componentDidUpdate() {
     // Mnage lifecylce of the view
 
     const component = this;
-    super.componentDidUpdate();
+    await super.componentDidUpdate();
     
     const { isLoaded, eventTimeout, paintFilterLabelMapDetails } = this.props;
     const { imgRenderInit, segInit, segRenderInit } = this.state;
@@ -203,7 +282,7 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
 
         // Trigger segmentation updated events
         if (isLoaded && segInit && segVol && segRenderInit) {
-          c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(labelmapInstanceUID);
+          component.triggerSegmentationUpdate();
         }
       }
     }
@@ -213,11 +292,7 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
     const component = this;
 
     super.componentWillUnmount();
-
-    // Unset the colorLUT (if defined)
-    if (component.lutIdx) {
-      c3dSegmentations.state.removeColorLUT(component.lutIdx);
-    }
+    component._clearColorLUT();
   }
 }
 

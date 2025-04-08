@@ -1,0 +1,47 @@
+import React from 'react';
+
+import sonadorSegEditor from '../package.json';
+
+import commandsModule from './commandsModule.js';
+import ConnectedSegmentationEditorViewport from './ConnectedSegmentationEditorViewport';
+import toolbarModule from './toolbarModule.js';
+import withCommandsManager from './withCommandsManager.js';
+
+import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
+
+
+// Sonador 2D/3D Segmentation Editor
+const segmentationEditorExtension = {
+  id: 'sonador3dseg',
+  version: sonadorSegEditor.version,
+
+  preRegistration() {
+    console.log('Register segmentation editor');
+  },
+
+  getViewportModule({ commandsManager, servicesManager }) {
+    // Create segmentation editor viewport
+    const ExtendedSegmentationEditorViewport = (props) => (
+      <ConnectedSegmentationEditorViewport
+        {...props}
+        servicesManager={servicesManager}
+        commandsManager={commandsManager}
+      />
+    );
+    return withCommandsManager(ExtendedSegmentationEditorViewport, commandsManager);
+  },
+
+  getToolbarModule() {
+    console.log('Initialize toolbar module for seg editor');
+    return toolbarModule;
+  },
+
+  getCommandsModule({ commandsManager, servicesManager }) {
+    console.log('Initialize commands module for seg editor');
+    return commandsModule({ commandsManager, servicesManager });
+  },
+};
+
+
+export default segmentationEditorExtension;
+export { segmentationEditorExtension, setSegmentationEditorLayout };

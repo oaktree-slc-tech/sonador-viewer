@@ -16,8 +16,10 @@ const segmentationModule = cornerstoneTools.getModule('segmentation');
 
 const { StackManager } = OHIF.utils;
 
+
 // TODO: Find a long term (service based) location for the labelmap cache
 const labelmapCache = {};
+
 
 function _getRangeFromWindowLevels(width, center, Modality = undefined) {
   /** Takes window levels and converts them to a range (lower/upper)
@@ -47,9 +49,10 @@ function _getRangeFromWindowLevels(width, center, Modality = undefined) {
   };
 }
 
+
 class OHIFVtkBaseViewport extends Component {
   // Component base class which can be used to work with VTK based volumetric data
-  // in OHIF. Provides methods and state properties to download image stacks and covert
+  // in OHIF. Provides methods and state properties to download image stacks and convert
   // them to volumetric representations.
 
   state = {
@@ -325,5 +328,6 @@ class OHIFVtkBaseViewport extends Component {
     imageDataObject.onPixelDataInsertedError(onPixelDataInsertedErrorCallback);
   }
 }
+
 
 export default OHIFVtkBaseViewport;

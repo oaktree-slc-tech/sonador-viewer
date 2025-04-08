@@ -3,25 +3,24 @@ import _ from 'lodash';
 
 import OHIF from '@ohif/core';
 
-import VTKVolumeViewport from './VTKVolumeViewport.js';
+import OHIFSegmentationEditorViewport from './OHIFSegmentationEditorViewport.js';
 
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
 
-
 const mapStateToProps = (state, ownProps) => {
-  // Retrieve global viewport properties for volume rendering viewport
+  // Retrieve global viewport properties
+
   let dataFromStore;
 
-  // Retrieve parsed 3D volume viewer options from data store
-  if (state.extensions && state.extensions.viewer3dvol) {
-    dataFromStore = state.extensions.viewer3dvol;
+  if (state.extensions && state.extensions.sonador3dseg) {
+    datafromStore = state.extensions.sonador3dseg;
   }
 
-  // If viewport is active, enable prefectching.
+  // TODO: If viewport is active, enable prefetching
   const { viewportIndex } = ownProps;
-  const isActive = viewportIndex === state.viewports.activeViewportIndex;
+  const isActive = viewportIndex == state.viewports.activeViewportIndex;
   const viewportLayout = state.viewports.layout.viewports[viewportIndex];
-  const pluginDetails = viewportLayout.viewer3dvol || viewportLayout.vtk || {};
+  const pluginDetails = viewportLayout.sonador3dseg || {};
 
   return {
     activeViewportIndex: state.viewports.activeViewportIndex,
@@ -33,12 +32,13 @@ const mapStateToProps = (state, ownProps) => {
   };
 };
 
-
 const mapDispatchToProps = (dispatch, ownProps) => {
   // Create actions to modify global state from component
+
   const { viewportIndex } = ownProps;
   return {
     setViewportActive: () => {
+      console.log('Activate segmentation editor Viewport!');
       dispatch(setViewportActive(viewportIndex));
     },
     setViewportSpecificData: (data) => {
@@ -46,7 +46,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
     },
   };
 };
-
 
 const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   // Merge properties from different sources to prevent collissions
@@ -62,7 +61,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
     ...propsFromDispatch,
     ..._.omit(ownProps, 'afterCreation'),
     /**
-     * The 3D viewer components sets up the underlying DOM element on "componentDidMount"
+     * The segmentation editor component sets up the underlying DOM element on "componentDidMount"
      * for use with VTK. The onCreated prop passes back an Object contining many of the internal
      * components of the VTK scene. This method passes a reference to the component
      * to make it easier to integrate with VTK's native methods. The Cornerstone extension
@@ -70,7 +69,7 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
      */
     onCreated: (api) => {
       // Store VTK API details
-      if (afterCreation && _.isFunction(afterCreation)) {
+      if (afterCreation && typeof afterCreation == 'function') {
         afterCreation(api);
       }
       if (componentAfterCreation && _.isFunction(componentAfterCreation)) {
@@ -80,6 +79,10 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   };
 };
 
+const ConnectedSegmentationEditorViewport = connect(
+  mapStateToProps,
+  mapDispatchToProps,
+  mergeProps
+)(OHIFSegmentationEditorViewport);
 
-const ConnectedVTKVolumeViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKVolumeViewport);
-export default ConnectedVTKVolumeViewport;
+export default ConnectedSegmentationEditorViewport;

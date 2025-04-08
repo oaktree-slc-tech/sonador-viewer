@@ -91,7 +91,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   static defaultProps = {
-    ...Cornerstone3DLabelmapBaseView.defaultProps,
+    ..._.omit(Cornerstone3DLabelmapBaseView.defaultProps, 'renderId'),
+    renderId: 'sonadorCornerstone3dInspectionViewport',
+    toolGroupId: 'sonadorCornerstone3dInspectionViewport',
   }
 
   async loadSegImageVolume() {
@@ -108,6 +110,25 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     await super.renderSegImageData();
   }
 
+  _registerTools() {
+    // Register tools with Cornerstone3D
+
+    // Initialize interaction tool instance with Cornerstone3D
+    c3dAddTool(C3dZoomTool);
+    c3dAddTool(C3dWindowLevelTool);
+    c3dAddTool(C3dPanTool);
+    c3dAddTool(C3dStackScrollTool);
+    c3dAddTool(C3dAngleTool);
+    c3dAddTool(C3dLengthTool);
+    c3dAddTool(C3dCobbAngleTool);
+
+    // Add anatomical orientation and scale overlay indicators as part of the inspection "grid".
+    // The grid tools are enabled/disabled as a single unit.
+    c3dAddTool(C3dOrientationMarkerTool);
+    c3dAddTool(C3dScaleOverlayTool);
+    c3dAddTool(ViewportGridOverlayTool);
+  }
+
   initTools() {
     // Initialize interaction tools for inspection view
 
@@ -116,23 +137,13 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     if (!component.imgTools) {
       const { toolGroupId } = component.props;
 
+      // Register tool instances with Cornerstone3D
+      component._registerTools();
+
       // Initialize tool group and add window/zoom interaction. The interaction tools
       // are initailized and managed as a distinct "state group". If one
       // interaction tool is active, the others need to be in a "passive" state.
       component.imgTools = C3dToolGroupManager.createToolGroup(toolGroupId);
-      c3dAddTool(C3dZoomTool);
-      c3dAddTool(C3dWindowLevelTool);
-      c3dAddTool(C3dPanTool);
-      c3dAddTool(C3dStackScrollTool);
-      c3dAddTool(C3dAngleTool);
-      c3dAddTool(C3dLengthTool);
-      c3dAddTool(C3dCobbAngleTool);
-
-      // Add anatomical orientation and scale overlay indicators as part of the inspection "grid".
-      // The grid tools are enabled/disabled as a single unit.
-      c3dAddTool(C3dOrientationMarkerTool);
-      c3dAddTool(C3dScaleOverlayTool);
-      c3dAddTool(ViewportGridOverlayTool);
 
       // Add tools to the group
       component.imgTools.addTool(C3dZoomTool.toolName);
@@ -192,6 +203,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
   deactivateTools(options) {
     // Deactivate all tools in preparation of applyling new bindings
+
     options = options || {};
     _.defaults(options, { removeAllBindings: true });
 
@@ -301,14 +313,14 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
           ]
         })
       }
-    }
 
-    // Update the state if tool mode is different than current mode
-    if (mode && (mode != toolMode)) {
+      // Update the state if tool mode is different than current mode
+      if (mode && (mode != toolMode)) {
 
-      // Set current tool mode and re-render viewport    
-      component.setState({ toolMode: mode });
-      component.render3d();
+        // Set current tool mode and re-render viewport    
+        component.setState({ toolMode: mode });
+        component.render3d();
+      }
     }
   }
 
@@ -473,7 +485,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     // Load segmentation data
     
     const component = this;
-    super.componentDidMount();
+    await super.componentDidMount();
   }
 
   async componentDidUpdate() {
@@ -556,10 +568,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 }
 
 
-
-
 Cornerstone3DInspectionView.propTypes = {
   ...Cornerstone3DLabelmapBaseView.propTypes,
+  toolGroupId: PropTypes.string,
   onClose: PropTypes.func.isRequired,
   servicesManager: PropTypes.object.isRequired,
 };

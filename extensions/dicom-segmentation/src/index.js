@@ -104,6 +104,7 @@ const segmentationExtension = {
           onSelectedSegmentationChange={onSelectedSegmentationChangeHandler}
           onDisplaySetLoadFailure={onDisplaySetLoadFailureHandler}
           servicesManager={servicesManager}
+          commandsManager={commandsManager}
         />
       );
     };

@@ -23,8 +23,18 @@ import vtkVolumeColorPresets, {
 } from './utils/volume/vtkVolumePresets.js';
 import { getWindowLevel, toLowHighRange, toWindowLevel } from './utils/windowLevelRangeConverter.js';
 
+
+// Initialize Cornerstone3D integrations and components
+import { init as c3dCoreInit } from '@cornerstonejs/core';
+import { init as c3dToolsInit } from '@cornerstonejs/tools';
+import { init as c3dDcmImageLoaderInit } from '@cornerstonejs/dicom-image-loader';
+import * as polySeg from '@cornerstonejs/polymorphic-segmentation';
+import { init as c3dPolySegInit } from '@cornerstonejs/polymorphic-segmentation';
+
+
 // Cornerstone 3D utilities
 import {
+  initCornerstone3d,
   cacheVtkImage,
   cacheVtkLabelmapImage,
   getVolumeAnnotations,
@@ -65,8 +75,15 @@ import toolbarModule from './toolbarModule.js';
 import withCommandsManager from './withCommandsManager.js';
 
 
-// Tools for Working with Cornerstone3D data
+// Tools for Working with Cornerstone3D
+import Cornerstone3DBaseView from './components/Cornerstone3DBaseView.js';
+import Cornerstone3DLabelmapBaseView from './components/Cornerstone3DLabelmapBaseView.js';
+import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView.js';
+
 const cornerstone3dUtils = {
+
+  // Initialize Cornerstone3D tools
+  initCornerstone3d,
 
   // Convert vtk data to Cornerstone data
   cacheVtkImage,
@@ -80,6 +97,7 @@ const cornerstone3dUtils = {
 }
 
 
+
 // OHIF VTK Extension
 const vtkExtension = {
   /**
@@ -87,6 +105,14 @@ const vtkExtension = {
    */
   id: 'vtk',
   version: vtkVersionPackage.version,
+
+  async preRegistration() {
+    console.log('Register VTK and Cornerstone3D components');
+
+    // Initialize Cornerstone3D Modules
+    await initCornerstone3d();
+    console.log('VTK and Cornerston3D registered successfully');
+  },
 
   getViewportModule({ commandsManager, servicesManager }) {
     const ExtendedVTKViewport = (props) => (
@@ -102,8 +128,11 @@ const vtkExtension = {
   },
 };
 
+
 export default vtkExtension;
 export { vtkExtension, redux, vtkUtils, cornerstone3dUtils,
-  OHIFVtkBaseViewport, LoadingIndicator, vtkVolumeColorPresetSelector };
+  OHIFVtkBaseViewport, Cornerstone3DBaseView, Cornerstone3DLabelmapBaseView, Cornerstone3DInspectionView, 
+  LoadingIndicator, vtkVolumeColorPresetSelector };
 
 // loadLocales();
+

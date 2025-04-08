@@ -3,6 +3,8 @@ import _ from 'lodash';
 import { vtkImageData } from '@kitware/vtk.js/Common/DataModel/ImageData';
 
 import {
+	init as c3dCoreInit,
+
 	ImageVolume as C3dImageVolume, 
 	Enums as C3dEnums,
 	volumeLoader as c3dVolumeLoader,
@@ -12,6 +14,7 @@ import {
 import triggerEvent from '@cornerstonejs/core/utilities/triggerEvent';
 
 import {
+	init as c3dToolsInit,
 	
 	// Annotation management
  	annotation as c3dAnnotations,
@@ -21,6 +24,31 @@ import {
 } from '@cornerstonejs/tools';
 
 const { Events: c3dEvents } = C3dEnums;
+
+import { init as c3dDcmImageLoaderInit } from '@cornerstonejs/dicom-image-loader';
+import * as polySeg from '@cornerstonejs/polymorphic-segmentation';
+import { init as c3dPolySegInit } from '@cornerstonejs/polymorphic-segmentation';
+
+
+
+// Track init state of Cornerstone3D
+let C3D_INIT = false;
+
+
+export async function initCornerstone3d() {
+	// Initialize Cornerstone3D tools
+
+	if (!C3D_INIT) {
+		await c3dCoreInit();
+		await c3dDcmImageLoaderInit();
+		await c3dPolySegInit();
+		await c3dToolsInit({ addons: { polySeg }});
+
+		C3D_INIT = true;
+	}
+
+	return C3D_INIT;
+}
 
 
 export const gridReferenceLineColors = {
@@ -224,4 +252,3 @@ export function inspectVtkLabelmapImage(vtkImg) {
 
   return { segmentCount, uniqueLabels, scalarData, length: scalarData.length }
 }
-
