@@ -7,6 +7,8 @@ import PropTypes from 'prop-types';
 
 import { log, utils } from '@ohif/core';
 import { CustomSelect, Icon, ScrollableArea, TableList } from '@ohif/ui';
+import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
+import { setSegmentationEditorLayout } from '@ohif/extension-seg3d-editor';
 
 import DICOMSegTempCrosshairsTool from '../../tools/DICOMSegTempCrosshairsTool';
 import refreshViewports from '../../utils/refreshViewports';
@@ -46,6 +48,7 @@ const SegmentationPanel = ({
   activeContexts = [],
   contexts = {},
   servicesManager,
+  commandsManager,
 }) => {
   const isVTK = () => activeContexts.includes(contexts.VTK);
   const isCornerstone = () => activeContexts.includes(contexts.CORNERSTONE);
@@ -126,6 +129,8 @@ const SegmentationPanel = ({
   };
 
   const getCurrentDisplaySet = () => {
+    // Retrieve the current display sets for the active viewport
+
     const { StudyInstanceUID, displaySetInstanceUID } = getActiveViewport();
     const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
     const allDisplaySets = studyMetadata.getDisplaySets();
@@ -133,6 +138,8 @@ const SegmentationPanel = ({
   };
 
   const setActiveSegment = (segmentIndex) => {
+    // Set the active segment
+
     const activeSegmentIndex = getActiveSegmentIndex();
     const activeViewport = getActiveViewport();
 
@@ -579,6 +586,17 @@ const SegmentationPanel = ({
     refreshViewports();
   };
 
+  const onShowSegmentationEditor = () => {
+    // Load the editor the currently selected series and seg
+    const { setIsDisplayedLayoutButton } = useLayoutButton.getState();
+
+    if (commandsManager) {
+      // Toggle layout button and display semgentation editor
+      setIsDisplayedLayoutButton(false);
+      commandsManager.runCommand('segmentationEditor');
+    }
+  };
+
   const disabledConfigurationFields = ['outlineAlpha', 'shouldRenderInactiveLabelmaps'];
 
   const selectedSegmentationOption = state.labelMapList.find((i) => i.value === state.selectedSegmentation);
@@ -616,14 +634,25 @@ const SegmentationPanel = ({
         {/*    />*/}
         {/*  </form>*/}
         {/*)}*/}
-        <Icon
-          className="cog-icon"
-          name="cog"
-          width="25px"
-          height="25px"
-          onClick={() => setState((state) => ({ ...state, showSettings: true }))}
-        />
-        <h3>Segmentations</h3>
+        <div className="segmentations-actions">
+          <h3>Segmentations</h3>
+          {state.segmentList.length > 0 && (
+            <Icon
+              className={`icon edit-icon`}
+              name="edit"
+              width="25px"
+              height="25px"
+              onClick={() => onShowSegmentationEditor()}
+            />
+          )}
+          <Icon
+            className={`icon cog-icon`}
+            name="cog"
+            width="25px"
+            height="25px"
+            onClick={() => setState((state) => ({ ...state, showSettings: true }))}
+          />
+        </div>
         <div className="segmentations">
           <CustomSelect value={selectedSegmentationOption} options={state.labelMapList} />
         </div>

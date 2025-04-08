@@ -17,6 +17,8 @@ import OHIFDicomSegmentationExtension from '@ohif/extension-dicom-segmentation';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
 import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
+import OHIFSegEditorExtension from '@ohif/extension-seg3d-editor';
+
 /**
  * EXTENSIONS
  * =================
@@ -68,10 +70,11 @@ const initOHIFViewer = function () {
       OHIFDicomRtExtension,
       OHIFDicomEkgExtension,
 
-      // 3D Visualization
+      // 3D Visualization and Segmentation Editing
       OHIFVTKExtension,
       OHIF3DVolumeViewerExtension,
       OHIFM3DViewerExtension,
+      OHIFSegEditorExtension,
 
       // Metadata
       OHIFDicomTagBrowserExtension,

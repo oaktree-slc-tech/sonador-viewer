@@ -21,6 +21,7 @@ import ConnectedVTKViewport from './ConnectedVTKViewport';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
+
 const volumeCache = {};
 
 
@@ -263,12 +264,12 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
     };
 
     // TODO: Does it make more sense to use Context?
-    if (this.props.children && this.props.children.length) {
-      childrenWithProps = this.props.children.map((child, index) => {
+    if (component.props.children && component.props.children.length) {
+      childrenWithProps = component.props.children.map((child, index) => {
         return (
           child &&
           React.cloneElement(child, {
-            viewportIndex: this.props.viewportIndex,
+            viewportIndex: component.props.viewportIndex,
             key: index,
           })
         );
@@ -280,31 +281,31 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
     return (
       <>
         <div style={style}>
-          {!this.state.isLoaded && <LoadingIndicator percentComplete={this.state.percentComplete} />}
-          {this.state.volumes && (
+          {!component.state.isLoaded && <LoadingIndicator percentComplete={component.state.percentComplete} />}
+          {component.state.volumes && (
             <ConnectedVTKViewport
-              volumes={this.state.volumes}
-              paintFilterLabelMapImageData={this.state.paintFilterLabelMapImageData}
-              paintFilterBackgroundImageData={this.state.paintFilterBackgroundImageData}
-              viewportIndex={this.props.viewportIndex}
-              dataDetails={this.state.dataDetails}
+              volumes={component.state.volumes}
+              paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
+              paintFilterBackgroundImageData={component.state.paintFilterBackgroundImageData}
+              viewportIndex={component.props.viewportIndex}
+              dataDetails={component.state.dataDetails}
               labelmapRenderingOptions={{
-                colorLUT: this.state.labelmapColorLUT,
+                colorLUT: component.state.labelmapColorLUT,
                 globalOpacity: segmentationConfiguration.fillAlpha,
                 visible: segmentationConfiguration.renderFill,
                 outlineThickness: segmentationConfiguration.outlineWidth,
                 renderOutline: segmentationConfiguration.renderOutline,
-                segmentsDefaultProperties: this.segmentsDefaultProperties,
+                segmentsDefaultProperties: component.segmentsDefaultProperties,
                 onNewSegmentationRequested: () => {
-                  this.setStateFromProps();
+                  component.setStateFromProps();
                 },
               }}
-              onScroll={this.props.onScroll}
-              afterCreation={(api) => (this.api = api)}
+              onScroll={component.props.onScroll}
+              afterCreation={(api) => (component.api = api)}
             />
           )}
         </div>
-        {this.state.isLoaded && (
+        {component.state.isLoaded && (
           <div className="zoomButton" onClick={handleToggleInspectionView} >
             <Icon name="search-plus" width="18px" height="18px" />
           </div>

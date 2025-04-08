@@ -1,5 +1,6 @@
 import _ from 'lodash';
 
+
 export function toWindowLevel(low, high) {
   // Convert the provided low and high range values to a window width and center
 
@@ -9,6 +10,7 @@ export function toWindowLevel(low, high) {
   return { windowWidth, windowCenter };
 }
 
+
 export function toLowHighRange(windowWidth, windowCenter) {
   // Convert the provided window width and window center to the high/low rnge
 
@@ -17,6 +19,7 @@ export function toLowHighRange(windowWidth, windowCenter) {
 
   return { lower, upper };
 }
+
 
 export function getWindowLevel(volumeActor, options) {
   // Retrieve the window level for the provided volume

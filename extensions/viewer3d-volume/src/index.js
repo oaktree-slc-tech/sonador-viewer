@@ -1,6 +1,6 @@
 import React from 'react';
 
-import viewer3dColumePackage from '../package.json';
+import viewer3dVolumePackage from '../package.json';
 
 import commandsModule from './commandsModule.js';
 import OHIFVtkVolumeViewport from './OHIFVtkVolumeViewport';
@@ -10,7 +10,7 @@ import withCommandsManager from './withCommandsManager.js';
 // 3D Volume Rendering Plugin: provide volume rendering capabilities
 export default {
   id: 'viewer3dvol',
-  version: viewer3dColumePackage.version,
+  version: viewer3dVolumePackage.version,
 
   getViewportModule({ commandsManager, servicesManager }) {
     // Create connected volume rendering viewport
@@ -20,9 +20,11 @@ export default {
     );
     return withCommandsManager(ExtendedVtkVolumeViewport, commandsManager);
   },
+
   getToolbarModule() {
     return toolbarModule;
   },
+
   getCommandsModule({ commandsManager, servicesManager }) {
     return commandsModule({ commandsManager, servicesManager });
   },

@@ -49,9 +49,13 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",
-    "@cornerstonejs/core": "^3.7.13",
-    "@cornerstonejs/tools": "^3.7.13",
-    "@kitware/vtk.js": "^32.9.0",
+    "@kitware/vtk.js": "^32.12.1",
+    "@cornerstonejs/core": "^3.9.1",
+    "@cornerstonejs/dicom-image-loader": "^3.9.1",
+    "@cornerstonejs/nifti-volume-loader": "^3.9.1",
+    "@cornerstonejs/polymorphic-segmentation": "^3.9.1",
+    "@cornerstonejs/tools": "^3.9.1",
+    "@icr/polyseg-wasm": "^0.4.0",
     "@sonador/react-vtkjs-viewport": "^0.2.0",
     "lodash.throttle": "^4.1.1"
   },

@@ -65,7 +65,13 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
       warnings: true,
     },
     module: {
-      rules: [transpileJavaScriptRule(NODE_ENV), loadWebWorkersRule, loadShadersRule],
+      rules: [transpileJavaScriptRule(NODE_ENV), loadWebWorkersRule, loadShadersRule, {
+        test: /\.wasm$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/wasm/[name][hash][ext]',
+        },
+      }],
     },
     resolve: {
       fallback: {
@@ -77,8 +83,10 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
         'react/jsx-dev-runtime': 'react/jsx-dev-runtime.js',
       },
       modules: [
+        
         // Modules specific to this package
         path.resolve(__dirname, '../node_modules'),
+        
         // Hoisted Yarn Workspace Modules
         path.resolve(__dirname, '../../../node_modules'),
         path.resolve(__dirname, '../platform/viewer/node_modules'),
@@ -88,6 +96,13 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
       ],
       extensions: ['.js', '.jsx', '.json', '.mjs', '.*'],
       symlinks: true,
+      alias: {
+        '@icr/polyseg-wasm/dist/ICRPolySeg.wasm': path.resolve(__dirname, '../node_modules/@icr/polyseg-wasm/dist/ICRPolySeg.wasm'),
+        '@cornerstonejs/codec-charls/dist/charlswasm_decode.wasm': path.resolve(__dirname, '../node_modules/@cornerstonejs/codec-charls/dist/charlswasm_decode.wasm'),
+        '@cornerstonejs/codec-libjpeg-turbo-8bit/dist/libjpegturbowasm_decode.wasm': path.resolve(__dirname, '../node_modules/@cornerstonejs/codec-libjpeg-turbo-8bit/dist/libjpegturbowasm_decode.wasm'),
+        '@cornerstonejs/codec-openjpeg/dist/openjpegwasm_decode.wasm': path.resolve(__dirname, '../node_modules/@cornerstonejs/codec-openjpeg/dist/openjpegwasm_decode.wasm'),
+        '@cornerstonejs/codec-openjph/dist/openjphjs.wasm': path.resolve(__dirname, '../node_modules/@cornerstonejs/codec-openjph/dist/openjphjs.wasm'),
+      }
     },
     plugins: [
       new webpack.DefinePlugin(defineValues),
@@ -95,6 +110,7 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
         Buffer: ['buffer', 'Buffer'],
       }),
     ],
+    experiments: { asyncWebAssembly: true }
   };
 
   if (isQuickBuild) {

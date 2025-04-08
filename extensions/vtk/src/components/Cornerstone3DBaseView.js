@@ -4,15 +4,17 @@ import React, { Component, createRef } from "react";
 import PropTypes from 'prop-types';
 
 import {
+  init as c3dCoreInit,
+
   RenderingEngine as C3dRenderingEngine,
   Enums as c3dEnums,
-  init as c3dCoreInit,
   volumeLoader as c3dVolumeLoader,
   cache as c3dCache,
 } from "@cornerstonejs/core";
 
 import {
   init as c3dToolsInit,
+
   ToolGroupManager as C3dToolGroupManager,
   SynchronizerManager as C3dSynchronizerManager,
   WindowLevelTool as C3dWindowLevelTool,
@@ -42,8 +44,7 @@ class Cornerstone3DBaseView extends Component {
 
     // Maintain persistent references to image/volume tools and components
     this.container = createRef();
-    this.cornerstone3dViewProps = _.clone(this.props.cornerstone3dViewProps);
-    this.cornerstone3dViewProps.defaultOptions.orientation = this.props.orientation;
+    this._initViewProps();
   }
 
   state = {
@@ -56,7 +57,6 @@ class Cornerstone3DBaseView extends Component {
 
   static propTypes = {
     renderId: PropTypes.string,
-    toolGroupId: PropTypes.string,
     sep: PropTypes.string,
     viewportData: PropTypes.object.isRequired,
     volumes: PropTypes.array.isRequired,
@@ -67,14 +67,34 @@ class Cornerstone3DBaseView extends Component {
   }
 
   static defaultProps = {
-    renderId: 'sonadorCornerstone3dInspectionViewport',
-    toolGroupId: 'sonadorCornerstone3dInspectionViewport',
+    renderId: 'sonadorCornerstone3dBaseViewport',
     sep: '-',
     orientation: c3dEnums.OrientationAxis.AXIAL,
     cornerstone3dViewProps: {
       type: ViewportType.ORTHOGRAPHIC, defaultOptions: {},
     },
     eventTimeout: 50,
+  }
+
+  _initViewProps() {
+    // Initialize properties for the view
+    
+    this.cornerstone3dViewProps = _.clone(this.props.cornerstone3dViewProps);
+    this.cornerstone3dViewProps.defaultOptions.orientation = this.props.orientation;
+  }
+
+  _checkViewportActive(options) {
+    // Check to see if the viewport is active.
+    // Returns the viewport ID and viewport reference if active and undefined otherwise.
+
+    const _v3d_id = this.getViewportId(options);
+    const _view3d = this.renderEngine.getViewport(_v3d_id);
+
+    if (_view3d) {
+      return { viewportId: _v3d_id, viewport: _view3d };
+    }
+
+    return {};
   }
 
   getViewportId() {
@@ -199,15 +219,12 @@ class Cornerstone3DBaseView extends Component {
     const { renderId, isLoaded } = this.props;
     const { imgRenderInit, imgToolsInit } = this.state;
 
-    await c3dCoreInit();
-    await c3dToolsInit();
-
     // Initialize render engine
     component.renderEngine = new C3dRenderingEngine(renderId);
     component.initUi();
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  async componentDidUpdate(prevProps, prevState) {
     // Manage lifecycle to the viewport
     
     const component = this;
@@ -255,7 +272,7 @@ class Cornerstone3DBaseView extends Component {
     // 4. Destroy the render engine
 
     const component = this;
-    const { renderId, toolGroupId, volumes } = component.props;
+    const { renderId, volumes } = component.props;
     const { displaySet } = component.props.viewportData;
 
     if (component.renderEngine) {

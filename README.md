@@ -1,8 +1,8 @@
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
 <div align="center">
-  <h1>OHIF Medical Imaging Viewer</h1>
-  <p><strong>The OHIF Viewer</strong> is a zero-footprint medical image viewer provided by the <a href="http://ohif.org/">Open Health Imaging Foundation (OHIF)</a>. It is a configurable and extensible progressive web application with out-of-the-box support for image archives which support <a href="https://www.dicomstandard.org/dicomweb/">DICOMweb</a>.</p>
+  <h1>Sonador Medical Imaging Viewer</h1>
+  <p><strong>The Sonador Medical Imaging Viewer</strong> is a zero-footprint medical image viewer maintained by the [Sonador Project](https://sonador.oak-tree.tech). It builds upon tools provided by the <a href="http://ohif.org/">Open Health Imaging Foundation (OHIF)</a> and integrates with the Sonador Medical Data platform. It is a configurable and extensible progressive web application with out-of-the-box support for image archives which support <a href="https://www.dicomstandard.org/dicomweb/">DICOMweb</a>.</p>
 </div>
 
 
@@ -33,10 +33,10 @@
 
 ## About
 
-The OHIF Medical Imaging Viewer is for viewing medical images. It can retrieve and load images from most sources and
+The Sonador Medical Imaging Viewer is for viewing medical images. It can retrieve and load images from most sources and
 formats; render sets in 2D, 3D, and reconstructed representations; allows for the manipulation, annotation, and
-serialization of observations; supports internationalization, OpenID Connect, offline use, hotkeys, and many more
-features.
+serialization of observations; supports internationalization, OpenID Connect, medical 3D data visualization, offline
+use, hotkeys, and many more features.
 
 Almost everything offers some degree of customization and configuration. If it doesn't support something you need, we
 accept pull requests and have an ever improving Extension System.
@@ -288,18 +288,6 @@ The following is a (partial) list of projects that contributed resources towards
   Imaging Data Commons is supported by the contract number 19X037Q from Leidos Biomedical Research under Task Order
   HHSN26100071 from NCI. [IDC Viewer](https://learn.canceridc.dev/portal/visualization) is a customized version of the
   OHIF Viewer.
-
-### Research notice
-
-Please note that this repository is participating in a study into sustainability of open source projects. Data will be
-gathered about this repository for approximately the next 12 months, starting from June 2021.
-
-Data collected will include number of contributors, number of PRs, time taken to close/merge these PRs, and issues
-closed.
-
-For more information, please visit [our informational page](https://sustainable-open-science-and-software.github.io/) or
-download our
-[participant information sheet](https://sustainable-open-science-and-software.github.io/assets/PIS_sustainable_software.pdf).
 
 ## License
 

@@ -48,6 +48,8 @@ VTKViewport.propTypes = {
   /* Receives viewportIndex */
   onScroll: PropTypes.func,
 };
+
+
 VTKViewport.defaultProps = {
   onScroll: () => {},
 };

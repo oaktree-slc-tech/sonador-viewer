@@ -3,8 +3,7 @@
     "eslint:recommended",
     "plugin:jsx-a11y/recommended",
     "plugin:react/recommended",
-    "plugin:react-hooks/recommended",
-    "plugin:prettier/recommended"
+    "plugin:react-hooks/recommended"
   ],
   "parser": "@babel/eslint-parser",
   "env": {
@@ -48,9 +47,11 @@
     "assert": true
   },
   "rules": {
+    "no-multiple-empty-lines": ["error", {"max": 3, "maxEOF": 0 }],
     "react-hooks/exhaustive-deps": "off",
     "react/display-name": "off",
     "react/prop-types": "warn",
-    "no-console": ["error", { "allow": ["warn", "error"] }]
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "prettier/prettier": 0
   }
 }

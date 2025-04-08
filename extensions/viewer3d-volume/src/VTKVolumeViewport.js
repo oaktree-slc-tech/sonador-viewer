@@ -2,6 +2,7 @@ import React from 'react';
 import { View3D } from '@sonador/react-vtkjs-viewport';
 import PropTypes from 'prop-types';
 
+
 const VTKVolumeViewport = (props) => {
   // React component that can be used to render volumes. (Uses VTK.js components.)
 
@@ -22,10 +23,12 @@ const VTKVolumeViewport = (props) => {
   );
 };
 
+
 VTKVolumeViewport.propTypes = {
   setViewportActive: PropTypes.func.isRequired,
   viewportIndex: PropTypes.number.isRequired,
   activeViewportIndex: PropTypes.number.isRequired,
 };
+
 
 export default VTKVolumeViewport;

@@ -20,13 +20,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     // Retrieve the VTK API for the currently active VTK viewport
 
     // Unpack viewport configuration/layout
-    const {
-      numRows,
-      numColumns,
-      layout,
-      viewportSpecificData,
-      activeViewportIndex,
-    } = viewports;
+    const { numRows, numColumns, layout, viewportSpecificData, activeViewportIndex } = viewports;
 
     // Retrieve active viewport data and locate VTK API
     const currentData = layout.viewports[activeViewportIndex];
@@ -48,12 +42,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     const imageData = volumeMapper.getInputData();
 
     // Apply options to volume and re-render
-    vtkUtils.applyVtkVolumeRenderOptions(
-      imageData,
-      volumeActor,
-      volumeMapper,
-      options
-    );
+    vtkUtils.applyVtkVolumeRenderOptions(imageData, volumeActor, volumeMapper, options);
     api.genericRenderWindow.getRenderWindow().render();
 
     // Determine new window/level
@@ -94,10 +83,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       // Set default interactor style
       api.genericRenderWindow.getInteractor().disable();
-      vtkUtils.setVtkVolumeInteractorStyle(
-        api,
-        api.defaultVolumeInteractorStyle
-      );
+      vtkUtils.setVtkVolumeInteractorStyle(api, api.defaultVolumeInteractorStyle);
       api.genericRenderWindow.getInteractor().enable();
     },
 
@@ -160,8 +146,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       // Open VTK volume viewer for CT modalities
 
       // Retrieve currently active display set
-      const displaySet =
-        viewports.viewportSpecificData[viewports.activeViewportIndex];
+      const displaySet = viewports.viewportSpecificData[viewports.activeViewportIndex];
 
       // Set layout of viewport for CT volume viewer
       try {
@@ -169,16 +154,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         apis = await setCTVolumeLayout(displaySet, [{}]);
         _.each(apis, (api, k) => {
           // Set reference to default volume interactor style
-          api.defaultVolumeInteractorStyle = api.genericRenderWindow
-            .getInteractor()
-            .getInteractorStyle();
+          api.defaultVolumeInteractorStyle = api.genericRenderWindow.getInteractor().getInteractorStyle();
 
           // Set volume options to default render
           _applyVtkVolumeRenderOptions(api, {
-            vtkColorPreset:
-              vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(
-                displaySet.Modality
-              ),
+            vtkColorPreset: vtkUtils.volumeColorPresetUtils.getDefaultVolumePresetForModality(displaySet.Modality),
           });
         });
 

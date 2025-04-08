@@ -14,6 +14,7 @@ import OHIFDicomSegmentationExtension from '@ohif/extension-dicom-segmentation';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
 import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
+import OHIFSegEditorExtension from '@ohif/extension-seg3d-editor';
 import OHIFVTKExtension from '@ohif/extension-vtk';
 
 import 'regenerator-runtime/runtime';
@@ -38,15 +39,22 @@ const version = viewerPackage.version;
 export {
   App,
   installViewer,
-  OHIFVTKExtension,
+
+  // Data management
   OHIFDicomHtmlExtension,
   OHIFDicomMicroscopyExtension,
   OHIFDicomPDFExtension,
   OHIFDicomSegmentationExtension,
   OHIFDicomRtExtension,
+
+  // Metadata
   OHIFDicomTagBrowserExtension,
-  OHIF3DVolumeViewerExtension,
+
+  // 3D visualization
+  OHIFVTKExtension,
   OHIFDicomECGExtension,
+  OHIF3DVolumeViewerExtension,
+  OHIFSegEditorExtension,
   OHIFM3DViewerExtension,
   version,
 };
