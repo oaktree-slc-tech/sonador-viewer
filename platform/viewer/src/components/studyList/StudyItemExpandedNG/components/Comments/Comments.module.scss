@@ -1,4 +1,4 @@
-@import "@ohif/viewer/src/styles/breakpoints";
+@import "@ohif/sonador-viewer/src/styles/breakpoints";
 
 .contentComments {
   flex: 1;
@@ -36,12 +36,7 @@
       font-weight: 600;
     }
 
-    .commentItemDate {
-      margin: 0 0 0 27.5px;
-      font-size: 14px;
-      line-height: 16.41px;
-      color: #60646d;
-    }
+
 
     .commentItemText {
       margin: 0 0 0 27.5px;

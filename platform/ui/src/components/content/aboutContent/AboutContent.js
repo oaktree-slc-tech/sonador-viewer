@@ -16,13 +16,13 @@ const AboutContent = () => {
     return [
       {
         name: t('Repository URL'),
-        value: 'https://github.com/OHIF/Viewers/',
-        link: 'https://github.com/OHIF/Viewers/',
+        value: 'https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers',
+        link: 'https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers',
       },
       {
         name: t('Latest Master Commits'),
-        value: 'https://github.com/OHIF/Viewers/commits/master',
-        link: 'https://github.com/OHIF/Viewers/commits/master',
+        value: 'https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers/-/commits/master',
+        link: 'https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers/-/commits/master',
       },
       {
         name: 'Version Number',
@@ -74,12 +74,12 @@ const AboutContent = () => {
           className="btn btn-default"
           target="_blank"
           rel="noopener noreferrer"
-          href="https://github.com/OHIF/Viewers/issues/new/choose"
+          href="https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers/-/issues/new"
         >
           {t('Report an issue')}
         </a>
         {` `}
-        <a className="btn btn-default" target="_blank" rel="noopener noreferrer" href="http://ohif.org">
+        <a className="btn btn-default" target="_blank" rel="noopener noreferrer" href="https://sonador.oak-tree.tech">
           {t('More details')}
         </a>
       </div>

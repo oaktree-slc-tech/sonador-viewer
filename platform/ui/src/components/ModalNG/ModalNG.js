@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
+import toggleScrolling from '@ohif/sonador-viewer/src/utils/toggleScrolling';
 import { ReactComponent as CloseCircle } from '@ohif/ui/src/elements/Svg/svgs/close-circle.svg';
-import toggleScrolling from '@ohif/viewer/src/utils/toggleScrolling';
 
 import styles from './ModalNG.module.scss';
 

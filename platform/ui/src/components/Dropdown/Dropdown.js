@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
+import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 
 import styles from './Dropdown.module.scss';
 

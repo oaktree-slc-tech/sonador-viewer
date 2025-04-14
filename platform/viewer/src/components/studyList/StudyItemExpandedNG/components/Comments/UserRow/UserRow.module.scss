@@ -1,0 +1,31 @@
+.userRow {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #ccc;
+  display: flex;
+  color: #000;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.title{
+  color: #fff;
+  font-weight: 600;
+}
+
+.commentItemDate {
+  margin: 0 0 0 20px;
+  font-size: 14px;
+  color: #60646D;
+}

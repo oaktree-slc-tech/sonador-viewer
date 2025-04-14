@@ -4,10 +4,10 @@ import { flexRender } from '@tanstack/react-table';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
+import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as CaretIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
 import { ReactComponent as ChevronDown } from '@ohif/ui/src/elements/Svg/svgs/chevron-down.svg';
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import StudyItemExpandedNG from '../../../StudyItemExpandedNG/StudyItemExpandedNG';
