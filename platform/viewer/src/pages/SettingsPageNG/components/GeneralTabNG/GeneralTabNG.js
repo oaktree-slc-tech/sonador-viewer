@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import i18n from '@ohif/i18n';
+import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CaretDownIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';

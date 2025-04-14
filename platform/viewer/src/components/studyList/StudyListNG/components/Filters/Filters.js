@@ -8,15 +8,15 @@ import moment from 'moment';
 import PropTypes from 'prop-types';
 import qs from 'query-string';
 
+import ImageServerPickerNG from '@ohif/sonador-viewer/src/components/ImageServerPickerNG/ImageServerPickerNG';
+import AppContext from '@ohif/sonador-viewer/src/context/AppContext';
+import { useDeviceStore } from '@ohif/sonador-viewer/src/store/useDeviceStore';
 import SelectDropdownNG from '@ohif/ui/src/components/SelectDropdownNG/SelectDropdownNG';
 import DateRangePickerNG from '@ohif/ui/src/components/studyList/DateRangePickerNG';
 import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
 import { ReactComponent as RefreshIcon } from '@ohif/ui/src/elements/Svg/svgs/refresh.svg';
 import { ReactComponent as RefreshOneArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/refreshOneArrow.svg';
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
-import ImageServerPickerNG from '@ohif/viewer/src/components/ImageServerPickerNG/ImageServerPickerNG';
-import AppContext from '@ohif/viewer/src/context/AppContext';
-import { useDeviceStore } from '@ohif/viewer/src/store/useDeviceStore';
 
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_FILTERS, FILTER_TYPES } from '../../../../../lib/constants';

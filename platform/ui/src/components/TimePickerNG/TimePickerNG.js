@@ -2,8 +2,8 @@ import React, { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
+import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Svg/svgs/close.svg';
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
 import styles from './TimePickerNG.module.scss';
 

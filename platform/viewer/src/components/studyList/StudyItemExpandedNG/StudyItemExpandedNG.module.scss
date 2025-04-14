@@ -1,5 +1,5 @@
-@import '@ohif/viewer/src/styles/breakpoints';
-@import '@ohif/viewer/src/styles/variables';
+@import '@ohif/sonador-viewer/src/styles/breakpoints';
+@import '@ohif/sonador-viewer/src/styles/variables';
 
 .container {
   border-radius: 0 0 10px 10px;
@@ -16,7 +16,34 @@
     left: 20px;
   }
 
+  .studyItem {
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    background: transparent;
+    gap: 2px;
+    padding: 7px;
+    border-radius: 5px;
+    width: 134px;
+    cursor: pointer;
+    color: #fff;
+
+    &.active {
+      background-color: #1e1f23;
+    }
+  }
+
+  .spacer {
+    height: 155px;
+    width: 1px;
+    background: #fff;
+  }
+
   .item {
+    position: relative;
     background-color: transparent;
     padding: 7px;
     border-radius: 5px;
@@ -126,4 +153,32 @@
   @include md {
     width: 100%;
   }
+}
+
+.countWrapper {
+  position: absolute;
+  right: 0;
+  top: 0;
+  min-width: 24px;
+  min-height: 24px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%20class%3D%22size-6%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M4.848%202.771A49.144%2049.144%200%200%201%2012%202.25c2.43%200%204.817.178%207.152.52%201.978.292%203.348%202.024%203.348%203.97v6.02c0%201.946-1.37%203.678-3.348%203.97-1.94.284-3.916.455-5.922.505a.39.39%200%200%200-.266.112L8.78%2021.53A.75.75%200%200%201%207.5%2021v-3.955a48.842%2048.842%200%200%201-2.652-.316c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946%201.37-3.68%203.348-3.97Z%22%20clip-rule%3D%22evenodd%22/%3E%3C/svg%3E');
+  background-size: cover;
+  padding: 5px;
+
+  .icon {
+    position: absolute;
+    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    color: #fff;
+  }
+
+  .countNumber {
+    color: #000;
+  }
+
 }

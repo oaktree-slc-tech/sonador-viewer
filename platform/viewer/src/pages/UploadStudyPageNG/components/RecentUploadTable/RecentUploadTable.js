@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import qs from 'query-string';
 
+import useStudiesTable from '@ohif/sonador-viewer/src/hooks/useStudiesTable';
 import { useDebounce } from '@ohif/ui';
-import useStudiesTable from '@ohif/viewer/src/hooks/useStudiesTable';
 
 import StudyListNG from '../../../../components/studyList/StudyListNG/StudyListNG';
 import useStudies from '../../../../hooks/useStudies';

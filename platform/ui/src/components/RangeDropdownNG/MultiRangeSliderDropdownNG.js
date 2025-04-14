@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
+import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Svg/svgs/close.svg';
-import useClickOutside from '@ohif/viewer/src/hooks/useClickOutside';
 
 import MultiRangeSlider from '../MultiRangeSlider/MultiRangeSlider';
 

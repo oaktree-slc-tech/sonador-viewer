@@ -23,7 +23,7 @@
     "build:demo": "lerna run build:viewer:demo --stream",
     "build:package": "lerna run build:viewer:package --stream",
     "build:package-all": "lerna run build:package --parallel --stream",
-    "dev": "lerna run dev --stream --scope=@ohif/viewer",
+    "dev": "lerna run dev --stream --scope=@ohif/sonador-viewer",
     "dev:lt": "lerna run dev:viewer:lesion-tracker --stream",
     "dev:project": ".scripts/dev.sh",
     "dev:orthanc": "lerna run dev:orthanc --stream",

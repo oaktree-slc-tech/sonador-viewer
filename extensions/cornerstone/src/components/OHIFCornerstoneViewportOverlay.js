@@ -3,10 +3,10 @@ import classNames from 'classnames';
 import cornerstone from 'cornerstone-core';
 import PropTypes from 'prop-types';
 
+import { useViewerMetadataSettingsStore } from '@ohif/sonador-viewer/src/store/useViewerMetadataSettingsStore';
 import { OverlayTrigger } from '@ohif/ui/src/components/overlayTrigger';
 import { Tooltip } from '@ohif/ui/src/components/tooltip';
 import { Icon } from '@ohif/ui/src/elements/Icon';
-import { useViewerMetadataSettingsStore } from '@ohif/viewer/src/store/useViewerMetadataSettingsStore';
 
 import {
   formatDICOMDate,

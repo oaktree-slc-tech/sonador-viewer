@@ -3,6 +3,7 @@ import { urlUtil } from '@ohif/core/src/utils';
 
 import { getAuthToken } from './sonador';
 
+
 export const fetchSeriesComments = (server, series) => {
   // Retrieve comments for the provided series
 
@@ -11,10 +12,31 @@ export const fetchSeriesComments = (server, series) => {
   }).then((res) => res.json());
 };
 
+
 export const createSeriesComment = (server, series, text) => {
   // Create a comment for the provided series
 
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'series', series.SeriesInstanceUID, 'comments'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+    body: JSON.stringify({ Text: text }),
+  });
+};
+
+
+export const fetchStudyComments = (server, studyId) => {
+  // Retrieve comments for the provided series
+
+  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'comments'), {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  }).then((res) => res.json());
+};
+
+
+export const createStudyComment = (server, studyId, text) => {
+  // Create a comment for the provided series
+
+  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'comments'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${getAuthToken()}` },
     body: JSON.stringify({ Text: text }),
