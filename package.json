@@ -113,6 +113,8 @@
   },
   "resolutions": {
     "**/node-gyp": "8.4.1",
-    "**/@babel/runtime": "7.23.2"
+    "**/@babel/runtime": "7.23.2",
+    "@ohif/sonador-viewer": "workspace:*",
+    "@ohif/extension-vtk": "workspace:*"
   }
 }
