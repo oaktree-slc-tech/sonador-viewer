@@ -6,6 +6,18 @@ export const DEFAULT_COLUMNS_IDS = [
   'modalities',
   'StudyDescription',
 ];
+export const WORK_LIST_DEFAULT_COLUMNS_IDS = [
+  'AssignedUser',
+  'GroupName',
+  'PatientName',
+  'Status',
+  'mrn',
+  'AccessionNumber',
+  'StudyDate',
+  'modalities',
+  'series',
+  'StudyDescription',
+];
 export const DEFAULT_FILTERS = ['PatientBirthDate', 'PatientID', 'Modality', 'StudyDescription', 'SeriesDescription'];
 
 export const DEFAULT_COLUMNS = [

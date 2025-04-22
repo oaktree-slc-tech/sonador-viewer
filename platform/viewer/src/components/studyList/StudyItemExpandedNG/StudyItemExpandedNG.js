@@ -4,6 +4,7 @@ import moment from 'moment';
 import PropTypes from 'prop-types';
 
 import AppContext from '@ohif/sonador-viewer/src/context/AppContext';
+import useSeriesMetadata from '@ohif/sonador-viewer/src/hooks/useSeriesMetadata';
 import * as RoutesUtil from '@ohif/sonador-viewer/src/routes/routesUtil';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as DotsIcon } from '@ohif/ui/src/elements/Svg/svgs/dots.svg';
@@ -16,7 +17,7 @@ import { useAllSeriesComments, useStudyComments } from './components/Comments/lo
 import ImageThumbnailNG from './components/ImageThumbnailNG/ImageThumbnailNG';
 import Metadata from './components/Metadata/Metadata';
 import TabletMobileTabs from './components/TabletMobileTabs/TabletMobileTabs';
-import { useSeriesMetadata } from './logic';
+// import { useSeriesMetadata } from './logic';
 import { ReactComponent as StudyCopyIcon } from './study-copy.svg';
 
 import styles from './StudyItemExpandedNG.module.scss';
@@ -36,7 +37,6 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
   const allSeries = data?.[0]?.thumbnails;
   const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(server, allSeries);
   const { data: studyCommentsArr = [] } = useStudyComments(server, studyId);
-  console.log(studyCommentsArr, 1111);
 
   const handleClickOpenInViewer = () => {
     const link = RoutesUtil.parseViewerPath(appConfig, server, {

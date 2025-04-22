@@ -1,0 +1,94 @@
+.container {
+  position: relative;
+
+  .selectedStatus {
+    all: unset;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 12px 15px;
+    color: #FFFFFF;
+    border-radius: 10px;
+    min-width: 160px;
+    box-sizing: border-box;
+    column-gap: 5px;
+
+    &:disabled{
+      pointer-events: none;
+    }
+
+    &.unread {
+      background-color: #545457;
+    }
+
+    &.reviewed {
+      background-color: #2E46E9;
+    }
+
+    &.approved {
+      background-color: #58BC82;
+    }
+
+    &.rejected {
+      background-color: #FF423B;
+    }
+
+    .statusLabel {
+      font-size: 16px;
+      line-height: 18px;
+      color: #FFFFFF;
+    }
+
+    .caret {
+      margin-left: auto;
+    }
+
+    .openCaret {
+      transform: rotate(180deg);
+    }
+  }
+
+
+  .statusList {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    background-color: #000000;
+    padding: 5px 0;
+    border-radius: 5px;
+    min-width: 160px;
+    z-index: 200;
+  }
+
+  .statusItem {
+    all: unset;
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    column-gap: 5px;
+    width: 100%;
+
+    .statusItemLabel {
+      font-size: 16px;
+      line-height: 18px;
+      color: white;
+
+      &.unread {
+        color: #BEBEBF;
+      }
+
+      &.reviewed {
+        color: #2E46E9;
+      }
+
+      &.approved {
+        color: #58BC82;
+      }
+
+      &.rejected {
+        color: #FF423B;
+      }
+    }
+  }
+}

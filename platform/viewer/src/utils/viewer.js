@@ -26,8 +26,8 @@ export const disassociateStudy = () => {
 /**
  * Async function to check if the displaySet has any derived one
  *
- * @param {*object} displaySet
- * @param {*object} study
+ * @param {object} displaySet
+ * @param {object} study
  * @returns {bool}
  */
 const checkForDerivedDisplaySets = async (displaySet, study) => {
@@ -35,11 +35,11 @@ const checkForDerivedDisplaySets = async (displaySet, study) => {
   if (displaySet.Modality && !['SEG', 'SR', 'RTSTRUCT'].includes(displaySet.Modality)) {
     const studyMetadata = studyMetadataManager.get(study.StudyInstanceUID);
 
-    const derivedDisplaySets = studyMetadata.getDerivedDatasets({
+    const derivedDisplaySets = studyMetadata?.getDerivedDatasets({
       referencedSeriesInstanceUID: displaySet.SeriesInstanceUID,
     });
 
-    derivedDisplaySetsNumber = derivedDisplaySets.length;
+    derivedDisplaySetsNumber = derivedDisplaySets?.length || 0;
   }
 
   return derivedDisplaySetsNumber > 0;

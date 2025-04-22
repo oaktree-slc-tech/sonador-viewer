@@ -7,21 +7,21 @@ const { urlUtil: UrlUtil } = OHIF.utils;
 
 // Dynamic Import Routes (CodeSplitting)
 const IHEInvokeImageDisplay = lazy(
-  () => import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay.js')
+  () => import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay')
 );
-const ViewerRouting = lazy(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting.js'));
+const ViewerRouting = lazy(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting'));
 
-const StudyListRouting = lazy(
-  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting.js')
-);
+const StudyListRouting = lazy(() => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting'));
 const StudyListRoutingNG = lazy(
-  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG.js')
+  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG')
 );
-const StandaloneRouting = lazy(() => import('../connectedComponents/ConnectedStandaloneRouting.js'));
-const ViewerLocalFileData = lazy(() => import('../connectedComponents/ViewerLocalFileData.js'));
-const UploadStudyPageNG = lazy(() => import('../pages/UploadStudyPageNG/UploadStudyPageNG.js'));
+const StandaloneRouting = lazy(() => import('../connectedComponents/ConnectedStandaloneRouting'));
+const ViewerLocalFileData = lazy(() => import('../connectedComponents/ViewerLocalFileData'));
+const UploadStudyPageNG = lazy(() => import('../pages/UploadStudyPageNG/UploadStudyPageNG'));
 const SettingsPageNG = lazy(() => import('../pages/SettingsPageNG/SettingsPageNG'));
 const SharedWithMeNG = lazy(() => import('../pages/SharedWithMePageNG/SharedWithMePageNG'));
+const WorkListPageNG = lazy(() => import('../pages/WorkListPageNG/WorkListPageNG'));
+const WorkListViewerPageNG = lazy(() => import('../pages/WorkListViewerPageNG/WorkListViewerPageNG'));
 
 const reload = () => window.location.reload();
 
@@ -93,6 +93,20 @@ const ROUTES_DEF = [
   {
     path: '/ng/shared-with-me',
     component: SharedWithMeNG,
+    condition: (appConfig) => {
+      return appConfig.showStudyList;
+    },
+  },
+  {
+    path: '/ng/worklist',
+    component: WorkListPageNG,
+    condition: (appConfig) => {
+      return appConfig.showStudyList;
+    },
+  },
+  {
+    path: '/ng/worklist/viewer',
+    component: WorkListViewerPageNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },

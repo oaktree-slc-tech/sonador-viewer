@@ -7,7 +7,7 @@ import { metadata, utils } from '@ohif/core';
 import { extensionManager } from '../App';
 import filesToStudies from '../lib/filesToStudies';
 
-import ConnectedViewer from './ConnectedViewer';
+import Viewer from './Viewer';
 
 import './ViewerLocalFileData.css';
 
@@ -98,7 +98,7 @@ function ViewerLocalFileData() {
       {({ getRootProps }) => (
         <div {...getRootProps()} style={{ width: '100%', height: '100%' }}>
           {studies ? (
-            <ConnectedViewer studies={studies} studyInstanceUIDs={studies.map((a) => a.StudyInstanceUID)} />
+            <Viewer studies={studies} studyInstanceUIDs={studies.map((a) => a.StudyInstanceUID)} />
           ) : (
             <div className={'drag-drop-instructions'}>
               <div className={'drag-drop-contents'}>

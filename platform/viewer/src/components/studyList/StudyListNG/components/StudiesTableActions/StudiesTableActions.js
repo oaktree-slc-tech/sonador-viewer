@@ -1,21 +1,30 @@
 import React, { useContext, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
+import { ReactComponent as UpdateStatusIcon } from '@ohif/ui/src/elements/Svg/svgs/reload-circle.svg';
+import { ReactComponent as ViewAndProcessIcon } from '@ohif/ui/src/elements/Svg/svgs/search-circle.svg';
 import { ReactComponent as ShareIcon } from '@ohif/ui/src/elements/Svg/svgs/share.svg';
 
 import AppContext from '../../../../../context/AppContext';
 import { parseViewerPath } from '../../../../../routes/routesUtil';
+import { useWorkListStore } from '../../../../../store/useWorkListStore';
 import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
+
+import UpdateWorklistModal from './components/UpdateWorklistModal';
 
 import styles from './StudiesTableActions.module.scss';
 
-export default function StudiesTableActions({ server, selectedRows }) {
+export default function StudiesTableActions({ server, selectedRows, isWorkList }) {
   const { appConfig } = useContext(AppContext);
+  const navigate = useNavigate();
+  const [openUpdateWorklistModal, setOpenUpdateWorklistModal] = useState(false);
 
   const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
+  const { setWorkListSelectedStudies } = useWorkListStore();
 
   const handleViewAllSelectedStudies = () => {
     selectedRows.forEach(({ id }) => {
@@ -49,19 +58,42 @@ export default function StudiesTableActions({ server, selectedRows }) {
             View
           </button>
         )}
-        <button className={styles.action} disabled={!selectedRows.length}>
-          <DownloadIcon />
-          Download
-        </button>
-        <div className={styles.shareContainer}>
-          <button className={styles.action} disabled={selectedRows.length !== 1} onClick={handleClickShare}>
-            <ShareIcon />
-            Share
+        {isWorkList ? (
+          <button
+            className={styles.action}
+            disabled={!selectedRows.length}
+            onClick={() => {
+              setWorkListSelectedStudies(selectedRows);
+              navigate(`/ng/worklist/viewer/`);
+            }}
+          >
+            <ViewAndProcessIcon />
+            View and Process
           </button>
-          {selectedRows.length > 1 && (
-            <span className={styles.tooltipText}>Only one resource at a time can be shared</span>
-          )}
-        </div>
+        ) : (
+          <button className={styles.action} disabled={!selectedRows.length}>
+            <DownloadIcon />
+            Download
+          </button>
+        )}
+        {isWorkList ? (
+          <button onClick={() => {
+            setOpenUpdateWorklistModal(true);
+          }} className={styles.action} disabled={!selectedRows.length}>
+            <UpdateStatusIcon />
+            Update Status
+          </button>
+        ) : (
+          <div className={styles.shareContainer}>
+            <button className={styles.action} disabled={selectedRows.length !== 1} onClick={handleClickShare}>
+              <ShareIcon />
+              Share
+            </button>
+            {selectedRows.length > 1 && (
+              <span className={styles.tooltipText}>Only one resource at a time can be shared</span>
+            )}
+          </div>
+        )}
       </div>
       {isOpenedShareModal && (
         <StudiesTableShareModal
@@ -71,6 +103,10 @@ export default function StudiesTableActions({ server, selectedRows }) {
           selectedStudy={selectedRows[0]}
         />
       )}
+      {isWorkList && openUpdateWorklistModal &&
+        <UpdateWorklistModal isOpen={openUpdateWorklistModal}
+                             selectedWorklists={selectedRows}
+                             setIsOpen={setOpenUpdateWorklistModal} />}
     </>
   );
 }
@@ -78,4 +114,5 @@ export default function StudiesTableActions({ server, selectedRows }) {
 StudiesTableActions.propTypes = {
   server: PropTypes.object,
   selectedRows: PropTypes.arrayOf(PropTypes.object),
+  isWorkList: PropTypes.bool,
 };

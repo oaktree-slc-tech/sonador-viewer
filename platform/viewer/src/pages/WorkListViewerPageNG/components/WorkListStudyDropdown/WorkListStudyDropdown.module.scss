@@ -1,0 +1,53 @@
+.container {
+  position: relative;
+}
+
+.selectedStudy {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #60646D;
+  column-gap: 8px;
+  min-width: 230px;
+  flex-wrap: nowrap;
+  border-radius: 4px;
+
+  .caret {
+    margin-left: auto;
+  }
+
+  .openCaret {
+    transform: rotate(180deg);
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .value {
+    font-size: 16px;
+    line-height: 18px;
+    color: #FFFFFF;
+  }
+}
+
+.studyList {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  background-color: #000000;
+  padding: 5px 0;
+  border-radius: 5px;
+  min-width: 230px;
+  z-index: 200;
+
+  .studyItem {
+    all: unset;
+    width: 100%;
+    color: #FFFFFF;
+    padding: 10px 15px;
+    cursor: pointer;
+  }
+}

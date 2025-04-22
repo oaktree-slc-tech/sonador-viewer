@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import classNames from 'classnames';
-import qs from 'query-string';
 
 import { ReactComponent as GroupIcon } from '@ohif/ui/src/elements/Svg/svgs/group.svg';
 import { ReactComponent as AccountIcon } from '@ohif/ui/src/elements/Svg/svgs/person.svg';
@@ -28,17 +27,13 @@ export default function SideBarNG() {
   const isAccountPage = location.pathname.endsWith('/account');
   const isSharedWithMePage = location.pathname.endsWith('/shared-with-me');
   const isStudiesPage = !isUploadPage && !isAccountPage && !isSettingsPage && !isSharedWithMePage;
-  const searchParams = qs.parse(location.search.replace('?', ''));
 
   const [isStudiesSubMenuOpen, setIsStudiesSubMenuOpen] = useState(isStudiesPage);
 
   const { isLarge, isDesktop, isTablet, isMobile } = useDeviceStore();
 
   const canUpload = activeServer?.perms?.upload;
-  const studyListPathname =
-    (location.pathname.includes('/server') && params.token) || location.pathname.includes('studylist')
-      ? location.pathname
-      : '/ng';
+  const studyListPathname = location.pathname.includes('/server') && params.token ? location.pathname : '/ng';
 
   const enableScrolling = () => {
     if (isTablet || isMobile) {
@@ -72,63 +67,71 @@ export default function SideBarNG() {
       {isDesktop && <ImageServerPickerNG />}
       <nav className={styles.navigation}>
         <div>
-          <Link
+          <NavLink
             to="/ng"
+            end
             onClick={handleClickStudiesLink}
-            className={classNames(styles.menuItem, {
-              [styles.active]: isStudiesPage,
-            })}
+            className={({ isActive }) =>
+              classNames(styles.menuItem, {
+                [styles.active]: isActive,
+              })
+            }
           >
             <StudiesIcon fill={isStudiesPage ? '#ffffff' : '#60646D'} />
             <span className={styles.name}>Studies</span>
-          </Link>
+          </NavLink>
           {isStudiesSubMenuOpen && (
             <>
-              <Link
+              <NavLink
                 to={studyListPathname}
-                className={classNames(styles.menuSubItem, {
-                  [styles.active]: !searchParams.studyType && isStudiesPage,
-                })}
+                end
+                className={({ isActive }) =>
+                  classNames(styles.menuSubItem, {
+                    [styles.active]: isActive,
+                  })
+                }
                 onClick={enableScrolling}
               >
                 <span>All</span>
                 {/*<span className={styles.count}>1,543</span>*/}
-              </Link>
-              <Link
-                to={{ pathname: studyListPathname, search: 'studyType=worklist' }}
-                className={classNames(styles.menuSubItem, {
-                  [styles.active]: searchParams.studyType === 'worklist',
-                })}
+              </NavLink>
+              <NavLink
+                to="/ng/worklist"
+                className={({ isActive }) =>
+                  classNames(styles.menuSubItem, {
+                    [styles.active]: isActive,
+                  })
+                }
                 onClick={enableScrolling}
               >
                 <span>Worklist</span>
                 {/*<span className={styles.count}>12</span>*/}
-              </Link>
+              </NavLink>
             </>
           )}
-          <Link
+          <NavLink
             to="/ng/shared-with-me"
-            className={classNames(styles.menuItem, { [styles.active]: isSharedWithMePage })}
+            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
             onClick={enableScrolling}
           >
             <GroupIcon fill={isSharedWithMePage ? '#ffffff' : '#60646D'} />
             <span className={styles.name}>Shared with me</span>
-          </Link>
+          </NavLink>
           {canUpload && (
-            <Link
+            <NavLink
               to="/ng/upload"
               onClick={handleClickNotStudiesLink}
-              className={classNames(styles.menuItem, { [styles.active]: isUploadPage })}
+              className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
             >
               <UploadIcon fill={isUploadPage ? '#ffffff' : '#60646D'} />
               <span className={styles.name}>Upload</span>
-            </Link>
+            </NavLink>
           )}
         </div>
         <div className={styles.bottom}>
-          <Link
-            to=""
-            className={classNames(styles.menuItem, { [styles.active]: isAccountPage })}
+          <NavLink
+            to="/ng/account"
+            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
             onClick={(e) => {
               e.preventDefault(); // TODO remove once account page is ready
               enableScrolling();
@@ -136,15 +139,15 @@ export default function SideBarNG() {
           >
             <AccountIcon fill={isAccountPage ? '#ffffff' : '#60646D'} />
             <span className={styles.name}>Account</span>
-          </Link>
-          <Link
+          </NavLink>
+          <NavLink
             to="/ng/settings"
             onClick={handleClickNotStudiesLink}
-            className={classNames(styles.menuItem, { [styles.active]: isSettingsPage })}
+            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
           >
             <SettingsIcon fill={isSettingsPage ? '#ffffff' : '#60646D'} />
             <span className={styles.name}>Settings</span>
-          </Link>
+          </NavLink>
         </div>
       </nav>
     </aside>

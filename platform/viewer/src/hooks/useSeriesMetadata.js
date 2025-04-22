@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { log, metadata, studies, utils } from '@ohif/core';
 
-import { extensionManager } from '../../../App';
-import AppContext from '../../../context/AppContext';
+import { extensionManager } from '../App';
+import AppContext from '../context/AppContext';
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata } = studies;
 const { studyMetadataManager } = utils;
@@ -13,13 +13,12 @@ const loadStudies = async (studyId, server, appConfig) => {
   // Retrieve study data from application store
 
   try {
-    const retrieveParams = [server, [studyId]];
-
-    if (appConfig.splitQueryParameterCalls || appConfig.enableGoogleCloudAdapter) {
-      retrieveParams.push(true);
-    }
-
-    const result = await retrieveStudiesMetadata(...retrieveParams);
+    const result = await retrieveStudiesMetadata(
+      server,
+      [studyId],
+      {},
+      appConfig.splitQueryParameterCalls || appConfig.enableGoogleCloudAdapter
+    );
 
     if (result && !result.isCanceled) {
       await Promise.all(
@@ -46,17 +45,6 @@ const loadStudies = async (studyId, server, appConfig) => {
   } catch (error) {
     log.error(error);
   }
-};
-
-export const useSeriesMetadata = ({ studyId, server }) => {
-  const { appConfig = {} } = useContext(AppContext);
-
-  return useQuery({
-    queryFn: () => loadStudies(studyId, server, appConfig),
-    queryKey: [JSON.stringify(server), studyId],
-    enabled: !!JSON.stringify(server) && !!studyId,
-    select: mapStudiesToThumbnails,
-  });
 };
 
 const processThumbnail = (study, displaySet) => {
@@ -162,3 +150,20 @@ const updateStudyMetadataManager = (study, studyMetadata) => {
     studyMetadataManager.add(studyMetadata);
   }
 };
+
+export default function useSeriesMetadata({ studyId, server, mapToThumbnails = true }) {
+  const { appConfig = {} } = useContext(AppContext);
+
+  return useQuery({
+    queryFn: () => loadStudies(studyId, server, appConfig),
+    queryKey: [JSON.stringify(server), studyId],
+    enabled: !!JSON.stringify(server) && !!studyId,
+    select: (response) => {
+      if (mapToThumbnails) {
+        return mapStudiesToThumbnails(response);
+      }
+
+      return response;
+    },
+  });
+}

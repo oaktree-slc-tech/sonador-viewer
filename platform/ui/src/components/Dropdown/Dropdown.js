@@ -48,8 +48,9 @@ export default function Dropdown({ Button, options, onClick, position = 'left' }
               return (
                 <button
                   key={id}
-                  onClick={() => {
-                    onClick();
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClick(e);
                     setIsOpen(false);
                   }}
                   className={styles.option}

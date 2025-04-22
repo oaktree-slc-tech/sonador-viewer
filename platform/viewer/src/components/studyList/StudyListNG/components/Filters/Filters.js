@@ -21,7 +21,6 @@ import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/sea
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_FILTERS, FILTER_TYPES } from '../../../../../lib/constants';
 import { getDateEntryFromRange } from '../../../../../lib/utils/getDateEntryFromRange';
-import { useStudiesTableFiltersAndColumnsStore } from '../../../../../store/useStudiesTableFiltersAndColumnsStore';
 import StudyListFilterNG from '../../../StudyListFilterNG/StudyListFilterNG';
 
 import styles from './Filters.module.scss';
@@ -35,13 +34,14 @@ export default function Filters({
   title,
   onChangeFilterValue,
   filters,
+  selectedFilters,
+  setSelectedFilters,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation(['StudyList', 'Header']);
 
   const { isDesktop, isMobile, isLarge, isTablet } = useDeviceStore();
-  const { selectedFilters, setSelectedFilters } = useStudiesTableFiltersAndColumnsStore();
 
   const [isOpenFiltersSelect, setIsOpenFiltersSelect] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
@@ -184,4 +184,6 @@ Filters.propTypes = {
   title: PropTypes.string.isRequired,
   onChangeFilterValue: PropTypes.func.isRequired,
   filters: PropTypes.object,
+  selectedFilters: PropTypes.arrayOf(PropTypes.string).isRequired,
+  setSelectedFilters: PropTypes.func.isRequired,
 };

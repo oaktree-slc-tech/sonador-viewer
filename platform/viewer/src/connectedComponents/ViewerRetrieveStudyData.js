@@ -10,7 +10,7 @@ import AppContext from '../context/AppContext';
 import usePrevious from '../hooks/usePrevious';
 import NotFound from '../pages/NotFound/NotFound';
 
-import ConnectedViewer from './ConnectedViewer';
+import Viewer from './Viewer';
 
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata, deleteStudyMetadataPromise } = studies;
@@ -383,7 +383,7 @@ function ViewerRetrieveStudyData({
     return <NotFound message="Failed to retrieve study data" />;
   }
 
-  return <ConnectedViewer studies={studies} isStudyLoaded={isStudyLoaded} studyInstanceUIDs={studyInstanceUIDs} />;
+  return <Viewer studies={studies} isStudyLoaded={isStudyLoaded} studyInstanceUIDs={studyInstanceUIDs} />;
 }
 
 ViewerRetrieveStudyData.propTypes = {

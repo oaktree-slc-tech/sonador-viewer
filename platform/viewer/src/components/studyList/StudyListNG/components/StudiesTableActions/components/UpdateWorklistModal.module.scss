@@ -1,0 +1,50 @@
+.modal {
+  width: 700px;
+  height: 370px;
+  min-width: 750px;
+  color: #FFFFFF;
+
+
+  .topRow {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .textarea{
+    width: 100%;
+    background: #000;
+    margin: 20px 0;
+    border-radius: 8px;
+    color: #FFFFFF;
+    padding: 8px;
+  }
+
+  .buttons{
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+
+    button{
+      color: white;
+      border-radius: 8px;
+      padding: 11px 16px;
+      cursor: pointer;
+    }
+
+    .cancel{
+      background: transparent;
+      border: 1px solid white;
+    }
+
+    .save{
+      background: #2E46E9;
+      border: none;
+
+      &:disabled{
+        pointer-events: none;
+      }
+    }
+
+  }
+}

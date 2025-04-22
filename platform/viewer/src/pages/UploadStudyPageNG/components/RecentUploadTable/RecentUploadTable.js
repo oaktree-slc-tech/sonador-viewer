@@ -8,6 +8,7 @@ import { useDebounce } from '@ohif/ui';
 import StudyListNG from '../../../../components/studyList/StudyListNG/StudyListNG';
 import useStudies from '../../../../hooks/useStudies';
 import useTags from '../../../../hooks/useTags';
+import { useStudiesTableFiltersAndColumnsStore } from '../../../../store/useStudiesTableFiltersAndColumnsStore';
 
 export default function RecentUploadTable() {
   const location = useLocation();
@@ -19,6 +20,7 @@ export default function RecentUploadTable() {
   const [forceRerender, setForceRerender] = useState(Math.random());
 
   const debouncedSearch = useDebounce(search, 500);
+  const { uploadStudiesSelectedColumns, setUploadStudiesSelectedColumns } = useStudiesTableFiltersAndColumnsStore();
 
   const {
     debouncedSort,
@@ -75,6 +77,8 @@ export default function RecentUploadTable() {
       onSorting={handleSorting}
       noFilters
       error={error}
+      selectedColumns={uploadStudiesSelectedColumns}
+      setSelectedColumns={setUploadStudiesSelectedColumns}
     />
   );
 }

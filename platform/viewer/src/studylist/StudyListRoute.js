@@ -10,9 +10,9 @@ import PropTypes from 'prop-types';
 import OHIF from '@ohif/core';
 import { PageToolbar, StudyList, TablePagination, useDebounce, useMedia } from '@ohif/ui';
 
+import Header from '../components/Header/Header';
 // Sonador integration tools
 import ImageServerPicker from '../components/ImageServerPicker/ImageServerPicker';
-import ConnectedHeader from '../connectedComponents/ConnectedHeader.js';
 import AppContext from '../context/AppContext';
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
@@ -239,9 +239,9 @@ function StudyListRoute({ server, user, studyListFunctionsEnabled, filters }) {
         {(whiteLabeling) => (
           <UserManagerContext.Consumer>
             {(userManager) => (
-              <ConnectedHeader useLargeLogo={true} user={user} userManager={userManager}>
+              <Header useLargeLogo user={user} userManager={userManager}>
                 {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
-              </ConnectedHeader>
+              </Header>
             )}
           </UserManagerContext.Consumer>
         )}

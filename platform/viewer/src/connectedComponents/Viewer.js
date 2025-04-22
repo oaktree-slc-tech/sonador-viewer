@@ -1,5 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import classNames from 'classnames';
 import moment from 'moment';
 import PropTypes from 'prop-types';
 
@@ -8,8 +11,10 @@ import { useDialog, useSnackbarContext } from '@ohif/ui';
 
 import { getDistortionCheck } from '../api/deviceList';
 import { extensionManager, servicesManager } from '../App';
+import Header from '../components/Header/Header';
 import StudyLoadingMonitor from '../components/StudyLoadingMonitor';
 import StudyPrefetcher from '../components/StudyPrefetcher/StudyPrefetcher';
+import { WORK_LIST_VIEWER_PARAM } from '../constants/worklist';
 import AppContext from '../context/AppContext';
 import UserManagerContext from '../context/UserManagerContext';
 // Contexts
@@ -26,7 +31,6 @@ import {
 import ErrorBoundaryDialog from './../components/ErrorBoundaryDialog';
 import SidePanel from './../components/SidePanel/SidePanel';
 import ViewerIssuesContent from './ViewerIssuesContent/ViewerIssuesContent';
-import ConnectedHeader from './ConnectedHeader';
 import ConnectedStudyBrowser from './ConnectedStudyBrowser';
 import ToolbarRow from './ToolbarRow';
 import ViewerMain from './ViewerMain';
@@ -34,18 +38,17 @@ import ViewerMain from './ViewerMain';
 import './Viewer.css';
 
 const { TimepointApi, MeasurementApi } = OHIF.measurements;
+const { setTimepoints, setMeasurements } = OHIF.redux.actions;
 const currentTimepointId = 'TimepointId';
 
-export default function Viewer({
-  activeServer,
-  studies,
-  studyInstanceUIDs,
-  onTimepointsUpdated = () => {},
-  onMeasurementsUpdated = () => {},
-  isStudyLoaded,
-  viewports,
-  activeViewportIndex,
-}) {
+export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, selectedStudyId }) {
+  const dispatch = useDispatch();
+  const [searchParams] = useSearchParams();
+
+  const viewports = useSelector((state) => state.viewports.viewportSpecificData);
+  const activeViewportIndex = useSelector((state) => state.viewports.activeViewportIndex);
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
+
   const [thumbnails, setThumbnails] = useState([]);
   const {
     isIssuesContentRightSidePanel,
@@ -55,8 +58,24 @@ export default function Viewer({
     selectedRightSidePanel,
   } = useViewerSidePanels();
 
-  const timepointApi = useMemo(() => new TimepointApi(currentTimepointId, { onTimepointsUpdated }), []);
-  const measurementApi = useMemo(() => new MeasurementApi(timepointApi, { onMeasurementsUpdated }), []);
+  const timepointApi = useMemo(
+    () =>
+      new TimepointApi(currentTimepointId, {
+        onTimepointsUpdated: (timepoints) => {
+          dispatch(setTimepoints(timepoints));
+        },
+      }),
+    []
+  );
+  const measurementApi = useMemo(
+    () =>
+      new MeasurementApi(timepointApi, {
+        onMeasurementsUpdated: (measurements) => {
+          dispatch(setMeasurements(measurements));
+        },
+      }),
+    []
+  );
 
   const dialog = useDialog();
   const snackbar = useSnackbarContext();
@@ -66,6 +85,8 @@ export default function Viewer({
     queryFn: () => getDistortionCheck(activeServer, studyInstanceUIDs),
     enabled: !!activeServer && !!studyInstanceUIDs,
   });
+
+  const isWorkList = searchParams.get(WORK_LIST_VIEWER_PARAM) === 'true';
 
   const updateThumbnails = () => {
     const activeViewport = viewports[activeViewportIndex];
@@ -179,7 +200,7 @@ export default function Viewer({
       const devicesWithErrors = [];
 
       Object.values(distortionCheckResponse).forEach(({ results }) => {
-        results.forEach((device) => {
+        results?.forEach((device) => {
           if (device.error) {
             devicesWithErrors.push(device);
           }
@@ -219,32 +240,40 @@ export default function Viewer({
   return (
     <>
       {/* HEADER */}
-      <WhiteLabelingContext.Consumer>
-        {(whiteLabeling) => (
-          <UserManagerContext.Consumer>
-            {(userManager) => (
-              <AppContext.Consumer>
-                {(appContext) => (
-                  <ConnectedHeader
-                    linkText={appContext.appConfig.showStudyList ? 'Study List' : undefined}
-                    linkPath={appContext.appConfig.showStudyList ? '/' : undefined}
-                    userManager={userManager}
-                  >
-                    {whiteLabeling && whiteLabeling.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
-                  </ConnectedHeader>
-                )}
-              </AppContext.Consumer>
-            )}
-          </UserManagerContext.Consumer>
-        )}
-      </WhiteLabelingContext.Consumer>
+      {!isWorkList && (
+        <WhiteLabelingContext.Consumer>
+          {(whiteLabeling) => (
+            <UserManagerContext.Consumer>
+              {(userManager) => (
+                <AppContext.Consumer>
+                  {(appContext) => (
+                    <Header
+                      linkText={appContext.appConfig.showStudyList ? 'Study List' : undefined}
+                      linkPath={appContext.appConfig.showStudyList ? '/' : undefined}
+                      userManager={userManager}
+                    >
+                      {whiteLabeling &&
+                        whiteLabeling.createLogoComponentFn &&
+                        whiteLabeling.createLogoComponentFn(React)}
+                    </Header>
+                  )}
+                </AppContext.Consumer>
+              )}
+            </UserManagerContext.Consumer>
+          )}
+        </WhiteLabelingContext.Consumer>
+      )}
       {/* TOOLBAR */}
       <ErrorBoundaryDialog context="ToolbarRow">
         <ToolbarRow activeViewport={viewports[activeViewportIndex]} studies={studies} />
       </ErrorBoundaryDialog>
       <AppContext.Consumer>{() => <StudyLoadingMonitor studies={studies} />}</AppContext.Consumer>
       {/* VIEWPORTS + SIDEPANELS */}
-      <div className="FlexboxLayout">
+      <div
+        className={classNames('FlexboxLayout', {
+          worklist: isWorkList,
+        })}
+      >
         {/* LEFT */}
         <ErrorBoundaryDialog context="LeftSidePanel">
           <SidePanel from="left" isOpen={isLeftSidePanelOpen}>
@@ -275,7 +304,7 @@ export default function Viewer({
         <div className="main-content">
           <ErrorBoundaryDialog context="ViewerMain">
             <StudyPrefetcher studies={studies} />
-            <ViewerMain studies={studies} isStudyLoaded={isStudyLoaded} />
+            <ViewerMain studies={studies} isStudyLoaded={isStudyLoaded} selectedStudyId={selectedStudyId} />
           </ErrorBoundaryDialog>
         </div>
 
@@ -324,15 +353,6 @@ Viewer.propTypes = {
     })
   ),
   studyInstanceUIDs: PropTypes.array,
-  activeServer: PropTypes.shape({
-    type: PropTypes.string,
-    wadoRoot: PropTypes.string,
-  }),
-  onTimepointsUpdated: PropTypes.func,
-  onMeasurementsUpdated: PropTypes.func,
-  // window.store.getState().viewports.viewportSpecificData
-  viewports: PropTypes.object.isRequired,
-  // window.store.getState().viewports.activeViewportIndex
-  activeViewportIndex: PropTypes.number.isRequired,
   isStudyLoaded: PropTypes.bool,
+  selectedStudyId: PropTypes.string,
 };

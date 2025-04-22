@@ -5,8 +5,8 @@ import qs from 'query-string';
 import OHIF from '@ohif/core';
 
 import { extensionManager } from '../App';
-import ConnectedViewer from '../connectedComponents/ConnectedViewer';
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
+import Viewer from '../connectedComponents/Viewer';
 import NotFound from '../pages/NotFound/NotFound';
 
 const { log, metadata, utils } = OHIF;
@@ -161,7 +161,7 @@ class StandaloneRouting extends Component {
     }
 
     return this.state.studies ? (
-      <ConnectedViewer studies={this.state.studies} />
+      <Viewer studies={this.state.studies} />
     ) : (
       <ConnectedViewerRetrieveStudyData
         studyInstanceUIDs={this.state.studyInstanceUIDs}

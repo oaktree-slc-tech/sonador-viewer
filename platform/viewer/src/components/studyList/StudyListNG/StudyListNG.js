@@ -4,7 +4,6 @@ import moment from 'moment';
 import PropTypes from 'prop-types';
 
 import { useMetadataSettingsStore } from '../../../store/useMetadataSettingsStore';
-import { useStudiesTableFiltersAndColumnsStore } from '../../../store/useStudiesTableFiltersAndColumnsStore';
 
 import Filters from './components/Filters/Filters';
 import SelectAndSettingsAndExpandCell from './components/SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell';
@@ -15,35 +14,45 @@ import { metadataArr } from './logic';
 import styles from './StudyListNG.module.scss';
 
 export default function StudyListNG({
-  studies = [],
-  server,
-  sorting,
-  onClickNextPage,
-  onClickPrevPage,
-  pageNumber,
-  rowsPerPage,
-  onChangeRowsPerPage,
-  onSorting,
-  isLoading,
-  onRefresh,
-  startDate,
-  endDate,
-  onChangeDates,
-  title,
-  onChangeFilterValue,
-  filters,
-  noFilters = false,
-  error,
-}) {
+                                      studies = [],
+                                      server,
+                                      sorting,
+                                      onClickNextPage,
+                                      onClickPrevPage,
+                                      pageNumber,
+                                      rowsPerPage,
+                                      onChangeRowsPerPage,
+                                      onSorting,
+                                      isLoading,
+                                      onRefresh,
+                                      startDate,
+                                      endDate,
+                                      onChangeDates,
+                                      title,
+                                      onChangeFilterValue,
+                                      filters,
+                                      noFilters = false,
+                                      error,
+                                      isWorkList = false,
+                                      selectedColumns,
+                                      selectedFilters,
+                                      setSelectedColumns,
+                                      setSelectedFilters,
+                                    }) {
   const [expanded, setExpanded] = useState({});
-
-  const { selectedColumns } = useStudiesTableFiltersAndColumnsStore();
 
   const columns = useMemo(() => {
     return [
       {
         id: 'selector-settings-expander',
-        header: ({ table }) => <SelectSettingsHeader table={table} server={server} />,
+        header: ({ table }) => (
+          <SelectSettingsHeader
+            table={table}
+            server={server}
+            selectedColumns={selectedColumns}
+            setSelectedColumns={setSelectedColumns}
+          />
+        ),
         cell: ({ row }) => <SelectAndSettingsAndExpandCell row={row} server={server} />,
       },
       ...selectedColumns.map((id) => {
@@ -79,7 +88,7 @@ export default function StudyListNG({
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => true,
-    getRowId: (row) => row.StudyInstanceUID?.value,
+    getRowId: (row) => isWorkList ? row.id : row.StudyInstanceUID?.value,
   });
 
   const { rows: selectedRows } = getSelectedRowModel();
@@ -101,6 +110,8 @@ export default function StudyListNG({
           title={title}
           onChangeFilterValue={onChangeFilterValue}
           filters={filters}
+          selectedFilters={selectedFilters}
+          setSelectedFilters={setSelectedFilters}
         />
       )}
       <hr className={styles.filtersActionsDivider} />
@@ -120,6 +131,7 @@ export default function StudyListNG({
         onSorting={onSorting}
         error={error}
         isFilters={!noFilters}
+        isWorkList={isWorkList}
       />
     </>
   );
@@ -148,4 +160,9 @@ StudyListNG.propTypes = {
   onChangeFilterValue: PropTypes.func,
   noFilters: PropTypes.bool,
   error: PropTypes.object,
+  isWorkList: PropTypes.bool,
+  selectedColumns: PropTypes.arrayOf(PropTypes.string),
+  setSelectedColumns: PropTypes.func,
+  selectedFilters: PropTypes.arrayOf(PropTypes.string),
+  setSelectedFilters: PropTypes.func,
 };
