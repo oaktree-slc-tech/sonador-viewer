@@ -10,24 +10,27 @@ import useStudiesTable from '../../hooks/useStudiesTable';
 import useTags from '../../hooks/useTags';
 import Layout from '../../layouts/Layout/Layout';
 import { useStudiesTableFilters } from '../../store/useStudiesTableFilters';
+import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTableFiltersAndColumnsStore';
 
 export default function StudyListPageNG() {
   const location = useLocation();
 
-  const { search, studyType } = qs.parse(location.search.replace('?', ''));
+  const { search } = qs.parse(location.search.replace('?', ''));
 
   const [studyStartDate, setStartStudyDate] = useState('');
   const [studyEndDate, setStudyEndDate] = useState('');
   const [forceRerender, setForceRerender] = useState(Math.random());
 
-  const { studyListPageFilters, setStudyListPageFilters, workListPageFilters, setWorkListPageFilters } =
-    useStudiesTableFilters();
-
-  const isWorkList = studyType === 'worklist';
-  const filters = isWorkList ? workListPageFilters : studyListPageFilters;
+  const { studyListPageFilters, setStudyListPageFilters } = useStudiesTableFilters();
+  const {
+    allStudiesSelectedColumns,
+    allStudiesSelectedFilters,
+    setAllStudiesSelectedColumns,
+    setAllStudiesSelectedFilters,
+  } = useStudiesTableFiltersAndColumnsStore();
 
   const debouncedSearch = useDebounce(search, 500);
-  const debouncedFilters = useDebounce(filters, 500);
+  const debouncedFilters = useDebounce(studyListPageFilters, 500);
 
   const {
     debouncedSort,
@@ -84,9 +87,13 @@ export default function StudyListPageNG() {
         }}
         sorting={sorting}
         onSorting={handleSorting}
-        filters={filters}
-        onChangeFilterValue={isWorkList ? setWorkListPageFilters : setStudyListPageFilters}
+        filters={studyListPageFilters}
+        onChangeFilterValue={setStudyListPageFilters}
         error={error}
+        selectedColumns={allStudiesSelectedColumns}
+        selectedFilters={allStudiesSelectedFilters}
+        setSelectedFilters={setAllStudiesSelectedFilters}
+        setSelectedColumns={setAllStudiesSelectedColumns}
       />
     </Layout>
   );

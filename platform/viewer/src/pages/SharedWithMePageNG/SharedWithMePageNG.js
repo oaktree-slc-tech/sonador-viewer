@@ -10,6 +10,7 @@ import useStudiesTable from '../../hooks/useStudiesTable';
 import useTags from '../../hooks/useTags';
 import Layout from '../../layouts/Layout/Layout';
 import { useStudiesTableFilters } from '../../store/useStudiesTableFilters';
+import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTableFiltersAndColumnsStore';
 
 export default function SharedWithMePageNG() {
   const location = useLocation();
@@ -21,6 +22,12 @@ export default function SharedWithMePageNG() {
   const [forceRerender, setForceRerender] = useState(Math.random());
 
   const { sharedWithMePageFilters, setSharedWithMePageFilters } = useStudiesTableFilters();
+  const {
+    sharedStudiesSelectedColumns,
+    sharedStudiesSelectedFilters,
+    setSharedStudiesSelectedColumns,
+    setSharedStudiesSelectedFilters,
+  } = useStudiesTableFiltersAndColumnsStore();
 
   const debouncedSearch = useDebounce(search, 500);
   const debouncedFilters = useDebounce(sharedWithMePageFilters, 500);
@@ -62,7 +69,7 @@ export default function SharedWithMePageNG() {
   return (
     <Layout noHorizontalPadding>
       <StudyListNG
-        title="All studies"
+        title="Shared"
         isLoading={isLoading}
         studies={studies || []}
         onClickNextPage={() => updatePageNumber(pageNumber + 1)}
@@ -83,6 +90,10 @@ export default function SharedWithMePageNG() {
         filters={sharedWithMePageFilters}
         onChangeFilterValue={setSharedWithMePageFilters}
         error={error}
+        selectedFilters={sharedStudiesSelectedFilters}
+        selectedColumns={sharedStudiesSelectedColumns}
+        setSelectedColumns={setSharedStudiesSelectedColumns}
+        setSelectedFilters={setSharedStudiesSelectedFilters}
       />
     </Layout>
   );

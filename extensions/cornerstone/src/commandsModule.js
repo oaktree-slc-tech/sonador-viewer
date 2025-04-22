@@ -1,17 +1,19 @@
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
+
 import OHIF from '@ohif/core';
 
-import setCornerstoneLayout from './utils/setCornerstoneLayout.js';
-import { getEnabledElement } from './state';
+import setCornerstoneLayout from './utils/setCornerstoneLayout';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
+import { getEnabledElement } from './state';
+
 const scroll = cornerstoneTools.import('util/scroll');
 
 const { studyMetadataManager } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
 
 const refreshCornerstoneViewports = () => {
-  cornerstone.getEnabledElements().forEach(enabledElement => {
+  cornerstone.getEnabledElements().forEach((enabledElement) => {
     if (enabledElement.image) {
       cornerstone.updateImage(enabledElement.element);
     }
@@ -96,13 +98,8 @@ const commandsModule = ({ servicesManager }) => {
         return;
       }
 
-      const {
-        toolState,
-      } = cornerstoneTools.globalImageIdSpecificToolStateManager;
-      if (
-        !toolState ||
-        toolState.hasOwnProperty(enabledElement.image.imageId) === false
-      ) {
+      const { toolState } = cornerstoneTools.globalImageIdSpecificToolStateManager;
+      if (!toolState || toolState.hasOwnProperty(enabledElement.image.imageId) === false) {
         return;
       }
 
@@ -110,15 +107,11 @@ const commandsModule = ({ servicesManager }) => {
 
       const measurementsToRemove = [];
 
-      Object.keys(imageIdToolState).forEach(toolType => {
+      Object.keys(imageIdToolState).forEach((toolType) => {
         const { data } = imageIdToolState[toolType];
 
-        data.forEach(measurementData => {
-          const {
-            _id,
-            lesionNamingNumber,
-            measurementNumber,
-          } = measurementData;
+        data.forEach((measurementData) => {
+          const { _id, lesionNamingNumber, measurementNumber } = measurementData;
           if (!_id) {
             return;
           }
@@ -132,7 +125,7 @@ const commandsModule = ({ servicesManager }) => {
         });
       });
 
-      measurementsToRemove.forEach(measurementData => {
+      measurementsToRemove.forEach((measurementData) => {
         OHIF.measurements.MeasurementHandlers.onRemoved({
           detail: {
             toolType: measurementData.toolType,
@@ -150,8 +143,7 @@ const commandsModule = ({ servicesManager }) => {
       scroll(enabledElement, -1);
     },
     getActiveViewportEnabledElement: ({ viewports }) => {
-      const enabledElement = getEnabledElement(viewports.activeViewportIndex);
-      return enabledElement;
+      return getEnabledElement(viewports.activeViewportIndex);
     },
     showDownloadViewportModal: ({ title, viewports }) => {
       const activeViewportIndex = viewports.activeViewportIndex;
@@ -167,19 +159,12 @@ const commandsModule = ({ servicesManager }) => {
         });
       }
     },
-    updateTableWithNewMeasurementData({
-      toolType,
-      measurementNumber,
-      location,
-      description,
-    }) {
+    updateTableWithNewMeasurementData({ toolType, measurementNumber, location, description }) {
       // Update all measurements by measurement number
       const measurementApi = OHIF.measurements.MeasurementApi.Instance;
-      const measurements = measurementApi.tools[toolType].filter(
-        m => m.measurementNumber === measurementNumber
-      );
+      const measurements = measurementApi.tools[toolType].filter((m) => m.measurementNumber === measurementNumber);
 
-      measurements.forEach(measurement => {
+      measurements.forEach((measurement) => {
         measurement.location = location;
         measurement.description = description;
 
@@ -194,27 +179,18 @@ const commandsModule = ({ servicesManager }) => {
       const nearbyTool = {};
       let pointNearTool = false;
 
-      availableToolTypes.forEach(toolType => {
-        const elementToolData = cornerstoneTools.getToolState(
-          element,
-          toolType
-        );
+      availableToolTypes.forEach((toolType) => {
+        const elementToolData = cornerstoneTools.getToolState(element, toolType);
 
         if (!elementToolData) {
           return;
         }
 
         elementToolData.data.forEach((toolData, index) => {
-          let elementToolInstance = cornerstoneTools.getToolForElement(
-            element,
-            toolType
-          );
+          let elementToolInstance = cornerstoneTools.getToolForElement(element, toolType);
 
           if (!elementToolInstance) {
-            elementToolInstance = cornerstoneTools.getToolForElement(
-              element,
-              `${toolType}Tool`
-            );
+            elementToolInstance = cornerstoneTools.getToolForElement(element, `${toolType}Tool`);
           }
 
           if (!elementToolInstance) {
@@ -222,13 +198,7 @@ const commandsModule = ({ servicesManager }) => {
             return undefined;
           }
 
-          if (
-            elementToolInstance.pointNearTool(
-              element,
-              toolData,
-              canvasCoordinates
-            )
-          ) {
+          if (elementToolInstance.pointNearTool(element, toolData, canvasCoordinates)) {
             pointNearTool = true;
             nearbyTool.tool = toolData;
             nearbyTool.index = index;
@@ -263,20 +233,10 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
-    jumpToImage: ({
-      StudyInstanceUID,
-      SOPInstanceUID,
-      frameIndex,
-      activeViewportIndex,
-      refreshViewports = true,
-    }) => {
+    jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, activeViewportIndex, refreshViewports = true }) => {
       const study = studyMetadataManager.get(StudyInstanceUID);
-
-      const displaySet = study.findDisplaySet(ds => {
-        return (
-          ds.images &&
-          ds.images.find(i => i.getSOPInstanceUID() === SOPInstanceUID)
-        );
+      const displaySet = study?.findDisplaySet((ds) => {
+        return ds.images && ds.images.find((i) => i.getSOPInstanceUID() === SOPInstanceUID);
       });
 
       if (!displaySet) {
@@ -285,10 +245,7 @@ const commandsModule = ({ servicesManager }) => {
 
       displaySet.SOPInstanceUID = SOPInstanceUID;
       displaySet.frameIndex = frameIndex;
-
-      window.store.dispatch(
-        setViewportSpecificData(activeViewportIndex, displaySet)
-      );
+      window.store.dispatch(setViewportSpecificData(activeViewportIndex, displaySet));
 
       if (refreshViewports) {
         refreshCornerstoneViewports();

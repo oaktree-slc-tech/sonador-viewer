@@ -1,4 +1,6 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { ChatBubbleLeftIcon } from '@heroicons/react/24/solid';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
@@ -13,12 +15,16 @@ import { ReactComponent as ShareIcon } from '@ohif/ui/src/elements/Svg/svgs/shar
 import AppContext from '../../../../../context/AppContext';
 import * as RoutesUtil from '../../../../../routes/routesUtil';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
+import CreateWorklistModal from '../CreateWorklistModal/CreateWorklistModal';
 
 import tableStyles from '../StudiesTable/StudiesTable.module.scss';
 import styles from './SelectAndSettingsAndExpandCell.module.scss';
 
 export default function SelectAndSettingsAndExpandCell({ row, server }) {
   const isExpanded = row.getIsExpanded();
+  const { pathname } = useLocation();
+
+  const [createWorklistModalOpen, setCreateWorklistModalOpen] = useState(false);
 
   const { appConfig } = useContext(AppContext);
 
@@ -28,50 +34,78 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
     studyInstanceUIDs: row.id,
   });
 
+  const options = [
+    {
+      id: 'download',
+      Label: () => (
+        <div className={styles.rowDotsOption}>
+          <DownloadIcon />
+          <span>Download</span>
+        </div>
+      ),
+      onClick: () => {
+      },
+    },
+    {
+      id: 'share',
+      Label: () => (
+        <div className={styles.rowDotsOption}>
+          <ShareIcon />
+          <span>Share</span>
+        </div>
+      ),
+      onClick: () => {
+      },
+    },
+    {
+      id: 'create-worklist',
+      Label: () => (
+        <div className={styles.rowDotsOption}>
+          <ChatBubbleLeftIcon width={16} />
+          <span>Request review</span>
+        </div>
+      ),
+      onClick: () => {
+        setCreateWorklistModalOpen(true);
+      },
+    },
+  ];
+  const filteredOptions = options.filter(option => {
+    if (option.id === 'create-worklist') {
+      return !pathname.includes('worklist');
+    }
+    return true;
+  });
+
   return (
-    <div className={styles.selectorExpanderColumn}>
-      <ChevronDown className={classNames(styles.expander, { [styles.expanded]: isExpanded })} />
-      {isDesktop && (
-        <>
-          <Dropdown
-            onClick={(e) => e.stopPropagation()}
-            Button={() => <DotsIcon className={styles.dotsIcon} />}
-            options={[
-              {
-                id: 'download',
-                Label: () => (
-                  <div className={styles.rowDotsOption}>
-                    <DownloadIcon />
-                    <span>Download</span>
-                  </div>
-                ),
-                onClick: () => {},
-              },
-              {
-                id: 'share',
-                Label: () => (
-                  <div className={styles.rowDotsOption}>
-                    <ShareIcon />
-                    <span>Share</span>
-                  </div>
-                ),
-                onClick: () => {},
-              },
-            ]}
+    <>
+      <div className={styles.selectorExpanderColumn}>
+        <ChevronDown className={classNames(styles.expander, { [styles.expanded]: isExpanded })} />
+        {isDesktop && (
+          <>
+            <Dropdown
+              onClick={(e) => e.stopPropagation()}
+              Button={() => <DotsIcon className={styles.dotsIcon} />}
+              options={filteredOptions}
+            />
+            <CheckboxNG checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()} />
+          </>
+        )}
+        {server?.perms.view && (
+          <EyeIcon
+            className={classNames(styles.rowEyeIcon, tableStyles.rowEyeIcon)}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(link, '_blank');
+            }}
           />
-          <CheckboxNG checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()} />
-        </>
+        )}
+      </div>
+      {createWorklistModalOpen && (
+        <CreateWorklistModal isOpen={createWorklistModalOpen} setIsOpen={setCreateWorklistModalOpen}
+                             studyInstanceUIDs={row.id} />
       )}
-      {server?.perms.view && (
-        <EyeIcon
-          className={classNames(styles.rowEyeIcon, tableStyles.rowEyeIcon)}
-          onClick={(e) => {
-            e.stopPropagation();
-            window.open(link, '_blank');
-          }}
-        />
-      )}
-    </div>
+    </>
   );
 }
 

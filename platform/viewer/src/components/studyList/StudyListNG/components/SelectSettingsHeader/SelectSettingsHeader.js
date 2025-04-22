@@ -8,12 +8,12 @@ import SettingsHeader from '../SettingsHeader/SettingsHeader';
 
 import styles from './SelectSettingsHeader.module.scss';
 
-export default function SelectSettingsHeader({ table, server }) {
+export default function SelectSettingsHeader({ table, server, selectedColumns, setSelectedColumns }) {
   const { isDesktop } = useDeviceStore();
 
   return (
     <div className={styles.container}>
-      <SettingsHeader server={server} />
+      <SettingsHeader server={server} selectedColumns={selectedColumns} setSelectedColumns={setSelectedColumns} />
       {isDesktop && (
         <CheckboxNG
           checked={table.getIsAllRowsSelected()}
@@ -28,4 +28,6 @@ export default function SelectSettingsHeader({ table, server }) {
 SelectSettingsHeader.propTypes = {
   table: PropTypes.object.isRequired,
   server: PropTypes.object,
+  selectedColumns: PropTypes.arrayOf(PropTypes.string),
+  setSelectedColumns: PropTypes.func,
 };

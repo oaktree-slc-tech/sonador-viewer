@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import  { Toaster } from 'react-hot-toast';
 import { I18nextProvider } from 'react-i18next';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router } from 'react-router-dom';
@@ -166,6 +167,7 @@ class App extends Component {
               </I18nextProvider>
             </AppProvider>
           </Provider>
+          <Toaster />
         </ErrorBoundaryNG>
       );
     }
@@ -193,6 +195,7 @@ class App extends Component {
             </I18nextProvider>
           </AppProvider>
         </Provider>
+        <Toaster />
       </ErrorBoundaryNG>
     );
   }

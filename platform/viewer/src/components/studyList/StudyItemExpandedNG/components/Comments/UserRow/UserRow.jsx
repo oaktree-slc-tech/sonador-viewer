@@ -1,17 +1,9 @@
 import React from 'react'
 
+import { getDisplayName } from '../../../../../../lib/getDisplayName';
 import { getInitialLetters } from '../../../../../../utils/getUserInitials';
 
 import styles from './UserRow.module.scss';
-
-
-const getDisplayName = (user)  => {
-  if (user.first_name || user.last_name) {
-    return `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
-  }
-  return user.email ?? user.username;
-};
-
 
 const UserRow = ({User, LastUpdate}) => {
   const displayName = getDisplayName(User);

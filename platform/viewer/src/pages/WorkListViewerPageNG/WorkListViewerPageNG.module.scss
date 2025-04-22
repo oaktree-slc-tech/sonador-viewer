@@ -1,0 +1,72 @@
+.workListViewer {
+  p {
+    margin: 0;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1e1f23;
+
+    .leftHeader {
+      display: flex;
+      align-items: center;
+      column-gap: 30px;
+      padding: 10px 30px;
+
+      .exit, .filters {
+        all: unset;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        row-gap: 10px;
+        font-size: 8px;
+        line-height: 10px;
+        cursor: pointer;
+        color: #FFFFFF;
+      }
+    }
+
+    .rightHeader {
+      display: flex;
+      align-items: center;
+      column-gap: 20px;
+      border-left: 1px solid #FFFFFF;
+      padding: 10px 30px;
+
+      .items {
+        font-size: 18px;
+        line-height: 21px;
+        color: #FFFFFF;
+      }
+
+      .completed {
+        font-size: 10px;
+        line-height: 12px;
+        color: #d3d3d3;
+      }
+
+      .count {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .leftArrow, .rightArrow {
+        all: unset;
+        cursor: pointer;
+        color: #FFFFFF;
+
+        &:disabled {
+          pointer-events: none;
+          opacity: 0.5;
+        }
+      }
+    }
+  }
+
+  .iframe {
+    height: calc(100dvh - 64px);
+  }
+}

@@ -16,7 +16,7 @@ import './ViewerMain.css';
 
 const { setViewportSpecificData, clearEntireViewportSpecificData } = OHIF.redux.actions;
 
-export default function ViewerMain({ studies, isStudyLoaded }) {
+export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId }) {
   const dispatch = useDispatch();
   const { studyInstanceUIDs } = useParams();
 
@@ -27,6 +27,7 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
   const { addError } = useViewerStudyErrors();
 
   const viewportData = values(viewportSpecificData);
+  const studyId = selectedStudyId || studyInstanceUIDs;
 
   const getDisplaySets = (studies) => {
     const newDisplaySets = [];
@@ -75,8 +76,8 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 
           const errorTitle = 'DICOM Segmentation Loader';
 
-          if (studyInstanceUIDs) {
-            addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+          if (studyId) {
+            addError({ studyId, error: message, title: errorTitle });
           }
 
           UINotificationService.show({
@@ -111,8 +112,8 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 
         LoggerService.error({ error, message });
 
-        if (studyInstanceUIDs) {
-          addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+        if (studyId) {
+          addError({ studyId, error: message, title: errorTitle });
         }
 
         UINotificationService.show({
@@ -131,8 +132,8 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 
       LoggerService.error({ error, message });
 
-      if (studyInstanceUIDs) {
-        addError({ studyId: studyInstanceUIDs, error: message, title: errorTitle });
+      if (studyId) {
+        addError({ studyId, error: message, title: errorTitle });
       }
 
       UINotificationService.show({
@@ -236,4 +237,5 @@ export default function ViewerMain({ studies, isStudyLoaded }) {
 ViewerMain.propTypes = {
   studies: PropTypes.array,
   isStudyLoaded: PropTypes.bool,
+  selectedStudyId: PropTypes.string,
 };

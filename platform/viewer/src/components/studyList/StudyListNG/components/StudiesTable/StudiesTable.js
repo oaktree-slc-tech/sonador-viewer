@@ -31,6 +31,7 @@ export default function StudiesTable({
   onSorting,
   error,
   isFilters,
+  isWorkList,
 }) {
   const { t } = useTranslation(['StudyList']);
 
@@ -62,7 +63,7 @@ export default function StudiesTable({
       })}
     >
       <div className={styles.tableToolbar}>
-        {isDesktop && <StudiesTableActions server={server} selectedRows={selectedRows} />}
+        {isDesktop && <StudiesTableActions server={server} selectedRows={selectedRows} isWorkList={isWorkList} />}
         <div className={styles.tablePagination}>
           <div className={styles.rowsPerPage__wrapper} ref={perPageRef}>
             <div className={styles.rowsPerPage__label}>
@@ -221,4 +222,5 @@ StudiesTable.propTypes = {
   onSorting: PropTypes.func.isRequired,
   error: PropTypes.object,
   isFilters: PropTypes.bool.isRequired,
+  isWorkList: PropTypes.bool,
 };

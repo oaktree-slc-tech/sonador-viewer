@@ -8,12 +8,10 @@ import SettingsIcon from '@ohif/ui/src/elements/Svg/svgs/settings.svg';
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_COLUMNS, DEFAULT_COLUMNS_IDS, FILTER_TYPES } from '../../../../../lib/constants';
 import { useColumnsSelectStore } from '../../../../../store/useColumnsSelectStore';
-import { useStudiesTableFiltersAndColumnsStore } from '../../../../../store/useStudiesTableFiltersAndColumnsStore';
 
 import styles from './SettingsHeader.module.scss';
 
-export default function SettingsHeader({ server }) {
-  const { selectedColumns, setSelectedColumns } = useStudiesTableFiltersAndColumnsStore();
+export default function SettingsHeader({ server, selectedColumns, setSelectedColumns }) {
   const { isOpenColumnsSelect, setIsOpenColumnsSelect } = useColumnsSelectStore();
 
   const { data: tags } = useTags({ server });
@@ -66,4 +64,6 @@ export default function SettingsHeader({ server }) {
 
 SettingsHeader.propTypes = {
   server: PropTypes.object,
+  selectedColumns: PropTypes.arrayOf(PropTypes.string),
+  setSelectedColumns: PropTypes.func,
 };

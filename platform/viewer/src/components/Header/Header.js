@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
@@ -18,18 +19,12 @@ import { UserPreferences } from '../UserPreferences';
 import './Header.css';
 import issuesBtnStyles from './IssuesButton.module.scss';
 
-function Header({
-  user,
-  userManager,
-  modal: { show },
-  useLargeLogo = false,
-  linkPath,
-  linkText,
-  children = OHIFLogo(),
-}) {
+function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, linkText, children = OHIFLogo() }) {
   const { t } = useTranslation(['Header', 'AboutModal']);
   const location = useLocation();
   const { token, studyInstanceUIDs } = useParams();
+
+  const user = useSelector((state) => state.oidc && state.oidc.user);
 
   const [isOpenDevicesList, setIsOpenDevicesList] = useState(false);
 
@@ -149,9 +144,7 @@ Header.propTypes = {
   useLargeLogo: PropTypes.bool,
   children: PropTypes.node,
   userManager: PropTypes.object,
-  user: PropTypes.object,
   modal: PropTypes.object,
-  servers: PropTypes.array,
 };
 
 export default withModal(Header);

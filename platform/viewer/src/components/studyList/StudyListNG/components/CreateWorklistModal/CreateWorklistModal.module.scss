@@ -1,0 +1,63 @@
+.modal {
+  width: 700px;
+  height: 700px;
+  min-width: 750px;
+  color: #FFFFFF;
+
+  .inputGroup {
+    position: relative;
+    margin-top: 1rem;
+    margin-bottom: 20px;
+  }
+
+  .input {
+    width: 100%;
+    padding: 8px;
+    font-size: 1rem;
+  }
+
+  .dropdown {
+    border: 1px solid #ccc;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+  }
+
+  .dropdownItem {
+    padding: 8px;
+    cursor: pointer;
+    color: #fff;
+  }
+
+  .dropdownItem:hover {
+    background-color: #f0f0f0;
+    color: black;
+  }
+
+
+  .createButtonWrapper {
+    display: flex;
+    justify-content: center;
+
+    .createWorklist {
+      display: flex;
+      gap: 8px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      font-size: 18px;
+      padding: 16px;
+      cursor: pointer;
+      div{
+        height: 16px;
+        width: 16px;
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+      }
+    }
+  }
+}
