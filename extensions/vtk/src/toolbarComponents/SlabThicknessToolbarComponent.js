@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react';
 import classnames from 'classnames';
-import { Range, Checkbox, OldSelect } from '@ohif/ui';
+import PropTypes from 'prop-types';
+
+import { Checkbox, OldSelect, Range } from '@ohif/ui';
 
 import './slab-thickness-toolbar-button.styl';
 
@@ -25,14 +26,7 @@ const ToolbarSlider = (props) => {
   return (
     <div className="toolbar-slider-container">
       <label htmlFor="toolbar-slider">{value}mm</label>
-      <Range
-        value={value}
-        min={min}
-        max={max}
-        step={SLIDER.STEP}
-        onChange={onChange}
-        id="toolbar-slider"
-      />
+      <Range value={value} min={min} max={max} step={SLIDER.STEP} onChange={onChange} id="toolbar-slider" />
     </div>
   );
 };
@@ -59,12 +53,7 @@ const _getClassNames = (isActive, className) => {
   });
 };
 
-const _applySlabThickness = (
-  value,
-  modeChecked,
-  toolbarClickCallback,
-  button
-) => {
+const _applySlabThickness = (value, modeChecked, toolbarClickCallback, button) => {
   if (!modeChecked || !toolbarClickCallback) {
     return;
   }
@@ -86,12 +75,7 @@ const _applySlabThickness = (
   toolbarClickCallback(operation, event);
 };
 
-const _applyModeOperation = (
-  operation,
-  modeChecked,
-  toolbarClickCallback,
-  button
-) => {
+const _applyModeOperation = (operation, modeChecked, toolbarClickCallback, button) => {
   // in case modeChecked has not being triggered by user yet
   if (typeof modeChecked !== 'boolean') {
     return;
@@ -117,9 +101,7 @@ const _getInitialState = (currentSelectedOption) => {
 
 const INITIAL_OPTION_INDEX = 0;
 const _getInitialtSelectedOption = (button = {}) => {
-  return (
-    button.operationButtons && button.operationButtons[INITIAL_OPTION_INDEX]
-  );
+  return button.operationButtons && button.operationButtons[INITIAL_OPTION_INDEX];
 };
 
 function SlabThicknessToolbarComponent({
@@ -137,9 +119,7 @@ function SlabThicknessToolbarComponent({
   const selectOptions = _getSelectOptions(button);
   function onChangeSelect(selectedValue) {
     // find select value
-    const operation = operationButtons.find(
-      (button) => button.id === selectedValue
-    );
+    const operation = operationButtons.find((button) => button.id === selectedValue);
 
     if (operation === state.operation) {
       return;
@@ -161,40 +141,21 @@ function SlabThicknessToolbarComponent({
   }
 
   useEffect(() => {
-    _applyModeOperation(
-      state.operation,
-      state.modeChecked,
-      toolbarClickCallback,
-      button
-    );
+    _applyModeOperation(state.operation, state.modeChecked, toolbarClickCallback, button);
   }, [state.modeChecked, state.operation]);
 
   useEffect(() => {
-    _applySlabThickness(
-      state.value,
-      state.modeChecked,
-      toolbarClickCallback,
-      button
-    );
+    _applySlabThickness(state.value, state.modeChecked, toolbarClickCallback, button);
   }, [state.operation, state.modeChecked, state.value]);
 
   return (
     <div className={_className}>
       <div className="container">
-        <ToolbarSlider
-          value={state.value}
-          min={state.sliderMin}
-          max={state.sliderMax}
-          onChange={onChangeSlider}
-        />
+        <ToolbarSlider value={state.value} min={state.sliderMin} max={state.sliderMax} onChange={onChangeSlider} />
         <ToolbarLabel key="toolbar-label" label={label} />
       </div>
       <div className="controller">
-        <Checkbox
-          label="mode"
-          checked={state.modeChecked}
-          onChange={onChangeCheckbox}
-        ></Checkbox>
+        <Checkbox label="mode" checked={state.modeChecked} onChange={onChangeCheckbox}></Checkbox>
         <OldSelect
           key="toolbar-select"
           options={selectOptions}
