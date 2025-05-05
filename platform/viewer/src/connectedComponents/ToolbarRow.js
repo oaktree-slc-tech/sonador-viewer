@@ -1,10 +1,9 @@
 // Toolbar row component for editor. Manages which tools are visible based on active context
 // and viewport.
 
-import _ from 'lodash';
-
 import React, { Component } from 'react';
 import { withTranslation } from 'react-i18next';
+import _ from 'lodash';
 import PropTypes from 'prop-types';
 
 import { MODULE_TYPES } from '@ohif/core';
@@ -200,65 +199,6 @@ class ToolbarRow extends Component {
   }
 }
 
-function getCustomButtonComponent(button, activeButtons) {
-  const CustomComponent = button.CustomComponent;
-  const isValidComponent = typeof CustomComponent === 'function';
-
-  // Check if its a valid customComponent. Later on an CustomToolbarComponent interface could be implemented.
-  if (isValidComponent) {
-    const parentContext = this;
-    const activeButtonsIds = activeButtons.map((button) => button.id);
-    const isActive = activeButtonsIds.includes(button.id);
-
-    return (
-      <CustomComponent
-        parentContext={parentContext}
-        toolbarClickCallback={handleToolbarButtonClick.bind(this)}
-        button={button}
-        key={button.id}
-        activeButtons={activeButtonsIds}
-        isActive={isActive}
-      />
-    );
-  }
-}
-
-function getExpandableButtonComponent(button, activeButtons) {
-  // Iterate over button definitions and update `onClick` behavior
-  let activeCommand;
-  const childButtons = button.buttons.map((childButton) => {
-    childButton.onClick = handleToolbarButtonClick.bind(this, childButton);
-
-    if (activeButtons.map((button) => button.id).indexOf(childButton.id) > -1) {
-      activeCommand = childButton.id;
-    }
-
-    return childButton;
-  });
-
-  return (
-    <ExpandableToolMenu
-      key={button.id}
-      label={button.label}
-      icon={button.icon}
-      buttons={childButtons}
-      activeCommand={activeCommand}
-    />
-  );
-}
-
-function getDefaultButtonComponent(button, activeButtons) {
-  return (
-    <ToolbarButton
-      key={button.id}
-      id={button.id}
-      label={button.label}
-      icon={button.icon}
-      onClick={handleToolbarButtonClick.bind(this, button)}
-      isActive={activeButtons.map((button) => button.id).includes(button.id)}
-    />
-  );
-}
 /**
  * Determine which extension buttons should be showing, if they're
  * active, and what their onClick behavior should be.
@@ -269,14 +209,62 @@ function getButtonComponents(toolbarButtons, activeButtons) {
     const hasNestedButtonDefinitions = button.buttons && button.buttons.length;
 
     if (hasCustomComponent) {
-      return getCustomButtonComponent.call(this, button, activeButtons);
+      const CustomComponent = button.CustomComponent;
+      const isValidComponent = typeof CustomComponent === 'function';
+
+      // Check if its a valid customComponent. Later on an CustomToolbarComponent interface could be implemented.
+      if (isValidComponent) {
+        const parentContext = this;
+        const activeButtonsIds = activeButtons.map((button) => button.id);
+        const isActive = activeButtonsIds.includes(button.id);
+
+        return (
+          <CustomComponent
+            parentContext={parentContext}
+            toolbarClickCallback={handleToolbarButtonClick.bind(this)}
+            button={button}
+            key={button.id}
+            activeButtons={activeButtonsIds}
+            isActive={isActive}
+          />
+        );
+      }
     }
 
     if (hasNestedButtonDefinitions) {
-      return getExpandableButtonComponent.call(this, button, activeButtons);
+      // Iterate over button definitions and update `onClick` behavior
+      let activeCommand;
+      const childButtons = button.buttons.map((childButton) => {
+        childButton.onClick = handleToolbarButtonClick.bind(this, childButton);
+
+        if (activeButtons.map((button) => button.id).indexOf(childButton.id) > -1) {
+          activeCommand = childButton.id;
+        }
+
+        return childButton;
+      });
+
+      return (
+        <ExpandableToolMenu
+          key={button.id}
+          label={button.label}
+          icon={button.icon}
+          buttons={childButtons}
+          activeCommand={activeCommand}
+        />
+      );
     }
 
-    return getDefaultButtonComponent.call(this, button, activeButtons);
+    return (
+      <ToolbarButton
+        key={button.id}
+        id={button.id}
+        label={button.label}
+        icon={button.icon}
+        onClick={handleToolbarButtonClick.bind(this, button)}
+        isActive={activeButtons.map((button) => button.id).includes(button.id)}
+      />
+    );
   });
 }
 
@@ -325,6 +313,7 @@ function handleToolbarButtonClick(button, evt) {
  */
 function getVisibleToolbarButtons() {
   const toolbarModules = extensionManager.modules[MODULE_TYPES.TOOLBAR];
+  console.log(toolbarModules, 12222);
   const toolbarButtonDefinitions = [];
 
   toolbarModules.forEach((extension) => {
