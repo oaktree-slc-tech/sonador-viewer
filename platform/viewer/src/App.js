@@ -1,45 +1,62 @@
 import React, { Component } from 'react';
-import  { Toaster } from 'react-hot-toast';
-import { I18nextProvider } from 'react-i18next';
+import PropTypes from 'prop-types';
 import { Provider } from 'react-redux';
+import { I18nextProvider } from 'react-i18next';
+
 import { BrowserRouter as Router } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import PropTypes from 'prop-types';
 import { OidcProvider } from 'redux-oidc';
+
+import  { Toaster } from 'react-hot-toast';
+
 
 import {
   CommandsManager,
   ExtensionManager,
   HotkeysManager,
-  LoggerService,
-  MeasurementService,
   ServicesManager,
+  
+  LoggerService,
+  DicomMetadataStore,
+  MeasurementService,
+  DisplaySetService,
+  CustomizationService,
   UIDialogService,
   UIModalService,
   UINotificationService,
+  
   utils,
 } from '@ohif/core';
-import OHIFCornerstoneExtension from '@ohif/extension-cornerstone';
+import OHIFCornerstoneExtension, { createDicomLocalApi } from '@ohif/extension-cornerstone';
+
 import i18n from '@ohif/i18n';
 import { DialogProvider, LoggerProvider, ModalProvider, OHIFModal, SnackbarProvider } from '@ohif/ui';
 import ErrorBoundaryNG from '@ohif/ui/src/components/ErrorBoudaryNG/ErrorBoundaryNG';
 
 import { AppProvider, CONTEXTS, useAppContext } from './context/AppContext';
 import UserManagerContext from './context/UserManagerContext';
+
 /** Contexts */
 import WhiteLabelingContext from './context/WhiteLabelingContext';
-/** Store */
+
+/** State Management: Redux, Services, and UI Stores */
+import { initDataServiceIntegration } from './init/initDataIntegrations.js';
 import { getActiveContexts } from './store/layout/selectors';
+
 /** Extensions */
 import { GenericViewerCommands, MeasurementsPanel } from './appExtensions';
+
 // TODO: This should not be here
 //import './config';
 import { setConfiguration } from './config';
+
 /** Viewer */
 import OHIFStandaloneViewer from './OHIFStandaloneViewer';
 import store from './store';
+
 /** Utils */
 import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils';
+
 
 /** ~~~~~~~~~~~~~ Application Setup */
 const commandsManagerConfig = {
@@ -73,7 +90,10 @@ const queryClient = new QueryClient({
   },
 });
 
+
 class App extends Component {
+  //  Sonador Viewer
+
   static propTypes = {
     config: PropTypes.oneOfType([
       PropTypes.func,
@@ -123,7 +143,31 @@ class App extends Component {
     setConfiguration(this._appConfig);
 
     this.initUserManager(oidc);
-    _initServices([UINotificationService, UIModalService, UIDialogService, MeasurementService, LoggerService]);
+
+    // Initialize primary services. Primary services ar those which are initialized
+    // directly within a module and can be imported and consumed without requiring a
+    // reference from the services manager.
+    _initServices([
+      LoggerService,
+      DicomMetadataStore,
+      UINotificationService,
+      UIModalService,
+      UIDialogService,
+      MeasurementService,
+    ]);
+    
+    // Initialize secondary services. Secondary services are those which are initialized
+    // as part of the application init and must be passed by reference from the service
+    // manager (rather than providing a module instance that can be imported directly).
+    servicesManager.registerService(DisplaySetService.REGISTRATION)
+    servicesManager.registerService(CustomizationService.REGISTRATION);
+
+    // TODO: The DisplaySetService and CustomizationService are required to support MeasurementService.
+    // and limited features of OHIF v3 within the Sonador Viewer. Their utilization should be expanded 
+    // as needed to enable broader compatibility.
+    initDataServiceIntegration({ servicesManager });
+
+    // Initializes extensions and state management
     _initExtensions([...defaultExtensions, ...extensions], cornerstoneExtensionConfig, this._appConfig);
 
     /*
@@ -137,7 +181,12 @@ class App extends Component {
 
   render() {
     const { whiteLabeling, routerBasename } = this._appConfig;
-    const { UINotificationService, UIDialogService, UIModalService, LoggerService } = servicesManager.services;
+    const {
+      UINotificationService,
+      UIDialogService,
+      UIModalService,
+      LoggerService
+    } = servicesManager.services;
 
     if (this._userManager) {
       return (
@@ -227,31 +276,33 @@ function _initServices(services) {
   servicesManager.registerServices(services);
 }
 
-/**
- * @param
- */
-function _initExtensions(extensions, cornerstoneExtensionConfig, appConfig) {
-  extensionManager = new ExtensionManager({
-    commandsManager,
-    servicesManager,
-    appConfig,
-    api: {
-      contexts: CONTEXTS,
-      hooks: {
-        useAppContext,
-      },
-    },
-  });
 
+function _initExtensions(extensions, cornerstoneExtensionConfig, appConfig) {
+  /**
+  * Initialize extensions for the viewer
+  * @param
+  */
+
+  // Initialize extension manager instance
+  extensionManager = new ExtensionManager({commandsManager, servicesManager, appConfig, api: {
+    contexts: CONTEXTS,
+    hooks: { useAppContext,},
+  }});
+
+  // Sonador viewer required extensions
   const requiredExtensions = [GenericViewerCommands, [OHIFCornerstoneExtension, cornerstoneExtensionConfig]];
 
   if (appConfig.disableMeasurementPanel !== true) {
+    
     /* WARNING: MUST BE REGISTERED _AFTER_ OHIFCornerstoneExtension */
     requiredExtensions.push(MeasurementsPanel);
   }
 
   const mergedExtensions = requiredExtensions.concat(extensions);
   extensionManager.registerExtensions(mergedExtensions);
+
+  // Initialize storage providers
+  extensionManager.registerStorageProvider('dcm-local', createDicomLocalApi({ name: 'dcm-local' }));
 }
 
 /**

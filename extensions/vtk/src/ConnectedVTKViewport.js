@@ -7,6 +7,7 @@ import VTKViewport from './VTKViewport';
 
 const { setViewportActive, setViewportSpecificData } = OHIF.redux.actions;
 
+
 const mapStateToProps = (state, ownProps) => {
   // Retrieve VTK viewport data kept in the Redux store
   let dataFromStore;
@@ -18,7 +19,7 @@ const mapStateToProps = (state, ownProps) => {
   // If this is the active viewport, enable prefetching.
   const { viewportIndex } = ownProps;
   const isActive = viewportIndex === state.viewports.activeViewportIndex;
-  const viewportLayout = state.viewports.layout.viewports[viewportIndex];
+  const viewportLayout = state.viewports?.layout?.viewports?.[viewportIndex] ?? {};
   const pluginDetails = viewportLayout.vtk || {};
 
   return {
@@ -33,6 +34,7 @@ const mapStateToProps = (state, ownProps) => {
   };
 };
 
+
 const mapDispatchToProps = (dispatch, ownProps) => {
   const { viewportIndex } = ownProps;
 
@@ -46,6 +48,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
     },
   };
 };
+
 
 const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   // Merge properties from different sources to prevent collissions

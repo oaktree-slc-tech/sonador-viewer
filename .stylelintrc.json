@@ -1,7 +1,13 @@
 {
   "extends": "stylelint-config-recommended",
+  "overrides": [
+    {
+      "files": ["**/*.styl"],
+      "customSyntax": "postcss-styl"
+    }
+  ],
   "rules": {
-    "function-no-unknown": [true, {"ignoreFunctions": ["lighten", "darken"]}],
+    "function-no-unknown": [true, { "ignoreFunctions": ["lighten", "darken"] }],
     "at-rule-no-unknown": null
   }
 }

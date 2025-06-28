@@ -1,4 +1,4 @@
-import { CodeNameCodeSequenceValues } from '../enums';
+import { CodeNameCodeSequenceValues } from '../../enums';
 
 import getSequenceAsArray from './getSequenceAsArray';
 

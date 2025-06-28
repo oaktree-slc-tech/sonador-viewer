@@ -1,128 +1,110 @@
+// Helper methods used for parsing DICOM-SR reports to OHIF measurement instances
+// which can be displayed by the Sonador Viewer. This module uses the OHIF v3
+// "Measurements Service" to manage the metadata lifecycle and aims to be broadly
+// compatible with the OHIF v3 classes used for creating, displaying, and persisting
+// DICOM measurements to SR.
+//
+// The primary method of the module is `parseDicomStructuredReport`, which takes a 
+// part10SRArrayBuffer, parses it to a structured report instance, registers the 
+// the metadata with the measurements service, and returns a grouped set of measurement
+// instances for display. `parseDicomStructuredReport` utilizes the OHIF v3 `DicomMetadataStore`
+// and Cornerstone3D adapters to manage parsing of data.
+//
+// The method can be toggled between a version which uses Cornerstone 3D compatible
+// components and a version which falls back to parsing methods provided by Cornerstone Tools
+// Legacy/Classic. The Cornerstone 3D version writes all data to the measurement service.
+// The Cornerstone Tools Classic returns an iterable of data which is persisted
+// to local Measurements API state.
+
+import _ from 'lodash';
 import dcmjs from 'dcmjs';
 
-import { useViewerStudyErrors } from '../store/useViewerStudyErrors';
-import { extractStudyIdFromURL } from '../utils/extractStudyIdFromURL';
+import cornerstone from 'cornerstone-core';
 
+import {
+  utilities as c3dCoreUtilities, 
+  metaData as c3dCoreMetaData
+} from '@cornerstonejs/core';
+import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
+
+import { DicomMetadataStore } from '../services/DicomMetadataStore';
+import { fileLoader } from '../store';
+
+import Enums from '../measurements/enums';
+import getImagePath from '../measurements/lib/getImagePath';
+
+import MeasurementApi from '../measurements/classes/MeasurementApi';
+
+import initDisplaySetMeasurements from './utils/initDisplaySetMeasurements';
 import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
 
-/**
- * Function to parse the part10 array buffer that comes from a DICOM Structured report into measurementData
- * measurementData format is a viewer specific format to be stored into the redux and consumed by other components
- * (e.g. measurement table)
- *
- * @param {ArrayBuffer} part10SRArrayBuffer
- * @param {Array} displaySets
- * @param {object} external
- * @returns
- */
-const parseDicomStructuredReport = (part10SRArrayBuffer, displaySets, external) => {
-  // Get the dicom data as an Object
-  const dicomData = dcmjs.data.DicomMessage.readFile(part10SRArrayBuffer);
-  const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
+import { Cornerstone3D as Cornerstone3dDcmSrParse } from './Cornerstone3d';
+import { Cornerstone as CornerstoneDcmSrParse } from './SCOORD3D';
 
-  const { LoggerService, UINotificationService } = external.servicesManager.services;
-  if (external && external.servicesManager) {
-    try {
-      parseSCOORD3D({ servicesManager: external.servicesManager, displaySets });
-    } catch (error) {
-      const seriesDescription = dataset.SeriesDescription || '';
-      LoggerService.error({ error, message: error.message });
-      const studyId = extractStudyIdFromURL();
-      const errorTitle = `Failed to parse ${seriesDescription} SR display set`;
 
-      if (studyId) {
-        useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
-      }
+const {
+  CORNERSTONE_TOOLS_SOURCE_NAME, CORNERSTONE_TOOLS_SOURCE_VERSION, Cornerstone: CornerstoneSR,
+  CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION, Cornerstone3D: Cornerstone3dSR,
+} = Enums;
 
-      UINotificationService.show({
-        title: errorTitle,
-        message: error.message,
-        type: 'error',
-        autoClose: false,
-      });
-      return;
-    }
-  }
 
-  const { MeasurementReport } = dcmjs.adapters.Cornerstone;
+const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, external, options) => {
+  // Function to parse the part10 array buffer that comes from a DICOM Structured report into measurementData
+  // that can be consumed by the OHIF measurement service. This method utilizes the Cornerstone compatibility 
+  // classes available in Cornerstone3D to parse measurements while also reading the dicomSR file
+  // to locate "CodedConcept" instances and free-text associated with measurements.
+  
+  options = options || {};
+  _.defaults(options, {
+    parseReadOnly: false,
+    renderModule: CornerstoneSR.sr,
+    parserModule: Cornerstone3dSR.sr,
+  });
 
-  let storedMeasurementByToolType;
+  // Retrieve references to services and API
+  const { LoggerService, UINotificationService, displaySetService } = external.servicesManager.services;
+  const measurementApi = MeasurementApi.Instance;
+  const measurementService = measurementApi.measurementService;
+
   try {
-    storedMeasurementByToolType = MeasurementReport.generateToolState(dataset);
-  } catch (error) {
-    const seriesDescription = dataset.SeriesDescription || '';
-    LoggerService.error({ error, message: error.message });
-    const studyId = extractStudyIdFromURL();
-    const errorTitle = `Failed to parse ${seriesDescription} measurement report`;
 
-    if (studyId) {
-      useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
-    }
+    // Parse read-only annotations from the DICOM-SR file.
+    parseSCOORD3D({ servicesManager: external.servicesManager, displaySets });
+
+  } catch(err) {
+
+    // Parse DICOM-SR document to retrieve details for error
+    const dicomData = dcmjs.data.DicomMessage.readFile(part10SRArrayBuffer);
+    const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
+    const seriesDescription = dataset.SeriesDescription || '';
+    
+    // Log error details and notify user of failure
+    LoggerService.error({ error: err, message: err.message });
 
     UINotificationService.show({
-      title: errorTitle,
-      message: error.message,
+      title: `Failed to parse ${seriesDescription} SR display set`,
+      message: err.message,
       type: 'error',
       autoClose: false,
     });
-    return;
   }
 
-  const measurementData = {};
-  let measurementNumber = 0;
+  if (options.parserModule.name == Cornerstone3dSR.sr.name && options.parserModule.version == Cornerstone3dSR.sr.version) {
 
-  Object.keys(storedMeasurementByToolType).forEach((toolName) => {
-    const measurements = storedMeasurementByToolType[toolName];
-    measurementData[toolName] = [];
+    // Parse measurements via Cornerstone 3D
+    return Cornerstone3dDcmSrParse.parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external, options);
 
-    measurements.forEach((measurement) => {
-      const instanceMetadata = findInstanceMetadataBySopInstanceUID(displaySets, measurement.sopInstanceUid);
+  } else if (options.parserModule.name == CornerstoneSR.sr.name && options.parserModule.version == CornerstoneSR.sr.version) {
 
-      const { _study: study, _series: series } = instanceMetadata;
-      const { StudyInstanceUID, PatientID } = study;
-      const { SeriesInstanceUID } = series;
-      const { sopInstanceUid, frameIndex } = measurement;
-      const imagePath = getImagePath(StudyInstanceUID, SeriesInstanceUID, sopInstanceUid, frameIndex);
+    // Parse measurements via Cornerstone Tools (Legacy/Classic)
+    return CornerstoneDcmSrParse.parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external, options);
 
-      const imageId = instanceMetadata.getImageId();
-      if (!imageId) {
-        return;
-      }
+  }
 
-      // TODO: We need the currentTimepointID set into the viewer
-      const currentTimepointId = 'TimepointId';
+  throw new Error('Unsupported DICOM-SR parsing module. sourceName='+options.parserModule.name
+    +' sourceVersion='+options.parserModule.version);
+}
 
-      const toolData = Object.assign({}, measurement, {
-        imageId,
-        imagePath,
-        SOPInstanceUID: sopInstanceUid,
-        SeriesInstanceUID,
-        StudyInstanceUID,
-        PatientID,
-        measurementNumber: ++measurementNumber,
-        timepointId: currentTimepointId,
-        toolType: toolName,
-        _id: imageId + measurementNumber,
-      });
-
-      measurementData[toolName].push(toolData);
-    });
-  });
-
-  return measurementData;
-};
-
-/**
- * Function to create imagePath with all imageData related
- * @param {string} StudyInstanceUID
- * @param {string} SeriesInstanceUID
- * @param {string} SOPInstanceUID
- * @param {string} frameIndex
- * @returns
- */
-const getImagePath = (StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameIndex) => {
-  return [StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameIndex].join('_');
-};
 
 export default parseDicomStructuredReport;

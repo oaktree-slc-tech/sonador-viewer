@@ -13,6 +13,7 @@ function SelectTree({
   searchEnabled = true,
   selectTreeFirstTitle = 'First Level itens',
   selectTreeSecondTitle,
+  searchPlaceholder,
   items,
   onSelected,
 }) {
@@ -99,7 +100,7 @@ function SelectTree({
               <input
                 type="text"
                 className="searchInput"
-                placeholder="Search labels"
+                placeholder={searchPlaceholder}
                 autoFocus={autoFocus}
                 onChange={searchLocations}
                 value={searchTerm || ''}
@@ -139,13 +140,20 @@ function SelectTree({
   );
 }
 
+
 SelectTree.propTypes = {
   autoFocus: PropTypes.bool,
   searchEnabled: PropTypes.bool,
   selectTreeFirstTitle: PropTypes.string,
   selectTreeSecondTitle: PropTypes.string,
+  searchPlaceholder: PropTypes.string,
   items: PropTypes.array.isRequired,
   onSelected: PropTypes.func.isRequired,
 };
+
+
+SelectTree.defaultProps = {
+  searchPlaceholder: 'Search labels',
+}
 
 export default SelectTree;

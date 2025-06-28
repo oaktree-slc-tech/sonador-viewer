@@ -3,7 +3,7 @@ import HotkeysManager from './HotkeysManager.js';
 import ImageSet from './ImageSet';
 import LogManager from './LogManager';
 import { InstanceMetadata, SeriesMetadata, StudyMetadata } from './metadata';
-import MetadataProvider from './MetadataProvider';
+import MetadataProvider, { CornerstoneMetadataProvider, Cornerstone3dMetadataProvider }from './MetadataProvider';
 import OHIFError from './OHIFError.js';
 import { OHIFStudyMetadataSource } from './OHIFStudyMetadataSource';
 import PubSub from './PubSub';
@@ -18,6 +18,8 @@ import { TypeSafeCollection } from './TypeSafeCollection';
 export {
   OHIFStudyMetadataSource,
   MetadataProvider,
+  CornerstoneMetadataProvider,
+  Cornerstone3dMetadataProvider,
   CommandsManager,
   HotkeysManager,
   ImageSet,
@@ -36,6 +38,8 @@ export {
 const classes = {
   OHIFStudyMetadataSource,
   MetadataProvider,
+  CornerstoneMetadataProvider,
+  Cornerstone3dMetadataProvider,
   CommandsManager,
   HotkeysManager,
   LogManager,

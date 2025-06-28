@@ -10,7 +10,7 @@ import OHIF, { DICOMSR, MODULE_TYPES } from '@ohif/core';
 import { useDialog, useSnackbarContext } from '@ohif/ui';
 
 import { getDistortionCheck } from '../api/deviceList';
-import { extensionManager, servicesManager } from '../App';
+import { extensionManager, servicesManager, commandsManager } from '../App';
 import Header from '../components/Header/Header';
 import StudyLoadingMonitor from '../components/StudyLoadingMonitor';
 import StudyPrefetcher from '../components/StudyPrefetcher/StudyPrefetcher';
@@ -37,11 +37,16 @@ import ViewerMain from './ViewerMain';
 
 import './Viewer.css';
 
+const { DicomMetadataStore } = OHIF;
 const { TimepointApi, MeasurementApi } = OHIF.measurements;
+const { DisplaySetApi } = OHIF.display;
 const { setTimepoints, setMeasurements } = OHIF.redux.actions;
 const currentTimepointId = 'TimepointId';
 
+
 export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, selectedStudyId }) {
+  // Sonador Viewer: provides side panels, viewport layouts, and toolbar
+
   const dispatch = useDispatch();
   const [searchParams] = useSearchParams();
 
@@ -58,25 +63,25 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     selectedRightSidePanel,
   } = useViewerSidePanels();
 
-  const timepointApi = useMemo(
-    () =>
-      new TimepointApi(currentTimepointId, {
-        onTimepointsUpdated: (timepoints) => {
-          dispatch(setTimepoints(timepoints));
-        },
-      }),
-    []
-  );
-  const measurementApi = useMemo(
-    () =>
-      new MeasurementApi(timepointApi, {
-        onMeasurementsUpdated: (measurements) => {
-          dispatch(setMeasurements(measurements));
-        },
-      }),
-    []
-  );
+  
+  const timepointApi = useMemo(() => new TimepointApi(currentTimepointId, {
+    onTimepointsUpdated: (timepoints) => { dispatch(setTimepoints(timepoints)); },
+  }),[]);
 
+  const measurementApi = useMemo(() => {
+    const { MeasurementService } = servicesManager.services;
+
+    return new MeasurementApi(MeasurementService, timepointApi, {
+      onMeasurementsUpdated: (measurements) => { dispatch(setMeasurements(measurements)); },
+    });
+  }, []);
+
+  const displaySetApi = useMemo(() => {
+    const { displaySetService } = servicesManager.services;
+
+    return new DisplaySetApi(displaySetService, DicomMetadataStore);
+  }, []);
+ 
   const dialog = useDialog();
   const snackbar = useSnackbarContext();
 
@@ -100,6 +105,7 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     let earliestDate = new Date().toISOString();
     let latestDate = new Date().toISOString();
     if (studies) {
+
       latestDate = new Date('1000-01-01').toISOString();
       studies.forEach((study) => {
         const StudyDate = moment(study.StudyDate, 'YYYYMMDD').toISOString();
@@ -126,12 +132,17 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     ]);
   };
 
+  
   useEffect(() => {
+    // Viewer setup and teardown events
+
     if (studies) {
       const PatientID = studies[0] && studies[0].PatientID;
 
       timepointApi.retrieveTimepoints({ PatientID });
       if (isStudyLoaded) {
+        console.warn('[viewer] study loaded, retrieve measurements from patient cache. '
+          +'PatientID='+PatientID+' currentTimepointId='+currentTimepointId);
         measurementApi.retrieveMeasurements(PatientID, [currentTimepointId]);
       }
 
@@ -148,18 +159,28 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
       setThumbnails(mapStudiesToThumbnails(studies, activeDisplaySetInstanceUID));
     };
 
+    // Add DOM/document event listeners
     document.addEventListener('segmentationLoadingError', updateThumbnailsCb, false);
 
     return () => {
+
+      // Dismiss any open dialogs
       if (dialog) {
         dialog.dismissAll();
       }
 
+      // Remove segmentation load errors
       document.removeEventListener('segmentationLoadingError', updateThumbnailsCb);
+
+      // Release MeasurementApi and DisplaySetApi event bindings
+      measurementApi.destroy?.();
+      displaySetApi.destroy?.();
     };
   }, []);
 
   useLayoutEffect(() => {
+    // Set configuration and data transfer methods for measurements and timepoint APIs
+
     OHIF.measurements.MeasurementApi.setConfiguration({
       dataExchange: {
         retrieve: (server) => DICOMSR.retrieveMeasurements(server, { servicesManager }),
@@ -178,23 +199,42 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
       },
     });
   }, []);
-
+  
+  
   useEffect(() => {
+    // Trigger display port events and update thumbnails
+
+    // Retrieve reference to displaySet service
+    const { displaySetService } = servicesManager.services;
+
+    // Retrieve active viewport and displaySetInstanceUID
     const activeViewport = viewports[activeViewportIndex];
     const activeDisplaySetInstanceUID = activeViewport ? activeViewport.displaySetInstanceUID : undefined;
 
     setThumbnails(mapStudiesToThumbnails(studies, activeDisplaySetInstanceUID));
+
+    if (displaySetService && activeDisplaySetInstanceUID) {
+
+      // Trigger display set update via service
+      displaySetService._broadcastEvent(displaySetService.EVENTS.DISPLAY_SET_ACTIVATED, {
+        displaySetInstanceUID: activeDisplaySetInstanceUID, activeViewportIndex,
+      });
+    }
   }, [viewports, activeViewportIndex, studies]);
 
+  
   useEffect(() => {
     if (isStudyLoaded) {
       const PatientID = studies[0] && studies[0].PatientID;
 
+      console.warn('[viewer] load single study, retrieve measurements from patient cache. '
+          +'PatientID='+PatientID+' currentTimepointId='+currentTimepointId);
       timepointApi.retrieveTimepoints({ PatientID });
       measurementApi.retrieveMeasurements(PatientID, [currentTimepointId]).then(updateThumbnails);
     }
   }, [isStudyLoaded]);
 
+  
   useEffect(() => {
     if (distortionCheckResponse) {
       const devicesWithErrors = [];
@@ -220,13 +260,16 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     }
   }, [distortionCheckResponse]);
 
+  
   const getActiveViewport = () => {
     return viewports[activeViewportIndex];
   };
 
+  
   let VisiblePanelLeft, VisiblePanelRight;
   const panelExtensions = extensionManager.modules[MODULE_TYPES.PANEL];
 
+  
   panelExtensions.forEach((panelExt) => {
     panelExt.module.components.forEach((comp) => {
       if (comp.id === selectedRightSidePanel) {
@@ -237,6 +280,7 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     });
   });
 
+  
   return (
     <>
       {/* HEADER */}
@@ -304,7 +348,8 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
         <div className="main-content">
           <ErrorBoundaryDialog context="ViewerMain">
             <StudyPrefetcher studies={studies} />
-            <ViewerMain studies={studies} isStudyLoaded={isStudyLoaded} selectedStudyId={selectedStudyId} />
+            <ViewerMain studies={studies} isStudyLoaded={isStudyLoaded} 
+              selectedStudyId={selectedStudyId} commandsManager={commandsManager} />
           </ErrorBoundaryDialog>
         </div>
 

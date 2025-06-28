@@ -1,7 +1,7 @@
 import actions from './actions.js';
 import localStorage from './localStorage.js';
 import reducers from './reducers';
-import { getActiveViewportData } from './selectors.js';
+import { getActiveViewportData, activeOhifServer } from './selectors.js';
 import sessionStorage from './sessionStorage.js';
 
 const redux = {
@@ -11,6 +11,7 @@ const redux = {
   sessionStorage,
   selectors: {
     getActiveViewportData,
+    activeOhifServer,
   },
 };
 

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
-import LabellingFlow from '../../components/Labelling/LabellingFlow';
+import OHIF, { measurements } from '@ohif/core';
+import { workflow } from '@ohif/ui';
 
-import ConnectedMeasurementTable from './ConnectedMeasurementTable.js';
+import SonadorMeasurementTable from './SonadorMeasurementsTable.js';
 import init from './init.js';
 
 export default {
@@ -19,40 +20,33 @@ export default {
   },
 
   getPanelModule({ servicesManager, commandsManager }) {
+    // Retrieve Measurements Panel module
+
     const { UINotificationService, UIDialogService } = servicesManager.services;
 
     const showLabellingDialog = (props, measurementData) => {
-      if (!UIDialogService) {
-        console.warn('Unable to show dialog; no UI Dialog Service available.');
-        return;
-      }
+      // Create a dialog which can be used to label data
+      const dialogProps = props;
 
-      UIDialogService.dismiss({ id: 'labelling' });
-      UIDialogService.create({
-        id: 'labelling',
-        centralize: true,
-        isDraggable: false,
-        showOverlay: true,
-        content: LabellingFlow,
-        contentProps: {
-          measurementData,
-          labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
-          updateLabelling: ({ location, description, response }) => {
-            measurementData.location = location || measurementData.location;
-            measurementData.description = description || '';
-            measurementData.response = response || measurementData.response;
-
-            commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
-          },
-          ...props,
-        },
-      });
+      commandsManager.runCommand('labellingDialog', { measurementData, dialogProps });
     };
 
+    const onRelabel = (tool) => {
+      // Show labelling workflow dialog with edit location and edit description buttons
+      
+      return showLabellingDialog({ editLocation: true, skipAddLabelButton: true }, tool);
+    }
+
+    const onEditDescription = (tool) => {
+      // Show labelling workflow dialog with edit descrpition only
+      
+      return showLabellingDialog({ editDescriptionOnDialog: true }, tool);
+    }
+
     const ExtendedConnectedMeasurementTable = () => (
-      <ConnectedMeasurementTable
-        onRelabel={(tool) => showLabellingDialog({ editLocation: true, skipAddLabelButton: true }, tool)}
-        onEditDescription={(tool) => showLabellingDialog({ editDescriptionOnDialog: true }, tool)}
+      <SonadorMeasurementTable
+        servicesManager={servicesManager}
+        onRelabel={onRelabel} onEditDescription={onEditDescription}
         onSaveComplete={(message) => {
           if (UINotificationService) {
             UINotificationService.show(message);

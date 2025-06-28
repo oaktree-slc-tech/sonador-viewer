@@ -1,3 +1,5 @@
+// Utility methods for downloading DICOMweb data
+
 import cornerstone from 'cornerstone-core';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import { api } from 'dicomweb-client';
@@ -86,7 +88,10 @@ const getImageLoaderType = (imageId) => {
 
 class DicomLoaderService {
   getLocalData(dataset, studies) {
+
+    // Retrieve a locally cached version of the data
     if (dataset && dataset.localFile) {
+
       // Use referenced imageInstance
       const imageInstance = getImageInstance(dataset);
       let imageId = getImageInstanceId(imageInstance);

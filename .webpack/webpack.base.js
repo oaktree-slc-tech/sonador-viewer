@@ -94,7 +94,7 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
         // TODO check if i18n works, add i18n node_modules if not
         SRC_DIR,
       ],
-      extensions: ['.js', '.jsx', '.json', '.mjs', '.*'],
+      extensions: ['.ts', '.tsx', '.js', '.jsx', '.json', '.mjs', '.*'],
       symlinks: true,
       alias: {
         '@icr/polyseg-wasm/dist/ICRPolySeg.wasm': path.resolve(__dirname, '../node_modules/@icr/polyseg-wasm/dist/ICRPolySeg.wasm'),

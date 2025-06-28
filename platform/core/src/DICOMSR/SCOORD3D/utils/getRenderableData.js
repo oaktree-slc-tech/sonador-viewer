@@ -1,9 +1,12 @@
 import csMath from 'cornerstone-math';
 import { inv } from 'mathjs';
 
-import SCOORD_TYPES from '../constants/scoordTypes';
+import SCOORD_TYPES from '../../constants/scoordTypes';
+
 
 const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) => {
+  // Retrieves renderable data from the provided GraphicType instance.
+
   let renderableData;
 
   const orientation = imageMetadata.ImageOrientationPatient;
@@ -168,5 +171,6 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
 
   return renderableData;
 };
+
 
 export default getRenderableData;

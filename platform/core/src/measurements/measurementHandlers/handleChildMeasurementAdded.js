@@ -8,6 +8,15 @@ import getLabel from '../lib/getLabel';
 import refreshCornerstoneViewports from '../lib/refreshCornerstoneViewports';
 
 export default function ({ eventData, tool, toolGroupId, toolGroup }) {
+  // Event handler for single measurement updates for child measurements. Create a new instance of the provided tool.
+
+  // @input eventData (object): data options forwarded by the OHIF event
+  // - toolType (str): tool type for which the measurement should be created
+  // - measurementData (object): measurement instance to be created
+
+  // @input tool (Cornerstone Tool intsance): tool instance for which the data should be updated.
+
+  // Retrieve measurement service data.
   const measurementApi = MeasurementApi.Instance;
   if (!measurementApi) {
     log.warn('Measurement API is not initialized');
@@ -49,13 +58,11 @@ export default function ({ eventData, tool, toolGroupId, toolGroup }) {
     parentMeasurement.childToolsCount = (parentMeasurement.childToolsCount || 0) + 1;
     measurementApi.updateMeasurement(tool.parentTool, parentMeasurement);
 
-    // Update the measurementData ID and lesionNamingNumber
+    // Update the measurementData ID
     measurementData._id = parentMeasurement._id;
-    measurementData.lesionNamingNumber = parentMeasurement.lesionNamingNumber;
   } else {
     const measurement = {
       toolType: tool.parentTool,
-      lesionNamingNumber: measurementData.lesionNamingNumber,
       userId: user.getUserId(),
       PatientID: imageAttributes.PatientID,
       StudyInstanceUID: imageAttributes.StudyInstanceUID,

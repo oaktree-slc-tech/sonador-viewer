@@ -1,18 +1,27 @@
 import React from 'react';
+import OHIF from '@ohif/core';
 
 import cornerstonePackage from '../package.json';
 
-import commandsModule from './commandsModule';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
-import init from './init';
 import OHIFCornerstoneViewport from './OHIFCornerstoneViewport';
-import { getEnabledElement, setEnabledElement } from './state';
-import toolbarModule from './toolbarModule';
 
+import { createDicomLocalApi } from './DicomLocalDataSource';
+import { getEnabledElement, setEnabledElement } from './state';
+import SyncGroupService from './services/SyncGroupService';
+import CornerstoneViewportService from './services/ViewportService/CornerstoneViewportService';
+
+import toolbarModule from './toolbarModule';
+import commandsModule from './commandsModule';
+
+import init from './init';
+
+const { DisplaySetService, CustomizationService } = OHIF;
 const cornerstoneState = {
   setEnabledElement,
   getEnabledElement,
 };
+
 
 export default {
   /**
@@ -27,8 +36,17 @@ export default {
    * @param {object} [configuration={}]
    * @param {object|array} [configuration.csToolsConfig] - Passed directly to `initCornerstoneTools`
    */
-  preRegistration({ servicesManager, configuration = {} }) {
-    init({ servicesManager, configuration });
+  preRegistration({ servicesManager, commandsManager, configuration = {} }) {
+
+    // Register OHIF v3 Viewport Sync Service. TODO: This service provides an integration stub
+    // only and (at some point in the future), we will want to replace the OHIF v2 viewport currently
+    // provided by the Sonador viewer with a modernized version similar in functionality to what
+    // OHIF v3 provides. The service is provided here to provide compatibility with the OHIF v3
+    // MeasurementService and DicomMetadataService.
+    servicesManager.registerService(CornerstoneViewportService.REGISTRATION)
+    servicesManager.registerService(SyncGroupService.REGISTRATION);
+
+    init({ servicesManager, commandsManager, configuration });
   },
   getViewportModule({ commandsManager, appConfig }) {
     return (props) => {
@@ -58,9 +76,10 @@ export default {
   getToolbarModule() {
     return toolbarModule;
   },
-  getCommandsModule({ servicesManager }) {
-    return commandsModule({ servicesManager });
+  getCommandsModule({ commandsManager, servicesManager }) {
+    return commandsModule({ commandsManager, servicesManager });
   },
 };
 
-export { CornerstoneViewportDownloadForm, cornerstoneState };
+
+export { CornerstoneViewportDownloadForm, cornerstoneState, createDicomLocalApi };

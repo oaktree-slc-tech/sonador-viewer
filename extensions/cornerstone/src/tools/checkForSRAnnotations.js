@@ -7,14 +7,19 @@ import id from './id';
 
 const { studyMetadataManager } = OHIF.utils;
 
+
 const checkForSRAnnotations = ({ viewportIndex, displaySet }) => {
+  // Check the provided viewport and displayset to determine if there are any SR annotations
+
   const srModule = csTools.getModule(id);
 
+  // Retrieve the currently active element
   const element = getEnabledElement(viewportIndex);
   if (!element) {
     return;
   }
 
+  // Study and series metadata
   const { StudyInstanceUID } = displaySet;
   const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
   if (!studyMetadata) {
@@ -28,30 +33,42 @@ const checkForSRAnnotations = ({ viewportIndex, displaySet }) => {
     return;
   }
 
-  const { measurements: _measurements } = srDisplaySets[0];
-  if (!_measurements || _measurements.length < 1) {
+  // Collate tracking UIDs from SR displaysets
+  let measurements = [];
+
+  _.each(srDisplaySets, (srDisplaySet) => {
+    const { measurements: _measurements } = srDisplaySet;
+    if (!_measurements || !_measurements.length) {
+      return;
+    }
+
+    measurements = [...measurements, ..._measurements.filter(m => m.loaded === true)];
+  });
+
+  if (!measurements || !measurements.length) {
     return;
   }
 
-  const measurements = _measurements.filter(m => m.loaded === true);
   const measurement = measurements[0];
   if (!measurement) {
     return;
   }
 
-  srModule.setters.trackingUniqueIdentifiersForElement(
-    element,
-    measurements.map(measurement => measurement.TrackingUniqueIdentifier),
-    measurement
-  );
+  try {
 
-  const { TrackingUniqueIdentifier } = measurement;
-  srModule.setters.activeTrackingUniqueIdentifierForElement(
-    element,
-    TrackingUniqueIdentifier
-  );
+    // Update 
+    srModule.setters.trackingUniqueIdentifiersForElement(element,
+      measurements.map(measurement => measurement.TrackingUniqueIdentifier), measurement);
 
-  cs.updateImage(element);
+    // Set the active tracking identifier
+    const { TrackingUniqueIdentifier } = measurement;
+    srModule.setters.activeTrackingUniqueIdentifierForElement(element, TrackingUniqueIdentifier);
+
+    cs.updateImage(element);
+  } catch(err) {
+    console.error('Unable to set unique identifiers for the element due to an error:', err);
+  }
 };
+
 
 export default checkForSRAnnotations;

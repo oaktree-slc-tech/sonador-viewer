@@ -1,3 +1,7 @@
+// Initialize Legacy Cornerstone and Cornerstone Tools integration with Sonador Viewer.
+// New features within Sonador should be built on top of the Cornerstone3D package
+// and utilize the `vtk` extension for managing their interfaces.
+
 import cornerstone from 'cornerstone-core';
 import csTools from 'cornerstone-tools';
 import merge from 'lodash.merge';
@@ -7,17 +11,28 @@ import { InputDialog } from '@ohif/ui';
 
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
-import measurementServiceMappingsFactory from './utils/measurementServiceMappings/measurementServiceMappingsFactory';
 import initCornerstoneTools from './initCornerstoneTools.js';
+import { connectToolsToMeasurementService } from './initMeasurementService.js';
+import { initDataServiceIntegration } from './initDataIntegrations.js';
 
-/**
- *
- * @param {Object} servicesManager
- * @param {Object} configuration
- * @param {Object|Array} configuration.csToolsConfig
- */
-export default function init({ servicesManager, configuration }) {
-  const { UIDialogService, MeasurementService } = servicesManager.services;
+
+export default function init({ servicesManager, commandsManager, configuration }) {
+  /**
+  *
+  * @param {Object} servicesManager
+  * @param {Object} configuration
+  * @param {Object|Array} configuration.csToolsConfig
+  */
+
+  const {
+    UIDialogService,
+    MeasurementService,
+    displaySetService,
+    customizationService,
+    cornerstoneViewportService,
+  } = servicesManager.services;
+
+  console.warn('Cornerstone services: ', servicesManager.services);
 
   csTools.register('module', srModuleId, dicomSRModule);
 
@@ -62,6 +77,7 @@ export default function init({ servicesManager, configuration }) {
     autoResizeViewports: false,
   };
 
+  OHIF.utils.cornerstone3dUtils.initCornerstone3d();
   initCornerstoneTools({ ...defaultCsToolsConfig, ...stackPrefetch });
 
   const toolsGroupedByType = {
@@ -92,7 +108,10 @@ export default function init({ servicesManager, configuration }) {
   Object.keys(toolsGroupedByType).forEach((toolsGroup) => tools.push(...toolsGroupedByType[toolsGroup]));
 
   /* Measurement Service */
-  _connectToolsToMeasurementService(MeasurementService);
+  connectToolsToMeasurementService(MeasurementService, displaySetService, cornerstoneViewportService, customizationService);
+
+  /* Dataservices Integration: sync data between OHIF v3 services, Cornerstone Legacy/Classic Providers, and Cornerstone 3D */
+  initDataServiceIntegration({ servicesManager, commandsManager });
 
   /* Add extension tools configuration here. */
   const internalToolsConfig = {
@@ -162,67 +181,3 @@ export default function init({ servicesManager, configuration }) {
   csTools.setToolEnabled('Overlay', {});
 }
 
-const _initMeasurementService = (measurementService) => {
-  /* Initialization */
-  const { toAnnotation, toMeasurement } = measurementServiceMappingsFactory(measurementService);
-  const csToolsVer4MeasurementSource = measurementService.createSource('CornerstoneTools', '4');
-
-  /* Matching Criterias */
-  const matchingCriteria = {
-    valueType: measurementService.VALUE_TYPES.POLYLINE,
-    points: 2,
-  };
-
-  /* Mappings */
-  measurementService.addMapping(csToolsVer4MeasurementSource, 'Length', matchingCriteria, toAnnotation, toMeasurement);
-
-  return csToolsVer4MeasurementSource;
-};
-
-const _connectToolsToMeasurementService = (measurementService) => {
-  const csToolsVer4MeasurementSource = _initMeasurementService(measurementService);
-  const { id: sourceId, addOrUpdate, getAnnotation } = csToolsVer4MeasurementSource;
-
-  /* Measurement Service Events */
-  cornerstone.events.addEventListener(cornerstone.EVENTS.ELEMENT_ENABLED, (event) => {
-    const { MEASUREMENT_ADDED, MEASUREMENT_UPDATED } = measurementService.EVENTS;
-
-    measurementService.subscribe(MEASUREMENT_ADDED, ({ source, measurement }) => {
-      if (![sourceId].includes(source.id)) {
-        const annotation = getAnnotation('Length', measurement.id);
-      }
-    });
-
-    measurementService.subscribe(MEASUREMENT_UPDATED, ({ source, measurement }) => {
-      if (![sourceId].includes(source.id)) {
-        const annotation = getAnnotation('Length', measurement.id);
-      }
-    });
-
-    const addOrUpdateMeasurement = (csToolsAnnotation) => {
-      try {
-        const { toolName, toolType, measurementData } = csToolsAnnotation;
-        const csTool = toolName || measurementData.toolType || toolType;
-        csToolsAnnotation.id = measurementData._measurementServiceId;
-        const measurementServiceId = addOrUpdate(csTool, csToolsAnnotation);
-
-        if (!measurementData._measurementServiceId) {
-          addMeasurementServiceId(measurementServiceId, csToolsAnnotation);
-        }
-      } catch (error) {
-        console.warn('Failed to add or update measurement:', error);
-      }
-    };
-
-    const addMeasurementServiceId = (id, csToolsAnnotation) => {
-      const { measurementData } = csToolsAnnotation;
-      Object.assign(measurementData, { _measurementServiceId: id });
-    };
-
-    [csTools.EVENTS.MEASUREMENT_ADDED, csTools.EVENTS.MEASUREMENT_MODIFIED].forEach((csToolsEvtName) => {
-      event.detail.element.addEventListener(csToolsEvtName, ({ detail: csToolsAnnotation }) => {
-        addOrUpdateMeasurement(csToolsAnnotation);
-      });
-    });
-  });
-};

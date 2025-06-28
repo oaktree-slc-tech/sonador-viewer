@@ -4,9 +4,11 @@ const _ = require('lodash');
 const PARAM_SEPARATOR = ';';
 const PARAM_PATTERN_IDENTIFIER = ':';
 
+
 function toLowerCaseFirstLetter(word) {
   return word[0].toLowerCase() + word.slice(1);
 }
+
 
 const getQueryFilters = (location = {}, skipCaseTransform = []) => {
   // Retrieve the query filters from the location string
@@ -27,6 +29,7 @@ const getQueryFilters = (location = {}, skipCaseTransform = []) => {
   return filters;
 };
 
+
 const decode = (strToDecode = '') => {
   // Decode URL components
   try {
@@ -37,6 +40,7 @@ const decode = (strToDecode = '') => {
   }
 };
 
+
 const parse = (toParse) => {
   // Parse URL to components
 
@@ -46,12 +50,15 @@ const parse = (toParse) => {
 
   return {};
 };
+
+
 const parseParam = (paramStr) => {
   const _paramDecoded = decode(paramStr);
   if (_paramDecoded && typeof _paramDecoded === 'string') {
     return _paramDecoded.split(PARAM_SEPARATOR);
   }
 };
+
 
 const replaceParam = (path = '', paramKey, paramValue) => {
   const paramPattern = `${PARAM_PATTERN_IDENTIFIER}${paramKey}`;
@@ -62,6 +69,7 @@ const replaceParam = (path = '', paramKey, paramValue) => {
   return path;
 };
 
+
 const isValidPath = (path) => {
   const paramPatternPiece = `/${PARAM_PATTERN_IDENTIFIER}`;
   return path.indexOf(paramPatternPiece) < 0;
@@ -71,11 +79,13 @@ const queryString = {
   getQueryFilters,
 };
 
+
 const paramString = {
   isValidPath,
   parseParam,
   replaceParam,
 };
+
 
 const urlJoin = (...args) =>
   args
@@ -87,4 +97,27 @@ const urlJoin = (...args) =>
     .replace(/\?/g, '&')
     .replace('&', '?');
 
-export { parse, queryString, paramString, urlJoin };
+
+function getRootUrl(url) {
+  // Parse the provided URL to components and return the "root" URL including
+  // scheme, hostname, and port.
+
+  // @input url (str): URL to be parsed
+  // @returns object
+  //  - rootUrl (str): full root URL composed from components
+  //  - parsedUrl (object): URL object
+
+  const _url = new URL(url);
+  const rootUrl = `${_url.protocol}//${_url.hostname}${_url.port ? `:${_url.port}` : ''}`;
+
+  return { rootUrl, parsedUrl: _url }
+}
+
+
+function buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
+  // Create a Wado-RS URI from a server instance and DICOM identifiers
+  return `${server.wadoRoot}/studies/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}`;
+}
+
+
+export { parse, queryString, paramString, urlJoin, getRootUrl, buildInstanceWadoRsUri };

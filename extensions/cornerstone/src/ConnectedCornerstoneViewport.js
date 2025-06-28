@@ -1,5 +1,6 @@
 import CornerstoneViewport from 'react-cornerstone-viewport';
 import { connect } from 'react-redux';
+import _ from 'lodash';
 import throttle from 'lodash.throttle';
 
 import OHIF from '@ohif/core';
@@ -15,9 +16,7 @@ const { onAdded, onRemoved, onModified } = OHIF.measurements.MeasurementHandlers
 const MEASUREMENT_ACTION_MAP = {
   added: onAdded,
   removed: onRemoved,
-  modified: throttle((event) => {
-    return onModified(event);
-  }, 300),
+  modified: _.debounce((event) => { return onModified(event); }, 100),
 };
 
 const mapStateToProps = (state, ownProps) => {

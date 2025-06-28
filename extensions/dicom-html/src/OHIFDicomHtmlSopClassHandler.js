@@ -1,4 +1,5 @@
-import { MODULE_TYPES, utils, metadata } from '@ohif/core';
+import OHIF, { MODULE_TYPES, utils, metadata } from '@ohif/core';
+const { DicomMetadataStore } = OHIF;
 
 // TODO: Should probably use dcmjs for this
 const SOP_CLASS_UIDS = {
@@ -19,18 +20,29 @@ const sopClassUIDs = Object.values(SOP_CLASS_UIDS);
 // same SOP Class
 const OHIFDicomHtmlSopClassHandler = {
   id: 'OHIFDicomHtmlSopClassHandler',
+  name: 'dicom-sr',
   type: MODULE_TYPES.SOP_CLASS_HANDLER,
   sopClassUIDs,
   getDisplaySetFromSeries(series, study, dicomWebClient, authorizationHeaders) {
+    // Create displaySet from the provided DICOM-SR series
+
     const instance = series.getFirstInstance();
 
-    const metadata = instance.getData().metadata;
+    // Unpack series properties from instance meta
+    const dcm = instance.getData();
+    const metadata = dcm.metadata || dcm;
     const {
       SeriesDescription,
       SeriesNumber,
       SeriesDate,
       SeriesTime,
     } = metadata;
+    
+    const SeriesInstanceUID = series.getSeriesInstanceUID();
+    const StudyInstanceUID = study.getStudyInstanceUID();
+
+    // Retrieve series from DicomMetadataStore to back-fill properties
+    const sx = DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID);
 
     const srDisplaySet = {
       plugin: 'html',
@@ -39,8 +51,8 @@ const OHIFDicomHtmlSopClassHandler = {
       wadoRoot: study.getData().wadoRoot,
       wadoUri: instance.getData().wadouri,
       SOPInstanceUID: instance.getSOPInstanceUID(),
-      SeriesInstanceUID: series.getSeriesInstanceUID(),
-      StudyInstanceUID: study.getStudyInstanceUID(),
+      SeriesInstanceUID,
+      StudyInstanceUID,
       SeriesDescription,
       metadata,
       SeriesDate,

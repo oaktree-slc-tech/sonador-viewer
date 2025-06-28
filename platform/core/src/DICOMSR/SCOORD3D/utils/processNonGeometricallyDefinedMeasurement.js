@@ -1,10 +1,11 @@
-import SCOORD_TYPES from '../constants/scoordTypes';
-import { CodeNameCodeSequenceValues, CodingSchemeDesignators } from '../enums';
+import SCOORD_TYPES from '../../constants/scoordTypes';
+import { CodeNameCodeSequenceValues, CodingSchemeDesignators } from '../../enums';
 
 import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
 import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
 
-const CORNERSTONE_FREETEXT_CODE_VALUE = 'CORNERSTONEFREETEXT';
+const CORNERSTONE_FREETEXT_CODE_VALUE = '';
+
 
 const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
   const NUMContentItems = contentSequence.filter((group) => group.ValueType === 'NUM');
@@ -124,5 +125,6 @@ const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
 
   return measurement;
 };
+
 
 export default processNonGeometricallyDefinedMeasurement;

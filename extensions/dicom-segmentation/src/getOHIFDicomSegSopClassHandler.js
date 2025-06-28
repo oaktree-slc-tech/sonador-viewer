@@ -1,8 +1,9 @@
-import { MODULE_TYPES, utils } from '@ohif/core';
+import dcmjs from 'dcmjs';
+
+import OHIF, { MODULE_TYPES, utils } from '@ohif/core';
 import loadSegmentation from './loadSegmentation';
 import getSourceDisplaySet from './getSourceDisplaySet';
-import OHIF from '@ohif/core';
-import dcmjs from 'dcmjs';
+
 
 const { DicomLoaderService } = OHIF.utils;
 const { DicomMessage, DicomMetaDictionary } = dcmjs.data;
@@ -79,6 +80,14 @@ export default function getSopClassHandlerModule({ servicesManager }) {
       };
 
       segDisplaySet.load = async function(referencedDisplaySet, studies) {
+        // Load segmentation displaySet data
+        
+        // Skip loading of segmentation data if no referencedDisplaySet provided
+        if (!referencedDisplaySet) {
+          console.warn('[dicom-segmentation:loadSegDisplaySet] invalid referencedDisplaySet. Skip load of data.', studies);
+          return;
+        }
+
         segDisplaySet.isLoaded = true;
         const { StudyInstanceUID } = referencedDisplaySet;
         const segArrayBuffer = await DicomLoaderService.findDicomDataPromise(

@@ -19,6 +19,7 @@ module.exports = {
           },
         ],
         '@babel/preset-react',
+        '@babel/preset-typescript',
       ],
       plugins: ['@babel/plugin-transform-runtime'],
     },
@@ -27,6 +28,7 @@ module.exports = {
         // WebPack handles ES6 --> Target Syntax
         ['@babel/preset-env', { modules: false }],
         '@babel/preset-react',
+	      '@babel/preset-typescript',
       ],
       ignore: ['**/*.test.jsx', '**/*.test.js', '__snapshots__', '__tests__'],
     },
@@ -35,6 +37,7 @@ module.exports = {
         // WebPack handles ES6 --> Target Syntax
         ['@babel/preset-env', { modules: false }],
         '@babel/preset-react',
+        '@babel/preset-typescript',
       ],
       ignore: ['**/*.test.jsx', '**/*.test.js', '__snapshots__', '__tests__'],
     },

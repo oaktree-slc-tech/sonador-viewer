@@ -1,22 +1,26 @@
+// Hydrate measurements from DICOM-SR which can be displayed by the DICOM-SR display tool.
+import _ from 'lodash';
+
 import csTools from 'cornerstone-tools';
 
 import OHIF from '../../../';
-/** Internal imports */
-import TOOL_NAMES from '../constants/toolNames';
 
+import TOOL_NAMES from '../../constants/toolNames';
 import getRenderableData from './getRenderableData';
 
 const globalImageIdSpecificToolStateManager = csTools.globalImageIdSpecificToolStateManager;
 
-/**
- * Add a measurement to a display set.
- *
- * @param {*} measurement
- * @param {*} imageId
- * @param {*} displaySetInstanceUID
- */
+
 export default function addMeasurement(measurement, imageId, imageMetadata, displaySetInstanceUID) {
-  // TODO -> Render rotated ellipse .
+  /**
+  * Add a measurement to a display set.
+  *
+  * @param {*} measurement
+  * @param {*} imageId
+  * @param {*} displaySetInstanceUID
+  */
+  // TODO -> Render rotated ellipse 
+
   const toolName = TOOL_NAMES.DICOM_SR_DISPLAY_TOOL;
 
   const measurementData = {
@@ -55,12 +59,18 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
 
   const toolData = imageIdToolState[toolName];
 
-  measurementData.description = `Read-only annotation`;
+  // Add measurement extended attributes to data representation which will be
+  // added to the measurementService
   measurementData.isReadOnly = true;
+  _.defaults(measurementData, _.pick(measurement, 'description'));
+  measurementData.metadata = _.extend(
+    measurementData.metadata || {}, _.defaults(measurement.metadata || {}));
+
   toolData.data.push(measurementData);
 
   addToMeasurementApi({ measurementData, toolName, imageId });
 
+  // Add state attributes to displaySet copy of measurement
   measurement.loaded = true;
   measurement.imageId = imageId;
   measurement.displaySetInstanceUID = displaySetInstanceUID;
@@ -70,10 +80,16 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
   // It'd be super werid if it didn't anyway as a SCOORD.
   measurement.ReferencedSOPInstanceUID = measurement.coords[0].ReferencedSOPSequence.ReferencedSOPInstanceUID;
 
-  return measurement;
+  return {
+    measurement,
+    measurementRepresentation: measurementData,
+  }
 }
 
+
 const addToMeasurementApi = ({ measurementData, toolName, imageId }) => {
+  // Add measurement to API
+
   const measurementApi = OHIF.measurements.MeasurementApi.Instance;
 
   const toolType = toolName;
@@ -83,7 +99,6 @@ const addToMeasurementApi = ({ measurementData, toolName, imageId }) => {
 
   const imageAttributes = OHIF.measurements.getImageAttributes(null, imageId);
   const measurement = Object.assign({}, measurementData, imageAttributes, {
-    lesionNamingNumber: measurementData.lesionNamingNumber,
     userId: OHIF.user.getUserId(),
     toolType,
   });
@@ -95,4 +110,6 @@ const addToMeasurementApi = ({ measurementData, toolName, imageId }) => {
   if (measurementLabel) {
     measurementData.labels = [measurementLabel];
   }
+
+  return measurementData;
 };

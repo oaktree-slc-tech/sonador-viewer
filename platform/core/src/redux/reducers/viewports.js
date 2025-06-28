@@ -24,16 +24,18 @@ export const DEFAULT_STATE = {
   viewportSpecificData: {},
 };
 
-/**
- *  Take the new number of Rows and Columns, delete all not used viewport data and also set
- *  active viewport as default in case current one is not available anymore.
- *
- * @param {Number} numRows
- * @param {Number} numColumns
- * @param {Object} currentViewportSpecificData
- * @returns
- */
+
 const findActiveViewportSpecificData = (numRows, numColumns, currentViewportSpecificData = {}) => {
+  /**
+  *  Take the new number of Rows and Columns, delete all not used viewport data and also set
+  *  active viewport as default in case current one is not available anymore.
+  *
+  * @param {Number} numRows
+  * @param {Number} numColumns
+  * @param {Object} currentViewportSpecificData
+  * @returns
+  */
+
   const numberOfViewports = numRows * numColumns;
   const viewportSpecificData = _.cloneDeep(currentViewportSpecificData);
 
@@ -47,15 +49,17 @@ const findActiveViewportSpecificData = (numRows, numColumns, currentViewportSpec
 
   return viewportSpecificData;
 };
-/**
- *  Take new number of Rows and Columns and make sure the current active viewport index is still available, if not, return the default
- *
- * @param {Number} numRows
- * @param {Number} numColumns
- * @param {Number} currentActiveViewportIndex
- * @returns
- */
+
+
 const getActiveViewportIndex = (numRows, numColumns, currentActiveViewportIndex) => {
+  /**
+  *  Take new number of Rows and Columns and make sure the current active viewport index is still available, if not, return the default
+  *
+  * @param {Number} numRows
+  * @param {Number} numColumns
+  * @param {Number} currentActiveViewportIndex
+  * @returns
+  */
   const numberOfViewports = numRows * numColumns;
 
   return currentActiveViewportIndex > numberOfViewports - 1
@@ -63,22 +67,23 @@ const getActiveViewportIndex = (numRows, numColumns, currentActiveViewportIndex)
     : currentActiveViewportIndex;
 };
 
-/**
- * The definition of a viewport action.
- *
- * @typedef {Object} ViewportAction
- * @property {string} type -
- * @property {Object} data -
- * @property {Object} layout -
- * @property {number} viewportIndex -
- * @property {Object} viewportSpecificData -
- */
 
-/**
- * @param {Object} [state=DEFAULT_STATE] The current viewport state.
- * @param {ViewportAction} action A viewport action.
- */
 const viewports = (state = DEFAULT_STATE, action) => {
+  /**
+  * The definition of a viewport action.
+  *
+  * @typedef {Object} ViewportAction
+  * @property {string} type -
+  * @property {Object} data -
+  * @property {Object} layout -
+  * @property {number} viewportIndex -
+  * @property {Object} viewportSpecificData -
+  */
+
+  /**
+  * @param {Object} [state=DEFAULT_STATE] The current viewport state.
+  * @param {ViewportAction} action A viewport action.
+  */
   let useActiveViewport = false;
 
   switch (action.type) {
@@ -151,6 +156,12 @@ const viewports = (state = DEFAULT_STATE, action) => {
           draftState.viewportSpecificData[action.viewportIndex][key] = action.viewportSpecificData[key];
         });
 
+        // Create a placeholder in the draftState for the viewportIndex (if it doesn't already exist)
+        if (action.viewportSpecificData && _.isUndefined(draftState.layout.viewports[action.viewportIndex])) {
+          draftState.layout.viewports[action.viewportIndex] = {};
+        }
+
+        // Set plugin for the viewport
         if (action.viewportSpecificData && action.viewportSpecificData.plugin) {
           draftState.layout.viewports[action.viewportIndex].plugin = action.viewportSpecificData.plugin;
         }
@@ -214,5 +225,6 @@ const viewports = (state = DEFAULT_STATE, action) => {
     }
   }
 };
+
 
 export default viewports;

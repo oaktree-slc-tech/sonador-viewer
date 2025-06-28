@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
+import { Form } from 'radix-ui';
+
 import { TextInput } from '@ohif/ui';
 
 import './SimpleDialog.styl';
@@ -14,6 +16,8 @@ const SimpleDialog = ({
   headerTitle,
   onClose,
   onConfirm,
+  btnTextConfirm,
+  btnTextCancel,
 }) => {
   const handleClose = (event) => {
     event.preventDefault();
@@ -31,28 +35,25 @@ const SimpleDialog = ({
     <>
       {isOpen && (
         <div className={`simpleDialog ${rootClass} `} ref={componentRef} style={componentStyle}>
-          <form>
-            <div className="header">
-              <span className="closeBtn" onClick={handleClose}>
-                <span className="closeIcon">x</span>
-              </span>
-              <h4 className="title">{headerTitle}</h4>
-            </div>
-            <div className="content">{children}</div>
-            <div className="footer">
-              <button className="btn btn-default" onClick={handleClose}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={handleConfirm}>
-                Confirm
-              </button>
-            </div>
-          </form>
+          <div className="header">
+            <span className="closeBtn" onClick={handleClose}>
+              <span className="closeIcon">x</span>
+            </span>
+            <h4 className="title">{headerTitle}</h4>
+          </div>
+          
+          <div className="content">{children}</div>
+          
+          <div className="footer">
+            <button className="btn btn-default" onClick={handleClose}>{btnTextCancel}</button>
+            <button className="btn btn-primary" onClick={handleConfirm}>{btnTextConfirm}</button>
+          </div>
         </div>
       )}
     </>
   );
 };
+
 
 SimpleDialog.propTypes = {
   children: PropTypes.node,
@@ -63,7 +64,16 @@ SimpleDialog.propTypes = {
   headerTitle: PropTypes.string.isRequired,
   onClose: PropTypes.func.isRequired,
   onConfirm: PropTypes.func.isRequired,
+  btnTextConfirm: PropTypes.string,
+  btnTextCancel: PropTypes.string,
 };
+
+
+SimpleDialog.defaultProps = {
+  btnTextConfirm: 'Confirm',
+  btnTextCancel: 'Cancel',
+}
+
 
 const InputDialog = ({ onSubmit, defaultValue, title, label, onClose }) => {
   const [inputDialogValue, setInputDialogValue] = useState(defaultValue);
@@ -85,5 +95,6 @@ const InputDialog = ({ onSubmit, defaultValue, title, label, onClose }) => {
     </div>
   );
 };
+
 
 export { SimpleDialog, InputDialog };

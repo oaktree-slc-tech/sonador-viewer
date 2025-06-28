@@ -1,4 +1,4 @@
-import metadataProvider from '../classes/MetadataProvider.js';
+import metadataProvider from '../classes/MetadataProvider';
 import OHIFError from '../classes/OHIFError.js';
 
 import getImageId from './getImageId';

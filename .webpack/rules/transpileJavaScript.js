@@ -1,4 +1,6 @@
 const excludeNodeModulesExcept = require('./../helpers/excludeNodeModulesExcept.js');
+
+
 function transpileJavaScript(mode) {
   const exclude =
     mode === 'production'
@@ -20,7 +22,7 @@ function transpileJavaScript(mode) {
       : excludeNodeModulesExcept(['pdfjs-dist']);
 
   return {
-    test: /\.jsx?$/,
+    test: /\.(mjs|ts|js)x?$/,
     // These are packages that are not transpiled to our lowest supported
     // JS version (currently ES5). Most of these leverage ES6+ features,
     // that we need to transpile to a different syntax.

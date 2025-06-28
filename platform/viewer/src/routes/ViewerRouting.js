@@ -7,6 +7,7 @@ import { user, utils } from '@ohif/core';
 import ConnectedViewerRetrieveStudyData from '../connectedComponents/ConnectedViewerRetrieveStudyData';
 import useQuery from '../hooks/useQuery';
 import useServer from '../hooks/useServer';
+
 const { urlUtil: UrlUtil } = utils;
 
 /**
@@ -21,6 +22,7 @@ const getSeriesInstanceUIDs = (seriesInstanceUIDs, routeLocation) => {
 
   return UrlUtil.paramString.parseParam(_seriesInstanceUIDs);
 };
+
 
 function ViewerRouting({ location: routeLocation }) {
   const { project, location, dataset, dicomStore, studyInstanceUIDs, seriesInstanceUIDs } = useParams();
@@ -46,6 +48,7 @@ function ViewerRouting({ location: routeLocation }) {
 
   return null;
 }
+
 
 ViewerRouting.propTypes = {
   location: PropTypes.any,

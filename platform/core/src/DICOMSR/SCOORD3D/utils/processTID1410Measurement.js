@@ -1,15 +1,17 @@
-import { CodeNameCodeSequenceValues, RELATIONSHIP_TYPE } from '../enums';
+import { CodeNameCodeSequenceValues, RELATIONSHIP_TYPE } from '../../enums';
 
 import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
 import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
 
-/**
- * TID 1410 Planar ROI Measurements and Qualitative Evaluations.
- *
- * @param {*} contentSequence
- * @returns
- */
+
 const processTID1410Measurement = (contentSequence) => {
+  /**
+  * TID 1410 Planar ROI Measurements and Qualitative Evaluations.
+  *
+  * @param {*} contentSequence
+  * @returns
+  */
+
   // Need to deal with TID 1410 style measurements, which will have a SCOORD or SCOORD3D at the top level,
   // And non-geometric representations where each NUM has "INFERRED FROM" SCOORD/SCOORD3D
 
@@ -28,6 +30,7 @@ const processTID1410Measurement = (contentSequence) => {
 
   const NUMContentItems = contentSequence.filter((group) => group.ValueType === 'NUM');
 
+  // Measurement schema
   const measurement = {
     loaded: false,
     labels: [],
@@ -58,5 +61,6 @@ const processTID1410Measurement = (contentSequence) => {
 
   return measurement;
 };
+
 
 export default processTID1410Measurement;
