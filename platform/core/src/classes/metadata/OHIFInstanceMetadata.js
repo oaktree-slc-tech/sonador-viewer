@@ -51,35 +51,44 @@ export class OHIFInstanceMetadata extends InstanceMetadata {
 
   // Override
   getTagValue(tagOrProperty, defaultValue, bypassCache) {
-    // check if this property has been cached...
-    if (tagOrProperty in this._cache && bypassCache !== true) {
-      return this._cache[tagOrProperty];
+    // Retrieve tag value from metadata cache
+
+    try {
+      if (tagOrProperty in this._cache && bypassCache !== true) {
+        return this._cache[tagOrProperty];
+      }
+
+      const instanceData = this._instance.metadata || this._instance;
+
+      // Search property value in the whole study metadata chain...
+      let rawValue;
+      if (tagOrProperty in instanceData) {
+        rawValue = instanceData[tagOrProperty];
+      } else if (tagOrProperty in this._series) {
+        rawValue = this._series[tagOrProperty];
+      } else if (tagOrProperty in this._study) {
+        rawValue = this._study[tagOrProperty];
+      }
+
+      if (rawValue !== void 0) {
+        // if rawValue value is not undefined, cache result...
+        this._cache[tagOrProperty] = rawValue;
+        return rawValue;
+      }
+
+      return defaultValue;
+
+    } catch(err) {
+      console.error('[OhifInstanceMetata:getTagValue] error when retrieving property tagOrProperty='+tagOrProperty);
+      throw err
     }
-
-    const instanceData = this._instance.metadata;
-
-    // Search property value in the whole study metadata chain...
-    let rawValue;
-    if (tagOrProperty in instanceData) {
-      rawValue = instanceData[tagOrProperty];
-    } else if (tagOrProperty in this._series) {
-      rawValue = this._series[tagOrProperty];
-    } else if (tagOrProperty in this._study) {
-      rawValue = this._study[tagOrProperty];
-    }
-
-    if (rawValue !== void 0) {
-      // if rawValue value is not undefined, cache result...
-      this._cache[tagOrProperty] = rawValue;
-      return rawValue;
-    }
-
-    return defaultValue;
+    
   }
 
   // Override
   tagExists(tagOrProperty) {
-    return tagOrProperty in this._instance.metadata || tagOrProperty in this._series || tagOrProperty in this._study;
+    const instanceData = this._instance.metadata || this._instance;
+    return tagOrProperty in instanceData || tagOrProperty in this._series || tagOrProperty in this._study;
   }
 
   // Override

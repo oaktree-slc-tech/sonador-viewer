@@ -16,7 +16,10 @@
 //  -- ACTIVE_VIEWPORT::CORNERSTONE
 // setToolActive commands should receive the button event that triggered
 // so we can do the "bind to this button" magic
+
 import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
+
+import { SeriesTagToolbarButton } from './toolbarComponents/SeriesTagToolbarButton.js';
 
 /* TODO: Export enums through a extension manager. */
 const enums = {
@@ -29,7 +32,6 @@ const definitions = [
     id: 'StackScroll',
     label: 'Stack Scroll',
     icon: 'bars',
-    //
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'setToolActive',
     commandOptions: { toolName: 'StackScroll' },
@@ -38,7 +40,6 @@ const definitions = [
     id: 'Zoom',
     label: 'Zoom',
     icon: 'search-plus',
-    //
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'setToolActive',
     commandOptions: { toolName: 'Zoom' },
@@ -46,8 +47,7 @@ const definitions = [
   {
     id: 'Wwwc',
     label: 'Levels',
-    icon: 'level',
-    //
+    icon: 'level',    
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'setToolActive',
     commandOptions: { toolName: 'Wwwc' },
@@ -56,55 +56,104 @@ const definitions = [
     id: 'Pan',
     label: 'Pan',
     icon: 'arrows',
-    //
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'setToolActive',
     commandOptions: { toolName: 'Pan' },
   },
   {
-    id: 'Length',
-    label: 'Length',
-    icon: 'measure-temp',
-    //
-    type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-    commandName: 'setToolActive',
-    commandOptions: { toolName: 'Length' },
-  },
-  {
-    id: 'ArrowAnnotate',
-    label: 'Annotate',
-    icon: 'measure-non-target',
-    //
-    type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-    commandName: 'setToolActive',
-    commandOptions: { toolName: 'ArrowAnnotate' },
-  },
-  {
-    id: 'Angle',
-    label: 'Angle',
-    icon: 'angle-left',
-    //
-    type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-    commandName: 'setToolActive',
-    commandOptions: { toolName: 'Angle' },
-  },
-  {
-    id: 'Reset',
-    label: 'Reset',
-    icon: 'reset',
-    //
+    id: 'SeriesTag',
+    label: 'Series Tag',
+    icon: 'tags',
+    CustomComponent: SeriesTagToolbarButton,
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'resetViewport',
+    commandName: 'seriesTagDialog',
+  },
+  {
+    id: 'AnnotationTools',
+    label: 'Annotate',
+    icon: 'measure-target',
+    buttons: [
+      {
+        id: 'Length',
+        label: 'Length',
+        icon: 'measure-temp',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'Length' },
+      },
+      {
+        id: 'ArrowAnnotate',
+        label: 'Annotate',
+        icon: 'measure-non-target',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'ArrowAnnotate' },
+      },
+      {
+        id: 'Angle',
+        label: 'Angle',
+        icon: 'angle-left',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'Angle' },
+      },
+      {
+        id: 'Bidirectional',
+        label: 'Bidirectional',
+        icon: 'measure-target',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'Bidirectional' },
+      },
+      {
+        id: 'EllipticalRoi',
+        label: 'Ellipse',
+        icon: 'circle-o',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'EllipticalRoi' },
+      },
+      {
+        id: 'RectangleRoi',
+        label: 'Rectangle',
+        icon: 'square-o',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'RectangleRoi' },
+      },
+      {
+        // Clear and reload annotations
+        id: 'ReloadAnnotations',
+        label: 'Reload',
+        icon: 'reset',
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'reloadAnnotations',
+      },
+      { 
+        // Clear measurements and annotations
+        id: 'Clear',
+        label: 'Clear',
+        icon: 'trash',        
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'clearAnnotations',
+      },
+    ]
   },
   {
     id: 'Cine',
     label: 'CINE',
     icon: 'youtube',
-    //
     type: TOOLBAR_BUTTON_TYPES.BUILT_IN,
     options: {
       behavior: TOOLBAR_BUTTON_BEHAVIORS.CINE,
     },
+  },
+  {
+    id: 'Reset',
+    label: 'Reset',
+    icon: 'reset',
+    type: TOOLBAR_BUTTON_TYPES.COMMAND,
+    commandName: 'resetViewport',
   },
   {
     id: 'More',
@@ -115,7 +164,6 @@ const definitions = [
         id: 'Magnify',
         label: 'Magnify',
         icon: 'circle',
-        //
         type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
         commandName: 'setToolActive',
         commandOptions: { toolName: 'Magnify' },
@@ -124,7 +172,6 @@ const definitions = [
         id: 'WwwcRegion',
         label: 'ROI Window',
         icon: 'stop',
-        //
         type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
         commandName: 'setToolActive',
         commandOptions: { toolName: 'WwwcRegion' },
@@ -133,34 +180,14 @@ const definitions = [
         id: 'DragProbe',
         label: 'Probe',
         icon: 'dot-circle',
-        //
         type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
         commandName: 'setToolActive',
         commandOptions: { toolName: 'DragProbe' },
       },
       {
-        id: 'EllipticalRoi',
-        label: 'Ellipse',
-        icon: 'circle-o',
-        //
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setToolActive',
-        commandOptions: { toolName: 'EllipticalRoi' },
-      },
-      {
-        id: 'RectangleRoi',
-        label: 'Rectangle',
-        icon: 'square-o',
-        //
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setToolActive',
-        commandOptions: { toolName: 'RectangleRoi' },
-      },
-      {
         id: 'Invert',
         label: 'Invert',
         icon: 'adjust',
-        //
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'invertViewport',
       },
@@ -168,7 +195,6 @@ const definitions = [
         id: 'RotateRight',
         label: 'Rotate Right',
         icon: 'rotate-right',
-        //
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'rotateViewportCW',
       },
@@ -176,7 +202,6 @@ const definitions = [
         id: 'FlipH',
         label: 'Flip H',
         icon: 'ellipse-h',
-        //
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'flipViewportHorizontal',
       },
@@ -184,45 +209,33 @@ const definitions = [
         id: 'FlipV',
         label: 'Flip V',
         icon: 'ellipse-v',
-        //
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'flipViewportVertical',
       },
       {
-        id: 'Clear',
-        label: 'Clear',
-        icon: 'trash',
-        //
-        type: TOOLBAR_BUTTON_TYPES.COMMAND,
-        commandName: 'clearAnnotations',
-      },
-      {
-        id: 'Bidirectional',
-        label: 'Bidirectional',
-        icon: 'measure-target',
-        //
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setToolActive',
-        commandOptions: { toolName: 'Bidirectional' },
-      },
-      {
         id: 'Download',
         label: 'Download',
-        icon: 'create-screen-capture',
-        //
+        icon: 'create-screen-capture',        
         type: TOOLBAR_BUTTON_TYPES.BUILT_IN,
         options: {
           behavior: TOOLBAR_BUTTON_BEHAVIORS.DOWNLOAD_SCREEN_SHOT,
           togglable: true,
         },
       },
+      {
+        id: 'ReloadStudy',
+        label: 'Reload Study',
+        icon: 'reset',        
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'reloadStudy',
+      },
     ],
   },
   {
+    // Exit 2D MPR View
     id: 'Exit2DMPR',
     label: 'Exit 2D MPR',
     icon: 'times',
-    //
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'setCornerstoneLayout',
     context: 'ACTIVE_VIEWPORT::VTK',

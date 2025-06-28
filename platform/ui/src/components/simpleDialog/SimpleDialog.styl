@@ -1,9 +1,6 @@
 @import './../../design/styles/common/button.styl'
 @import './../../design/styles/common/global.styl'
 
-.InputDialog
-  .simpleDialog
-    position: relative
 
 .simpleDialog
   position: relative;
@@ -78,7 +75,7 @@
         transform-origin: calc(100% - 1px) 50%;
 
   .content
-    padding: 16px 22px 25px;
+    padding: 10px 22px 10px;
     position: relative;
     color: var(--text-primary-color);
 
@@ -102,10 +99,33 @@
       margin: 10px 0 0 0;
       color: var(--text-primary-color);
 
+    .formField
+      margin-bottom: 15px;
+      display: grid;
+
+      &:last-child
+        margin-bottom: 10px;
+
+      .field
+        display: flex
+        align-items: baseline;
+        justify-content: space-between      
+
+    .formError
+      color: var(--state-error);
+
   .footer
-    padding: 15px;
+    padding: 20px 22px 20px;
     text-align: right;
     margin 0 !important;
 
     .btn
       margin-left: 5px;
+
+    .btn-primary
+      color: #fff;
+
+
+.InputDialog
+  .simpleDialog
+    position: relative

@@ -38,9 +38,11 @@ const LoadingIndicator = ({ percentComplete = 0, error = null }) => {
   );
 };
 
+
 LoadingIndicator.propTypes = {
-  percentComplete: PropTypes.number.isRequired,
+  percentComplete: PropTypes.number,
   error: PropTypes.object,
 };
+
 
 export default LoadingIndicator;

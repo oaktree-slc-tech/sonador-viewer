@@ -1,7 +1,11 @@
+// Construct an Image ID for WadoRS by inspecting instance properties
+
+
 function getWADORSImageUrl(instance, frame) {
   let wadorsuri = instance.wadorsuri;
 
   if (!wadorsuri) {
+    console.warn('[core:getWADORSImageId] Unable to create imageId, instance does not have a valid wadorsuri property');
     return;
   }
 
@@ -19,14 +23,15 @@ function getWADORSImageUrl(instance, frame) {
   return wadorsuri;
 }
 
-/**
- * Obtain an imageId for Cornerstone based on the WADO-RS scheme
- *
- * @param {object} instanceMetada metadata object (InstanceMetadata)
- * @param {(string\|number)} [frame] the frame number
- * @returns {string} The imageId to be used by Cornerstone
- */
+
 export default function getWADORSImageId(instance, frame) {
+  /**
+  * Obtain an imageId for Cornerstone based on the WADO-RS scheme
+  *
+  * @param {object} instanceMetada metadata object (InstanceMetadata)
+  * @param {(string\|number)} [frame] the frame number
+  * @returns {string} The imageId to be used by Cornerstone
+  */
   const uri = getWADORSImageUrl(instance, frame);
 
   if (!uri) {

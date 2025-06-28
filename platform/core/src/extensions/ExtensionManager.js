@@ -1,13 +1,19 @@
 import log from './../log.js';
 import MODULE_TYPES from './MODULE_TYPES.js';
 
+
 export default class ExtensionManager {
+  // OHIF / Sonador Manager extension manager
+
   constructor({ commandsManager, servicesManager, api, appConfig = {} }) {
     this.modules = {};
     this.registeredExtensionIds = [];
     this.registeredExtensionVesions = {};
     this.moduleTypeNames = Object.values(MODULE_TYPES);
-    //
+    this.modulesMap = {};
+    this.dataSources = {};
+    
+    // Internal references to commands and services manager
     this._commandsManager = commandsManager;
     this._servicesManager = servicesManager;
     this._appConfig = appConfig;
@@ -18,13 +24,13 @@ export default class ExtensionManager {
     });
   }
 
-  /**
-   * An array of extensions, or an array of arrays that contains extension
-   * configuration pairs.
-   *
-   * @param {Object[]} extensions - Array of extensions
-   */
   registerExtensions(extensions) {
+    /**
+    * An array of extensions, or an array of arrays that contains extension
+    * configuration pairs.
+    *
+    * @param {Object[]} extensions - Array of extensions
+    */
     extensions.forEach((extension) => {
       const hasConfiguration = Array.isArray(extension);
 
@@ -37,13 +43,30 @@ export default class ExtensionManager {
     });
   }
 
-  /**
-   *
-   * TODO: Id Management: SopClassHandlers currently refer to viewport module by id; setting the extension id as viewport module id is a workaround for now
-   * @param {Object} extension
-   * @param {Object} configuration
-   */
+  registerStorageProvider(providerName, provider) {
+    // Register a storage provider with the extensions manager
+
+    if (!providerName || !provider) {
+      throw new Error('Invalid data provider')
+    }
+
+    this.dataSources[providerName] = provider;
+  }
+
+  getDataProvider(providerName) {
+    // Retrieve the requested storage provider
+    return this.dataSources[providerName];
+  }
+
   registerExtension(extension, configuration = {}) {
+    /**
+    *
+    * TODO: Id Management: SopClassHandlers currently refer to viewport module by id; setting the extension id as viewport module id is a workaround for now
+    * @param {Object} extension
+    * @param {Object} configuration
+    */
+    const _manager = this;
+
     if (!extension) {
       log.warn('Attempting to register a null/undefined extension. Exiting early.');
       return;
@@ -80,6 +103,16 @@ export default class ExtensionManager {
       if (extensionModule) {
         this._initSpecialModuleTypes(moduleType, extensionModule);
 
+        // Add module references to manager via processExtensionModule
+        switch(moduleType) {
+          case MODULE_TYPES.VIEWPORT:
+          case MODULE_TYPES.SOP_CLASS_HANDLER:
+          case MODULE_TYPES.CUSTOMIZATION:
+          case MODULE_TYPES.UTILITY:
+            _manager.processExtensionModule(extensionModule, extensionId, moduleType);
+            break;
+        }
+
         this.modules[moduleType].push({
           extensionId,
           module: extensionModule,
@@ -93,13 +126,13 @@ export default class ExtensionManager {
     this.registeredExtensionVesions[extensionId] = version;
   }
 
-  /**
-   * @private
-   * @param {string} moduleType
-   * @param {Object} extension
-   * @param {string} extensionId - Used for logging warnings
-   */
   _getExtensionModule(moduleType, extension, extensionId, configuration) {
+    /**
+    * @private
+    * @param {string} moduleType
+    * @param {Object} extension
+    * @param {string} extensionId - Used for logging warnings
+    */
     const getModuleFnName = 'get' + _capitalizeFirstCharacter(moduleType);
     const getModuleFn = extension[getModuleFnName];
 
@@ -129,6 +162,34 @@ export default class ExtensionManager {
     }
   }
 
+  processExtensionModule(extensionModule, extensionId, moduleType) {
+    // Process an extension module and add it to the manager
+    const _manager = this;
+
+    // Register all members of the module
+    _.each(extensionModule, element => {
+
+      if (!element.name) {
+        log.warn(`Extension ID="${extensionId}" module="${moduleType}" element has no name and will not available `
+          + `for retrieval via ExtensionsManager.getModuleEntry`);
+        return;
+      }
+      const id = `${extensionId}.${moduleType}.${element.name}`;
+      _manager.modulesMap[id] = element;
+    });    
+  }
+
+  getModuleEntry(stringEntry) {
+    /**
+    * Retrieves the module entry associated with the given string entry
+    * @param stringEntry - The string entry to retrieve the module entry for which is
+    * in the format of `${extensionId}.${moduleType}.${moduleName}`
+    * @returns The module entry associated with the given string entry.
+    */
+
+    return this.modulesMap[stringEntry];
+  }
+
   _initSpecialModuleTypes(moduleType, extensionModule) {
     switch (moduleType) {
       case 'commandsModule': {
@@ -145,12 +206,14 @@ export default class ExtensionManager {
     }
   }
 
-  /**
-   *
-   * @private
-   * @param {Object[]} commandDefinitions
-   */
+  
   _initCommandsModule(commandDefinitions, defaultContext = 'VIEWER') {
+    /**
+    *
+    * @private
+    * @param {Object[]} commandDefinitions
+    */
+
     if (!this._commandsManager.getContext(defaultContext)) {
       this._commandsManager.createContext(defaultContext);
     }

@@ -1,20 +1,10 @@
 import user from '@ohif/core/src/user';
+import OHIF from '@ohif/core';
 
-const getAuthToken = () => user && user.getAccessToken && user.getAccessToken();
 
-const sonadorUrl = (resource) => {
-  // Create a fully qualified domain resource (FQDN) URL for the provided path. If the URL
-  // is a relative URL, it will be combined with the Sonador connection host (taken from the)
-  // global window variable to transform it to a complete URL.
+// Unpack Sonador helper utilities from OHIF core
+const { getAuthToken, sonadorUrl } = OHIF.sonador;
 
-  // @returns URL
 
-  // Ensure that window.sonador.host is defined
-  if (!window || !window.sonador || !window.sonador.host) {
-    throw new Error('Unable to retrieve Sonador host, window.sonador.host is not defined.');
-  }
-
-  return new URL(resource, window.sonador.host);
-};
-
-export { sonadorUrl, getAuthToken };
+// Maintain export of utilities for backwards compatibility
+export { getAuthToken, sonadorUrl };

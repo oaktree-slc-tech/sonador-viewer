@@ -26,6 +26,7 @@ const getAvailableViewportModules = memoize((viewportModules) => {
   return availableViewportModules;
 });
 
+
 function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStudyLoaded }) {
   const {
     numColumns = 1,

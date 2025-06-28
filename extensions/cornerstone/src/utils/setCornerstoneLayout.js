@@ -2,12 +2,13 @@ import { redux } from '@ohif/core';
 
 const { setLayout } = redux.actions;
 
-/**
- * Update the current layout with a simple Cornerstone one
- *
- * @return void
- */
+
 const setCornerstoneLayout = () => {
+  /**
+  * Update the current layout with a simple Cornerstone one
+  *
+  * @return void
+  */
   const layout = {
     numRows: 1,
     numColumns: 1,
@@ -18,5 +19,6 @@ const setCornerstoneLayout = () => {
 
   window.store.dispatch(action);
 }
+
 
 export default setCornerstoneLayout;

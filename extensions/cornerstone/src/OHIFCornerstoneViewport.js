@@ -10,18 +10,20 @@ import OHIFCornerstoneViewportOverlay from './components/OHIFCornerstoneViewport
 import checkForSRAnnotations from './tools/checkForSRAnnotations';
 import ConnectedCornerstoneViewport from './ConnectedCornerstoneViewport';
 
+const { DisplaySetApi } = OHIF.display;
 const { StackManager } = OHIF.utils;
 
+
 export default function OHIFCornerstoneViewport({
-  viewportData,
-  customProps = {},
+  viewportData, 
+  customProps={},
   isStackPrefetchEnabled = true,
   viewportIndex,
   children,
   onNewImage,
   stackPrefetch,
 }) {
-  const [viewportDataState, setViewportDataState] = useState(null);
+  const [viewportDataState, setViewportDataState] = useState(null);  
 
   const snackbar = useSnackbarContext();
   const { addError } = useViewerStudyErrors();

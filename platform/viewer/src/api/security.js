@@ -2,6 +2,7 @@ import { urlUtil } from '@ohif/core/src/utils';
 
 import { getAuthToken, sonadorUrl } from './sonador';
 
+
 export const fetchTokens = () => {
   // Retrieve access tokens from the Sonador server
 
@@ -11,6 +12,7 @@ export const fetchTokens = () => {
     },
   }).then((res) => res.json());
 };
+
 
 export const createToken = (description) => {
   // Create an API access token
@@ -32,6 +34,7 @@ export const createToken = (description) => {
     });
 };
 
+
 export const fetchAccesses = () => {
   // Fetch secure API access credentials from the Sonadoer server
 
@@ -41,6 +44,7 @@ export const fetchAccesses = () => {
     },
   }).then((res) => res.json());
 };
+
 
 export const createAccessIdAndSecretKey = (description) => {
   // Create Sonador secure authorization credentials (access ID and secret key)
@@ -62,6 +66,7 @@ export const createAccessIdAndSecretKey = (description) => {
     });
 };
 
+
 export const getCsrfToken = () => {
   // Retrieve a CSRF token from Sonador to allow
 
@@ -71,6 +76,7 @@ export const getCsrfToken = () => {
     },
   }).then((res) => res.json());
 };
+
 
 export const deleteToken = (token) => {
   // Delete an API access token
@@ -83,6 +89,7 @@ export const deleteToken = (token) => {
     body: JSON.stringify({ token }),
   }).then((res) => res.json());
 };
+
 
 export const deleteAccessIdAndSecretKey = (token) => {
   // Delete Sonador secure authorization credentials (access ID and secret key)

@@ -1,11 +1,15 @@
 import { connect } from 'react-redux';
+import OHIF from '@ohif/core';
 
 import StudyListRoute from './StudyListRoute';
 
-const isActive = (a) => a.active === true;
+const { sonador } = OHIF;
+
 
 const mapStateToProps = (state) => {
-  const activeServer = state.servers.servers.find(isActive);
+  // Map Redux state to component properties for the study list
+
+  const activeServer = sonador.getActiveServer(state.servers.servers);
 
   return {
     server: activeServer,
@@ -13,6 +17,8 @@ const mapStateToProps = (state) => {
   };
 };
 
+
 const ConnectedStudyList = connect(mapStateToProps, null)(StudyListRoute);
+
 
 export default ConnectedStudyList;

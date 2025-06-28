@@ -16,7 +16,10 @@ import { InstanceMetadata } from './InstanceMetadata';
 import { Metadata } from './Metadata';
 import { SeriesMetadata } from './SeriesMetadata';
 
+
 class StudyMetadata extends Metadata {
+  // Metadata class for working with DICOM study properties.
+
   constructor(data, uid) {
     super(data, uid);
     // Initialize Private Properties

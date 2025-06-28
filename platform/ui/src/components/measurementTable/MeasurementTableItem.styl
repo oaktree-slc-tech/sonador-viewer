@@ -12,47 +12,60 @@
     height: 20px;
 
   .rowActions
-      margin-left: -1px;
-      background-color: var(--ui-gray-darker)
-      height: 0
-      overflow: hidden
+    display: flex
+    justify-content: space-between
+    align-items: center
+    width: auto;
+    margin-top: 5px;
+    margin-left: -6px;
+    padding-left: 3px;
+    padding-right: 10px;      
+    background-color: var(--ui-gray-darker)
+    height: 0
+    overflow: hidden
+    transition: all 0.3s ease
+    visibility: hidden
+
+    .btnAction
+      background-color: transparent;
+      border: none;
+      color: var(--default-color)
+      cursor: pointer
+      line-height: 35px
+      height: 35px
       transition: all 0.3s ease
-      visibility: hidden
-      padding-left: 14px
+      white-space: no-wrap
 
-      .btnAction
-        background-color: transparent;
-        border: none;
-        color: var(--default-color)
-        cursor: pointer
-        line-height: 35px
-        height: 35px
-        transition: all 0.3s ease
+      &:hover, &:active
+        color: var(--text-primary-color)
 
-        &:hover, &:active
-          color: var(--text-primary-color)
-
-        i
-          margin-right: 4px;
+      i
+        margin-right: 4px;
 
   &.selected
     .rowActions
       height: auto;
       visibility: visible
 
-  .measurementLocation
-    margin-top: 9px;
+  .measurementContent
+    display: flex
+    justify-content: space-between;
+    width: auto;
+    max-width: calc(100% - 10px);
+
+  .measurementLabel
+    margin-top: 0px;
+    padding-left: 4px;
+    padding-bottom: 1px;
     overflow: hidden;
-    max-width: calc(100% - 50px);
     text-overflow: ellipsis;
     overflow-wrap: normal;
     white-space: nowrap;
 
   .measurementDisplayText
     display: inline-block;
-    margin-top: 9px;
     padding-left: 9px;
-    width: 90px;
+    margin-left: -7px;
     border-left: 1px solid var(--text-secondary-color);
     color: var(--text-primary-color);
 
@@ -81,6 +94,9 @@
   align-items: center;
   border-radius: 5px;
 
+.displayIcon
+  margin-right: 8px;
+
 .icons .eye-icon
   margin-left: 100px;
   margin-right: -5px;
@@ -88,3 +104,15 @@
 .icons .angle-double-up
   margin-left: 15px;
   margin-right: -5px;
+
+.referenceMeta
+  margin-left: 4px;
+  margin-top: -4px;
+  color: var(--text-secondary-color);
+
+  .refSxNum, .refImgNum
+    margin-right: 10px;
+
+&.active
+  .referenceMeta
+    color: var(--active-color);

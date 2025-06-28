@@ -1,0 +1,30 @@
+:root {
+  --text-color-primary: white;
+}
+
+
+.dcm-sr-html-viewport {
+  overflow-y: scroll;
+  width: 100%;
+  height: 100%;  
+}
+
+
+.dcm-sr-html-viewport .text-white {
+  color: var(--text-color-primary);
+}
+
+
+.dcm-sr-html-viewport .font-bold {
+  font-weight: 400;
+}
+
+
+.dcm-sr-html-viewport .whitespace-pre-line {
+  white-space: pre-line;
+}
+
+
+.p-4 { padding: 4px; }
+.mb-2 { margin-bottom: 2px; }
+.ml-4 { margin-left: 4px; }

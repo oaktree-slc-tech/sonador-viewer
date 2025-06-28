@@ -3,7 +3,6 @@ import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
 import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
 import { viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from './utils/viewerbaseDisplaySet.js';
 import ViewerbaseDragDropContext from './utils/viewerbaseDragDropContext.js';
-// Alias this for now as not all dependents are using strict versioning
 import ExpandableToolMenu from './viewer/ExpandableToolMenu.js';
 import PlayClipButton from './viewer/PlayClipButton.js';
 import Toolbar from './viewer/Toolbar.js';
@@ -30,6 +29,9 @@ import {
   RoundedButtonGroup,
   SelectTree,
   SimpleDialog,
+  SimpleViewerDialog,
+  EditDescriptionDialog,
+  SaveDicomSeriesDialog,
   StudyBrowser,
   StudyList,
   TabComponents,
@@ -42,6 +44,10 @@ import {
   ToolbarSection,
   Tooltip,
   ViewportDownloadForm,
+
+  // Viewer workflow components
+  LabellingFlow,
+  SeriesTagLabellingFlow,
 } from './components';
 import {
   DialogProvider,
@@ -72,6 +78,7 @@ import {
 } from './elements';
 import { useDebounce, useMedia } from './hooks';
 
+
 const eventTypes = {
   sidebar: {
     toggle: 'ohif:ui:side-bar:toggle',
@@ -81,18 +88,30 @@ const eventTypes = {
   },
 };
 
+
 const TOOLBAR_BUTTON_TYPES = {
   COMMAND: 'command',
   SET_TOOL_ACTIVE: 'setToolActive',
   BUILT_IN: 'builtIn',
 };
 
+
 const TOOLBAR_BUTTON_BEHAVIORS = {
   CINE: 'CINE',
   DOWNLOAD_SCREEN_SHOT: 'DOWNLOAD_SCREEN_SHOT',
 };
 
+
+const workflow = {
+  
+  // Components which can be used to help create and interface with workflows
+  LabellingFlow,
+  SeriesTagLabellingFlow,
+}
+
+
 export {
+  
   // Elements
   ICONS,
   Checkbox,
@@ -121,6 +140,7 @@ export {
   OldSelect,
   SelectTree,
   SimpleDialog,
+  SaveDicomSeriesDialog,
   InputDialog,
   StudyBrowser,
   StudyList,
@@ -172,4 +192,7 @@ export {
 
   // Events
   eventTypes,
+
+  // Workflows
+  workflow,
 };

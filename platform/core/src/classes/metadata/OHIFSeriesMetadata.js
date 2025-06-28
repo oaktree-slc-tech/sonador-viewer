@@ -23,7 +23,16 @@ export class OHIFSeriesMetadata extends SeriesMetadata {
 
     // populate internal list of instances...
     series.instances.forEach((instance) => {
-      this.addInstance(new OHIFInstanceMetadata(instance, series, study));
+
+      // Check instance for required interface properties, create a wrapper OHIF v2 instance
+      // with a metadata property and url if those properties are not defined.
+      let _instance;
+      if (!instance.metadata) {
+        const { imageId } = instance;
+        _instance = { metadata: instance, url: imageId, };
+      } else { _instance = instance; }
+
+      this.addInstance(new OHIFInstanceMetadata(_instance, series, study));
     });
   }
 }

@@ -5,7 +5,10 @@ import OHIF from '@ohif/core';
 import ViewerRetrieveStudyData from './ViewerRetrieveStudyData';
 
 const { clearViewportSpecificData, setStudyData } = OHIF.redux.actions;
+
+
 const isActive = (a) => a.active === true;
+
 
 const mapStateToProps = (state, ownProps) => {
   const activeServer = state.servers.servers.find(isActive);
@@ -14,6 +17,8 @@ const mapStateToProps = (state, ownProps) => {
     server: ownProps.server || activeServer,
   };
 };
+
+
 const mapDispatchToProps = (dispatch) => {
   return {
     setStudyData: (StudyInstanceUID, data) => {
@@ -24,6 +29,7 @@ const mapDispatchToProps = (dispatch) => {
     },
   };
 };
+
 
 const ConnectedViewerRetrieveStudyData = connect(mapStateToProps, mapDispatchToProps)(ViewerRetrieveStudyData);
 

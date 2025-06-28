@@ -1,9 +1,13 @@
 import { InstanceMetadata } from './InstanceMetadata';
 import { Metadata } from './Metadata';
 
+
 export class SeriesMetadata extends Metadata {
+  // Metadata class for interacting with DICOM series properties
+
   constructor(data, uid) {
     super(data, uid);
+    
     // Initialize Private Properties
     Object.defineProperties(this, {
       _seriesInstanceUID: {
@@ -25,6 +29,7 @@ export class SeriesMetadata extends Metadata {
         value: null,
       },
     });
+    
     // Initialize Public Properties
     this._definePublicProperties();
   }

@@ -1,10 +1,16 @@
+import _ from 'lodash';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 
 import metadataProvider from '../../../classes/MetadataProvider';
 import DICOMWeb from '../../../DICOMWeb';
 import getWADORSImageId from '../../../utils/getWADORSImageId';
 
+import { buildInstanceWadoRsUri } from '../../../utils/urlUtil.js';
+
 import getReferencedSeriesSequence from './getReferencedSeriesSequence';
+
+import DicomMetadataStore from '../../../services/DicomMetadataStore';
+
 
 /**
  * Create a plain JS object that describes a study (a study descriptor object)
@@ -61,9 +67,6 @@ function buildInstanceWadoUrl(server, StudyInstanceUID, SeriesInstanceUID, SOPIn
   return `${server.wadoUriRoot}?${paramString}`;
 }
 
-function buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
-  return `${server.wadoRoot}/studies/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}`;
-}
 
 function buildInstanceFrameWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frame) {
   const baseWadoRsUri = buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID);
@@ -72,7 +75,10 @@ function buildInstanceFrameWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID
   return `${baseWadoRsUri}/frames/${frame}`;
 }
 
+
 async function makeSOPInstance(server, study, instance) {
+  // Parse the SOP instance data from remote server and register a copy of the information with Cornerstone
+
   const naturalizedInstance = await metadataProvider.addInstance(instance, {
     server,
   });
@@ -143,7 +149,12 @@ async function makeSOPInstance(server, study, instance) {
 
   series.instances.push(sopInstance);
 
+  // Create instance to add to the DicomMetadataStore service
+  let svcInstance;
+
+  // Add instance to Cornerstone Tools/Classic Metadata Store
   if (sopInstance.thumbnailRendering === 'wadors' || sopInstance.imageRendering === 'wadors') {
+    
     // If using WADO-RS for either images or thumbnails,
     // Need to add this to cornerstoneWADOImageLoader's provider
     // (it won't be hit on cornerstone.metaData.get, but cornerstoneWADOImageLoader
@@ -155,32 +166,48 @@ async function makeSOPInstance(server, study, instance) {
 
     if (NumberOfFrames) {
       for (let i = 0; i < NumberOfFrames; i++) {
-        const wadorsImageId = getWADORSImageId(sopInstance, i);
 
+        // Generate WadoRS instance with multiple frames, register with Legacy/Classic metadata service
+        const wadorsImageId = getWADORSImageId(sopInstance, i);
         cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
+
+        svcInstance = Object.assign({}, naturalizedInstance);
+        svcInstance.imageId = wadorsImageId;
+        DicomMetadataStore.addInstance(svcInstance);
       }
     } else {
-      const wadorsImageId = getWADORSImageId(sopInstance);
 
+      // Generate WadoRS instance with single frame, register with Legacy/Classic metadata service
+      const wadorsImageId = getWADORSImageId(sopInstance);
       cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
+
+      svcInstance = Object.assign({}, naturalizedInstance);
+      svcInstance.imageId = wadorsImageId;
+      DicomMetadataStore.addInstance(svcInstance);
     }
   }
-
+    
   return sopInstance;
 }
 
-/**
- * Add a list of SOP Instances to a given study object descriptor
- * @param {Object} server Object with server configuration parameters
- * @param {Object} study The study descriptor to which the given SOP instances will be added
- * @param {Array} sopInstanceList A list of SOP instance objects
- */
+
 async function addInstancesToStudy(server, study, sopInstanceList) {
-  return Promise.all(
-    sopInstanceList.map(function (sopInstance) {
+  /**
+  * Add a list of SOP Instances to a given study object descriptor
+  * @param {Object} server Object with server configuration parameters
+  * @param {Object} study The study descriptor to which the given SOP instances will be added
+  * @param {Array} sopInstanceList A list of SOP instance objects
+  */
+
+  // Generate instances
+  const instances = await Promise.all(sopInstanceList.map((sopInstance) => {
       return makeSOPInstance(server, study, sopInstance);
-    })
-  );
+    }));
+
+  // Add instances to DicomMetadataStore
+  DicomMetadataStore.addInstances(instances.map((i) => i.metadata ));
+
+  return instances;
 }
 
 const createStudyFromSOPInstanceList = async (server, sopInstanceList) => {

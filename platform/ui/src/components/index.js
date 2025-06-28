@@ -22,6 +22,13 @@ import { TableList, TableListItem } from './tableList';
 import { ToolbarSection } from './toolbarSection';
 import { Tooltip } from './tooltip';
 
+import SimpleViewerDialog  from './SimpleViewerDialog/SimpleDialog.js';
+import EditDescriptionDialog  from './EditDescriptionDialog/EditDescriptionDialog.js';
+import SaveDicomSeriesDialog from './SaveDicomSeriesDialog/SaveDicomSeriesDialog';
+
+import LabellingFlow from './Labelling/LabellingFlow.js';
+import SeriesTagLabellingFlow from './Labelling/SeriesLabellingFlow.js';
+
 export {
   ContextMenu,
   Checkbox,
@@ -37,8 +44,14 @@ export {
   RoundedButtonGroup,
   PageToolbar,
   SelectTree,
+
+  // Dialog components
   SimpleDialog,
+  SimpleViewerDialog,
+  EditDescriptionDialog,
+  SaveDicomSeriesDialog,
   InputDialog,
+
   StudyBrowser,
   StudyList,
   TableList,
@@ -56,4 +69,8 @@ export {
   OHIFModal,
   ErrorPage,
   CustomSelect,
+
+  // Workflow components
+  LabellingFlow,
+  SeriesTagLabellingFlow,
 };

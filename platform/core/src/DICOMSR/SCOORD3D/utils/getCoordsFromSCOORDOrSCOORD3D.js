@@ -1,4 +1,8 @@
 const getCoordsFromSCOORDOrSCOORD3D = (graphicItem) => {
+  // Parse DICOM-SR data types from the provided graphic
+
+  // @input graphicItem: item which should be parsed for coordinates (SCOORD) and (SCOORD3D)
+
   const { ValueType, GraphicType, GraphicData } = graphicItem;
   const coords = { ValueType, GraphicType, GraphicData };
 
@@ -16,5 +20,6 @@ const getCoordsFromSCOORDOrSCOORD3D = (graphicItem) => {
 
   return coords;
 };
+
 
 export default getCoordsFromSCOORDOrSCOORD3D;

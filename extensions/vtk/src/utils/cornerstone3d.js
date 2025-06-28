@@ -23,6 +23,8 @@ import {
   segmentation as c3dSegmentations,
 } from '@cornerstonejs/tools';
 
+import OHIF from '@ohif/core';
+
 const { Events: c3dEvents } = C3dEnums;
 
 import { init as c3dDcmImageLoaderInit } from '@cornerstonejs/dicom-image-loader';
@@ -31,24 +33,8 @@ import { init as c3dPolySegInit } from '@cornerstonejs/polymorphic-segmentation'
 
 
 
-// Track init state of Cornerstone3D
-let C3D_INIT = false;
-
-
-export async function initCornerstone3d() {
-	// Initialize Cornerstone3D tools
-
-	if (!C3D_INIT) {
-		await c3dCoreInit();
-		await c3dDcmImageLoaderInit();
-		await c3dPolySegInit();
-		await c3dToolsInit({ addons: { polySeg }});
-
-		C3D_INIT = true;
-	}
-
-	return C3D_INIT;
-}
+// Add reference to initCornerstone3d to preserve backwards compatibility
+export const initCornerstone3d = OHIF.utils.cornerstone3dUtils.initCornerstone3d;
 
 
 export const gridReferenceLineColors = {

@@ -1,3 +1,5 @@
+// API which can be used to group collections of measurements by specific "timepoints."
+
 import log from '../../log';
 
 import { timepointApiDefaultConfig } from './../configuration.js';

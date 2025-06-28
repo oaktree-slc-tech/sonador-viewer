@@ -1,14 +1,17 @@
 import dcmjs from 'dcmjs';
+import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
 
-/**
- *  Checks if dcmjs has support to determined tool
- *
- * @param {string} toolName
- * @returns {boolean}
- */
+
 const isToolSupported = (toolName) => {
-  const adapter = dcmjs.adapters.Cornerstone;
+  /**
+  *  Checks if dcmjs has support to determined tool
+  *
+  * @param {string} toolName
+  * @returns {boolean}
+  */
+  const adapter = c3dAdaptersSR.Cornerstone;
   return !!adapter[toolName];
 };
+
 
 export default isToolSupported;

@@ -30,6 +30,7 @@ import createScreenCapture from './icons/create-screen-capture.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
 import cube3dSolid from './icons/cube-3d-solid.svg';
+import tags from './icons/tags.svg';
 import database from './icons/database.svg';
 import dotCircle from './icons/dot-circle.svg';
 import edit from './icons/edit.svg';
@@ -163,6 +164,7 @@ const ICONS = {
   palette,
   youtube,
   oval,
+  tags,
   'ellipse-h': ellipseH,
   'ellipse-v': ellipseV,
   adjust,

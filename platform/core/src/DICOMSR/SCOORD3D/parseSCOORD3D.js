@@ -1,44 +1,59 @@
+// Helper module used to parse DICOM-SR reports to OHIF measurement instances
+// which can be displayed by the Sonador viewer. Measurements created by this
+// module are read-only and are displayed via the DICOMSRDisplayTool.
+
+import _ from 'lodash';
+
 import { ImageSet } from '../../classes';
+import Enums from '../../measurements/enums.js';
+import MeasurementApi from '../../measurements/classes/MeasurementApi';
+const { Cornerstone } = Enums;
+
+import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements.js';
 
 import addMeasurement from './utils/addMeasurement';
 import getMeasurements from './utils/getMeasurements';
 import isRehydratable from './utils/isRehydratable';
 
-const parseSCOORD3D = ({ servicesManager, displaySets }) => {
+
+const parseSCOORD3D = ({ servicesManager, displaySets }, options) => {
+  // Scan SR instances within the provided displaysets and parse measurements
+
   const { MeasurementService } = servicesManager.services;
 
-  const srDisplaySets = displaySets.filter((ds) => ds.Modality === 'SR');
-  const imageDisplaySets = displaySets.filter(
-    (ds) => ds.Modality !== 'SR' && ds.Modality !== 'SEG' && ds.Modality !== 'RTSTRUCT'
-  );
-
-  imageDisplaySets.forEach((imageDisplaySet) => {
-    imageDisplaySet.SRLabels = [];
+  // Initialize displaySets for processing via the MeasurementService
+  const { srDisplaySets, imageDisplaySets } = initDisplaySetMeasurements(displaySets, servicesManager, {
+    sourceName: Cornerstone.sr.name, sourceVersion: Cornerstone.sr.version, adapters: Cornerstone.sr.adapers,
   });
 
   srDisplaySets.forEach((srDisplaySet) => {
+
+    // Ensure that the SR displaySet includes a metadata section
     const firstInstance = srDisplaySet.metadata;
     if (!firstInstance) {
       return;
     }
 
-    const { ContentSequence } = firstInstance;
-
-    srDisplaySet.measurements = getMeasurements(ContentSequence);
-    const mappings = MeasurementService.getSourceMappings('CornerstoneTools', '4');
-
-    srDisplaySet.isHydrated = false;
+    // Explicitly detect (and indicate) if the displaySet can be processed via Cornerstone mappings
+    const mappings = MeasurementService.getSourceMappings(Cornerstone.sr.name, Cornerstone.sr.version);
     srDisplaySet.isRehydratable = isRehydratable(srDisplaySet, mappings);
-    srDisplaySet.isLoaded = true;
 
     imageDisplaySets.forEach((imageDisplaySet) => {
+      
       // Check currently added displaySets and add measurements if the sources exist.
       checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, imageDisplaySet);
     });
   });
 };
 
+
 const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) => {
+  // Check if the provide srDisplaySet can be processed and the results added
+  // the imageDisplaySet using a DICOM SR display tool instance.
+
+  const measurementApi = MeasurementApi.Instance;
+
+  // Retrieve measurements from the displayset
   let measurements = srDisplaySet.measurements;
 
   /**
@@ -55,6 +70,14 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
    * Filter measurements that references the correct sop class.
    */
   measurements = measurements.filter((measurement) => {
+
+    // Filter out measurements which have already been added
+    const trackingUid = measurement.metadata?.TrackingUniqueIdentifier || measurement.TrackingUniqueIdentifier;
+
+    if (trackingUid && measurementApi.getMeasurementByTrackingUid(trackingUid)) {
+      return false;
+    }
+
     return measurement.coords.some((coord) => {
       if (coord.ReferencedSOPSequence === undefined) {
         /** we miss the referenced information. We can compare the annotation SCOORD3D coordinates with
@@ -113,22 +136,29 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
   const SOPInstanceUIDs = images.map((i) => i.SOPInstanceUID);
   const colors = new Map();
   measurements.forEach((measurement) => {
+
+    const trackingUid = measurement.metadata?.TrackingUniqueIdentifier || measurement.TrackingUniqueIdentifier;
     const { coords } = measurement;
 
     coords.forEach((coord, index) => {
+
       if (coord.ReferencedSOPSequence !== undefined) {
-        const imageIndex = SOPInstanceUIDs.findIndex(
-          (SOPInstanceUID) => SOPInstanceUID === coord.ReferencedSOPSequence.ReferencedSOPInstanceUID
-        );
+        const imageIndex = SOPInstanceUIDs.findIndex((SOPInstanceUID) => {
+          return SOPInstanceUID === coord.ReferencedSOPSequence.ReferencedSOPInstanceUID;
+        }) ;
+
         if (imageIndex > -1) {
           if (!srDisplaySet.referencedDisplaySets.includes(imageDisplaySet)) {
             srDisplaySet.referencedDisplaySets.push(imageDisplaySet);
+            console.log('[parseSCOORD3D:checkIfCanAddMeasurementsToDisplaySet] add imageDisplaySet reference to srDisplaySet. '
+              +'imageDisplaySetUid='+imageDisplaySet.displaySetInstanceUID+' srDisplaySetUid='+srDisplaySet.displaySetInstanceUID);
           }
 
           const imageId = imageIds[imageIndex];
           const imageMetadata = images[imageIndex].getData().metadata;
 
           if (coord.GraphicType === 'TEXT') {
+
             const key = measurement.labels[index].label + measurement.labels[index].value;
             let color = colors.get(key);
             if (!color) {
@@ -147,15 +177,20 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
             });
 
             if (index === 0) {
-              addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
+              const mr = addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
             }
           } else {
-            addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
+            const { measurementRepresentation: mr } = addMeasurement(measurement, imageId, imageMetadata, imageDisplaySet.displaySetInstanceUID);
+            console.log('[parseSCOORD3D:checkIfCanAddMeasurementsToDisplaySet:addMeasurement] srDisplaySet='+srDisplaySet.displaySetInstanceUID
+              +' trackingUid='+trackingUid+' imageIndex='+imageIndex, 'measurement', measurement, 'measurement representation', mr);
           }
         }
       }
     });
   });
+
+  measurementApi.syncMeasurementsAndToolData();
 };
+
 
 export default parseSCOORD3D;

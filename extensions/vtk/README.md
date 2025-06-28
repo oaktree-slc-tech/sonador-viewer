@@ -1,11 +1,8 @@
-# @ohif/extension-vtk
+# `@ohif/extension-vtk`
+**VTK and Cornerstone 3D extensions for the Sonador Viewer.** This package provides a set of base views for 2D/3D visualization of data and for loading reconstructed OHIF data into Cornerstone3D viewports for analysis.
 
-![npm (scoped)](https://img.shields.io/npm/v/@ohif/extension-vtk.svg?style=flat-square)
-
-<!-- TODO: Simple image or GIF? -->
 
 #### Index
-
 Extension Id: `vtk`
 
 - [Commands Module](#commands-module)

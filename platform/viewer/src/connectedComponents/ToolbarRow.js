@@ -313,7 +313,6 @@ function handleToolbarButtonClick(button, evt) {
  */
 function getVisibleToolbarButtons() {
   const toolbarModules = extensionManager.modules[MODULE_TYPES.TOOLBAR];
-  console.log(toolbarModules, 12222);
   const toolbarButtonDefinitions = [];
 
   toolbarModules.forEach((extension) => {

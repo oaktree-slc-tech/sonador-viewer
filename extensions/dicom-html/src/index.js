@@ -1,17 +1,28 @@
 import React from 'react';
 
+import OHIF from '@ohif/core';
+
 import dicomHtmlVersion from '../package.json';
 
 import OHIFDicomHtmlSopClassHandler from './OHIFDicomHtmlSopClassHandler.js';
+import OHIFCornerstoneSRViewport from './components/OHIFCornerstoneSRViewport';
 
-const Component = React.lazy(() => {
-  return import('./OHIFDicomHtmlViewport');
-});
+const { display } = OHIF;
+
 
 const OHIFDicomHtmlViewport = (props) => {
+  // OHIF Viewport able to render DICOM-SR documents to HTML
+
+  const { displaySetService } = display.DisplaySetApi.Instance;
+  const { viewportData } = props;
+  const { displaySet: srDisplaySet } = viewportData;
+
   return (
     <React.Suspense fallback={<div>Loading...</div>}>
-      <Component {...props} />
+      <OHIFCornerstoneSRViewport 
+        displaySets={displaySetService.getDisplaySetsForSeries(srDisplaySet.SeriesInstanceUID)}
+        {...props} 
+      />
     </React.Suspense>
   );
 };
@@ -23,8 +34,16 @@ export default {
   id: 'html',
   version: dicomHtmlVersion.version,
 
-  getViewportModule() {
-    return OHIFDicomHtmlViewport;
+  getViewportModule({ servicesManager, commandsManager, }) {
+    // DICOM-SR rendering viewport
+
+    const ExtendedOHIFDicomHtmlViewport = props => {
+      return <OHIFDicomHtmlViewport
+          servicesManager={servicesManager} commandsManager={commandsManager} {...props}
+        />
+    }
+    
+    return ExtendedOHIFDicomHtmlViewport;
   },
   getSopClassHandlerModule() {
     return OHIFDicomHtmlSopClassHandler;

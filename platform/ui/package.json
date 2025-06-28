@@ -36,10 +36,13 @@
   "dependencies": {
     "@floating-ui/react": "^0.26.4",
     "@ohif/i18n": "^0.53.0",
+    "@radix-ui/themes": "^3.2.1",
     "classnames": "^2.3.2",
     "dom-helpers": "^5.2.1",
     "moment": "^2.29.4",
     "prop-types": "15.7.0",
+    "radix": "^0.0.0",
+    "radix-ui": "^1.4.2",
     "react-dates": "^21.8.0",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
@@ -48,7 +51,9 @@
     "react-i18next": "^13.3.1",
     "react-modal": "^3.16.1",
     "react-overlays": "^0.8.0",
-    "react-transition-group": "^4.4.5"
+    "react-transition-group": "^4.4.5",
+    "tailwindcss": "^4.1.10",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@babel/runtime": "^7.5.5"

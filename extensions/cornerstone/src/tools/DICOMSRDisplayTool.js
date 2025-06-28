@@ -1,3 +1,7 @@
+// DICOM-SR Display Tool. Provides a readonly display of points, poly-lines,
+// and other primitives defind within DICOM-SR.
+import _ from 'lodash';
+
 import csTools, {
   importInternal,
   getToolState,
@@ -6,10 +10,12 @@ import csTools, {
 
 import cornerstone from 'cornerstone-core';
 
+
 /** Internal imports */
 import TOOL_NAMES from './constants/toolNames';
 import SCOORD_TYPES from './constants/scoordTypes';
 import id from './id';
+
 
 /** Cornerstone 3rd party dev kit imports */
 const draw = importInternal('drawing/draw');
@@ -22,19 +28,21 @@ const getNewContext = importInternal('drawing/getNewContext');
 const BaseTool = importInternal('base/BaseTool');
 const drawLinkedTextBox = importInternal('drawing/drawLinkedTextBox');
 
-/**
- * @class DICOMSRDisplayTool - Renders DICOMSR data in a read only manner (i.e. as an overlay).
- *
- * This is a generic render tool.
- *
- * A single tool that, given some schema, can render
- * POINT, MULTIPOINT, POLYLINE, CIRCLE, and ELLIPSE
- * value types for a given imageId.
- *
- *
- * @extends cornerstoneTools.BaseTool
- */
+
 export default class DICOMSRDisplayTool extends BaseTool {
+  /**
+  * @class DICOMSRDisplayTool - Renders DICOMSR data in a read only manner (i.e. as an overlay).
+  *
+  * This is a generic render tool.
+  *
+  * A single tool that, given some schema, can render
+  * POINT, MULTIPOINT, POLYLINE, CIRCLE, and ELLIPSE
+  * value types for a given imageId.
+  *
+  *
+  * @extends cornerstoneTools.BaseTool
+  */
+
   constructor(props = {}) {
     const defaultProps = {
       mixins: ['enabledOrDisabledBinaryTool'],
@@ -53,34 +61,34 @@ export default class DICOMSRDisplayTool extends BaseTool {
     const { element } = eventData;
     const module = this._module;
 
+    // Retrieve tool state for the current element
     const toolState = getToolState(element, this.name);
-
     if (!toolState) {
       return;
     }
 
-    const trackingUniqueIdentifiersForElement = module.getters.trackingUniqueIdentifiersForElement(
-      element
-    );
-
     const {
       activeIndex,
       trackingUniqueIdentifiers,
-    } = trackingUniqueIdentifiersForElement;
-
-    const activeTrackingUniqueIdentifier =
-      trackingUniqueIdentifiers[activeIndex];
+    } = module.getters.trackingUniqueIdentifiersForElement(element);
 
     // Filter toolData to only render the data for the active SR.
-    const filteredToolData = toolState.data.filter(td =>
-      trackingUniqueIdentifiers.includes(td.TrackingUniqueIdentifier)
-    );
+    const activeTrackingUniqueIdentifier = trackingUniqueIdentifiers[activeIndex];
+
+    
+    const filteredToolData = toolState.data.filter(
+      td => trackingUniqueIdentifiers.includes(td.TrackingUniqueIdentifier));
 
     let shouldRepositionTextBoxes = false;
 
     for (let i = 0; i < filteredToolData.length; i++) {
       const data = filteredToolData[i];
-      const { renderableData, labels } = data;
+      const { renderableData, labels, visible } = data;
+
+      // Skip rendering tools where visible = false. If visible
+      // is undefined or null, proceed.
+      const isVisible = _.isNil(visible) ? true : visible;
+      if (!isVisible) continue;
 
       const color =
         data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier

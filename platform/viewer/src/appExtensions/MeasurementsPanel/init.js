@@ -3,8 +3,8 @@ import csTools from 'cornerstone-tools';
 import throttle from 'lodash.throttle';
 
 import OHIF from '@ohif/core';
+import { workflow } from '@ohif/ui';
 
-import LabellingFlow from '../../components/Labelling/LabellingFlow';
 import ToolContextMenu from '../../connectedComponents/ToolContextMenu';
 
 const { onAdded, onRemoved, onModified } = OHIF.measurements.MeasurementHandlers;
@@ -68,7 +68,7 @@ export default function init({ servicesManager, commandsManager }) {
       isDraggable: false,
       showOverlay: true,
       centralize: true,
-      content: LabellingFlow,
+      content: workflow.LabellingFlow,
       contentProps: {
         measurementData,
         labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),

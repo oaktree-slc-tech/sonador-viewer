@@ -5,7 +5,10 @@ import PropTypes from 'prop-types';
 import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseDisplaySetReconstructable } from '@ohif/ui';
 
+
 function VTKMPRToolbarButton({ toolbarClickCallback, button, isActive }) {
+  // Toolbar button which hides itself if a volume cannot be 3D reconstructed
+
   const { id, label, icon } = button;
   const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 
@@ -26,6 +29,7 @@ function VTKMPRToolbarButton({ toolbarClickCallback, button, isActive }) {
     </>
   );
 }
+
 
 VTKMPRToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,

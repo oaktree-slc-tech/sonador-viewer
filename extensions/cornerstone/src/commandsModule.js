@@ -1,27 +1,29 @@
+// The Cornerstone Tools extension provides the core components of the OHIF viewer
+// including the primary toolbar, core overlays, and interaction for the viewer.
+import _ from 'lodash';
+
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 
 import OHIF from '@ohif/core';
+import { workflow, SaveDicomSeriesDialog } from '@ohif/ui';
 
 import setCornerstoneLayout from './utils/setCornerstoneLayout';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import { getEnabledElement } from './state';
+import cornerstoneToolEnums from './tools/constants/toolNames.js';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
-const { studyMetadataManager } = OHIF.utils;
+const { sonador, log, measurements, display } = OHIF;
+const { studyMetadataManager, cornerstoneUtils } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
 
-const refreshCornerstoneViewports = () => {
-  cornerstone.getEnabledElements().forEach((enabledElement) => {
-    if (enabledElement.image) {
-      cornerstone.updateImage(enabledElement.element);
-    }
-  });
-};
 
-const commandsModule = ({ servicesManager }) => {
+const commandsModule = ({ commandsManager, servicesManager }) => {
+
   const actions = {
+
     rotateViewport: ({ viewports, rotation }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -31,6 +33,7 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
+
     flipViewportHorizontal: ({ viewports }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -40,6 +43,7 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
+
     flipViewportVertical: ({ viewports }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -49,6 +53,7 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
+
     scaleViewport: ({ direction, viewports }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
       const step = direction * 0.15;
@@ -63,7 +68,182 @@ const commandsModule = ({ servicesManager }) => {
         }
       }
     },
+
+    labellingDialog: ({ viewports, measurementData, dialogProps }) => {
+      // Open the labelling dialog to allow for annotation of the provided measurement data
+      
+      dialogProps = dialogProps || {};
+
+      const { UINotificationService, UIDialogService } = servicesManager.services;
+      if (!UIDialogService) {
+        console.warn('Unable to show dialog; no UI Dialog Service available.');
+        return;
+      }      
+
+      // Unpack labelling attributes to back-fill data from dialog. _unpackMeasurementLabellingAttrs
+      // looks within all sections of the measurement data for attributes and flattens.
+      const labellingAttrs0 = OHIF.measurements.MeasurementApi._unpackMeasurementLabellingAttrs(measurementData);
+
+      UIDialogService.dismiss({ id: 'labelling' });
+      UIDialogService.create({
+        id: 'labelling',
+        centralize: true,
+        isDraggable: false,
+        showOverlay: true,
+        content: workflow.LabellingFlow,
+        contentProps: {
+          measurementData: labellingAttrs0,
+          labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
+          updateLabelling: ({ location, description, response }) => {
+
+            measurementData.location = location || labellingAttrs0.location || '';
+            measurementData.description = description || labellingAttrs0.description || '';
+            measurementData.response = response || measurementData.response;
+
+            commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
+          },
+          ...dialogProps,
+        },
+      });
+    },
+
+    seriesTagDialog: ({ viewports, servers, measurementData, dialogProps }) => {
+      // Add a series tag to the currently selected viewport. The series tag tool type
+      // allows for a "tag" (coded concept) to be attached to a series instance.
+
+      dialogProps = dialogProps || {};
+
+      const { UINotificationService, UIDialogService } = servicesManager.services;
+      
+      if (!UIDialogService) {
+        console.warn('Unable to show dialog; no UI Dialog Service available.');
+        return;
+      }
+
+      // Initialize series tag measurement data, add measurement type and toolType to structure
+      measurementData = measurementData || {};
+      if (!measurementData.toolType || !measurement.type) {
+
+        _.extend(measurementData, {
+          toolType: cornerstoneToolEnums.DICOM_SR_SERIES_TAG,
+          type: OHIF.measurements.ValueTypes.CODED_CONCEPT,
+        });
+      }
+
+      // Retrieve currently active server
+      const activeServer = sonador.getActiveServer(servers.servers);
+
+      if (UIDialogService && activeServer && activeServer.rootUrl) {
+
+        // Retrieve list of groups with active tags
+        sonador.searchImageServerGroups(activeServer, '', { tag: true })
+          .then((res) => res.json())
+          .then((res) => {
+
+            if (res.results) {
+
+              // Dismiss labelling service dialog
+              UIDialogService.dismiss({ id: 'labelling' });
+              UIDialogService.create({
+                id: 'labelling',
+                centralize: true,
+                isDraggable: false,
+                showOverlay: true,
+                content: workflow.SeriesTagLabellingFlow,
+                contentProps: {
+                  server: activeServer,
+                  groups: res.results,
+                  measurementData: OHIF.measurements.MeasurementApi._unpackMeasurementLabellingAttrs(measurementData),
+                  labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
+                  labellingCanceledCallback: ({ tags, group }) => {
+                    // Close dialog instance and display notification error
+                    
+                    UIDialogService.dismiss({ id: 'labelling' });
+
+                    // Group does not have any tags associated with it
+                    if (!tags || !tags.length) {
+
+                      UINotificationService.show({
+                        title: 'Unable to apply tag to series',
+                        message: `Group "${group.name}" does not have any tags associated with it`,
+                        type: 'warning',
+                        autoClose: true,
+                      });
+                    }
+                  },
+                  updateLabelling: ({ location, description, response }) => {
+                    // Update measurement service with tag value
+
+                    // Add location, description, and response attributes from the tag workflow
+                    measurementData.location = location || measurementData.location;
+                    measurementData.description = description || '';
+                    measurementData.response = response || measurementData.response;
+
+                    // Update measurements table
+                    commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
+                  },
+                  skipAddLabelButton: true,
+                },
+                ...dialogProps,
+              });
+            }
+          });
+      }
+    },
+
+    saveMeasurements: ({ viewports, servers, seriesNumber, dialogProps }) => {
+      // Persist measurement data to the currently active server
+
+      dialogProps = dialogProps || {};
+
+      const { UINotificationService, UIDialogService } = servicesManager.services;
+
+      // Retrieve currently active server
+      const activeServer = sonador.getActiveServer(servers.servers);
+
+      // Clear any active save dialogs
+      UIDialogService.dismiss({ id: 'saveDicomSeries' });
+
+      // Propmpt user to provide a series number and description
+      const promise = new Promise((resolve, reject) => {
+      
+        UIDialogService.create({
+          id: 'saveDicomSeries',
+          centralize: true,
+          isDraggable: false,
+          showOverlay: true,
+          content: SaveDicomSeriesDialog,
+          contentProps: {            
+            seriesNumber,
+            onUpdate: ({ SeriesNumber, SeriesDescription }) => {
+
+              const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+              const promise = measurementApi.storeMeasurements(undefined, {
+                headers: { SeriesNumber, SeriesDescription },
+                success: () => {
+
+                  // Resolve save measurements successfully
+                  UIDialogService.dismiss({ id: 'saveDicomSeries' });
+                  resolve({ title: 'Measurements saved successfully', message: 'Data persisted to '+activeServer.name, });
+                }
+              });
+            },
+            onCancel: () => {
+              UIDialogService.dismiss({ id: 'saveDicomSeries' });
+              reject({ title: 'Save cancelled', cancelled: true, message: 'Persistence of measurement data cancelled' });
+            },
+            btnTextConfirm: 'Save Measurements',
+            ...dialogProps,
+          }
+        });
+      });
+
+      return promise;
+    },
+
     resetViewport: ({ viewports }) => {
+      // Reset viewport to the state of the images when first loaded
+
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
       if (enabledElement) {
@@ -79,73 +259,126 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
-    // TODO: this is receiving `evt` from `ToolbarRow`. We could use it to have
-    //       better mouseButtonMask sets.
+    
     setToolActive: ({ toolName }) => {
+      // Sets the state of a tool to active
+
       if (!toolName) {
-        console.warn('No toolname provided to setToolActive command');
+        log.warn('No toolname provided to setToolActive command');
       }
       cornerstoneTools.setToolActive(toolName, { mouseButtonMask: 1 });
     },
+
     clearAnnotations: ({ viewports }) => {
+      // Clear annotations and measurements from the active viewport
+      log.debug('[cornerstone:commandsManager:clearAnnotations] annotation count (pre-clear)',
+        OHIF.measurements.MeasurementApi.Instance.measurementsCount());
+
+      // Retrieve currently active element
       const element = getEnabledElement(viewports.activeViewportIndex);
       if (!element) {
+        log.warn('[cornerstone:commandsManager:clearAnnotations] no element available for the active viewport.',
+          'activeViewportIndex='+viewports.activeViewportIndex);
         return;
       }
 
+      // Determine if the active element is enabled
       const enabledElement = cornerstone.getEnabledElement(element);
       if (!enabledElement || !enabledElement.image) {
+        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image.',
+          enabledElement, (enabledElement || {}).image);
         return;
       }
 
       const { toolState } = cornerstoneTools.globalImageIdSpecificToolStateManager;
       if (!toolState || toolState.hasOwnProperty(enabledElement.image.imageId) === false) {
+        log.warn('[cornerstone:commandsManager:clearAnnotations] unable to locate tool state for the enabled element. '
+          + 'Clear service measurements and return.');
+        OHIF.measurements.MeasurementApi.Instance.clearMeasurements();
         return;
       }
 
+      // Aggregate measurements to remove based on tool state
       const imageIdToolState = toolState[enabledElement.image.imageId];
-
       const measurementsToRemove = [];
 
       Object.keys(imageIdToolState).forEach((toolType) => {
         const { data } = imageIdToolState[toolType];
 
         data.forEach((measurementData) => {
-          const { _id, lesionNamingNumber, measurementNumber } = measurementData;
+
+          // Unpack measurement data: meta, data, uid, _id
+          const { measurementMeta, measurementData: _measurementData, uid, _id } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
+          const measurementNumber = measurementMeta.measurementNumber || _measurementData.measurementNumber
+          
+          log.debug('[cornerstone:commands:clearAnnotations] queue measurement for removal', toolType, measurementData);
+          
           if (!_id) {
+            log.warn('[cornerstone:commands:clearAnnotations] measurement does not have _id attribute, skip', toolType, measurementData);
             return;
           }
 
-          measurementsToRemove.push({
-            toolType,
-            _id,
-            lesionNamingNumber,
-            measurementNumber,
-          });
+          // Add measurement to queue for removal
+          measurementsToRemove.push({ toolType, _id, uid, measurementNumber, });
         });
       });
 
+      // Queue measurements for removal
       measurementsToRemove.forEach((measurementData) => {
-        OHIF.measurements.MeasurementHandlers.onRemoved({
-          detail: {
-            toolType: measurementData.toolType,
-            measurementData,
-          },
-        });
+
+        // Trigger OHIF measurement handlers
+        OHIF.measurements.MeasurementHandlers.onRemoved({ detail: { toolType: measurementData.toolType, measurementData, element, }, });
+      });
+
+      // Clear all remaining measurements from the API and update viewports
+      OHIF.measurements.MeasurementApi.Instance.clearMeasurements();
+      cornerstoneUtils.refreshCornerstoneViewports();
+    },
+
+    reloadAnnotations: ({ viewports }) => {
+      // Re-load annotations and measurements
+      log.info('[cornerstone:command-module:reloadAnnotations] Reload annotations');
+      
+      // Re-load
+      OHIF.measurements.MeasurementApi.Instance.retrieveMeasurements({
+        success: () => {
+
+          // Ensure that annotations were correctly removed from the API
+          let _count = OHIF.measurements.MeasurementApi.Instance.measurementsCount();
+          log.info('[cornerstone:commands:reloadAnnotations] annotation count', _count);
+        }
       });
     },
+
+    reloadStudy: ({ viewports }) => {
+      // Re-load study, segmentations, and annotations
+      log.info('[cornerstone:command-module:reloadStudy] Reload Study');
+
+      // Re-load study
+      display.DisplaySetApi.Instance.reloadStudy();
+    },
+
     nextImage: ({ viewports }) => {
+      // Progress to the next image in a stack
+
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
       scroll(enabledElement, 1);
     },
+
     previousImage: ({ viewports }) => {
+      // Return to the previous image in a stack
+
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
       scroll(enabledElement, -1);
     },
+
     getActiveViewportEnabledElement: ({ viewports }) => {
       return getEnabledElement(viewports.activeViewportIndex);
     },
+
     showDownloadViewportModal: ({ title, viewports }) => {
+      // Show modal dialog for downloading a high resolution capture of an image
+
       const activeViewportIndex = viewports.activeViewportIndex;
       const { UIModalService } = servicesManager.services;
       if (UIModalService) {
@@ -159,22 +392,47 @@ const commandsModule = ({ servicesManager }) => {
         });
       }
     },
-    updateTableWithNewMeasurementData({ toolType, measurementNumber, location, description }) {
-      // Update all measurements by measurement number
+
+    updateTableWithNewMeasurementData(measurementData) {
+      // Update the specified measurements with location and description information
+
       const measurementApi = OHIF.measurements.MeasurementApi.Instance;
-      const measurements = measurementApi.tools[toolType].filter((m) => m.measurementNumber === measurementNumber);
 
-      measurements.forEach((measurement) => {
-        measurement.location = location;
-        measurement.description = description;
+      // Unpack measurement data
+      const toolType = OHIF.measurements.MeasurementApi._getToolType(measurementData);
+      const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
+      const { measurementNumber, location, description } = measurementData;
+      
+      if (measurementApi.tools[toolType]) {
+        
+        // Update all state annotations which match the measurement number and tooltype        
+        const measurements = measurementApi.tools[toolType]
+          .filter((m) => {
+            const { _id: mId, uid: mUid, measurementData: mData } = OHIF.measurements.MeasurementApi._unpackMeasurementData(m);
+            return (_id && mId && mId == _id) || (uid && mUid && mUid == uid);
+          })
+          .forEach((m) => {
 
-        measurementApi.updateMeasurement(measurement.toolType, measurement);
-      });
+            // Update measurement location and description
+            m.location = location;
+            m.description = description;
 
-      measurementApi.syncMeasurementsAndToolData();
+            // Trigger update via measurement API
+            measurementApi.updateMeasurement(toolType, m, {
+              annotationData: true, notYetUpdatedAtSource: true,
+            });
+          });
 
-      refreshCornerstoneViewports();
+        measurementApi.syncMeasurementsAndToolData();
+      } else {
+        console.warn('[cornerstone:commands:updateTableWithNewMeasurementData] unable to update '
+          +' description/location for toolType='+toolType, measurementData);
+      }
+
+      // Refresh Cornerstone viewport renderings
+      cornerstoneUtils.refreshCornerstoneViewports();
     },
+
     getNearbyToolData({ element, canvasCoordinates, availableToolTypes }) {
       const nearbyTool = {};
       let pointNearTool = false;
@@ -213,13 +471,16 @@ const commandsModule = ({ servicesManager }) => {
 
       return pointNearTool ? nearbyTool : undefined;
     },
+
     removeToolState: ({ element, toolType, tool }) => {
       cornerstoneTools.removeToolState(element, toolType, tool);
       cornerstone.updateImage(element);
     },
+
     setCornerstoneLayout: () => {
       setCornerstoneLayout();
     },
+
     setWindowLevel: ({ viewports, window, level }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -233,7 +494,10 @@ const commandsModule = ({ servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
+
     jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, activeViewportIndex, refreshViewports = true }) => {
+      // Jump to a specific study/DICOM instance UID
+      
       const study = studyMetadataManager.get(StudyInstanceUID);
       const displaySet = study?.findDisplaySet((ds) => {
         return ds.images && ds.images.find((i) => i.getSOPInstanceUID() === SOPInstanceUID);
@@ -248,7 +512,7 @@ const commandsModule = ({ servicesManager }) => {
       window.store.dispatch(setViewportSpecificData(activeViewportIndex, displaySet));
 
       if (refreshViewports) {
-        refreshCornerstoneViewports();
+        cornerstoneUtils.refreshCornerstoneViewports();
       }
     },
   };
@@ -329,9 +593,34 @@ const commandsModule = ({ servicesManager }) => {
       storeContexts: ['viewports'],
       options: {},
     },
+    seriesTagDialog: {
+      commandFn: actions.seriesTagDialog,
+      storeContexts: ['viewports', 'servers'],
+      options: {},
+    },
+    labellingDialog: {
+      commandFn: actions.labellingDialog,
+      storeContexts: ['viewports'],
+      options: {},
+    },
     clearAnnotations: {
       commandFn: actions.clearAnnotations,
       storeContexts: ['viewports'],
+      options: {},
+    },
+    reloadAnnotations: {
+      commandFn: actions.reloadAnnotations,
+      storeContexts: ['viewports', 'servers'],
+      options: {},
+    },
+    saveMeasurements: {
+      commandFn: actions.saveMeasurements,
+      storeContexts: ['viewports', 'servers'],
+      options: { seriesNumber: 42 },
+    },
+    reloadStudy: {
+      commandFn: actions.reloadStudy,
+      storeContexts: ['viewports', 'servers'],
       options: {},
     },
     nextImage: {
@@ -344,6 +633,7 @@ const commandsModule = ({ servicesManager }) => {
       storeContexts: ['viewports'],
       options: {},
     },
+    
     // TOOLS
     setToolActive: {
       commandFn: actions.setToolActive,

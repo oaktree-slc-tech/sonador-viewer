@@ -126,7 +126,6 @@ const definitions = [
     id: '2DMPR',
     label: '2D MPR',
     icon: 'cube',
-    //
     CustomComponent: VTKMPRToolbarButton,
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'mpr2d',

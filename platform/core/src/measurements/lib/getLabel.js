@@ -8,8 +8,8 @@ export default function (measurement) {
     case 'TargetCR':
     case 'TargetNE':
     case 'TargetUN':
-      return `Target ${measurement.lesionNamingNumber}`;
+      return `Target ${measurement.measurementNumber}`;
     case 'NonTarget':
-      return `Non-Target ${measurement.lesionNamingNumber}`;
+      return `Non-Target ${measurement.measurementNumber}`;
   }
 }

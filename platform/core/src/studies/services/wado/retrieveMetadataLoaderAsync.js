@@ -12,6 +12,7 @@ import { addInstancesToStudy, createStudyFromSOPInstanceList } from './studyInst
 
 const { naturalizeDataset } = dcmjs.data.DicomMetaDictionary;
 
+
 /**
  * Map series to an array of SeriesInstanceUID
  * @param {Arrays} series list of Series Instance UIDs
@@ -33,6 +34,7 @@ function attachSeriesLoader(server, study, seriesLoader) {
     },
   });
 }
+
 
 /**
  * Creates an immutable series loader object which loads each series sequentially using the iterator interface
@@ -56,6 +58,7 @@ function makeSeriesAsyncLoader(dicomWebClient, studyInstanceUID, seriesInstanceU
     },
   });
 }
+
 
 /**
  * Class for async load of study metadata.

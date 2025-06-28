@@ -1,7 +1,10 @@
 import getWADORSImageId from './getWADORSImageId';
 
-// https://stackoverflow.com/a/6021027/3895126
+
 function updateQueryStringParameter(uri, key, value) {
+  /** 
+   * Update query string parameter. Refer to https://stackoverflow.com/a/6021027/3895126.
+  */
   const regex = new RegExp('([?&])' + key + '=.*?(&|$)', 'i');
   const separator = uri.indexOf('?') !== -1 ? '&' : '?';
   if (uri.match(regex)) {
@@ -11,15 +14,16 @@ function updateQueryStringParameter(uri, key, value) {
   }
 }
 
-/**
- * Obtain an imageId for Cornerstone from an image instance
- *
- * @param instance
- * @param frame
- * @param thumbnail
- * @returns {string} The imageId to be used by Cornerstone
- */
+
 export default function getImageId(instance, frame, thumbnail = false) {
+  /**
+   * Obtain an imageId for Cornerstone from an image instance
+   *
+   * @param instance
+   * @param frame
+   * @param thumbnail
+   * @returns {string} The imageId to be used by Cornerstone
+  */
   if (!instance) {
     return;
   }
