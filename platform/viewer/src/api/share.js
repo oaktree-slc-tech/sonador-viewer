@@ -1,4 +1,4 @@
-import { pick, extend } from 'lodash';
+import { extend, pick } from 'lodash';
 
 import { urlUtil } from '@ohif/core/src/utils';
 
@@ -26,21 +26,43 @@ export const getAclUsers = (server, studyId) => {
     });
 };
 
-export const createAclUser = (server, studyId, newUser) => {
-  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user'), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    body: JSON.stringify(newUser),
-  });
+export const createAclUser = async (server, studyId, newUser) => {
+  const response = await fetch(
+    urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user'),
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify(newUser),
+    },
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Failed to create ACL user: ${response.status} ${message}`);
+  }
+
+  return response.json(); // or response.text() or void, depending on your API
 };
 
-export const updateAclUser = (server, studyId, user) => {
-  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user', user.ID), {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    body: JSON.stringify(user),
-  });
+
+export const updateAclUser = async (server, studyId, user) => {
+  const response = await fetch(
+    urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user', user.ID),
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify(user),
+    },
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Failed to update ACL user: ${response.status} ${message}`);
+  }
+
+  return response.json(); // or response.text(), depending on your API
 };
+
 
 export const getAclGroups = (server, studyId) => {
   // Retrieve group authorization policies for provided server and study UID via
@@ -64,23 +86,45 @@ export const getAclGroups = (server, studyId) => {
     });
 };
 
-export const createAclGroup = (server, studyId, newGroup) => {
+
+export const createAclGroup = async (server, studyId, newGroup) => {
   // Create group access control policy
+  const response = await fetch(
+    urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group'),
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify(newGroup),
+    },
+  );
 
-  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group'), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    body: JSON.stringify(newGroup),
-  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Failed to create ACL group: ${response.status} ${message}`);
+  }
+
+  return response.json();
 };
 
-export const updateAclGroup = (server, studyId, group) => {
-  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group', group.ID), {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    body: JSON.stringify(group),
-  });
+
+export const updateAclGroup = async (server, studyId, group) => {
+  const response = await fetch(
+    urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group', group.ID),
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      body: JSON.stringify(group),
+    }
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Failed to update ACL group: ${response.status} ${message}`);
+  }
+
+  return response.json();
 };
+
 
 export const searchAcl = (server, searchParams) => {
   return fetch(sonadorUrl(urlUtil.urlJoin(`/visionaire/api/pacs/${server.token}/auth/search/`)), {
@@ -88,6 +132,7 @@ export const searchAcl = (server, searchParams) => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
     body: JSON.stringify(searchParams),
   })
     .then((res) => res.json())

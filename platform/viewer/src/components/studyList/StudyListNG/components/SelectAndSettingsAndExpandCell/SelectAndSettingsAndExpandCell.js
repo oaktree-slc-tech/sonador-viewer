@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import { ChatBubbleLeftIcon } from '@heroicons/react/24/solid';
 import classNames from 'classnames';
@@ -12,25 +13,31 @@ import { ReactComponent as DotsIcon } from '@ohif/ui/src/elements/Svg/svgs/dots.
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as ShareIcon } from '@ohif/ui/src/elements/Svg/svgs/share.svg';
 
+import { fetchDownloadStudies } from '../../../../../api/ext';
 import AppContext from '../../../../../context/AppContext';
 import * as RoutesUtil from '../../../../../routes/routesUtil';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import CreateWorklistModal from '../CreateWorklistModal/CreateWorklistModal';
+import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
 
 import tableStyles from '../StudiesTable/StudiesTable.module.scss';
 import styles from './SelectAndSettingsAndExpandCell.module.scss';
 
-export default function SelectAndSettingsAndExpandCell({ row, server }) {
+
+export default function SelectAndSettingsAndExpandCell({ row  }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const isExpanded = row.getIsExpanded();
   const { pathname } = useLocation();
 
+  const canWorkInWorklist = activeServer?.perms?.worklist;
   const [createWorklistModalOpen, setCreateWorklistModalOpen] = useState(false);
+  const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
 
   const { appConfig } = useContext(AppContext);
 
   const { isDesktop } = useDeviceStore();
 
-  const link = RoutesUtil.parseViewerPath(appConfig, server, {
+  const link = RoutesUtil.parseViewerPath(appConfig, activeServer, {
     studyInstanceUIDs: row.id,
   });
 
@@ -44,6 +51,7 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
         </div>
       ),
       onClick: () => {
+        fetchDownloadStudies(activeServer, row.id)
       },
     },
     {
@@ -55,20 +63,23 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
         </div>
       ),
       onClick: () => {
+        setIsOpenedShareModal(true);
       },
     },
-    {
-      id: 'create-worklist',
-      Label: () => (
-        <div className={styles.rowDotsOption}>
-          <ChatBubbleLeftIcon width={16} />
-          <span>Request review</span>
-        </div>
-      ),
-      onClick: () => {
-        setCreateWorklistModalOpen(true);
-      },
-    },
+    ...(canWorkInWorklist
+      ? [{
+        id: 'create-worklist',
+        Label: () => (
+          <div className={styles.rowDotsOption}>
+            <ChatBubbleLeftIcon width={16} />
+            <span>Request review</span>
+          </div>
+        ),
+        onClick: () => {
+          setCreateWorklistModalOpen(true);
+        },
+      }]
+      : []),
   ];
   const filteredOptions = options.filter(option => {
     if (option.id === 'create-worklist') {
@@ -79,7 +90,7 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
 
   return (
     <>
-      <div className={styles.selectorExpanderColumn}>
+      <div className={classNames(styles.selectorExpanderColumn, isDesktop && styles.desktop)}>
         <ChevronDown className={classNames(styles.expander, { [styles.expanded]: isExpanded })} />
         {isDesktop && (
           <>
@@ -91,7 +102,7 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
             <CheckboxNG checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()} />
           </>
         )}
-        {server?.perms.view && (
+        {activeServer?.perms.view && (
           <EyeIcon
             className={classNames(styles.rowEyeIcon, tableStyles.rowEyeIcon)}
             onClick={(e) => {
@@ -105,11 +116,20 @@ export default function SelectAndSettingsAndExpandCell({ row, server }) {
         <CreateWorklistModal isOpen={createWorklistModalOpen} setIsOpen={setCreateWorklistModalOpen}
                              studyInstanceUIDs={row.id} />
       )}
+      {isOpenedShareModal && (
+        <StudiesTableShareModal
+          isOpenedShareModal={isOpenedShareModal}
+          setIsOpenedShareModal={setIsOpenedShareModal}
+          server={activeServer}
+          selectedStudy={row}
+        />
+      )}
+
     </>
   );
 }
 
+
 SelectAndSettingsAndExpandCell.propTypes = {
   row: PropTypes.object.isRequired,
-  server: PropTypes.object.isRequired,
 };

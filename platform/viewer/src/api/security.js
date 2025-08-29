@@ -10,6 +10,7 @@ export const fetchTokens = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
   }).then((res) => res.json());
 };
 
@@ -22,7 +23,9 @@ export const createToken = (description) => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
     body: JSON.stringify({ description }),
+
   })
     .then((res) => res.json())
     .then((res) => {
@@ -42,6 +45,7 @@ export const fetchAccesses = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
   }).then((res) => res.json());
 };
 
@@ -54,6 +58,7 @@ export const createAccessIdAndSecretKey = (description) => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
     body: JSON.stringify({ description }),
   })
     .then((res) => res.json())
@@ -74,6 +79,7 @@ export const getCsrfToken = () => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
   }).then((res) => res.json());
 };
 
@@ -86,6 +92,7 @@ export const deleteToken = (token) => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
     body: JSON.stringify({ token }),
   }).then((res) => res.json());
 };
@@ -99,5 +106,6 @@ export const deleteAccessIdAndSecretKey = (token) => {
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
   }).then((res) => res.json());
 };

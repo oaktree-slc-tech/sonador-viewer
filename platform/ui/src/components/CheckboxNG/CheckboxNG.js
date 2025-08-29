@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 
 import styles from './CheckboxNG.module.scss';
 
-export default function CheckboxNG({ checked, onChange, indeterminate, id, label = '', classes = {}, ...rest }) {
+function CheckboxNG({ checked, onChange, indeterminate, id, label = '', classes = {}, ...rest }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -40,6 +40,8 @@ export default function CheckboxNG({ checked, onChange, indeterminate, id, label
   );
 }
 
+CheckboxNG.displayName = 'CheckboxNG';
+
 CheckboxNG.propTypes = {
   checked: PropTypes.bool.isRequired,
   onChange: PropTypes.func.isRequired,
@@ -50,3 +52,5 @@ CheckboxNG.propTypes = {
     checkmark: PropTypes.string,
   }),
 };
+
+export default CheckboxNG;

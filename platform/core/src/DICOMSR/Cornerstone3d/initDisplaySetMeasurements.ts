@@ -16,6 +16,7 @@ const { Enums: MeasurementEnums, SREnums } = measurements;
 const { CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION } = MeasurementEnums;
 const { ImageSet, Cornerstone3dMetadataProvider: metadataProvider } = classes;
 const { CodeScheme: Cornerstone3DCodeScheme } = adaptersSR.Cornerstone3D;
+const { measurementReport: Cornerstone3dMeasurementReport } = MeasurementEnums.Cornerstone3D.sr;
 
 const { CodeNameCodeSequenceValues, CodingSchemeDesignators } = SREnums;
 
@@ -355,7 +356,7 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     }
   }
 
-    NUMContentItems.forEach(item => {
+  NUMContentItems.forEach(item => {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
     const { ValueType } = ContentSequence;
@@ -376,9 +377,27 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     }
   });
 
+  // Retrieve referenced SOP instance and imageId if they are not already attached
+  if (!measurement.coords || !measurement.coords.length) {
+
+    // Retrieve primary finding group    
+    const findingGroup = mergedContentSequence.find(
+      group => Cornerstone3dMeasurementReport.codeValueMatch(group, SREnums.DCMSR_FINDING));
+
+    // SOP Instance References
+    const { ReferencedSOPSequence } = findingGroup.ContentSequence;    
+    const { ReferencedSOPInstanceUID, ReferencedFrameNumber } = (ReferencedSOPSequence || {});
+
+    if (ReferencedSOPInstanceUID) {
+      measurement.coords.push({ ReferencedSOPSequence, });
+    }
+
+    console.warn('[DICOM-SR:Cornerstone3d:_processNonGeometricallyDefinedMeasurement] no coordinates defined attempt to back-fill '
+      + 'from finding group. ReferencedSOPInstanceUID="'+ReferencedSOPInstanceUID+'"');
+  }
+
   return measurement;
 }
-
 
 
 const _getCoordsFromSCOORDOrSCOORD3D = graphicItem => {
@@ -597,10 +616,15 @@ function _measurementReferencesSOPInstanceUID(measurement, SOPInstanceUID, frame
    * NOTE: The ReferencedFrameNumber can be multiple values according to the DICOM
    * Standard. But for now, we will support only one ReferenceFrameNumber.
    */
-  const ReferencedFrameNumber =
-    (measurement.coords[0].ReferencedSOPSequence &&
-      measurement.coords[0].ReferencedSOPSequence?.ReferencedFrameNumber) ||
-    1;
+  if (!coords || !coords.length) {
+    console.warn('Unable to retrieve coordinates for the measurement');
+    return false;
+  }
+
+  const ReferencedFrameNumber =(
+    measurement.coords[0].ReferencedSOPSequence &&
+      measurement.coords[0].ReferencedSOPSequence?.ReferencedFrameNumber) 
+    || 1;
 
   if (frameNumber && Number(frameNumber) !== Number(ReferencedFrameNumber)) {
     return false;
@@ -670,6 +694,13 @@ function _checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, newDisplaySet, ser
       });
     }
 
+    // Move to next measurement if there are no coordinates defined
+    if (!measurement.coords || !measurement.coords.length) {
+      continue;
+    }
+
+    // Retrieve referenced SOP sequence. Proceed to next measurement if
+    // there isn't an SOP sequence referenced.
     const referencedSOPSequence = measurement.coords[0].ReferencedSOPSequence;
     if (!referencedSOPSequence) {
       continue;

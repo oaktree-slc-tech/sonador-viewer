@@ -1,8 +1,9 @@
-import React, { Fragment, memo } from 'react';
+import React, { Fragment, memo, useEffect, useState } from 'react';
 import classNames from 'classnames';
 import cornerstone from 'cornerstone-core';
 import PropTypes from 'prop-types';
 
+import { useDicomHeadersOverlayStore } from '@ohif/sonador-viewer/src/store/useDicomHeadersOverlay';
 import { useViewerMetadataSettingsStore } from '@ohif/sonador-viewer/src/store/useViewerMetadataSettingsStore';
 import { OverlayTrigger } from '@ohif/ui/src/components/overlayTrigger';
 import { Tooltip } from '@ohif/ui/src/components/tooltip';
@@ -31,8 +32,27 @@ function OHIFCornerstoneViewportOverlay({
 }) {
   const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = useViewerMetadataSettingsStore();
 
+  const { showOverlay, toggleShowOverlay } = useDicomHeadersOverlayStore()
+
+  // on shift + space toggle overlay
+  useEffect(() => {
+    const handleKeyDown = (e ) => {
+      if (e.key === ' ' && e.shiftKey) {
+        e.preventDefault();
+        toggleShowOverlay();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (!imageId) {
     return null;
+  }
+
+  if(!showOverlay){
+    return  null
   }
 
   const zoomPercentage = formatNumberPrecision(scale * 100, 0);
@@ -225,5 +245,7 @@ OHIFCornerstoneViewportOverlay.propTypes = {
   inconsistencyWarnings: PropTypes.array,
   SRLabels: PropTypes.array,
 };
+
+OHIFCornerstoneViewportOverlay.displayName = 'OHIFCornerstoneViewportOverlay';
 
 export default memo(OHIFCornerstoneViewportOverlay);

@@ -2,15 +2,17 @@
 // New features within Sonador should be built on top of the Cornerstone3D package
 // and utilize the `vtk` extension for managing their interfaces.
 
+import merge from 'lodash.merge';
+
 import cornerstone from 'cornerstone-core';
 import csTools from 'cornerstone-tools';
-import merge from 'lodash.merge';
 
 import OHIF from '@ohif/core';
 import { InputDialog } from '@ohif/ui';
 
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
+import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
 import initCornerstoneTools from './initCornerstoneTools.js';
 import { connectToolsToMeasurementService } from './initMeasurementService.js';
 import { initDataServiceIntegration } from './initDataIntegrations.js';
@@ -91,6 +93,7 @@ export default function init({ servicesManager, commandsManager, configuration }
       csTools.EllipticalRoiTool,
       csTools.DragProbeTool,
       csTools.RectangleRoiTool,
+      DICOMSRSeriesTagTool,
     ],
     other: [
       csTools.PanTool,
@@ -154,6 +157,8 @@ export default function init({ servicesManager, commandsManager, configuration }
 
   /* Add tools with its custom props through extension configuration. */
   tools.forEach((tool) => {
+    console.log('[]')
+
     const toolName = tool.name.replace('Tool', '');
     const externalToolsConfig = configuration.tools || {};
     const externalToolProps = externalToolsConfig[toolName] || {};
@@ -179,5 +184,6 @@ export default function init({ servicesManager, commandsManager, configuration }
   csTools.setToolActive('PanMultiTouch', { pointers: 2 }); // TODO: Better error if no options
   csTools.setToolActive('ZoomTouchPinch', {});
   csTools.setToolEnabled('Overlay', {});
+  csTools.setToolEnabled(OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {});
 }
 

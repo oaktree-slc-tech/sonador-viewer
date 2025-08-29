@@ -9,7 +9,8 @@ import {
   commonCleanAnnotation,
   SUPPORTED_TOOLS, 
 } from './common.js';
-import { Length as LengthMapping } from './Length.js'
+import { Length as LengthMapping } from './Length'
+import { DICOMSRSeriesTagTool as DICOMSRSeriesTagToolMapping } from './DICOMSRSeriesTagTool';
 
 
 const measurementServiceMappingsFactory = (measurementService, measurementSource) => {
@@ -51,6 +52,18 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
         points: 1,
       }
     },
+    DICOMSRSeriesTag: _.extend(_.pick(DICOMSRSeriesTagToolMapping, 'toolName', 'cleanAnnotation'), {
+      toAnnotation: (measurement, definition) => {
+        return DICOMSRSeriesTagToolMapping.toAnnotation(measurementService, measurement, definition);
+      },
+      toMeasurement: (csToolsAnnotation) => {
+        return DICOMSRSeriesTagToolMapping.toMeasurement(measurementService, csToolsAnnotation);
+      },
+      toAltSourceMeasurementSchema: (dstSrc, measurement, src) => {
+        return DICOMSRSeriesTagToolMapping.toAltSourceMeasurementSchema(measurementService, dstSrc, measurement, src);
+      },
+      matchingCriteria: { valueType: measurementService.VALUE_TYPES.CODED_CONCEPT, }
+    }),
 
     onElementEnabled: (event) => {
       // Initialize measurement service event handlers

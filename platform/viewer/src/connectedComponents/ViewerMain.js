@@ -1,15 +1,21 @@
 import _ from 'lodash';
+import values from 'lodash/values';
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams } from 'react-router-dom';
-import values from 'lodash/values';
+
 import PropTypes from 'prop-types';
+
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+
+import { toast } from 'react-hot-toast';
 
 import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { eventTypes as uiEvents } from '@ohif/ui';
 
+import { getDistortionCheck } from '../api/deviceList';
 import { servicesManager } from '../App';
 
 import ViewportGrid from './../components/ViewportGrid/ViewportGrid';
@@ -25,6 +31,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
 
   const dispatch = useDispatch();
   const { studyInstanceUIDs } = useParams();
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
 
   // Viewport layout
   const { layout, viewportSpecificData } = useSelector((state) => state.viewports);
@@ -58,7 +65,33 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
     return newDisplaySets;
   };
 
-  
+  const { data: distortionCheckData } = useQuery({
+    queryKey: ['distortion-check', studyInstanceUIDs],
+    queryFn: () => getDistortionCheck(activeServer, studyInstanceUIDs),
+  });
+
+
+  useEffect(() => {
+    if (distortionCheckData) {
+      try {
+        for (const series of Object.values(distortionCheckData)) {
+          for (const result of series.results) {
+            if (result.result !== 'Ignore') {
+              if (result.result === 'Filter Applied') {
+                toast.success(result.message, { duration: 10000 });
+              } else {
+                toast.error(`${result.result} ${result.error}`, { duration: 1000 });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log('error while parsing distortionCheckData', error);
+      }
+    }
+  }, [distortionCheckData]);
+
+
   const findDisplaySet = (studies, StudyInstanceUID, displaySetInstanceUID) => {
     // Retrieve the display from the studies array which matches the provided StudyInstanceUID and displaySetInstanceUID
     
@@ -111,7 +144,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
         const { referencedDisplaySet, activatedLabelmapPromise } = displaySet.getSourceDisplaySet(
           studies,
           true,
-          onDisplaySetLoadFailureHandler
+          onDisplaySetLoadFailureHandler,
         );
         displaySet = referencedDisplaySet;
 
@@ -203,7 +236,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
 
       const foundDisplaySet =
         displaySets.find(
-          (ds) => !dirtyViewportPanes.some((v) => v.displaySetInstanceUID === ds.displaySetInstanceUID)
+          (ds) => !dirtyViewportPanes.some((v) => v.displaySetInstanceUID === ds.displaySetInstanceUID),
         ) || displaySets[displaySets.length - 1];
 
       dirtyViewportPanes.push(foundDisplaySet);
@@ -311,6 +344,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
     </div>
   );
 }
+
 
 ViewerMain.propTypes = {
   studies: PropTypes.array,

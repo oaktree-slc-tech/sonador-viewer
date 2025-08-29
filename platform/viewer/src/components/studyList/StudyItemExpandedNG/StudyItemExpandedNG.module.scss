@@ -56,6 +56,7 @@
 
     .thumbnailName,
     .thumbnailDate {
+      min-width: 120px;
       max-width: 120px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -101,6 +102,9 @@
         line-height: 21px;
         color: #ffffff;
         margin: 0 0 2px;
+        max-width: inherit;
+        min-width: inherit;
+        padding-right: 20px;
       }
 
       .studyDate {
@@ -114,6 +118,7 @@
     .contentData {
       display: flex;
       column-gap: 20px;
+      min-height: 350px;
     }
   }
 
@@ -142,8 +147,9 @@
   font-size: 16px;
   line-height: 18.75px;
   font-weight: 600;
-  margin-top: 20px;
+  margin-top: 0px;
   cursor: pointer;
+  max-height: 45px;
 
   @include lg {
     width: 200px;

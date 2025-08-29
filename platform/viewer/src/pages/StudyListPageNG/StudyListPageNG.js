@@ -48,6 +48,7 @@ export default function StudyListPageNG() {
   const {
     data: studies,
     isLoading,
+    isFetching,
     error,
   } = useStudies({
     server: activeServer,
@@ -71,6 +72,7 @@ export default function StudyListPageNG() {
       <StudyListNG
         title="All studies"
         isLoading={isLoading}
+        isFetching={isFetching}
         studies={studies || []}
         onClickNextPage={() => updatePageNumber(pageNumber + 1)}
         onClickPrevPage={() => updatePageNumber(pageNumber - 1)}

@@ -252,6 +252,7 @@ export default class DICOMSRDisplayTool extends BaseTool {
     renderableData.forEach(points => {
       const point = points[0]; // The SCOORD type is POINT so the array length is 1.
       draw(context, context => {
+        
         // Draw the arrow
         const handleStartCanvas = cornerstone.pixelToCanvas(element, point);
         const handleEndCanvas = cornerstone.pixelToCanvas(element, {

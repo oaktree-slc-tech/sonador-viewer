@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+
 import { Provider } from 'react-redux';
 import { I18nextProvider } from 'react-i18next';
 
@@ -353,6 +354,8 @@ function _makeAbsoluteIfNecessary(url, base_url) {
 /*
  * Only wrap/use hot if in dev.
  */
+
+App.displayName = 'App';
 
 export default App;
 export { commandsManager, extensionManager, hotkeysManager, servicesManager };

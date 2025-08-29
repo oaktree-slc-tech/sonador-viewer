@@ -39,7 +39,7 @@ const initLegacyMeasurementServiceMappings = (measurementService) => {
   // Initialize measurement service source and service mappings
   const measurementSource = measurementService.createSource(CORNERSTONE_TOOLS_SOURCE_NAME, CORNERSTONE_TOOLS_SOURCE_VERSION);
   const measurementMappings = cornerstoneMeasurementDataProc.measurementServiceMappingsFactory(measurementService, measurementSource);
-  const { Length, ArrowAnnotateTool } = measurementMappings;
+  const { Length, ArrowAnnotateTool, DICOMSRSeriesTag } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource, 
@@ -50,6 +50,12 @@ const initLegacyMeasurementServiceMappings = (measurementService) => {
   measurementService.addMapping(measurementSource, 
     ArrowAnnotateTool.toolName, ArrowAnnotateTool.matchingCriteria, 
     ArrowAnnotateTool.toAnnotation, ArrowAnnotateTool.toMeasurement, ArrowAnnotateTool.cleanAnnotation);
+
+  // DICOM SR Series Tag Tool
+  measurementService.addMapping(measurementSource,
+    DICOMSRSeriesTag.toolName, DICOMSRSeriesTag.matchingCriteria,
+    DICOMSRSeriesTag.toAnnotation, DICOMSRSeriesTag.toMeasurement, DICOMSRSeriesTag.cleanAnnotation,
+    DICOMSRSeriesTag.toAltSourceMeasurementSchema);
 
   return {
     measurementSource, measurementMappings,
@@ -65,7 +71,7 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
   const measurementMappings = cornerstone3dMeasurementDataProc.measurementServiceMappingsFactory(
     measurementService, displaySetService, cornerstoneViewportService, customizationService);
 
-  const { Length, ArrowAnnotate } = measurementMappings;
+  const { Length, ArrowAnnotate, DICOMSRSeriesTagTool } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource,
@@ -74,6 +80,11 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
   // Arrow Annotation Tool
   measurementService.addMapping(measurementSource, 
     ArrowAnnotate.toolName, ArrowAnnotate.matchingCriteria, ArrowAnnotate.toAnnotation, ArrowAnnotate.toMeasurement);
+
+  // DICOM Series Tag Tool
+  measurementService.addMapping(measurementSource,
+    DICOMSRSeriesTagTool.toolName, DICOMSRSeriesTagTool.matchingCriteria, 
+    DICOMSRSeriesTagTool.toAnnotation, DICOMSRSeriesTagTool.toMeasurement);
 
   return {
     measurementSource, measurementMappings,

@@ -8,7 +8,7 @@ import { ReactComponent as CloseCircle } from '@ohif/ui/src/elements/Svg/svgs/cl
 
 import styles from './ModalNG.module.scss';
 
-export default function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = false }) {
+function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = false }) {
   useEffect(() => {
     if (isOpen) {
       toggleScrolling(false);
@@ -21,8 +21,8 @@ export default function ModalNG({ isOpen, children, title, onClose, classes, hid
     };
   }, []);
 
-  const handleClose = () => {
-    onClose();
+  const handleClose = (e) => {
+    onClose(e);
     toggleScrolling(true);
   };
 
@@ -32,7 +32,20 @@ export default function ModalNG({ isOpen, children, title, onClose, classes, hid
 
   return createPortal(
     <>
-      <div className={styles.backdrop} />
+      <div
+        role="button" tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleClose(e);
+          }
+        }}
+        aria-label="Close modal backdrop"
+        className={styles.backdrop}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+      />
       <div className={classNames(styles.content, classes?.content)}>
         <div className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
@@ -42,9 +55,11 @@ export default function ModalNG({ isOpen, children, title, onClose, classes, hid
         {children}
       </div>
     </>,
-    document.getElementById('body')
+    document.getElementById('body'),
   );
 }
+
+ModalNG.displayName = 'ModalNG';
 
 ModalNG.propTypes = {
   isOpen: PropTypes.bool.isRequired,
@@ -56,3 +71,5 @@ ModalNG.propTypes = {
   }),
   hideDivider: PropTypes.bool,
 };
+
+export default ModalNG;

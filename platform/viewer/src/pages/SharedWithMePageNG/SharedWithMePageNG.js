@@ -48,6 +48,7 @@ export default function SharedWithMePageNG() {
   const {
     data: studies,
     isLoading,
+    isFetching,
     error,
   } = useStudies({
     server: activeServer,
@@ -71,6 +72,7 @@ export default function SharedWithMePageNG() {
       <StudyListNG
         title="Shared"
         isLoading={isLoading}
+        isFetching={isFetching}
         studies={studies || []}
         onClickNextPage={() => updatePageNumber(pageNumber + 1)}
         onClickPrevPage={() => updatePageNumber(pageNumber - 1)}

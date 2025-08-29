@@ -157,6 +157,12 @@ export default class DisplaySetService extends PubSubService {
     );
   };
 
+  public getDisplaySetsForStudy = (studyInstanceUID: string): DisplaySet[] => {
+    return [...displaySetCache.values()].filter(
+      displaySet => displaySet.StudyInstanceUID == studyInstanceUID
+    );
+  }
+
   public getDisplaySetForSOPInstanceUID(
     sopInstanceUID: string,
     seriesInstanceUID: string,

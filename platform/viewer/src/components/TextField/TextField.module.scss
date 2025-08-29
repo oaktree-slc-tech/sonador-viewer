@@ -1,0 +1,46 @@
+@import '@ohif/sonador-viewer/src/styles/breakpoints';
+
+.studyListFilterInputNG {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 8.5px 10px;
+  border-radius: 8px;
+  border: 1px solid #60646d;
+  column-gap: 10px;
+  background-color: transparent;
+
+  @include xs {
+    padding: 7px 10px;
+  }
+
+  &.active {
+    background-color: #000000;
+    border-color: #000000;
+  }
+
+  .input {
+    outline: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: #60646d;
+    font-size: 16px;
+    line-height: 19px;
+    width: 145px;
+
+    @include xs {
+      font-size: 14px;
+      line-height: 16px;
+    }
+  }
+
+  .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .closeIcon {
+    cursor: pointer;
+  }
+}

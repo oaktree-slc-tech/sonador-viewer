@@ -5,6 +5,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { toast } from 'react-hot-toast';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -15,10 +16,9 @@ import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 import OHIFDicomRtExtension from '@ohif/extension-dicom-rt';
 import OHIFDicomSegmentationExtension from '@ohif/extension-dicom-segmentation';
 import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
+import OHIFSegEditorExtension from '@ohif/extension-seg3d-editor';
 import OHIF3DVolumeViewerExtension from '@ohif/extension-viewer3d-volume';
 import OHIFM3DViewerExtension from '@ohif/extension-viewerm3d';
-import OHIFSegEditorExtension from '@ohif/extension-seg3d-editor';
-
 /**
  * EXTENSIONS
  * =================
@@ -91,7 +91,14 @@ const initOHIFViewer = function () {
       fetch(sonador_pacsurl, {
         credentials: 'include',
       })
-        .then((response) => response.json())
+        .then( async (response) => {
+          if (!response.ok) {
+            const errorText = await response.text();
+            toast.error('Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.');
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+          return response.json();
+        })
         .then(function (servers) {
           if (!Array.isArray(servers)) servers = [servers];
 

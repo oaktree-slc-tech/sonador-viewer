@@ -28,7 +28,15 @@ const { CodeScheme: Cornerstone3DCodeScheme } = adaptersSR.Cornerstone3D;
 export const SCOORDTypes = _.pick(SCOORD_TYPES, 'POINT', 'MULTIPOINT', 'POLYLINE', 'CIRCLE', 'ELLIPSE');
 
 
+export const DCM = 'DCM';
+export const SNOMED_CT = 'SCT';
+export const SRT = 'SRT';
+
+export const DCMSR_NUM = 'NUM';
+export const DCMSR_IMAGE = 'IMAGE';
+
 export const CodeNameCodeSequenceValues = {
+  DCM, SNOMED_CT, SRT,
   ImagingMeasurementReport: '126000',
   ImageLibrary: '111028',
   ImagingMeasurements: '126010',
@@ -43,12 +51,26 @@ export const CodeNameCodeSequenceValues = {
   Score: '246262008',
 };
 
+const DCMSR_FINDING = {
+  CodingSchemeDesignator: DCM,
+  CodeValue: CodeNameCodeSequenceValues.Finding,
+}
+const DCMSR_FINDING_SITE = {
+  CodingSchemeDesignator: SNOMED_CT,
+  CodeValue: CodeNameCodeSequenceValues.FindingSiteSCT,
+}
+const DCMSR_FINDING_SITE_OLD = {
+  CodingSchemeDesignator: SRT, 
+  CodeValue: CodeNameCodeSequenceValues.FindingSite,
+}
+
 
 // Cornerstone and Sonador Manufacturer Concepts
 
 export const CORNERSTONE_MANUFACTURER = 'Cornerstone';
 export const CORNERSTONE_TOOLS_SOURCE_NAME = `${CORNERSTONE_MANUFACTURER}Tools`;
 export const CORNERSTONE_TOOLS_SOURCE_VERSION = '4';
+export const CORNERSTONE_TOOLS_SR_TAG = 'cornerstoneTools@^4.0.0';
 
 export const CORNERSTONE_3D_MANUFACTURER = 'Cornerstone3D';
 export const CORNERSTONE_3D_TOOLS_SOURCE_NAME = `${CORNERSTONE_3D_MANUFACTURER}Tools-Sonador`;
@@ -198,16 +220,25 @@ export const RelationshipType = RELATIONSHIP_TYPE;
 
 
 export const CodingSchemeDesignators = {
-  SRT: 'SRT',
-  SCT: 'SCT',
+  DCM,
+  SRT,
+  SCT: SNOMED_CT,
   cornerstoneTools4: 'CST4',
   CornerstoneCodeSchemes: [Cornerstone3DCodeScheme.CodingSchemeDesignator, 'CST4'],
 };
 
 
 const Enums = {
+  DCM,
+  DCMSR_FINDING,
+  DCMSR_FINDING_SITE,
+  DCMSR_FINDING_SITE_OLD,
+  DCMSR_NUM,
+  DCMSR_IMAGE,
+
   CORNERSTONE_TOOLS_SOURCE_NAME,
   CORNERSTONE_TOOLS_SOURCE_VERSION,
+  CORNERSTONE_TOOLS_SR_TAG,
   CORNERSTONE_3D_TOOLS_SOURCE_NAME,
   CORNERSTONE_3D_TOOLS_SOURCE_VERSION,
 

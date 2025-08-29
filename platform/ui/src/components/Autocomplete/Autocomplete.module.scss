@@ -1,0 +1,141 @@
+@import '@ohif/sonador-viewer/src/styles/breakpoints';
+
+.selectDropdownNgContainer {
+  .selectDropdownNgBtn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+}
+
+.selectDropdownNg {
+  background-color: #000000;
+  border-radius: 10px;
+  border: 1px solid #27292d;
+  padding: 20px;
+  min-width: 390px;
+  z-index: 100000;
+  max-height: 500px;
+  overflow-y: auto;
+
+  @include xs {
+    min-width: 200px;
+    max-width: 85dvw;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+
+    .selectTitle {
+      margin: 0;
+      color: #ffffff;
+    }
+  }
+
+  .searchContainer {
+    display: flex;
+    width: 100%;
+    border: 1px solid #60646d;
+    border-radius: 10px;
+    padding: 0 10px;
+    height: 30px;
+    align-items: center;
+    column-gap: 5px;
+
+    &.active {
+      border-color: #d3d3d3;
+    }
+
+    .search {
+      flex-grow: 1;
+      font-size: 16px;
+      line-height: 18px;
+      color: #60646d;
+      background: transparent;
+      border: none;
+      outline: none;
+
+      &.active {
+        color: #d3d3d3;
+      }
+    }
+
+    &.marginBottom {
+      margin-bottom: 20px;
+    }
+
+    .highlightSearch path {
+      stroke: #d3d3d3;
+    }
+  }
+
+  .selectAllDivider {
+    margin-top: 10px;
+    color: #60646d;
+  }
+
+  .optionsContainer {
+    display: flex;
+    flex-direction: column;
+    row-gap: 10px;
+    margin-top: 10px;
+  }
+
+  .action {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .selectCloseIcon {
+    cursor: pointer;
+  }
+
+  .bottomAction {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: 12px;
+    line-height: 14px;
+    color: #d3d3d3;
+  }
+}
+
+.checkmark {
+  top: 0 !important;
+}
+
+.studyFilterContainer {
+  display: flex;
+  align-items: center;
+  height: fit-content;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #60646d;
+  column-gap: 10px;
+  font-size: 16px;
+  color: #60646d;
+  line-height: 18px;
+  background-color: transparent;
+  cursor: pointer;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+
+  @include xs {
+    padding: 7px 10px;
+    font-size: 14px;
+    line-height: 16px;
+  }
+
+  &.active {
+    background-color: #000000;
+    border-color: #000000;
+  }
+
+  .resetIcon {
+    cursor: pointer;
+  }
+}

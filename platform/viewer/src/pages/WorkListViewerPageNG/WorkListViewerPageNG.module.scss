@@ -70,3 +70,15 @@
     height: calc(100dvh - 64px);
   }
 }
+.studyItemData{
+  display: flex;
+  gap: 16px;
+  color: #fff;
+
+  .studyDataItem{
+    display: flex;
+    flex-direction: column;
+  }
+
+}
+

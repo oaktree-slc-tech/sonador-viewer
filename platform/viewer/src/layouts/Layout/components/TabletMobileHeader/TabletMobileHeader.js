@@ -36,7 +36,7 @@ export default function TabletMobileHeader() {
             <BurgerIcon />
           </button>
           {isLarge && (
-            <Link to="/ng" className={styles.logoWrapper}>
+            <Link to="/" className={styles.logoWrapper}>
               <Logo />
             </Link>
           )}

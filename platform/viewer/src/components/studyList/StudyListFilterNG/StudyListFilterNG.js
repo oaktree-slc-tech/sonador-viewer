@@ -57,7 +57,6 @@ export default function StudyListFilterNG({ filter, onChangeFilterValue, filterV
       />
     );
   }
-
   return <StudyListFilterInputNG filter={filter} filterValue={filterValue} onChangeFilterValue={onChangeFilterValue} />;
 }
 

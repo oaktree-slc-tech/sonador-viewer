@@ -62,7 +62,6 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     selectedLeftSidePanel,
     selectedRightSidePanel,
   } = useViewerSidePanels();
-
   
   const timepointApi = useMemo(() => new TimepointApi(currentTimepointId, {
     onTimepointsUpdated: (timepoints) => { dispatch(setTimepoints(timepoints)); },
@@ -373,6 +372,7 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
     </>
   );
 }
+
 
 Viewer.propTypes = {
   studies: PropTypes.arrayOf(

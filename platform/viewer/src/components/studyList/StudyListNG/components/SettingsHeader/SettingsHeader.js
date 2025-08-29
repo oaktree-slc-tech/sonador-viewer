@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useSelector } from 'react-redux';
 import { flatten } from 'lodash';
 import PropTypes from 'prop-types';
 
@@ -11,10 +12,12 @@ import { useColumnsSelectStore } from '../../../../../store/useColumnsSelectStor
 
 import styles from './SettingsHeader.module.scss';
 
-export default function SettingsHeader({ server, selectedColumns, setSelectedColumns }) {
+
+export default function SettingsHeader({  selectedColumns, setSelectedColumns }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const { isOpenColumnsSelect, setIsOpenColumnsSelect } = useColumnsSelectStore();
 
-  const { data: tags } = useTags({ server });
+  const { data: tags } = useTags({ server:activeServer });
 
   const columns = useMemo(() => {
     if (tags) {
@@ -51,6 +54,7 @@ export default function SettingsHeader({ server, selectedColumns, setSelectedCol
       setIsOpen={setIsOpenColumnsSelect}
       Button={() => <SettingsIcon className={styles.settings} fill="#a9a9a9" />}
       title="Select Columns"
+      isSearch
       options={columns}
       selectedOptions={selectedColumns}
       onSelectOption={handleSelectOption}
@@ -62,8 +66,8 @@ export default function SettingsHeader({ server, selectedColumns, setSelectedCol
   );
 }
 
+
 SettingsHeader.propTypes = {
-  server: PropTypes.object,
   selectedColumns: PropTypes.arrayOf(PropTypes.string),
   setSelectedColumns: PropTypes.func,
 };

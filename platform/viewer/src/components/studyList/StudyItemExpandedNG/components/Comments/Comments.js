@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 import Loader from '@ohif/ui/src/components/Loader/Loader';
@@ -12,20 +13,21 @@ import { useCreateSeriesComment, useCreateStudyComment, useSeriesComments, useSt
 
 import styles from './Comments.module.scss';
 
-export default function Comments({ server, series, studyId }) {
+export default function Comments({  series, studyId }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   // Manage and display series comments
 
   // State management: comments array and new comment text
   const [newCommentText, setNewCommentText] = useState('');
-  const { data: seriesCommentsArr = [], isLoading: isLoadingSeriesComments } = useSeriesComments(server, series);
+  const { data: seriesCommentsArr = [], isLoading: isLoadingSeriesComments } = useSeriesComments(activeServer, series);
   const { mutate: createSeriesComment, isLoading: isLoadingCreatingSeriesComment } = useCreateSeriesComment(
-    server,
+    activeServer,
     series,
     () => setNewCommentText('')
   );
-  const { data: studyCommentsArr = [], isLoading: isLoadingStudyComments } = useStudyComments(server, studyId);
+  const { data: studyCommentsArr = [], isLoading: isLoadingStudyComments } = useStudyComments(activeServer, studyId);
   const { mutate: createStudyComment, isLoading: isLoadingCreatingStudyComment } = useCreateStudyComment(
-    server,
+    activeServer,
     studyId,
     () => setNewCommentText('')
   );
@@ -91,7 +93,6 @@ export default function Comments({ server, series, studyId }) {
 }
 
 Comments.propTypes = {
-  server: PropTypes.object.isRequired,
   series: PropTypes.object,
   studyId: PropTypes.string,
 };

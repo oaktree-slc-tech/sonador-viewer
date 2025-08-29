@@ -14,6 +14,7 @@ export const useGroupSearch = (server, searchTerm) => {
   });
 };
 
+
 export const useGroupMembership = ({ server, groupId, term, enabled }) => {
   return useQuery({
     queryKey: ['worklist', 'groupMembership', server, groupId, term],
@@ -21,6 +22,7 @@ export const useGroupMembership = ({ server, groupId, term, enabled }) => {
     enabled,
   });
 };
+
 
 const DISPLAY_TYPES = {
   'Code String': 'string',
@@ -38,9 +40,11 @@ const DISPLAY_TYPES = {
   'Short Text': 'string',
   'Floating Point Double': 'string',
 };
+
+
 export const useWorklistItems = (params) => {
   return useQuery({
-    queryKey: ['worklist', params.server, params.groupId, params.userId],
+    queryKey: ['worklist', params],
     queryFn: () => getWorklistItems(params),
     select: (response) => {
       const mapped = Object.entries(params.tags || {})
@@ -67,14 +71,16 @@ export const useWorklistItems = (params) => {
               ...acc,
               worklistId: study.ID,
               StudyInstanceUID: { value: DICOMWeb.getString(study['0020000D']) },
-              AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User' },
-              GroupName: { value: study.Group?.name, label: 'Group Name' },
+              AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User', id: study.User.id },
+              GroupName: { value: study.Group?.name, label: 'Group Name', id: study.Group.id },
               Status: { value: study.State },
               PatientName: { value: DICOMWeb.getName(study['00100010']), label: 'Patient Name' },
+              PatientID: { value: DICOMWeb.getName(study['00100020']), label: 'Patient Id' },
+              PatientSex: { value: DICOMWeb.getName(study['00100040']), label: 'Patient Sex' },
               mrn: { value: DICOMWeb.getString(study['00100020']) },
               StudyDescription: { value: DICOMWeb.getString(study['00081030']), label: 'Study Description' },
               AccessionNumber: { value: DICOMWeb.getString(study['00080050']), label: 'Accession Number' },
-              StudyDate: { value: DICOMWeb.getString(study['00080020']), label: 'Study Date' },
+              StudyDate: { value: DICOMWeb.getString(study['00080020']), label: 'Study Date', type: 'date' },
               id: study.ID,
               modalities: {
                 value: DICOMWeb.getString(DICOMWeb.getModalities(study['00080060'], study['00080061'])),
@@ -97,8 +103,8 @@ export const useWorklistItems = (params) => {
           return {
             ...acc,
             StudyInstanceUID: { value: DICOMWeb.getString(study['0020000D']) },
-            AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User' },
-            GroupName: { value: study.Group?.name, label: 'Group Name' },
+            AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User', id: study.User.id },
+            GroupName: { value: study.Group?.name, label: 'Group Name', id: study.Group.id },
             Status: { value: study.State },
             PatientName: { value: DICOMWeb.getString(study['00100010']), label: 'Patient Name' },
             id: study.ID,

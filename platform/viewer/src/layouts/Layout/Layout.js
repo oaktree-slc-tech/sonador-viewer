@@ -30,7 +30,7 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
     <>
       {isDesktop && <SideBarNG />}
       {!isDesktop && <TabletMobileHeader />}
-      <div className={styles.contentContainer}>
+      <div className={styles.contentContainer} >
         <div className={styles.wrapper}>
           <div
             className={classNames(styles.content, {

@@ -39,16 +39,16 @@ function getTID300ContentItem(tool, ReferencedSOPSequence, adapterClass) {
 
 
 function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence) {
-  // Retreive measurement data from the tool type
+  // Retreive measurement data from the tool type  
 
   const toolTypeData = toolData[toolType];
   const toolClass = SonadorCornerstoneMeasurementReport.CORNERSTONE_TOOL_CLASSES_BY_TOOL_TYPE[toolType];
   if ( !toolTypeData || !toolTypeData.data || !toolTypeData.data.length || !toolClass ) {
       return;
-  }
+  }  
 
   // Loop through the array of tool instances for this tool
-  const Measurements = toolTypeData.data.map(tool => {
+  const Measurements = toolTypeData.data.map(tool => {      
 
       // Retrieve TID300 measurement and annotate properties with the toolType
       const tid300 = getTID300ContentItem(tool, ReferencedSOPSequence, toolClass);

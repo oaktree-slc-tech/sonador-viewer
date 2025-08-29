@@ -4,6 +4,9 @@
   display: flex;
   align-items: center;
   column-gap: 8px;
+  &.desktop{
+    min-width: 100px;
+  }
 
   .expander {
     rotate: -90deg;

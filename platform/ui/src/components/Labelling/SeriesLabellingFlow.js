@@ -1,5 +1,6 @@
+import _ from 'lodash';
+
 import React, { useEffect, useRef, useState } from 'react';
-import * as _ from 'lodash';
 import PropTypes from 'prop-types';
 
 import { sonador } from '@ohif/core';
@@ -26,24 +27,48 @@ const SeriesTagLabellingFlow = ({
   server,
   groupSelectTitle,
   groupSearchPlaceholder,
+  updateLabelling,
   ...props
 }) => {
+
   // Manage state for group selection
   const [selectedGroup, setSelectedGroup] = useState(undefined);
   const [seriesTags, setSeriesTags] = useState([]);
   const [tagsLoaded, setTagsLoaded] = useState(false);
 
+
+  const onUpdateLabelling = (data) => {
+    // Add group and other series attributes to labelling data
+
+    // Add gropu, scheme, and schemeVersion to tag data
+    if (data.value) {
+      const t = seriesTags.find((_t) => _t.value == data.value);
+      if (t) {
+        _.extend(data, _.pick(t, 'group', 'scheme', 'schemeVersion'));
+      }
+    }
+
+    console.log('[ui:SeriesTagLabellingFlow:onUpdateLabelling] labelling data', data);
+    updateLabelling(data);
+  }
+
   useEffect(() => {
     
     // Fetch series tags
     if (selectedGroup && !seriesTags.length) {
-      sonador.fetchGroupTags(server, selectedGroup).then((res) => res.json()).then((res)=> {        
+      sonador.fetchGroupTags(server, selectedGroup).then((res) => res.json()).then((res)=> {   
 
         if (res.length) {
           
           // Add tags to component state
           setSeriesTags(_.map(res, t => {
-            return { label: t.Meaning, value: t.Value, group: selectedGroup };
+            return {
+              label: t.Meaning,
+              value: t.Value,
+              group: selectedGroup?.id ? selectedGroup.id : undefined,
+              scheme: t.SchemeDesignator,
+              schemeVersion: t.SchemeVersion,
+            };
           }));
         } else {
 
@@ -81,6 +106,9 @@ const SeriesTagLabellingFlow = ({
       <LabellingFlow
         {...props}
         labelData={seriesTags}
+        updateLabelling={onUpdateLabelling}
+        locationAttr='value'
+        locationLabelAttr='text'
       />
     );
   } else {

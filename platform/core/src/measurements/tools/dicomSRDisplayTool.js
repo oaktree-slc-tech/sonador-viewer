@@ -8,6 +8,9 @@
 import _ from 'lodash';
 
 
+const displayTemplate = _.template('<% if (label) { %><%= label %> / <% } %><%= value %>');
+
+
 export const dicomSRDisplayTool = {
   // Cornerstone Tools configuration for the DICOM-SR display tool
 
@@ -23,9 +26,7 @@ export const dicomSRDisplayTool = {
         // Generate the display text that will be displayed in the measurement table
         
         options = options || {}
-        _.defaults(options, {
-          template: _.template('<% if (label) { %><%= label %> / <% } %><%= value %>'), sep: '\n',
-        });
+        _.defaults(options, { template: displayTemplate, sep: '\n', });
 
         // Create 
         if (data.labels && data.labels.length) {

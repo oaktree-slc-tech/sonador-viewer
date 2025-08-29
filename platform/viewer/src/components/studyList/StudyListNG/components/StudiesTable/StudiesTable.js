@@ -16,7 +16,6 @@ import StudiesTableActions from '../StudiesTableActions/StudiesTableActions';
 import styles from './StudiesTable.module.scss';
 
 export default function StudiesTable({
-  server,
   rows,
   sorting,
   studies,
@@ -32,12 +31,38 @@ export default function StudiesTable({
   error,
   isFilters,
   isWorkList,
+  isFetching,
+  setColumnOrder,
+  columnOrder
 }) {
   const { t } = useTranslation(['StudyList']);
 
   const { isDesktop } = useDeviceStore();
 
   const [isOpenedRowsPerPage, setIsOpenedRowsPerPage] = useState(false);
+  const [draggingColumnId, setDraggingColumnId] = useState(null);
+
+  const handleDragStart = (e, columnId) => {
+    setDraggingColumnId(columnId);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetColumnId) => {
+    e.preventDefault();
+    if (draggingColumnId === null || draggingColumnId === targetColumnId) return;
+
+    const newOrder = [...columnOrder];
+    const fromIndex = newOrder.indexOf(draggingColumnId);
+    const toIndex = newOrder.indexOf(targetColumnId);
+
+    newOrder.splice(fromIndex, 1);
+    newOrder.splice(toIndex, 0, draggingColumnId);
+    setColumnOrder(newOrder);
+    setDraggingColumnId(null);
+  };
 
   const callback = useCallback(() => setIsOpenedRowsPerPage(false), [setIsOpenedRowsPerPage]);
 
@@ -51,10 +76,10 @@ export default function StudiesTable({
   };
 
   useEffect(() => {
-    if (isLoading || !studies.length || error) {
+    if (isFetching || !studies.length || error) {
       tableContainerRef.current?.scrollTo({ left: 0 });
     }
-  }, [isLoading, studies.length, error]);
+  }, [isFetching, studies.length, error]);
 
   return (
     <div
@@ -63,7 +88,7 @@ export default function StudiesTable({
       })}
     >
       <div className={styles.tableToolbar}>
-        {isDesktop && <StudiesTableActions server={server} selectedRows={selectedRows} isWorkList={isWorkList} />}
+        {isDesktop && <StudiesTableActions  selectedRows={selectedRows} isWorkList={isWorkList} />}
         <div className={styles.tablePagination}>
           <div className={styles.rowsPerPage__wrapper} ref={perPageRef}>
             <div className={styles.rowsPerPage__label}>
@@ -109,55 +134,68 @@ export default function StudiesTable({
       <div
         ref={tableContainerRef}
         className={classNames(styles.studiesTableContainer, {
-          [styles.disabledScroll]: isLoading || !studies.length || error,
+          [styles.disabledScroll]: isFetching || !studies.length || error,
         })}
       >
         <table className={styles.studiesTable}>
           <thead>
-            {headers.map((headerGroup) => (
-              <tr key={headerGroup.id} className={styles.header}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <th key={header.id}>
-                      {header.isPlaceholder ? null : (
-                        <>
-                          {header.id !== 'selector-settings-expander' ? (
-                            <div className={styles.studiesTableHeaderItem} onClick={() => onSorting(header.id)}>
-                              <div className={styles.studiesTableHeaderSorting}>
-                                <CaretIcon
-                                  fill={
-                                    sorting.fieldName === header.id && sorting.direction === 'asc'
-                                      ? 'rgb(169, 169, 169)'
-                                      : 'rgb(122, 124, 132)'
-                                  }
-                                  className={styles.studiesTableHeaderSortingUpIcon}
-                                />
-                                <CaretIcon
-                                  fill={
-                                    sorting.fieldName === header.id && sorting.direction === 'desc'
-                                      ? 'rgb(169, 169, 169)'
-                                      : 'rgb(122, 124, 132)'
-                                  }
-                                />
-                              </div>
-                              <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
-                            </div>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </>
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
+          {headers.map((headerGroup) => (
+            <tr key={headerGroup.id} className={styles.header}>
+              {headerGroup.headers.map((header) => {
+                if (header.isPlaceholder) return <th key={header.id} />;
+
+                return (
+                  <th
+                    style={{borderTop: 'none', borderBottom: 'none'}}
+                    key={header.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, header.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, header.id)}
+                  >
+                    {header.id !== 'selector-settings-expander' ? (
+                      <div
+                        tabIndex={0}
+                        role='button'
+                        className={styles.studiesTableHeaderItem}
+                        onClick={() => onSorting(header.id)}
+                      >
+                        <div className={styles.studiesTableHeaderSorting}>
+                          <CaretIcon
+                            fill={
+                              sorting.fieldName === header.id && sorting.direction === 'asc'
+                                ? 'rgb(169, 169, 169)'
+                                : 'rgb(122, 124, 132)'
+                            }
+                            className={styles.studiesTableHeaderSortingUpIcon}
+                          />
+                          <CaretIcon
+                            fill={
+                              sorting.fieldName === header.id && sorting.direction === 'desc'
+                                ? 'rgb(169, 169, 169)'
+                                : 'rgb(122, 124, 132)'
+                            }
+                          />
+                        </div>
+                        <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                      </div>
+                    ) : (
+                      flexRender(header.column.columnDef.header, header.getContext())
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
           </thead>
+
           <tbody>
-            {!isLoading &&
+            {!isFetching &&
               !!studies.length &&
               rows.map((row, index) => {
                 const isExpanded = row.getIsExpanded();
+
+                const studyId = isWorkList? row.original.StudyInstanceUID.value: row.id
 
                 return (
                   <Fragment key={row.id}>
@@ -173,13 +211,13 @@ export default function StudiesTable({
                       })}
                     >
                       {row.getVisibleCells().map((cell) => {
-                        return <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>;
+                        return <td key={cell.id} style={{borderTop: 'none', borderBottom:'none'}}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>;
                       })}
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan={row.getVisibleCells().length} className={styles.expandedContainer}>
-                          <StudyItemExpandedNG studyId={row.id} server={server} study={row.original} />
+                        <td colSpan={row.getVisibleCells().length} style={{borderTop:'none', borderBottom:'none'}} className={styles.expandedContainer}>
+                          <StudyItemExpandedNG studyId={studyId}  study={row.original} />
                         </td>
                       </tr>
                     )}
@@ -188,12 +226,12 @@ export default function StudiesTable({
               })}
           </tbody>
         </table>
-        {isLoading && (
+        {isFetching && (
           <div className={styles.loaderContainer}>
             <Loader />
           </div>
         )}
-        {!isLoading && (!studies.length || error) && (
+        {!isFetching && (!studies.length || error) && (
           <p className={styles.noMatchingResults}>
             {error ? `Error: ${JSON.stringify(error)}` : t('No matching results')}
           </p>
@@ -203,9 +241,10 @@ export default function StudiesTable({
   );
 }
 
+
 StudiesTable.propTypes = {
-  server: PropTypes.object,
   isLoading: PropTypes.bool.isRequired,
+  isFetching: PropTypes.bool.isRequired,
   studies: PropTypes.array.isRequired,
   sorting: PropTypes.shape({
     fieldName: PropTypes.oneOfType([PropTypes.string]),
