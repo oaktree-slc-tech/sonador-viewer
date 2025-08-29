@@ -85,6 +85,7 @@ const ArrowAnnotate = {
   },
 };
 
+
 function getMappedAnnotations(annotation, displaySetService) {
   const { metadata, data } = annotation;
   const { text } = data;
@@ -112,6 +113,7 @@ function getMappedAnnotations(annotation, displaySetService) {
 
   return annotations;
 }
+
 
 function getDisplayText(mappedAnnotations, displaySet) {
   const displayText = {
@@ -146,6 +148,7 @@ function getDisplayText(mappedAnnotations, displaySet) {
   return displayText;
 }
 
+
 function _getReport(mappedAnnotations, points, FrameOfReferenceUID) {
   const columns = [];
   const values = [];
@@ -174,5 +177,7 @@ function _getReport(mappedAnnotations, points, FrameOfReferenceUID) {
     values,
   };
 }
+
+
 export default ArrowAnnotate;
 export { ArrowAnnotate, }

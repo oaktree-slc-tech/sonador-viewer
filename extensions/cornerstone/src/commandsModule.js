@@ -24,6 +24,29 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
   const actions = {
 
+    getCornerstoneEnabledElement({ viewports }) {
+      // Retrieve active/active Cornerstone element for the currently active viewport.
+      // Verifies that the element is enabled/active and includes an image annotation.
+
+      // Retrieve currently active element
+      const element = getEnabledElement(viewports.activeViewportIndex);
+      if (!element) {
+        log.warn('[cornerstone:commandsManager:getCornerstoneEnabledElement] no element available for the active viewport.',
+          'activeViewportIndex='+viewports.activeViewportIndex);
+        return;
+      }
+
+      // Determine if the active element is enabled and includes an active image reference
+      const enabledElement = cornerstone.getEnabledElement(element);
+      if (!enabledElement || !enabledElement.image) {
+        log.warn('[cornerstone:commandsManager:getCornerstoneEnabledElement] no enabled element or no image.',
+          enabledElement, (enabledElement || {}).image);
+        return;
+      }
+
+      return { element, enabledElement };
+    },
+
     rotateViewport: ({ viewports, rotation }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -171,13 +194,33 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                       });
                     }
                   },
-                  updateLabelling: ({ location, description, response }) => {
+                  updateLabelling: ({ value, text, description, scheme, schemeVersion, group }) => {
                     // Update measurement service with tag value
 
+                    // Add tag to measurement API
+                    const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
+                    if (!_id && !uid) {
+                      
+                      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
+                      if (!enabledElement) {
+                        console.warn('[cornerstone:commands:seriesTagDialog] unable to retrieve enabled element');
+                        return;
+                      }
+
+                      cornerstoneTools.setToolEnabled(
+                        OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {}, element);
+
+                      //  Add measurements to Cornerstone Tool State
+                      cornerstoneTools.addToolState(
+                        element, OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, measurementData);
+                    }
+
                     // Add location, description, and response attributes from the tag workflow
-                    measurementData.location = location || measurementData.location;
-                    measurementData.description = description || '';
-                    measurementData.response = response || measurementData.response;
+                    measurementData.value = value || measurementData.value;
+                    measurementData.description = description || measurementData.description || '';
+                    measurementData.text = text || measurementData.text || '';
+                    measurementData.scheme = scheme || measurementData.metadata?.scheme || measurementData.scheme;
+                    measurementData.schemeVersion = schemeVersion || measurementData.metadata?.scheme || measurementData.schemeVersion
 
                     // Update measurements table
                     commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
@@ -275,23 +318,15 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         OHIF.measurements.MeasurementApi.Instance.measurementsCount());
 
       // Retrieve currently active element
-      const element = getEnabledElement(viewports.activeViewportIndex);
-      if (!element) {
-        log.warn('[cornerstone:commandsManager:clearAnnotations] no element available for the active viewport.',
-          'activeViewportIndex='+viewports.activeViewportIndex);
-        return;
-      }
-
-      // Determine if the active element is enabled
-      const enabledElement = cornerstone.getEnabledElement(element);
+      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
       if (!enabledElement || !enabledElement.image) {
-        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image.',
-          enabledElement, (enabledElement || {}).image);
+        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image.');
         return;
       }
 
       const { toolState } = cornerstoneTools.globalImageIdSpecificToolStateManager;
       if (!toolState || toolState.hasOwnProperty(enabledElement.image.imageId) === false) {
+
         log.warn('[cornerstone:commandsManager:clearAnnotations] unable to locate tool state for the enabled element. '
           + 'Clear service measurements and return.');
         OHIF.measurements.MeasurementApi.Instance.clearMeasurements();
@@ -401,7 +436,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       // Unpack measurement data
       const toolType = OHIF.measurements.MeasurementApi._getToolType(measurementData);
       const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
-      const { measurementNumber, location, description } = measurementData;
+      const { measurementNumber } = measurementData;
+
+      if (!_id && !uid) {
+        console.warn('[cornerstone:commands:updateTableWithNewMeasurementData] unable to update measurement, '
+          + 'invalid identifiers. uid="'+(uid || '(null)')+'" _id="'+(_id || '(null)')+'"');
+        return;
+      }
       
       if (measurementApi.tools[toolType]) {
         
@@ -413,9 +454,8 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
           })
           .forEach((m) => {
 
-            // Update measurement location and description
-            m.location = location;
-            m.description = description;
+            // Update measurement data
+            _.extend(m,  _.omit(_.pickBy(measurementData, v => !_.isNil(v)), 'measurementNumber'));
 
             // Trigger update via measurement API
             measurementApi.updateMeasurement(toolType, m, {
@@ -494,10 +534,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         cornerstone.setViewport(enabledElement, viewport);
       }
     },
-
+    
     jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, activeViewportIndex, refreshViewports = true }) => {
-      // Jump to a specific study/DICOM instance UID
       
+      // Jump to a specific study/DICOM instance UID
       const study = studyMetadataManager.get(StudyInstanceUID);
       const displaySet = study?.findDisplaySet((ds) => {
         return ds.images && ds.images.find((i) => i.getSOPInstanceUID() === SOPInstanceUID);

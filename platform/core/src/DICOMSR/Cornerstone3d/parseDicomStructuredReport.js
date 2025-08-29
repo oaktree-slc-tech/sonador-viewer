@@ -10,9 +10,12 @@ import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
 import { DicomMetadataStore } from '../../services/DicomMetadataStore';
 import { fileLoader } from '../../store';
 
+import { dataProc } from '../../utils';
+
 import Enums from '../../measurements/enums';
 import MeasurementApi from '../../measurements/classes/MeasurementApi';
 import getImagePath from '../../measurements/lib/getImagePath';
+
 import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 
@@ -98,6 +101,8 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       const { ReferencedSOPInstanceUID, imageId, frameNumber } = m;
 
       if (!sopInstanceUIDToImageId[ReferencedSOPInstanceUID]) {
+        console.log('[DICOM-SR:parseDicomStructuredReport:sopInstanceUIDs]', ReferencedSOPInstanceUID, imageId, m);
+
         sopInstanceUIDToImageId[ReferencedSOPInstanceUID] = imageId;
         imageIdsForToolState[ReferencedSOPInstanceUID] = [];
       }
@@ -109,7 +114,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
   // Rehydrate measurement instances via Cornerstone3D
   let storedMeasurementByAnnotationType = Cornerstone3dSR.sr.measurementReport.generateToolState(
-    instanceSR, sopInstanceUIDToImageId, c3dCoreUtilities.imageToWorldCoords, options.metaData, undefined, {
+    instanceSR, sopInstanceUIDToImageId, options.metaData, undefined, {
       onContentItemParse: (toolType, annotation, srItem) => { parseExtendedMeta(srItem, annotation); },
     });
 
@@ -189,6 +194,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     // Package tool data as anotation data and add to the measurements service.
     _.each(toolDataForAnnotationType, toolData => {
       let annotationData = _.cloneDeep((toolData.annotation || {}).data || toolData);
+      let _annotationMeta = _.cloneDeep(toolData.annotation?.metadata || {});
       const frameNumber = (annotationData && annotationData.frameNumber) || annotationData.frameIndex || toolData.frameIndex || 1;
 
       let instance, imageId, imagePath, FrameOfReferenceUID, SOPInstanceUID, SeriesInstanceUID, StudyInstanceUID, PatientID;
@@ -236,7 +242,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       annotationData['_id'] = _id;
 
       // Create annotation metadata structure
-      const annotationMeta = {
+      const annotationMeta = _.extend(_annotationMeta, {
         toolName: annotationType,
         referencedImageId: imageId,
         FrameOfReferenceUID,
@@ -246,8 +252,8 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
         SOPInstanceUID,
         imagePath,
         annotationUID: annotationData.annotationUID || _id,
-        location: annotationData.metadata?.location || toolData.annotation.metadata?.location,
-      }
+        location: annotationData.metadata?.location || toolData.annotation.metadata?.location,        
+      });
       _.defaults(annotationMeta, { _id, TrackingUniqueIdentifier: trackingUid });
       _.defaults(annotationMeta, _.pick(toolData, 'TrackingUniqueIdentifier', 'description', 'finding', 'findingSites'));
 
@@ -258,7 +264,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
         metadata: annotationMeta,
       }
 
-      console.log('[DICOM-SR:parseDicomStructuredReport:annotationData] trackingUid='+trackingUid, annotation);
+      console.debug('[DICOM-SR:parseDicomStructuredReport:annotationData] trackingUid='+trackingUid+' toolType='+annotationType, annotation);
 
       // For parser defined mappings, add annotation to measurement service. For annotations not
       // defined via the parser, return with the srMeasurements result to be processed by the
@@ -274,7 +280,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
       if (parserToolServiceManaged && !_apiMeasurement) {
 
-        console.log('[DICOM-SR:parseDicomStructuredReport:parser-source] process annotation via parser source mapping',
+        console.debug('[DICOM-SR:parseDicomStructuredReport:parser-source] process annotation via parser source mapping',
           'annotationType='+annotationType, annotation);
 
         if (!measurementApi._apiSourceServiceMeasurement(annotation, parserSource)) {
@@ -295,12 +301,20 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
         console.log('[DICOM-SR:parseDicomStructuredReport:parser-source] import measurement to service',
           'annotationType='+annotationType, 'uid='+measurement_uid, measurement)
 
+      } else if (_apiMeasurement) {
+
+        // Measurement already imported to measurement service
+        log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] duplicate measurement,'
+          +' skip import: annotationType='+annotationType, annotation);
+        return;
+
       } else {
 
         // Measurement not managed via measurement service, skip import of annotation data
         log.warn('[DICOM-SR:parseDicomStructuredReport:invalid-tool] unable to import via measurement service '
           +'annotationType='+annotationType, annotation);
         return;
+
       }
 
       // Incremenet measurement number

@@ -1,5 +1,5 @@
 import dcmjs from 'dcmjs';
-import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
+import { Cornerstone3DSrAdapters } from '../Cornerstone3d';
 
 
 const isToolSupported = (toolName) => {
@@ -9,7 +9,7 @@ const isToolSupported = (toolName) => {
   * @param {string} toolName
   * @returns {boolean}
   */
-  const adapter = c3dAdaptersSR.Cornerstone;
+  const adapter = Cornerstone3DSrAdapters;
   return !!adapter[toolName];
 };
 

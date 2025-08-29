@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
@@ -18,7 +19,9 @@ import UpdateWorklistModal from './components/UpdateWorklistModal';
 
 import styles from './StudiesTableActions.module.scss';
 
-export default function StudiesTableActions({ server, selectedRows, isWorkList }) {
+
+export default function StudiesTableActions({  selectedRows, isWorkList }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const { appConfig } = useContext(AppContext);
   const navigate = useNavigate();
   const [openUpdateWorklistModal, setOpenUpdateWorklistModal] = useState(false);
@@ -28,7 +31,7 @@ export default function StudiesTableActions({ server, selectedRows, isWorkList }
 
   const handleViewAllSelectedStudies = () => {
     selectedRows.forEach(({ id }) => {
-      const link = parseViewerPath(appConfig, server, {
+      const link = parseViewerPath(appConfig, activeServer, {
         studyInstanceUIDs: id,
       });
 
@@ -52,7 +55,7 @@ export default function StudiesTableActions({ server, selectedRows, isWorkList }
         >
           {selectedRows.length} Studies Selected
         </span>
-        {server?.perms?.view && (
+        {activeServer?.perms?.view && (
           <button className={styles.action} disabled={!selectedRows.length} onClick={handleViewAllSelectedStudies}>
             <EyeIcon />
             View
@@ -64,7 +67,7 @@ export default function StudiesTableActions({ server, selectedRows, isWorkList }
             disabled={!selectedRows.length}
             onClick={() => {
               setWorkListSelectedStudies(selectedRows);
-              navigate(`/ng/worklist/viewer/`);
+              navigate(`/worklist/viewer/`);
             }}
           >
             <ViewAndProcessIcon />
@@ -99,7 +102,6 @@ export default function StudiesTableActions({ server, selectedRows, isWorkList }
         <StudiesTableShareModal
           isOpenedShareModal={isOpenedShareModal}
           setIsOpenedShareModal={setIsOpenedShareModal}
-          server={server}
           selectedStudy={selectedRows[0]}
         />
       )}
@@ -110,6 +112,7 @@ export default function StudiesTableActions({ server, selectedRows, isWorkList }
     </>
   );
 }
+
 
 StudiesTableActions.propTypes = {
   server: PropTypes.object,

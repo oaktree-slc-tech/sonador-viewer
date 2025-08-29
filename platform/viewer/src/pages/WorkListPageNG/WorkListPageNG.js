@@ -1,35 +1,24 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+
 import qs from 'query-string';
 
-import DICOMWeb from '@ohif/core/src/DICOMWeb';
 import { useDebounce } from '@ohif/ui';
 
 import StudyListNG from '../../components/studyList/StudyListNG/StudyListNG';
 import useStudiesTable from '../../hooks/useStudiesTable';
-import useTags from '../../hooks/useTags';
+
 import Layout from '../../layouts/Layout/Layout';
 import { useWorklistItems } from '../../queries/worklist';
 import { useStudiesTableFilters } from '../../store/useStudiesTableFilters';
 import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTableFiltersAndColumnsStore';
 
-function useWorklist(server) {
-  const [domain] = server?.qidoRoot
-    ? server?.qidoRoot?.match(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/?\n]+)/gim) || ['']
-    : [''];
-  const [port] = server?.qidoRoot ? server?.qidoRoot?.match(/:\d+/) || [''] : [''];
-  const url = `${domain}${port}`;
+import { WorklistContextProvider } from './worklist.context';
 
-  return useQuery({
-    queryKey: ['worklist', server?.token],
-    queryFn: () =>
-      fetch(`${url}/dicom-web/worklist/studies?User=1`, {
-        headers: DICOMWeb.getAuthorizationHeader(server),
-      }).then((res) => res.json()),
-  });
-}
+
 export default function WorkListPageNG() {
+  // Sonador Viewer: Reviewer Worklist
+
   const location = useLocation();
 
   const { search } = qs.parse(location.search.replace('?', ''));
@@ -47,7 +36,6 @@ export default function WorkListPageNG() {
   } = useStudiesTableFiltersAndColumnsStore();
 
   const debouncedSearch = useDebounce(search, 500);
-  const debouncedFilters = useDebounce(workListPageFilters, 500);
 
   const {
     debouncedSort,
@@ -60,10 +48,9 @@ export default function WorkListPageNG() {
     activeServer,
   } = useStudiesTable();
 
-  const { data: tags } = useTags({ server: activeServer });
+  // const { data: tags } = useTags({ server: activeServer });
 
-  const { data, error: worklistError, isLoading: isLoadingWorklist } = useWorklist(activeServer);
-
+  // const { data, error: worklistError, isLoading: isLoadingWorklist } = useWorklist(activeServer);
   // const {
   //   data: studies,
   //   isLoading,
@@ -81,11 +68,36 @@ export default function WorkListPageNG() {
   //   tags,
   // });
 
-  const {data: worklist, isLoading, error} = useWorklistItems({
+  // Filter by user, group, and worklist state
+  const [assignedUserSearch, setAssignedUserSearch] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+  const [worklistStateSearch, setWorklistStateSearch] = useState('');
+  
+  const filters = useMemo(() => {
+    // Worklist search filters
+
+    const offset = pageNumber >1?(pageNumber - 1) * rowsPerPage:0;
+    return {
+      allFields: debouncedSearch,
+      limit: rowsPerPage,
+      offset,
+      ...workListPageFilters,
+      ...(assignedUserSearch && { User: assignedUserSearch }),
+      ...(groupSearch && { Group: groupSearch }),
+      ...(worklistStateSearch && { State: worklistStateSearch }),
+    };
+  }, [workListPageFilters, assignedUserSearch, groupSearch, worklistStateSearch, debouncedSearch, rowsPerPage, pageNumber]);
+
+  const debouncedFilters = useDebounce(filters, 500);
+
+  const { data: worklist, isLoading,isFetching, error } = useWorklistItems({
     server: activeServer,
-    filters: debouncedFilters,
+    filters: debouncedFilters ,
+    studyStartDate,
+    studyEndDate,
+    pageNumber,
     isForce: forceRerender,
-  })
+  });
 
   const refreshApp = () => {
     setForceRerender(Math.random());
@@ -93,34 +105,44 @@ export default function WorkListPageNG() {
 
   return (
     <Layout noHorizontalPadding>
-      <StudyListNG
-        title="Worklist"
-        isLoading={isLoading}
-        studies={worklist||[]}
-        onClickNextPage={() => updatePageNumber(pageNumber + 1)}
-        onClickPrevPage={() => updatePageNumber(pageNumber - 1)}
-        rowsPerPage={rowsPerPage}
-        pageNumber={pageNumber}
-        onRefresh={refreshApp}
-        onChangeRowsPerPage={updateRowsPerPage}
-        server={activeServer}
-        startDate={studyStartDate}
-        endDate={studyEndDate}
-        onChangeDates={(startDate, endDate) => {
-          setStartStudyDate(startDate);
-          setStudyEndDate(endDate);
-        }}
-        sorting={sorting}
-        onSorting={handleSorting}
-        filters={workListPageFilters}
-        onChangeFilterValue={setWorkListPageFilters}
-        error={error}
-        isWorkList
-        selectedFilters={workListStudiesSelectedFilters}
-        selectedColumns={workListStudiesSelectedColumns}
-        setSelectedColumns={setWorkListStudiesSelectedColumns}
-        setSelectedFilters={setWorkListStudiesSelectedFilters}
-      />
+      <WorklistContextProvider value={{
+        assignedUserSearch,
+        setAssignedUserSearch,
+        groupSearch,
+        setGroupSearch,
+        worklistStateSearch,
+        setWorklistStateSearch,
+      }}>
+        <StudyListNG
+          title="Worklist"
+          isLoading={isLoading}
+          isFetching={isFetching}
+          studies={worklist || []}
+          onClickNextPage={() => updatePageNumber(pageNumber + 1)}
+          onClickPrevPage={() => updatePageNumber(pageNumber - 1)}
+          rowsPerPage={rowsPerPage}
+          pageNumber={pageNumber}
+          onRefresh={refreshApp}
+          onChangeRowsPerPage={updateRowsPerPage}
+          server={activeServer}
+          startDate={studyStartDate}
+          endDate={studyEndDate}
+          onChangeDates={(startDate, endDate) => {
+            setStartStudyDate(startDate);
+            setStudyEndDate(endDate);
+          }}
+          sorting={sorting}
+          onSorting={handleSorting}
+          filters={workListPageFilters}
+          onChangeFilterValue={setWorkListPageFilters}
+          error={error}
+          isWorkList
+          selectedFilters={workListStudiesSelectedFilters}
+          selectedColumns={workListStudiesSelectedColumns}
+          setSelectedColumns={setWorkListStudiesSelectedColumns}
+          setSelectedFilters={setWorkListStudiesSelectedFilters}
+        />
+      </WorklistContextProvider>
     </Layout>
   );
 }

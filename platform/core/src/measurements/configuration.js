@@ -1,4 +1,6 @@
 import { allTools } from './toolGroups/allTools';
+import { findings } from './toolGroups/findings';
+
 import {
   disassociateStudy,
   removeTimepoint,
@@ -9,13 +11,15 @@ import {
   updateTimepoint,
 } from './dataExchange';
 
+
 const measurementApiDefaultConfig = {
-  measurementTools: [allTools],
+  measurementTools: [allTools, findings],
   dataExchange: {
     retrieve: retrieveMeasurements,
     store: storeMeasurements,
   },
 };
+
 
 const timepointApiDefaultConfig = {
   dataExchange: {
@@ -26,5 +30,6 @@ const timepointApiDefaultConfig = {
     disassociate: disassociateStudy,
   },
 };
+
 
 export { measurementApiDefaultConfig, timepointApiDefaultConfig };

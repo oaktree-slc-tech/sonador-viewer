@@ -46,6 +46,8 @@ export function ToolbarButton(props) {
 }
 
 
+ToolbarButton.displayName = 'ToolbarButton';
+
 ToolbarButton.propTypes = {
   id: PropTypes.string,
   isActive: PropTypes.bool,

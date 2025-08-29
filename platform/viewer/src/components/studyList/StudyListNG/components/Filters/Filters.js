@@ -1,16 +1,21 @@
+import { flatten } from 'lodash';
+
 import React, { useContext, useMemo, useState } from 'react';
 import { isInclusivelyBeforeDay } from 'react-dates';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
-import classNames from 'classnames';
-import { flatten } from 'lodash';
-import moment from 'moment';
 import PropTypes from 'prop-types';
+
+import classNames from 'classnames';
+import moment from 'moment';
+
 import qs from 'query-string';
 
 import ImageServerPickerNG from '@ohif/sonador-viewer/src/components/ImageServerPickerNG/ImageServerPickerNG';
 import AppContext from '@ohif/sonador-viewer/src/context/AppContext';
 import { useDeviceStore } from '@ohif/sonador-viewer/src/store/useDeviceStore';
+import Autocomplete from '@ohif/ui/src/components/Autocomplete/Autocomplete';
 import SelectDropdownNG from '@ohif/ui/src/components/SelectDropdownNG/SelectDropdownNG';
 import DateRangePickerNG from '@ohif/ui/src/components/studyList/DateRangePickerNG';
 import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
@@ -21,32 +26,37 @@ import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/sea
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_FILTERS, FILTER_TYPES } from '../../../../../lib/constants';
 import { getDateEntryFromRange } from '../../../../../lib/utils/getDateEntryFromRange';
+import { useWorklistContext } from '../../../../../pages/WorkListPageNG/worklist.context';
 import StudyListFilterNG from '../../../StudyListFilterNG/StudyListFilterNG';
 
 import styles from './Filters.module.scss';
 
+
 export default function Filters({
   onRefresh,
   endDate,
+  studies,
   onChangeDates,
   startDate,
-  server,
   title,
   onChangeFilterValue,
   filters,
   selectedFilters,
   setSelectedFilters,
+  isWorklist,
 }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation(['StudyList', 'Header']);
+
 
   const { isDesktop, isMobile, isLarge, isTablet } = useDeviceStore();
 
   const [isOpenFiltersSelect, setIsOpenFiltersSelect] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
 
-  const { data: filtersData = {} } = useTags({ server });
+  const { data: filtersData = {} } = useTags({ server: activeServer });
 
   const allTags = useMemo(() => {
     const mapped = Object.entries(filtersData).map(([, filtersObj]) => {
@@ -144,7 +154,7 @@ export default function Filters({
           }))}
           onSelectOption={(id) =>
             setSelectedFilters(
-              selectedFilters.includes(id) ? selectedFilters.filter((item) => item !== id) : [...selectedFilters, id]
+              selectedFilters.includes(id) ? selectedFilters.filter((item) => item !== id) : [...selectedFilters, id],
             )
           }
           onClickAction={() => setSelectedFilters(DEFAULT_FILTERS)}
@@ -158,6 +168,7 @@ export default function Filters({
           title="Select Filters"
           classes={{ dropdown: styles.filterSelectionDropdown }}
         />
+        {isWorklist && <WorklistSearch studies={studies} />}
         {allTags
           .filter(({ tag }) => selectedFilters.includes(tag))
           .map((filter) => {
@@ -175,12 +186,75 @@ export default function Filters({
   );
 }
 
+
+const worklistStateOptions = ['Open', 'All', 'Scheduled', 'In-progress', 'Completed', 'Cancelled'].map(v => {
+  return { value: v, label: v };
+});
+
+
+function WorklistSearch({ studies }) {
+  // Component used for worklist search
+
+  const {
+    assignedUserSearch,
+    setAssignedUserSearch,
+    groupSearch,
+    setGroupSearch,
+    worklistStateSearch,
+    setWorklistStateSearch,
+  } = useWorklistContext();
+  const usersOptions = Array.from(
+    new Map(studies.map(item => [item.AssignedUser.id, item.AssignedUser])).values(),
+  ).map(user => ({
+    value: user.id,
+    label: user.value,
+  }));
+
+  const groupsOptions = Array.from(
+    new Map(studies.map(item => [item.GroupName.id, item.GroupName])).values(),
+  ).map(group => ({
+    value: group.id,
+    label: group.value,
+  }));
+
+
+  return (
+    <>
+      <Autocomplete
+        selectedOptions={assignedUserSearch ? [assignedUserSearch] : []}
+        title="User"
+        options={usersOptions}
+        onSelectOption={value => {
+          setAssignedUserSearch(value);
+        }}
+      />
+      <Autocomplete
+        selectedOptions={groupSearch ? [groupSearch] : []}
+        title="Group"
+        options={groupsOptions}
+        onSelectOption={value => {
+          setGroupSearch(value);
+        }}
+      />
+      <Autocomplete
+        selectedOptions={worklistStateSearch ? [worklistStateSearch] : []}
+        title='State'
+        options={worklistStateOptions}
+        onSelectOption={value => {
+          setWorklistStateSearch(value);
+        }}
+      />
+    </>
+  );
+}
+
+
+
 Filters.propTypes = {
   onChangeDates: PropTypes.func.isRequired,
   startDate: PropTypes.string.isRequired,
   endDate: PropTypes.string.isRequired,
   onRefresh: PropTypes.func.isRequired,
-  server: PropTypes.object,
   title: PropTypes.string.isRequired,
   onChangeFilterValue: PropTypes.func.isRequired,
   filters: PropTypes.object,

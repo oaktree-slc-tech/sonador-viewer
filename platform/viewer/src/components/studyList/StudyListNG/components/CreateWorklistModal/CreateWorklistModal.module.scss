@@ -40,15 +40,18 @@
 
   .createButtonWrapper {
     display: flex;
-    justify-content: center;
+    justify-content: right;
 
     .createWorklist {
       display: flex;
-      gap: 8px;
-      background-color: #f0f0f0;
-      border-radius: 4px;
+      background-color: #2E46E9;
+      border-radius: 10px;
+      padding: 10px 20px;
+      border: none;
       font-size: 18px;
-      padding: 16px;
+      line-height: 21px;
+      font-weight: 600;
+      color: #FFFFFF;
       cursor: pointer;
       div{
         height: 16px;

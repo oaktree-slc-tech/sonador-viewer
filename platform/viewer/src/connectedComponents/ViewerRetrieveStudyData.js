@@ -6,7 +6,6 @@
 // metadata, or the dataflow of a study when loaded within the viewer (for example,
 // adding locally created DICOM data) should be added to this file.
 
-
 import _ from 'lodash';
 
 import React, { useCallback, useContext, useEffect, useState, useRef } from 'react';
@@ -27,12 +26,15 @@ import AppContext from '../context/AppContext';
 import usePrevious from '../hooks/usePrevious';
 import NotFound from '../pages/NotFound/NotFound';
 
-import Viewer from './Viewer';
 
+// App and Viwer components
 import { servicesManager, commandsManager } from '../App';
+
+import Viewer from './Viewer';
 
 const { DicomMetadataStore, measurements, io } = OHIF;
 const { displaySetService, customizationService } = servicesManager.services;
+
 
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata, deleteStudyMetadataPromise } = studies;

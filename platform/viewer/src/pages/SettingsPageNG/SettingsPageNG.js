@@ -3,12 +3,17 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
+import { AboutContent } from '@ohif/ui';
+
+import DeviceList from '../../components/DevicesListModal/DeviceList';
+import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import Layout from '../../layouts/Layout/Layout';
 import { useDeviceStore } from '../../store/useDeviceStore';
 
 import GeneralTabNG from './components/GeneralTabNG/GeneralTabNG';
 import HotkeysTabNG from './components/HotkeysTabNG/HotkeysTabNG';
 import SecurityTabNG from './components/SecurityTabNG/SecurityTabNG';
+import TabHeaderNG from './components/TabHeaderNG/TabHeaderNG';
 import WindowLevelTabNG from './components/WindowLevelTabNG/WindowLevelTabNG';
 
 import styles from './SettingsPageNG.module.scss';
@@ -17,6 +22,9 @@ const TOP_TABS = [
   { id: 'general', label: 'General' },
   { id: 'hotkeys', label: 'Hotkeys' },
   { id: 'window-level', label: 'Window Level' },
+  { id: 'about', label: 'About' },
+  { id: 'device-list', label: 'Device List' },
+  { id: 'viewer-metadata', label: 'Viewer Metadata' },
 ];
 
 const BOTTOM_TABS = [
@@ -37,10 +45,26 @@ export default function SettingsPageNG() {
 
     if (selectedTabId === 'hotkeys') {
       return <HotkeysTabNG />;
+
     }
 
     if (selectedTabId === 'window-level') {
       return <WindowLevelTabNG />;
+    }
+
+    if (selectedTabId === 'about') {
+      return <div>
+        {isDesktop && <TabHeaderNG title="About" />}
+        <AboutContent />
+      </div>;
+    }
+
+    if (selectedTabId === 'device-list') {
+      return <DeviceList withDefaultHeader />;
+    }
+
+    if (selectedTabId === 'viewer-metadata') {
+      return <ViewerMetadataSettings asTab withHeader />;
     }
 
     if (selectedTabId === 'tokens') {

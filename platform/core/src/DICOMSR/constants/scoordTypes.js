@@ -1,4 +1,5 @@
 export default {
+  CODE: 'CODE',
   TEXT: 'TEXT',
   POINT: 'POINT',
   MULTIPOINT: 'MULTIPOINT',

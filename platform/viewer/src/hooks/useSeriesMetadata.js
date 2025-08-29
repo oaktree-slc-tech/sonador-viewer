@@ -1,7 +1,7 @@
 import { useContext } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import { log, metadata, studies, utils } from '@ohif/core';
+import { log, metadata, studies, utils, display } from '@ohif/core';
 
 import { extensionManager } from '../App';
 import AppContext from '../context/AppContext';
@@ -9,16 +9,15 @@ const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata } = studies;
 const { studyMetadataManager } = utils;
 
+
 const loadStudies = async (studyId, server, appConfig) => {
   // Retrieve study data from application store
 
+  const displaySetApi = display.DisplaySetApi.Instance;
+
   try {
-    const result = await retrieveStudiesMetadata(
-      server,
-      [studyId],
-      {},
-      appConfig.splitQueryParameterCalls || appConfig.enableGoogleCloudAdapter
-    );
+    const result = await retrieveStudiesMetadata(server, [studyId], {},
+      appConfig.splitQueryParameterCalls || appConfig.enableGoogleCloudAdapter);
 
     if (result && !result.isCanceled) {
       await Promise.all(
@@ -35,17 +34,26 @@ const loadStudies = async (studyId, server, appConfig) => {
     const sopClassHandlerModules = extensionManager.modules['sopClassHandlerModule'];
 
     return result.map((study) => {
+
+      // Initialize study metadata and create series displaysets
       const studyMetadata = new OHIFStudyMetadata(study, study.StudyInstanceUID);
+      const displaySets = studyMetadata.createDisplaySets(sopClassHandlerModules);
+
+      // Add displaysets to displaySet service
+      if (displaySetApi && displaySetApi.displaySetService) {
+        displaySetApi.displaySetService.addDisplaySets(displaySets);
+      }
 
       return {
         ...study,
-        displaySets: studyMetadata.createDisplaySets(sopClassHandlerModules),
+        displaySets,
       };
     });
   } catch (error) {
     log.error(error);
   }
 };
+
 
 const processThumbnail = (study, displaySet) => {
   // Filter display set properties to those required for display in the item drawer
@@ -88,6 +96,7 @@ const processThumbnail = (study, displaySet) => {
   };
 };
 
+
 const processStudy = (study) => {
   const thumbnails = study.displaySets.map((displaySet) => processThumbnail(study, displaySet));
 
@@ -97,9 +106,11 @@ const processStudy = (study) => {
   };
 };
 
+
 const mapStudiesToThumbnails = (studies = []) => {
   return studies.map(processStudy);
 };
+
 
 const addSeriesToStudy = (studyMetadata, series) => {
   // Retrieve the metadata for a series and add it to the study instance
@@ -124,6 +135,7 @@ const addSeriesToStudy = (studyMetadata, series) => {
   updateStudyMetadataManager(study, studyMetadata);
 };
 
+
 const loadRemainingSeries = async (studyMetadata, maxConcurrentMetadataRequests) => {
   const { seriesLoader } = studyMetadata.getData();
   if (!seriesLoader) return;
@@ -143,6 +155,7 @@ const loadRemainingSeries = async (studyMetadata, maxConcurrentMetadataRequests)
   return await Promise.all(promises);
 };
 
+
 const updateStudyMetadataManager = (study, studyMetadata) => {
   const { StudyInstanceUID } = study;
 
@@ -150,6 +163,7 @@ const updateStudyMetadataManager = (study, studyMetadata) => {
     studyMetadataManager.add(studyMetadata);
   }
 };
+
 
 export default function useSeriesMetadata({ studyId, server, mapToThumbnails = true }) {
   const { appConfig = {} } = useContext(AppContext);

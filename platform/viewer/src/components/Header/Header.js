@@ -138,6 +138,10 @@ function IssuesButton() {
   );
 }
 
+IssuesButton.displayName = 'IssuesButton';
+
+Header.displayName = 'Header';
+
 Header.propTypes = {
   linkText: PropTypes.string,
   linkPath: PropTypes.string,

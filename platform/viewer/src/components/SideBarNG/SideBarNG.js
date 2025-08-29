@@ -33,7 +33,8 @@ export default function SideBarNG() {
   const { isLarge, isDesktop, isTablet, isMobile } = useDeviceStore();
 
   const canUpload = activeServer?.perms?.upload;
-  const studyListPathname = location.pathname.includes('/server') && params.token ? location.pathname : '/ng';
+  const canWorkInWorklist = activeServer?.perms?.worklist;
+  const studyListPathname = location.pathname.includes('/server') && params.token ? location.pathname : '/';
 
   const enableScrolling = () => {
     if (isTablet || isMobile) {
@@ -60,7 +61,7 @@ export default function SideBarNG() {
   return (
     <aside className={styles.ngSidebar}>
       {!isLarge && (
-        <Link to="/ng" className={styles.logoWrapper}>
+        <Link to="/" className={styles.logoWrapper}>
           <Logo />
         </Link>
       )}
@@ -68,7 +69,7 @@ export default function SideBarNG() {
       <nav className={styles.navigation}>
         <div>
           <NavLink
-            to="/ng"
+            to="/"
             end
             onClick={handleClickStudiesLink}
             className={({ isActive }) =>
@@ -95,8 +96,8 @@ export default function SideBarNG() {
                 <span>All</span>
                 {/*<span className={styles.count}>1,543</span>*/}
               </NavLink>
-              <NavLink
-                to="/ng/worklist"
+              {canWorkInWorklist && <NavLink
+                to="/worklist"
                 className={({ isActive }) =>
                   classNames(styles.menuSubItem, {
                     [styles.active]: isActive,
@@ -106,11 +107,11 @@ export default function SideBarNG() {
               >
                 <span>Worklist</span>
                 {/*<span className={styles.count}>12</span>*/}
-              </NavLink>
+              </NavLink>}
             </>
           )}
           <NavLink
-            to="/ng/shared-with-me"
+            to="/shared-with-me"
             className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
             onClick={enableScrolling}
           >
@@ -119,7 +120,7 @@ export default function SideBarNG() {
           </NavLink>
           {canUpload && (
             <NavLink
-              to="/ng/upload"
+              to="/upload"
               onClick={handleClickNotStudiesLink}
               className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
             >
@@ -129,19 +130,19 @@ export default function SideBarNG() {
           )}
         </div>
         <div className={styles.bottom}>
+          {/*<NavLink*/}
+          {/*  to="/account"*/}
+          {/*  className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}*/}
+          {/*  onClick={(e) => {*/}
+          {/*    e.preventDefault(); // TODO remove once account page is ready*/}
+          {/*    enableScrolling();*/}
+          {/*  }}*/}
+          {/*>*/}
+          {/*  <AccountIcon fill={isAccountPage ? '#ffffff' : '#60646D'} />*/}
+          {/*  <span className={styles.name}>Account</span>*/}
+          {/*</NavLink>*/}
           <NavLink
-            to="/ng/account"
-            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
-            onClick={(e) => {
-              e.preventDefault(); // TODO remove once account page is ready
-              enableScrolling();
-            }}
-          >
-            <AccountIcon fill={isAccountPage ? '#ffffff' : '#60646D'} />
-            <span className={styles.name}>Account</span>
-          </NavLink>
-          <NavLink
-            to="/ng/settings"
+            to="/settings"
             onClick={handleClickNotStudiesLink}
             className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
           >

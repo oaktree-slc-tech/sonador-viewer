@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import PropTypes from 'prop-types';
-
-import _ from 'lodash';
-
+import { toast } from 'react-hot-toast';
+import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import _ from 'lodash';
+import PropTypes from 'prop-types';
 
 import { useDebounce } from '@ohif/ui';
 import CheckboxNG from '@ohif/ui/src/components/CheckboxNG/CheckboxNG';
@@ -33,67 +33,61 @@ const permissions = [
   { label: 'View', id: 'View' },
   { label: 'Modify', id: 'Modify' },
   { label: 'Remove', id: 'Remove' },
-  // { label: 'Comment', id: 'CommentView' },
   { label: 'Manage ACL', id: 'ACL' },
 ];
 
-export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpenedShareModal, server, selectedStudy }) {
+export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpenedShareModal,  selectedStudy }) {
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const queryClient = useQueryClient();
 
   const { data: aclUsers, isLoading: aclUsersIsLoading } = useQuery({
-    queryFn: () => getAclUsers(server, selectedStudy.id),
+    queryFn: () => getAclUsers(activeServer, selectedStudy.id),
     queryKey: ['aclUsers'],
   });
-  const { mutate: createUser } = useMutation({
+  const { mutateAsync: createUserAsync } = useMutation({
     mutationFn: async (user) => {
       if (!user.ID) {
         // User does not yet exist on the server, create and then update local copy with ID
-        createAclUser(server, selectedStudy.id, user)
-          .then((res) => res.json())
-          .then((_data) => {
-            createUser({ User: user.User, ID: _data.ID });
-          });
+        const _data = await createAclUser(activeServer, selectedStudy.id, user)
+        createUserAsync({ User: user.User, ID: _data.ID });
       }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclUsers']);
     },
   });
-  const { mutate: updateUser } = useMutation({
-    mutationFn: (user) => updateAclUser(server, selectedStudy.id, user),
+  const { mutateAsync: updateUserAsync } = useMutation({
+    mutationFn: (user) => updateAclUser(activeServer, selectedStudy.id, user),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclUsers']);
     },
   });
 
   const { data: aclGroups, isLoading: aclGroupsIsLoading } = useQuery({
-    queryFn: () => getAclGroups(server, selectedStudy.id),
+    queryFn: () => getAclGroups(activeServer, selectedStudy.id),
     queryKey: ['aclGroups'],
   });
-  const { mutate: createGroup } = useMutation({
+  const { mutateAsync: createGroupAsync } = useMutation({
     mutationFn: async (group) => {
       if (!group.ID) {
         // Group does not yet exist on the server, create and then update local copy with ID
-        createAclGroup(server, selectedStudy.id, group)
-          .then((res) => res.json())
-          .then((_data) => {
-            createGroup({ Group: group.Group, ID: _data.ID });
-          });
+        const _data = await createAclGroup(activeServer, selectedStudy.id, group)
+        createGroupAsync({ Group: group.Group, ID: _data.ID });
       }
     },
-    onSuccess: async (_response, payload) => {
+    onSuccess: async (_response ) => {
       await queryClient.invalidateQueries(['aclGroups']);
     },
   });
-  const { mutate: updateGroup } = useMutation({
-    mutationFn: (group) => updateAclGroup(server, selectedStudy.id, group),
+  const { mutateAsync: updateGroupAsync } = useMutation({
+    mutationFn: (group) => updateAclGroup(activeServer, selectedStudy.id, group),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclGroups']);
     },
   });
   const { mutate: mutateDeleteGroupPermission, isPending: isPendingDeleteGroupPermission } = useMutation({
     mutationFn: ({ permissionId }) => {
-      deleteAclGroupPermission(server, selectedStudy.id, permissionId);
+      deleteAclGroupPermission(activeServer, selectedStudy.id, permissionId);
     },
     onSuccess: async (_response, payload) => {
       await queryClient.invalidateQueries(['aclGroups']);
@@ -102,7 +96,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
   });
   const { mutate: mutateDeleteUserPermission, isPending: isPendingDeleteUserPermision } = useMutation({
     mutationFn: ({ permissionId }) => {
-      deleteAclUserPermission(server, selectedStudy.id, permissionId);
+      deleteAclUserPermission(activeServer, selectedStudy.id, permissionId);
     },
     onSuccess: async (_response, payload) => {
       await queryClient.invalidateQueries(['aclUsers']);
@@ -116,7 +110,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     reset: resetFoundusersGroupList,
   } = useMutation({
     mutationFn: async (params) => {
-      return await searchAcl(server, params);
+      return await searchAcl(activeServer, params);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclUsers']);
@@ -235,25 +229,27 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     }
   };
 
-  const handleSave = () => {
-    // Persist changes to ACL policy to server
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    const tasks = [];
 
     usersWithAccess.forEach((userWithAccess) => {
       const foundUser = aclUsers.find(({ User }) => User === userWithAccess.User);
 
       if (foundUser) {
-        const isUserPermissionsChanged =
+        const isChanged =
           foundUser.View !== userWithAccess.View ||
           foundUser.Modify !== userWithAccess.Modify ||
           foundUser.Remove !== userWithAccess.Remove ||
           // foundUser.CommentView !== userWithAccess.CommentView ||
           foundUser.ACL !== userWithAccess.ACL;
 
-        if (isUserPermissionsChanged) {
-          updateUser(userWithAccess);
+        if (isChanged) {
+          tasks.push(updateUserAsync(userWithAccess));
         }
       } else {
-        createUser(_.pick(userWithAccess, ['User', ...permissions.map((p) => p.id)]));
+        const payload = _.pick(userWithAccess, ['User', ...permissions.map((p) => p.id)]);
+        tasks.push(createUserAsync(payload));
       }
     });
 
@@ -261,21 +257,34 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
       const foundGroup = aclGroups.find(({ Group }) => Group === groupWithAccess.Group);
 
       if (foundGroup) {
-        const isGroupPermissionsChanged =
+        const isChanged =
           foundGroup.View !== groupWithAccess.View ||
           foundGroup.Modify !== groupWithAccess.Modify ||
           foundGroup.Remove !== groupWithAccess.Remove ||
           foundGroup.CommentView !== groupWithAccess.CommentView ||
           foundGroup.ACL !== groupWithAccess.ACL;
 
-        if (isGroupPermissionsChanged) {
-          updateGroup(groupWithAccess);
+        if (isChanged) {
+          tasks.push(updateGroupAsync(groupWithAccess));
         }
       } else {
-        createGroup(_.pick(groupWithAccess, ['Group', ...permissions.map((p) => p.id)]));
+        const payload = _.pick(groupWithAccess, ['Group', ...permissions.map((p) => p.id)]);
+        tasks.push(createGroupAsync(payload));
       }
     });
+
+    // Wait for all tasks to settle
+    const results = await Promise.allSettled(tasks);
+
+    const hasErrors = results.some((res) => res.status === 'rejected');
+
+    if (hasErrors) {
+      toast.error('Some access changes failed to save.');
+    } else {
+      toast.success('Access control changes saved successfully!');
+    }
   };
+
 
   const tables = [
     { tableName: 'users', list: usersWithAccess },
@@ -452,6 +461,5 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
 StudiesTableShareModal.propTypes = {
   isOpenedShareModal: PropTypes.bool.isRequired,
   setIsOpenedShareModal: PropTypes.func.isRequired,
-  server: PropTypes.object,
   selectedStudy: PropTypes.object,
 };

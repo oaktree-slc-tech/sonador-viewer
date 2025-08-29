@@ -50,62 +50,62 @@ const ROUTES_DEF = [
     condition: (appConfig) => appConfig.showStudyList,
   },
   {
-    path: '/studylist',
+    path: '/legacy/studylist',
     component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/legacy',
+    component: StudyListRouting,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/server/:token',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/server/:token/viewer',
+    component: StudyListRoutingNG,
+    condition: (appConfig) => appConfig.showStudyList,
+  },
+  {
+    path: '/studylist',
+    component: StudyListRoutingNG,
     condition: (appConfig) => appConfig.showStudyList,
   },
   {
     path: '/',
-    component: StudyListRouting,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
-    path: '/ng/server/:token',
     component: StudyListRoutingNG,
     condition: (appConfig) => appConfig.showStudyList,
   },
   {
-    path: '/ng/server/:token/viewer',
-    component: StudyListRoutingNG,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
-    path: '/ng/studylist',
-    component: StudyListRoutingNG,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
-    path: '/ng',
-    component: StudyListRoutingNG,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
-    path: '/ng/upload',
+    path: '/upload',
     component: UploadStudyPageNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },
   },
   {
-    path: '/ng/settings',
+    path: '/settings',
     component: SettingsPageNG,
   },
   {
-    path: '/ng/shared-with-me',
+    path: '/shared-with-me',
     component: SharedWithMeNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },
   },
   {
-    path: '/ng/worklist',
+    path: '/worklist',
     component: WorkListPageNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },
   },
   {
-    path: '/ng/worklist/viewer',
+    path: '/worklist/viewer',
     component: WorkListViewerPageNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;

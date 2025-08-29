@@ -13,6 +13,8 @@ import LivewireContour from './LivewireContour';
 import Probe from './Probe';
 import UltrasoundDirectional from './UltrasoundDirectional';
 import SegmentBidirectional from './SegmentBidirectional';
+import DICOMSRSeriesTagTool from './DICOMSRSeriesTagTool';
+
 
 const measurementServiceMappingsFactory = (
   measurementService: MeasurementService,
@@ -73,6 +75,18 @@ const measurementServiceMappingsFactory = (
           points: 2,
         },
       ],
+    },
+    DICOMSRSeriesTagTool: {
+      toolName: DICOMSRSeriesTagTool.toolName,
+      toAnnotation: DICOMSRSeriesTagTool.toAnnotation,
+      toMeasurement: csToolsAnnotation => {
+        return DICOMSRSeriesTagTool.toMeasurement(
+          csToolsAnnotation, displaySetService, cornerstoneViewportService, 
+          _getValueTypeFromToolType, customizationService);
+      },
+      matchingCriteria:  [
+        { valueType:  measurementService.VALUE_TYPES.CODED_CONCEPT, }
+      ]
     },
     Bidirectional: {
       toAnnotation: Bidirectional.toAnnotation,

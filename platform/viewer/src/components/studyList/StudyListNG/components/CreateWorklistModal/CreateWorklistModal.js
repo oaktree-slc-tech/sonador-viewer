@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 
 import BouncingLoader from '@ohif/ui/src/components/Loader/BouncingLoader';
-import Loader from '@ohif/ui/src/components/Loader/Loader';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 
 import { createWorklistRequest } from '../../../../../api/worklist';
@@ -65,7 +64,7 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
     }),
     onSuccess: () => {
       setIsOpen(false);
-      navigate('/ng/worklist');
+      navigate('/worklist');
     },
     onError: () => {
       toast.error('Failed to create worklist request');
@@ -82,7 +81,10 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
     <ModalNG
       isOpen={isOpen}
       title="Create Worklist item"
-      onClose={() => setIsOpen(false)}
+      onClose={(e) => {
+        e.stopPropagation()
+        return setIsOpen(false);
+      }}
       classes={{ content: styles.modal }}
     >
       {/* Group*/}

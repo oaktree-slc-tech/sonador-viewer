@@ -118,6 +118,44 @@ const _getHandlesFromPoints = points => {
 };
 
 
+const annotationDataSections = (measurement) => {
+  // Retrieve data sections from provided measurement data for mapping to expected annotation format
+
+  const measurementMeta = measurement.metadata || measurement;
+  const measurementData = measurement.measurementData || measurement.data || measurement;
+
+  return { measurementMeta, measurementData };
+}
+
+
+const annotationUids = (measurement) => {
+  // Map annotation IDs from measurement format to expected annotation format
+  const {
+    uid, referenceSeriesUID, referenceStudyUID, referencedImageId, frameNumber
+  } = measurement;
+    
+  // Retrieve measurement data sections to parse UIDs from
+  const { measurementMeta, measurementData } = annotationDataSections(measurement);
+  const _id = measurementMeta._id || measurement?.data?._id || measurement._id;
+  const timepointId = measurementMeta.timepointId || measurementData.timepointId || measurement.timepointId;
+
+  // Study identifiers  
+  const SeriesInstanceUID = referenceSeriesUID || measurementMeta.SeriesInstanceUID || measurementData.SeriesInstanceUID 
+    || measurement.SeriesInstanceUID;
+  const StudyInstanceUID = referenceStudyUID || measurementMeta.StudyInstanceUID || measurementData.StudyInstanceUID 
+    || measurement.StudyInstanceUID;
+
+  // Measurement number
+  const measurementNumber = measurementMeta.measurementNumber || measurementData.measurementNumber 
+    || measurement.measurementNumber;
+
+  // Measurement Tracking Unique Identifier
+  const trackingUid = measurementMeta.TrackingUniqueIdentifier || measurementData.TrackingUniqueIdentifier || measurement.TrackingUniqueIdentifier;
+
+  return { _id, timepointId, SeriesInstanceUID, StudyInstanceUID, measurementNumber, trackingUid };
+}
+
+
 const commonToAnnotation = (measurementService, measurement, definition) => {
   /**
   * Maps measurement service format object to Cornerstone (Legacy) annotation object.
@@ -146,19 +184,11 @@ const commonToAnnotation = (measurementService, measurement, definition) => {
 
   // Retrieve metadata from measurement, include _id to allow for sync between
   // Cornerstone Tools (Legacy/Classic) and OHIF v3 MeasurementService.
-  const measurementMeta = measurement.metadata || measurement;
-  const measurementData = measurement.measurementData || measurement.data || measurement;
-  const _id = measurementMeta._id || measurement?.data?._id || measurement._id;
-  const measurementNumber = measurementMeta.measurementNumber || measurementData.measurementNumber 
-    || measurement.measurementNumber;
-  const timepointId = measurementMeta.timepointId || measurementData.timepointId || measurement.timepointId;
+  const { measurementMeta, measurementData } = annotationDataSections(measurement);
 
-  // Study identifiers  
-  const SeriesInstanceUID = referenceSeriesUID || measurementMeta.SeriesInstanceUID || measurementData.SeriesInstanceUID 
-    || measurement.SeriesInstanceUID;
-  const StudyInstanceUID = referenceStudyUID || measurementMeta.StudyInstanceUID || measurementData.StudyInstanceUID 
-    || measurement.StudyInstanceUID;
-
+  // Measurement IDs
+  const { _id, timepointId, measurementNumber, SeriesInstanceUID, StudyInstanceUID, trackingUid } = annotationUids(measurement);
+  
   // Image path
   const imagePath = measurementMeta.imagePath || measurement?.data?.imagePath  || measurement.imagePath 
     referencedImageId || measurements.getImagePath(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, frameNumber || 1);
@@ -173,9 +203,6 @@ const commonToAnnotation = (measurementService, measurement, definition) => {
   if (!description) {
     description = measurementMeta.description || measurementData.description;
   }
-
-  // Measurement Tracking Unique Identifier
-  const trackingUid = measurementMeta.TrackingUniqueIdentifier || measurementData.TrackingUniqueIdentifier || measurement.TrackingUniqueIdentifier;
 
   const annotation = {
     SOPInstanceUID,
@@ -274,13 +301,76 @@ const commonCleanInnerData = (measurementData, annotation, options) => {
 }
 
 
-const commonToMeasurement = (measurementService, csToolsAnnotation) => {
+const measurementDataSections = (csToolsAnnotation, _annotation) => {
+  // Retrieve measurement data sections from the provided annotation data structure.
+  // IMPORTANT: to be used during Cornerstone Tools (Legacy/Classic) to OHIF Measurement v3 schema parsing ONLY.
+
+  _annotation = _annotation || _.cloneDeep(csToolsAnnotation);
+
+  const annotation = _annotation.annotation || _annotation;  
+  const _measurementData = annotation.measurementData || annotation.data || annotation;
+  const measurementMeta = annotation.metadata || _annotation.metadata || _measurementData || _annotation;
+  
+  return { _annotation, annotation, _measurementData, measurementMeta };
+}
+
+
+const commonPrepAnnotation = (annotation) => {
+  // For tools annotations that contain both "data" and "measurementData" sections, ensure
+  // that measurementData is back-populated with the attributes from data. _.defaults 
+  // is used to prevent over-writing the same keys in measurement data.
+  
+  if (annotation.measurementData && annotation.data) {
+    _.defaults(annotation.measurementData, annotation.data);
+  }
+
+  return annotation;
+}
+
+
+const measurementStateProperties = (csToolsAnnotation, measurementMeta, measurementData, annotation) => {
+  // Parse measurement state properties: isLocked, isReadOnly, isVisible.
+  // Refer to MeasurementService.ts for property descriptions and state.
+
+  // Measurement state attributes
+  const isLocked = utils.dataProc.firstDefinedValue(measurementMeta.isLocked, measurementData.isLocked, annotation.isLocked);
+  const isReadOnly = utils.dataProc.firstDefinedValue(measurementMeta.isReadOnly, measurementData.isReadOnly);
+  const isVisible = utils.dataProc.firstDefinedValue(measurementMeta.isVisible, measurementData.isVisible, annotation.isVisible,
+    csToolsAnnotation.visible, measurementMeta.visible, measurementData.visible, annotation.visible);
+
+  return { isLocked, isReadOnly, isVisible };
+}
+
+
+const measurementExtendedMeta = (csToolsAnnotation, measurementMeta, measurementData, annotation) => {
+  // Parse extended measurement metadata properties
+  // Refer to MeasurementService.ts for property descriptions and state.
+
+  const description = csToolsAnnotation.description || measurementMeta.description || measurementData.description
+    || csToolsAnnotation.annotation?.metadata?.description;
+  const text = csToolsAnnotation.text || measurementMeta.text || measurementData.text 
+    || csToolsAnnotation.annotation?.metadata?.text;
+  const label = csToolsAnnotation.label || measurementMeta.label || measurementData.label || text;
+  const location = csToolsAnnotation.location || measurementData.location || measurementMeta.location
+    || csToolsAnnotation.annotation?.metadata?.text;
+
+  return { description, text, label, location };
+}
+
+
+const measurementCoreAttrs = (measurementService, csToolsAnnotation) => {
   /**
   * Maps cornerstone annotation event data to measurement service format.
+  * 
+  * IMPORTANT: Performs in-place transform for built-in Cornerstone (Legacy/Classic) tools to preserve
+  * location, text, value, description and other properties. Tested againsttools in SUPPORTED_TOOLS.
+  * For first-party tools, such as the Series Tag tools, use the transform methods available
+  * in annotation2measurement module.
   *
   * @param csToolsAnnotation {Object} cornerstone Cornerstone event data.
-  * @return {Measurement} Measurement instance
+  * @return {object} common measurmeent attrs
   */
+
   // For tools annotations that contain both "data" and "measurementData" sections, ensure
   // that measurementData is back-populated with the attributes from data. _.defaults 
   // is used to prevent over-writing the same keys in measurement data.
@@ -300,15 +390,6 @@ const commonToMeasurement = (measurementService, csToolsAnnotation) => {
   const tool = measurementMeta.toolName || measurementMeta.toolType || _annotation.toolName;
   const measurementNumber = measurementMeta.measurementNumber || _measurementData.measurementNumber || annotation.measurementNumber;
   const timepointId = measurementMeta.timepointId || _measurementData.timepointId || annotation.timepointId;
-
-  // Ensure that the tool type is supported by the method
-  const validToolType = toolName => SUPPORTED_TOOLS.includes(toolName);
-
-  if (!validToolType(tool)) {
-    const emsg = 'Tool not supported: "'+tool+'"';
-    console.error(emsg, tool);
-    throw new Error(emsg);
-  }
 
   // Retrieve measurement UIDs
   let FrameOfReferenceUID, SOPInstanceUID, SeriesInstanceUID, StudyInstanceUID, PatientID, referencedImageId, frameNumber;
@@ -367,20 +448,12 @@ const commonToMeasurement = (measurementService, csToolsAnnotation) => {
     length = _.toNumber(length);
   }
 
-  // Measurement state attributes
-  const isLocked = utils.dataProc.firstDefinedValue(measurementMeta.isLocked, measurementData.isLocked, annotation.isLocked);
-  const isReadOnly = utils.dataProc.firstDefinedValue(measurementMeta.isReadOnly, measurementData.isReadOnly);
-  const isVisible = utils.dataProc.firstDefinedValue(measurementMeta.isVisible, measurementData.isVisible, annotation.isVisible,
-    csToolsAnnotation.visible, measurementMeta.visible, measurementData.visible, annotation.visible);
-
-  // Description, location, label, and text attributes
-  const description = csToolsAnnotation.description || measurementMeta.description || measurementData.description
-    || csToolsAnnotation.annotation?.metadata?.description;
-  const text = csToolsAnnotation.text || measurementMeta.text || measurementData.text 
-    || csToolsAnnotation.annotation?.metadata?.text;
-  const label = csToolsAnnotation.label || measurementMeta.label || measurementData.label || text;
-  const location = csToolsAnnotation.location || measurementData.location || measurementMeta.location
-    || csToolsAnnotation.annotation?.metadata?.text;
+  const {
+    isLocked, isReadOnly, isVisible
+  } = measurementStateProperties(csToolsAnnotation, measurementMeta, measurementData, annotation);
+  const {
+    description, text, label, location 
+  } = measurementExtendedMeta(csToolsAnnotation, measurementMeta, measurementData, annotation);
 
   // Measurement Tracking Unique Identifier
   const trackingUid = csToolsAnnotation.TrackingUniqueIdentifier || measurementMeta.TrackingUniqueIdentifier || measurementData.TrackingUniqueIdentifier;
@@ -412,7 +485,7 @@ const commonToMeasurement = (measurementService, csToolsAnnotation) => {
     }),
     data: _.omit(measurementData, 'handles', 'imageId', 'toolName', 'toolType', 'isReadOnly', 'isLocked', 'measurementNumber', 
       'PatientID', 'StudyInstanceUID', 'SeriesInstanceUID', 'SOPInstanceUID', 'FrameOfReferenceUID', 'imagePath', 
-      'referencedImageId', 'sopInstanceUid', 'SOPInstanceUID', 'location', 'visible'),
+      'referencedImageId', 'sopInstanceUid', 'SOPInstanceUID', 'location', 'visible', 'metadata', 'uid'),
 
     label: label || text,
     description,
@@ -443,6 +516,33 @@ const commonToMeasurement = (measurementService, csToolsAnnotation) => {
 
   // Return measurement (omitting top-level keys that are part of annotation schema, but not included in measurement schema)
   return _.omit(measurement, 'handles');
+}
+
+
+const commonToMeasurement = (measurementService, csToolsAnnotation) => {
+  /**
+  * Maps cornerstone annotation event data to measurement service format.
+  * 
+  * IMPORTANT: Performs in-place transform for built-in Cornerstone (Legacy/Classic) tools to preserve
+  * location, text, value, description and other properties. Tested againsttools in SUPPORTED_TOOLS.
+  * For first-party tools, such as the Series Tag tools, use the transform methods available
+  * in annotation2measurement module.
+  *
+  * @param csToolsAnnotation {Object} cornerstone Cornerstone event data.
+  * @return {object} common measurmeent attrs
+  */
+  const measurement = measurementCoreAttrs(measurementService, csToolsAnnotation);
+
+  // Ensure that the tool type is supported by the method
+  const validToolType = toolName => SUPPORTED_TOOLS.includes(toolName);
+
+  if (!validToolType(measurement.toolName)) {
+    const emsg = 'Tool not supported: "'+measurement.toolName+'"';
+    console.error(emsg, measurement.toolName);
+    throw new Error(emsg);
+  }
+
+  return measurement;
 }
 
 
@@ -504,6 +604,17 @@ const commonToAltSourceMeasurementSchema = (measurementService, dstSrc, measurem
 const measurementServiceMappingTools = {
   commonToAnnotation,
   commonToMeasurement,
+  measurement2annotation: {
+    annotationDataSections,  
+    annotationUids,
+  },
+  annotation2measurement: {
+    measurementDataSections,
+    measurementStateProperties,
+    measurementExtendedMeta,
+    measurementCoreAttrs,
+  },
+  commonPrepAnnotation,
   commonCleanAnnotation,
   commonToAltSourceMeasurementSchema,
   SUPPORTED_TOOLS,

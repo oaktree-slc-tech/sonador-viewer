@@ -48,6 +48,7 @@ const MEASUREMENT_SCHEMA_KEYS = [
   'isLocked',
   'isVisible',
   'description',
+  'value',
   'type',
   'unit',
   'points',

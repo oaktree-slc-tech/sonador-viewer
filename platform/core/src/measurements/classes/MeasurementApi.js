@@ -1492,6 +1492,12 @@ export default class MeasurementApi {
     const groupCollection = this.toolGroups[toolGroup];
     const collection = this.tools[toolType];
 
+    if (!collection) {
+      log.warn('[measurementAPI:addMeasurementRepresentation] unable to create measurement representation, no collection registered '
+        + 'with measurementApi for toolType='+toolType, this.tools, this.toolGroups);
+      return;
+    }
+
     // Get the related measurement by the measurement number and use its location if defined
     const relatedMeasurement = collection.find(
       (t) => t.measurementNumber === measurementNumber && t.toolType ===  MeasurementApi._getToolType(measurement));
@@ -1688,6 +1694,18 @@ export default class MeasurementApi {
       measurementRepresentation: addedMeasurement,
     });
 
+    // Ensure that service managed tools have the correct measurement number
+    const { toolServiceManaged } = this._serviceManagedTool(toolType);
+    if (toolServiceManaged && addedMeasurement._id) {
+
+      // Ensure that measurement service representation includes the measurement number
+      const measurement0 = this.getMeasurementByCornerstoneId(addedMeasurement._id);
+      if (measurement0 && (!measurement0.metadata?.measurementNumber || measurement0.metadata?.measurementNumber != addedMeasurement.measurementNumber)) {
+        _.extend(measurement0.metadata, _.pick(addedMeasurement, 'measurementNumber'));
+        this.updateMeasurement(toolType, measurement0);
+      }
+    }
+
     return addedMeasurement;
   }
 
@@ -1783,6 +1801,8 @@ export default class MeasurementApi {
       // Trigger callbacks associated with the API and return updatedMeasurement instance
       this.onMeasurementsUpdated();
       return updatedMeasurement;
+    } else {
+      log.warn('[measurementAPI:updateMeasurement] unable to locate collection for toolType='+toolType);
     }
   }
 

@@ -45,7 +45,7 @@ export default function WindowLevelTabNG() {
   const handleInputChange = (key, name) => (event) => {
     const { value } = event.target;
 
-    if (!state.values[key] || !state.values[key][name]) {
+    if (!state.values[key]) {
       return;
     }
 
@@ -63,7 +63,7 @@ export default function WindowLevelTabNG() {
 
   return (
     <>
-      {isDesktop && <TabHeaderNG title="Window level" description="Someone explain what this is to me" />}
+      {isDesktop && <TabHeaderNG title="Window level" description="" />}
       <div className={styles.content}>
         <div className={styles.header}>
           <div className={styles.preset} />

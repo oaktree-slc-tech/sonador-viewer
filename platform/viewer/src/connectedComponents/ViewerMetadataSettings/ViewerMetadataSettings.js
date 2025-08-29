@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import classNames from 'classnames';
 
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
@@ -8,6 +9,7 @@ import { ReactComponent as SaveIcon } from '@ohif/ui/src/elements/Svg/svgs/save.
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
 import SelectNG from '../../components/SelectNG/SelectNG';
+import { useUpdateUserPreferences } from '../../queries/preferences';
 import { useViewerMetadataSettingsStore } from '../../store/useViewerMetadataSettingsStore';
 
 import styles from './ViewerMetadataSettings.module.scss';
@@ -33,7 +35,7 @@ const options = [
 
 const LIMIT_CORNER_ITEMS = 10;
 
-export default function ViewerMetadataSettings() {
+export default function ViewerMetadataSettings({ asTab = false, withHeader = false }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const {
@@ -68,7 +70,19 @@ export default function ViewerMetadataSettings() {
     setBottomLeftCornerState(filteredBottomLeftCornerState);
     setBottomRightCornerState(filteredBottomRightCornerState);
 
-    setIsOpen(false);
+    if (!asTab) {
+      setIsOpen(false);
+    }
+
+    const settings = getAllUserSettings();
+    updateUserPreferencesMutate(settings, {
+      onSuccess: () => {
+        toast.success('Viewer metadata settings saved successfully');
+      },
+      onError: (error) => {
+        toast.error(`Failed to save viewer metadata settings: ${error.message}`, { duration: 5000 });
+      },
+    });
   };
 
   const handleCancel = () => {
@@ -77,8 +91,203 @@ export default function ViewerMetadataSettings() {
     setBottomLeftCornerState(bottomLeftCorner);
     setBottomRightCornerState(bottomRightCorner);
 
-    setIsOpen(false);
+    if (!asTab) {
+      setIsOpen(false);
+    }
   };
+  const { mutate: updateUserPreferencesMutate } = useUpdateUserPreferences();
+
+  const getAllUserSettings = () => {
+    const viewerSettings = {
+      topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner,
+    };
+    return { viewerSettings };
+  };
+
+  const renderContent = () => (
+    <>
+      {withHeader && asTab && (
+        <div>
+          <div className={styles.header}>
+            <h2 className={styles.tabTitle}>Viewer Metadata Settings</h2>
+          </div>
+          <p className={styles.description}>Customize the metadata displayed in the viewer window.</p>
+          <hr className={styles.divider} style={{ marginBottom: '1rem' }} />
+        </div>
+      )}
+      {!asTab && (
+        <>
+          <p className={styles.subtitle}>Metadata</p>
+          <p className={styles.description}>Customize the metadata displayed in the viewer window.</p>
+          <hr className={styles.divider} />
+        </>
+      )}
+      <div className={styles.blocks}>
+        <div className={styles.block}>
+          {topLeftCornerState.map((item, index) => {
+            return (
+              <div key={index} className={styles.select}>
+                <SelectNG
+                  options={options}
+                  selected={item}
+                  onChange={(newItem) =>
+                    setTopLeftCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy[index] = newItem;
+                      return copy;
+                    })
+                  }
+                />
+                <TrashBinIcon
+                  className={styles.deleteIcon}
+                  onClick={() =>
+                    setTopLeftCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy.splice(index, 1);
+                      return copy;
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setTopLeftCornerState((prevState) => [...prevState, { value: null }])}
+            className={styles.addBtn}
+            disabled={topLeftCornerState.length === LIMIT_CORNER_ITEMS}
+          >
+            <span>Add</span>
+            <AddCircleIcon />
+          </button>
+        </div>
+        <div className={classNames(styles.block, styles.topRightBlock)}>
+          {topRightCornerState.map((item, index) => {
+            return (
+              <div key={index} className={styles.select}>
+                <SelectNG
+                  options={options}
+                  selected={item}
+                  onChange={(newItem) =>
+                    setTopRightCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy[index] = newItem;
+                      return copy;
+                    })
+                  }
+                />
+                <TrashBinIcon
+                  className={styles.deleteIcon}
+                  onClick={() =>
+                    setTopRightCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy.splice(index, 1);
+                      return copy;
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setTopRightCornerState((prevState) => [...prevState, { value: null }])}
+            className={styles.addBtn}
+            disabled={topRightCornerState.length === LIMIT_CORNER_ITEMS}
+          >
+            <span>Add</span>
+            <AddCircleIcon />
+          </button>
+        </div>
+        <div className={styles.blocksSpaceDivider} />
+        <div className={classNames(styles.block, styles.bottomLeftBlock)}>
+          <button
+            onClick={() => setBottomLeftCornerState((prevState) => [...prevState, { value: null }])}
+            className={styles.addBtn}
+            disabled={bottomLeftCornerState.length === LIMIT_CORNER_ITEMS}
+          >
+            <span>Add</span>
+            <AddCircleIcon />
+          </button>
+          {bottomLeftCornerState.map((item, index) => {
+            return (
+              <div key={index} className={styles.select}>
+                <SelectNG
+                  options={options}
+                  selected={item}
+                  onChange={(newItem) =>
+                    setBottomLeftCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy[index] = newItem;
+                      return copy;
+                    })
+                  }
+                />
+                <TrashBinIcon
+                  className={styles.deleteIcon}
+                  onClick={() =>
+                    setBottomLeftCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy.splice(index, 1);
+                      return copy;
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className={classNames(styles.block, styles.bottomRightBlock)}>
+          <button
+            onClick={() => setBottomRightCornerState((prevState) => [...prevState, { value: null }])}
+            className={styles.addBtn}
+            disabled={bottomRightCornerState.length === LIMIT_CORNER_ITEMS}
+          >
+            <span>Add</span>
+            <AddCircleIcon />
+          </button>
+          {bottomRightCornerState.map((item, index) => {
+            return (
+              <div key={index} className={styles.select}>
+                <SelectNG
+                  options={options}
+                  selected={item}
+                  onChange={(newItem) =>
+                    setBottomRightCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy[index] = newItem;
+                      return copy;
+                    })
+                  }
+                />
+                <TrashBinIcon
+                  className={styles.deleteIcon}
+                  onClick={() =>
+                    setBottomRightCornerState((prevState) => {
+                      const copy = [...prevState];
+                      copy.splice(index, 1);
+                      return copy;
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className={styles.actions}>
+        <button className={styles.cancelBtn} onClick={handleCancel}>
+          Cancel
+        </button>
+        <button className={styles.saveBtn} onClick={handleSave}>
+          <span>Save</span>
+          <SaveIcon />
+        </button>
+      </div>
+    </>
+  );
+
+  if (asTab) {
+    return renderContent();
+  }
 
   return (
     <>
@@ -94,185 +303,7 @@ export default function ViewerMetadataSettings() {
           classes={{ content: styles.modal }}
           hideDivider
         >
-          <p className={styles.subtitle}>Metadata</p>
-          <p className={styles.description}>Customize the metadata displayed in the viewer window.</p>
-          <hr className={styles.divider} />
-          <div className={styles.blocks}>
-            <div className={styles.block}>
-              {topLeftCornerState.map((item, index) => {
-                return (
-                  <div key={index} className={styles.select}>
-                    <SelectNG
-                      options={options}
-                      selected={item}
-                      onChange={(newItem) =>
-                        setTopLeftCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy[index] = newItem;
-
-                          return copy;
-                        })
-                      }
-                    />
-                    <TrashBinIcon
-                      className={styles.deleteIcon}
-                      onClick={() =>
-                        setTopLeftCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy.splice(index, 1);
-
-                          return copy;
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-              <button
-                onClick={() => setTopLeftCornerState((prevState) => [...prevState, { value: null }])}
-                className={styles.addBtn}
-                disabled={topLeftCornerState.length === LIMIT_CORNER_ITEMS}
-              >
-                <span>Add</span>
-                <AddCircleIcon />
-              </button>
-            </div>
-            <div className={classNames(styles.block, styles.topRightBlock)}>
-              {topRightCornerState.map((item, index) => {
-                return (
-                  <div key={index} className={styles.select}>
-                    <SelectNG
-                      options={options}
-                      selected={item}
-                      onChange={(newItem) =>
-                        setTopRightCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy[index] = newItem;
-
-                          return copy;
-                        })
-                      }
-                    />
-                    <TrashBinIcon
-                      className={styles.deleteIcon}
-                      onClick={() =>
-                        setTopRightCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy.splice(index, 1);
-
-                          return copy;
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-              <button
-                onClick={() => setTopRightCornerState((prevState) => [...prevState, { value: null }])}
-                className={styles.addBtn}
-                disabled={topRightCornerState.length === LIMIT_CORNER_ITEMS}
-              >
-                <span>Add</span>
-                <AddCircleIcon />
-              </button>
-            </div>
-            <div className={styles.blocksSpaceDivider} />
-            <div className={classNames(styles.block, styles.bottomLeftBlock)}>
-              <button
-                onClick={() => setBottomLeftCornerState((prevState) => [...prevState, { value: null }])}
-                className={styles.addBtn}
-                disabled={bottomLeftCornerState.length === LIMIT_CORNER_ITEMS}
-              >
-                <span>Add</span>
-                <AddCircleIcon />
-              </button>
-              {bottomLeftCornerState.map((item, index) => {
-                return (
-                  <div key={index} className={styles.select}>
-                    <SelectNG
-                      options={options}
-                      selected={item}
-                      onChange={(newItem) =>
-                        setBottomLeftCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy[index] = newItem;
-
-                          return copy;
-                        })
-                      }
-                    />
-                    <TrashBinIcon
-                      className={styles.deleteIcon}
-                      onClick={() =>
-                        setBottomLeftCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy.splice(index, 1);
-
-                          return copy;
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <div className={classNames(styles.block, styles.bottomRightBlock)}>
-              <button
-                onClick={() => setBottomRightCornerState((prevState) => [...prevState, { value: null }])}
-                className={styles.addBtn}
-                disabled={bottomRightCornerState.length === LIMIT_CORNER_ITEMS}
-              >
-                <span>Add</span>
-                <AddCircleIcon />
-              </button>
-              {bottomRightCornerState.map((item, index) => {
-                return (
-                  <div key={index} className={styles.select}>
-                    <SelectNG
-                      options={options}
-                      selected={item}
-                      onChange={(newItem) =>
-                        setBottomRightCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy[index] = newItem;
-
-                          return copy;
-                        })
-                      }
-                    />
-                    <TrashBinIcon
-                      className={styles.deleteIcon}
-                      onClick={() =>
-                        setBottomRightCornerState((prevState) => {
-                          const copy = [...prevState];
-
-                          copy.splice(index, 1);
-
-                          return copy;
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className={styles.actions}>
-            <button className={styles.cancelBtn} onClick={handleCancel}>
-              Cancel
-            </button>
-            <button className={styles.saveBtn} onClick={handleSave}>
-              <span>Save</span>
-              <SaveIcon />
-            </button>
-          </div>
+          {renderContent()}
         </ModalNG>
       )}
     </>

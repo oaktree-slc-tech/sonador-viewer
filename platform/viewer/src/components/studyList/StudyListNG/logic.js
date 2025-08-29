@@ -1,3 +1,5 @@
+
+
 export const metadataArr = [
   {
     title: 'Patient',
@@ -12,11 +14,20 @@ export const metadataArr = [
   {
     title: 'Study',
     options: [
-      { id: 'modalities', label: 'Modality', isSelected: true },
+      { id: 'AccessionNumber', label: 'Accession Number', isSelected: true },
+      { id: 'modalities', label: 'Modalities in Study', isSelected: true, },
       { id: 'StudyDate', label: 'Study Date', isSelected: true },
       { id: 'StudyTime', label: 'Study Time', isSelected: true },
-      { id: 'studyId', label: 'Study ID', isSelected: true },
+      { id: 'StudyID', label: 'Study ID', isSelected: true },
+      { id: 'StudyDescription', label: 'Study Description', isSelected: true }, 
     ],
   },
-  { title: 'Series', options: [{ id: 'numberOfStudyRelatedSeries', label: 'Number of Series', isSelected: true }] },
+  { title: 'Series', options: [
+      { id: 'numberOfStudyRelatedSeries', label: 'Number of Series', isSelected: true },
+      { id: 'SeriesInstanceUID', label: 'Series Instance UID', isSelected: true },
+      { id: 'SeriesDescription', label: 'Series Description', isSelected: true },
+      { id: 'Modality', label: 'Modality', isSelected: true },
+      { id: 'SeriesNumber', label: 'Series Number', isSelected: true },
+    ]
+  },
 ];

@@ -25,6 +25,8 @@ const LabellingFlow = ({
 
   measurementData,
   editLocation,
+  locationAttr,
+  locationLabelAttr,
   editDescription,
   skipAddLabelButton,
   updateLabelling,
@@ -54,7 +56,7 @@ const LabellingFlow = ({
     }
 
     if (editLocation) {
-      newMeasurementData.location = undefined;
+      newMeasurementData[locationAttr] = undefined;
     }
 
     let newEditLocation = editLocation;
@@ -106,9 +108,16 @@ const LabellingFlow = ({
   };
 
   const selectTreeSelectCallback = (event, itemSelected) => {
+
+    const locationData = {
+      [locationAttr]: itemSelected.value,
+      [locationLabelAttr]: itemSelected.label,
+    }
+
     const location = itemSelected.value;
     const locationLabel = itemSelected.label;
-    updateLabelling({ location });
+
+    updateLabelling(locationData);
 
     setState((state) => ({
       ...state,
@@ -244,6 +253,8 @@ LabellingFlow.propTypes = {
   initialTopDistance: PropTypes.number,
   skipAddLabelButton: PropTypes.bool,
   editLocation: PropTypes.bool,
+  locationAttr: PropTypes.string,
+  locationLabelAttr: PropTypes.string,
   editDescription: PropTypes.bool,
   editDescriptionOnDialog: PropTypes.bool,
   labelWorkflowTitle: PropTypes.string,
@@ -257,6 +268,8 @@ LabellingFlow.propTypes = {
 LabellingFlow.defaultProps = {
   skipAddLabelButton: false,
   editLocation: false,
+  locationAttr: 'location',
+  locationLabelAttr: 'locationLabel',
   editDescription: false,
   editDescriptionOnDialog: false,
   labelData: OHIFLabellingData,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { Navigate,useNavigate } from 'react-router-dom';
 
 import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Svg/svgs/close.svg';
 import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
@@ -23,6 +23,10 @@ export default function WorkListViewerPageNG() {
 
   const [selectedStudy, setSelectedStudy] = useState(workListSelectedStudies[0]);
   const [selectedStudyIndex, setSelectedStudyIndex] = useState(0);
+
+  if(!selectedStudy){
+    return  <Navigate to='/worklist'/>
+  }
 
   const handleSelectPrev = () => {
     if (selectedStudyIndex > 0) {
@@ -47,7 +51,7 @@ export default function WorkListViewerPageNG() {
           <button
             onClick={() => {
               setWorkListSelectedStudies([]);
-              navigate('/ng/worklist');
+              navigate('/worklist');
             }}
             className={styles.exit}
           >
@@ -59,6 +63,16 @@ export default function WorkListViewerPageNG() {
               <FiltersIcon fill="#D3D3D3" />
               <span>Filters</span>
             </button>
+          </div>
+          <div className={styles.studyItemData}>
+            <div className={styles.studyDataItem}>
+              <span>Patient Name</span>
+              <span>{selectedStudy.original?.PatientName?.value ?? "N/A"}</span>
+            </div>
+            <div className={styles.studyDataItem}>
+              <span>MRN</span>
+              <span>{selectedStudy.original?.mrn?.value ?? "N/A"}</span>
+            </div>
           </div>
         </div>
         <div className={styles.rightHeader}>

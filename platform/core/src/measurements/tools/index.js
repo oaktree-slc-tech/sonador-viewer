@@ -2,7 +2,7 @@ import { angle } from './angle';
 import { arrowAnnotate } from './arrowAnnotate';
 import { bidirectional } from './bidirectional';
 import { circleRoi } from './circleRoi';
-import dicomSRDisplayTool from './dicomSRDisplayTool';
+
 import { ellipticalRoi } from './ellipticalRoi';
 import { freehandMouse } from './freehandMouse';
 import { length } from './length';
@@ -11,6 +11,9 @@ import { rectangleRoi } from './rectangleRoi';
 import { targetCR } from './targetCR';
 import { targetNE } from './targetNE';
 import { targetUN } from './targetUN';
+
+import dicomSRDisplayTool from './dicomSRDisplayTool';
+import dicomSeriesTagTool from './dicomSeriesTagTool';
 
 export {
   arrowAnnotate,
@@ -26,4 +29,5 @@ export {
   targetNE,
   targetUN,
   dicomSRDisplayTool,
+  dicomSeriesTagTool,
 };

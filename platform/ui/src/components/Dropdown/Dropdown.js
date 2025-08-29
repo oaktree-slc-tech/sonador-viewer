@@ -6,7 +6,7 @@ import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 
 import styles from './Dropdown.module.scss';
 
-export default function Dropdown({ Button, options, onClick, position = 'left' }) {
+function Dropdown({ Button, options, onClick, position = 'left' }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const ref = useRef(null);
@@ -66,6 +66,8 @@ export default function Dropdown({ Button, options, onClick, position = 'left' }
   );
 }
 
+Dropdown.displayName = 'Dropdown';
+
 Dropdown.propTypes = {
   Button: PropTypes.func.isRequired,
   options: PropTypes.arrayOf(
@@ -78,3 +80,5 @@ Dropdown.propTypes = {
   onClick: PropTypes.func,
   position: PropTypes.oneOf(['left', 'right']),
 };
+
+export default Dropdown;

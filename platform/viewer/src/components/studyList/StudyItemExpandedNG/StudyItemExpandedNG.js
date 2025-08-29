@@ -1,14 +1,18 @@
-import React, { useContext, useState } from 'react';
+import _ from 'lodash';
+
+import React, { useContext, useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import classNames from 'classnames';
 import moment from 'moment';
 import PropTypes from 'prop-types';
 
+import OHIF, { display, redux } from '@ohif/core';
+import Loader from '@ohif/ui/src/components/Loader/Loader';
+import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
+
 import AppContext from '@ohif/sonador-viewer/src/context/AppContext';
 import useSeriesMetadata from '@ohif/sonador-viewer/src/hooks/useSeriesMetadata';
 import * as RoutesUtil from '@ohif/sonador-viewer/src/routes/routesUtil';
-import Loader from '@ohif/ui/src/components/Loader/Loader';
-import { ReactComponent as DotsIcon } from '@ohif/ui/src/elements/Svg/svgs/dots.svg';
-import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 
 import { useDeviceStore } from '../../../store/useDeviceStore';
 
@@ -17,17 +21,34 @@ import { useAllSeriesComments, useStudyComments } from './components/Comments/lo
 import ImageThumbnailNG from './components/ImageThumbnailNG/ImageThumbnailNG';
 import Metadata from './components/Metadata/Metadata';
 import TabletMobileTabs from './components/TabletMobileTabs/TabletMobileTabs';
-// import { useSeriesMetadata } from './logic';
 import { ReactComponent as StudyCopyIcon } from './study-copy.svg';
 
 import styles from './StudyItemExpandedNG.module.scss';
 
-export default function StudyItemExpandedNG({ studyId, server, study }) {
-  // Show details for the currently selected study
 
+export default function StudyItemExpandedNG({ studyId,  study }) {
+  // Drawer control for Sonador Viewer Study List
+
+  const displaySetApi = display.DisplaySetApi.Instance;
+  const { activeServer } = useSelector(redux.selectors.activeOhifServer);
+  
+  // Show details for the currently selected study
   const { appConfig } = useContext(AppContext);
 
-  const { data } = useSeriesMetadata({ studyId, server });
+  useEffect(() => {
+
+    return () => {
+
+      // Remove displaySets associated with the study when the drawer is closed/unmounted
+      _.each(displaySetApi.displaySetService.getDisplaySetsForStudy(studyId), (ds) => {
+        displaySetApi.displaySetService.deleteDisplaySet(ds.displaySetInstanceUID);
+      });
+    }
+  }, [])
+
+  // Initialize displaySets for the drawer and retrieve thumbnail data
+  const { data } = useSeriesMetadata({ studyId, server: activeServer });
+
   const { isDesktop, isLarge } = useDeviceStore();
 
   // Selected thumbnail and series
@@ -35,23 +56,17 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
   const [selectedStudy, setSelectedStudy] = useState(studyId);
 
   const allSeries = data?.[0]?.thumbnails;
-  const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(server, allSeries);
-  const { data: studyCommentsArr = [] } = useStudyComments(server, studyId);
+  const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(activeServer, allSeries);
+  const { data: studyCommentsArr = [] } = useStudyComments(activeServer, studyId);
 
   const handleClickOpenInViewer = () => {
-    const link = RoutesUtil.parseViewerPath(appConfig, server, {
+    const link = RoutesUtil.parseViewerPath(appConfig, activeServer, {
       studyInstanceUIDs: studyId,
     });
 
     window.open(link, '_blank');
   };
 
-  const openInViewerButton = server?.perms.view && (
-    <button className={styles.openInViewer} onClick={handleClickOpenInViewer}>
-      <EyeIcon />
-      <span>Open in Viewer</span>
-    </button>
-  );
 
   return (
     <div className={styles.container}>
@@ -113,7 +128,7 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
                     height={120}
                     altImageText={thumbnail.altImageText}
                   />
-                  <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}hello</p>
+                  <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}</p>
                 </div>
               );
             })}
@@ -128,7 +143,10 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
               {study.StudyDate && moment(study.StudyDate.value, 'YYYYMMDD').format('MMM DD, YYYY')}
             </p>
           </div>
-          {isDesktop ? <DotsIcon /> : openInViewerButton}
+          <button className={styles.openInViewer} onClick={handleClickOpenInViewer}>
+            <EyeIcon />
+            <span>Open in Viewer</span>
+          </button>
         </div>
         {isDesktop || isLarge ? (
           <div className={styles.contentData}>
@@ -143,14 +161,16 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
                   height={240}
                   altImageText={selectedThumbnail?.altImageText}
                 />
-                {openInViewerButton}
               </div>
             )}
-            <Metadata study={study} />
-            <Comments server={server} series={selectedThumbnail} studyId={selectedStudy} />
+            <Metadata 
+              study={study} seriesCount={data?.[0]?.thumbnails?.length??0} 
+              selectedSeries={selectedThumbnail}
+            />
+            <Comments  series={selectedThumbnail} studyId={selectedStudy} />
           </div>
         ) : (
-          <TabletMobileTabs server={server} study={study} series={selectedThumbnail} />
+          <TabletMobileTabs  study={study} series={selectedThumbnail} />
         )}
       </div>
     </div>
@@ -159,6 +179,5 @@ export default function StudyItemExpandedNG({ studyId, server, study }) {
 
 StudyItemExpandedNG.propTypes = {
   studyId: PropTypes.string.isRequired,
-  server: PropTypes.object.isRequired,
   study: PropTypes.object.isRequired,
 };

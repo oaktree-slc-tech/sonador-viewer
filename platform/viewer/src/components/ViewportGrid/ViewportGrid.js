@@ -128,6 +128,8 @@ function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStud
   );
 }
 
+ViewportGrid.displayName = 'ViewportGrid';
+
 ViewportGrid.propTypes = {
   viewportData: PropTypes.array.isRequired,
   setViewportData: PropTypes.func.isRequired,
@@ -152,5 +154,7 @@ function Viewport({ viewportData, viewportIndex, availablePlugins, pluginName, d
 
   return <EmptyViewport />;
 }
+
+Viewport.displayName = 'Viewport';
 
 export default ViewportGrid;

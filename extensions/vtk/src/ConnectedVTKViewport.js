@@ -20,7 +20,7 @@ const mapStateToProps = (state, ownProps) => {
   const { viewportIndex } = ownProps;
   const isActive = viewportIndex === state.viewports.activeViewportIndex;
   const viewportLayout = state.viewports?.layout?.viewports?.[viewportIndex] ?? {};
-  const pluginDetails = viewportLayout.vtk || {};
+  const pluginDetails = viewportLayout?.vtk || {};
 
   return {
     activeViewportIndex: state.viewports.activeViewportIndex,
@@ -87,6 +87,6 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   };
 };
 
-const ConnectedVTKViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKViewport);
 
+const ConnectedVTKViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKViewport);
 export default ConnectedVTKViewport;

@@ -119,7 +119,7 @@ export default function useStudies(params) {
       JSON.stringify(params.tags || {}),
     ],
     queryFn: () => getStudyList(params),
-    enabled: !!params.server?.perms?.query && !!Object.keys(params.tags || {}).length,
+    enabled: !!Object.keys(params.tags || {}).length,
     select: (response) => {
       const mapped = Object.entries(params.tags || {})
         .filter(([key]) => key !== 'Instance')

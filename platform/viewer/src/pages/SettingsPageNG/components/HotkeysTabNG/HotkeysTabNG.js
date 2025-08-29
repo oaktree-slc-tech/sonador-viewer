@@ -5,6 +5,7 @@ import classNames from 'classnames';
 import { useSnackbarContext } from '@ohif/ui';
 
 import { hotkeysManager } from '../../../../App';
+import { useUserPreferences } from '../../../../queries/preferences';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import HotkeyFieldNG from '../HotkeyFieldNG/HotkeyFieldNG';
 import TabFooterNG from '../TabFooterNG/TabFooterNG';
@@ -22,6 +23,9 @@ export default function HotkeysTabNG() {
 
   const snackbar = useSnackbarContext();
   const { isDesktop } = useDeviceStore();
+
+  // TODO use prefences fetched from api
+  const { data: userPreferences } = useUserPreferences()
 
   const onReset = () => {
     const defaultHotKeyDefinitions = {};
@@ -117,7 +121,8 @@ export default function HotkeysTabNG() {
           'Hotkeys definitions is empty'
         )}
       </div>
-      <TabFooterNG onReset={onReset} onSave={onSave} onCancel={() => {}} hasErrors={hasErrors} />
+      <TabFooterNG onReset={onReset} onSave={onSave} onCancel={() => {
+      }} hasErrors={hasErrors} />
     </>
   );
 }
