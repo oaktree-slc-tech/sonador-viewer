@@ -14,6 +14,7 @@ import { metadataArr } from './logic';
 
 import styles from './StudyListNG.module.scss';
 
+
 function StudyListNG({ studies = [], 
   server, 
   sorting, 

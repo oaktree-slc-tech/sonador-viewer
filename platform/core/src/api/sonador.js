@@ -57,6 +57,7 @@ function searchImageServerGroups(server, search, group_query) {
 
 	return fetch(sonadorUrl(urlUtil.urlJoin('/visionaire/api/pacs', server.token, 'group/search')), {
 		headers: { Authorization: `Bearer ${getAuthToken()}` },
+		credentials: 'omit',
 		method: 'POST',
 		body: JSON.stringify(_search),
 	});
@@ -80,6 +81,7 @@ function fetchGroupTags(server, group) {
 
 	return fetch(urlUtil.urlJoin(server.rootUrl, 'groups', _.toString(group.id), 'tags'), {
 		headers: { Authorization: `Bearer ${getAuthToken()}` },
+		credentials: 'omit',
 	});
 }
 

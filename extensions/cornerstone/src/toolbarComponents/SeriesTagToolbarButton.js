@@ -23,7 +23,6 @@ function SeriesTagToolbarButton({ toolbarClickCallback, button, isActive }) {
 	// Determine if the user has permissions to create series labels: must be a super user
 	// or have an upload permission AND be a member of at least one group where tags are enabled.
 	const checkTagPermissions = useCallback(_.debounce((server) => {
-		console.log('Query tag permissions on sever');
 
 		sonador.searchImageServerGroups(server, '', { tag: true })
 			.then((res) => res.json())
@@ -31,6 +30,7 @@ function SeriesTagToolbarButton({ toolbarClickCallback, button, isActive }) {
 
 				// Set menubar button visible if there is at least one group with tag permissions
 				setVisible(res.results?.length > 0);
+				
 			}).catch((err) => {
 				console.error('Unable to retrieve tag groups from Sonador', err);
 				setVisible(false);

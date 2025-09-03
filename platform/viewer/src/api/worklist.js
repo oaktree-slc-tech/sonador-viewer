@@ -42,6 +42,7 @@ export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userI
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
     body: JSON.stringify({
       Group: groupId,
       User: userId,
@@ -72,6 +73,7 @@ export const updateWorklist = ({ server, StudyInstanceUID, worklistId, State, Co
         Authorization: `Bearer ${getAuthToken()}`,
         'Content-Type': 'application/json',
       },
+      credentials: 'omit',
       body: JSON.stringify(payload),
     },
   )
@@ -137,6 +139,7 @@ export const getWorklistItems = ({ server, filters, studyStartDate, studyEndDate
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
+    credentials: 'omit',
   })
     .then((res) => res.json());
 };
