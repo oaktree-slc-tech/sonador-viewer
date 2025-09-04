@@ -14,9 +14,13 @@ import ImageServerPickerNG from '../../components/ImageServerPickerNG/ImageServe
 import { useDeviceStore } from '../../store/useDeviceStore';
 import toggleScrolling from '../../utils/toggleScrolling';
 
+import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 import styles from './SideBarNG.module.scss';
 
-export default function SideBarNG() {
+
+export default function SideBarNG({ children = OHIFLogo() }) {
+  // Sonador Viewer Sidebar
+
   const location = useLocation();
   const params = useParams();
 
@@ -62,7 +66,7 @@ export default function SideBarNG() {
     <aside className={styles.ngSidebar}>
       {!isLarge && (
         <Link to="/" className={styles.logoWrapper}>
-          <Logo />
+          { children }
         </Link>
       )}
       {isDesktop && <ImageServerPickerNG />}

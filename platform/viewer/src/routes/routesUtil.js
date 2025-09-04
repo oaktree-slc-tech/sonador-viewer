@@ -40,16 +40,6 @@ const ROUTES_DEF = [
     component: StandaloneRouting,
   },
   {
-    path: '/server/:token',
-    component: StudyListRouting,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
-    path: '/server/:token/viewer',
-    component: StudyListRouting,
-    condition: (appConfig) => appConfig.showStudyList,
-  },
-  {
     path: '/legacy/studylist',
     component: StudyListRouting,
     condition: (appConfig) => appConfig.showStudyList,

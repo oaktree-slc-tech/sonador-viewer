@@ -137,12 +137,12 @@ if (window && window.sonador && window.sonador.host) {
             className: 'header-brand',
             rel: 'noopener noreferrer',
             style: {
-              height: '50px',
+              height: '36px',
               width: '165px',
               backgroundImage: 'url(' + ohifconfig.branding.logo + ')',
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'left',
+              backgroundPosition: 'center',
             },
           });
         },

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
+import WhiteLabelingContext from '../../context/WhiteLabelingContext';
 import SideBarNG from '../../components/SideBarNG/SideBarNG';
 import { useDeviceStore } from '../../store/useDeviceStore';
 
@@ -28,7 +29,15 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
 
   return (
     <>
-      {isDesktop && <SideBarNG />}
+      {isDesktop && (
+        <WhiteLabelingContext.Consumer>
+          {(whiteLabeling) => (
+            <SideBarNG>
+              {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
+            </SideBarNG>
+          )}
+         </WhiteLabelingContext.Consumer>
+      )}
       {!isDesktop && <TabletMobileHeader />}
       <div className={styles.contentContainer} >
         <div className={styles.wrapper}>

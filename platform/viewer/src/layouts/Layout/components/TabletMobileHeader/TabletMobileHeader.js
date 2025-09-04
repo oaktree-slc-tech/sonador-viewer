@@ -6,8 +6,10 @@ import classNames from 'classnames';
 import { ReactComponent as BurgerIcon } from '@ohif/ui/src/elements/Svg/svgs/burger-menu.svg';
 import { ReactComponent as Logo } from '@ohif/ui/src/elements/Svg/svgs/sonador-logo.svg';
 
+import WhiteLabelingContext from '../../../../context/WhiteLabelingContext';
 import ImageServerPickerNG from '../../../../components/ImageServerPickerNG/ImageServerPickerNG';
 import SideBarNG from '../../../../components/SideBarNG/SideBarNG';
+import OHIFLogo from '../../../../components/OHIFLogo/OHIFLogo.js';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import toggleScrolling from '../../../../utils/toggleScrolling';
 
@@ -37,7 +39,15 @@ export default function TabletMobileHeader() {
           </button>
           {isLarge && (
             <Link to="/" className={styles.logoWrapper}>
-              <Logo />
+              <WhiteLabelingContext.Consumer>
+                {(whiteLabeling) => (
+                  <>
+                  {whiteLabeling?.createLogoComponentFn 
+                    ? whiteLabeling.createLogoComponentFn(React)
+                    : <OHIFLogo />}
+                  </>
+                )}
+              </WhiteLabelingContext.Consumer>
             </Link>
           )}
         </div>
@@ -52,7 +62,13 @@ export default function TabletMobileHeader() {
             })}
           >
             <div className={styles.sideBarContainer}>
-              <SideBarNG />
+              <WhiteLabelingContext.Consumer>
+                {(whiteLabeling) => (
+                  <SideBarNG>
+                    {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
+                  </SideBarNG>
+                )}
+              </WhiteLabelingContext.Consumer>
             </div>
           </div>
         </>,

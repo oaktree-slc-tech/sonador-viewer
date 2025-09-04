@@ -11,12 +11,15 @@ import OHIF from '@ohif/core';
 import { PageToolbar, StudyList, TablePagination, useDebounce, useMedia } from '@ohif/ui';
 
 import Header from '../components/Header/Header';
+
 // Sonador integration tools
 import ImageServerPicker from '../components/ImageServerPicker/ImageServerPicker';
 import AppContext from '../context/AppContext';
+
 // Contexts
 import UserManagerContext from '../context/UserManagerContext';
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
+
 // Google Health API
 import ConnectedDicomFilesUploader from '../googleCloud/ConnectedDicomFilesUploader';
 import * as RoutesUtil from '../routes/routesUtil';
