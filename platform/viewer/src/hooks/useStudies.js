@@ -58,6 +58,7 @@ async function getStudyList({
   rowsPerPage,
   pageNumber,
   isForce = false,
+  requireExplicitAccess = false,
   filters = {},
 }) {
   const sortField = sort.fieldName ? { OrderBy: `${sort.direction === 'desc' ? '-' : ''}${sort.fieldName}` } : {};
@@ -81,7 +82,7 @@ async function getStudyList({
     ...sortField,
   };
 
-  return await OHIF.studies.searchStudies(server, mappedFilters, isForce, true);
+  return await OHIF.studies.searchStudies(server, mappedFilters, isForce, true, requireExplicitAccess);
 }
 
 /**

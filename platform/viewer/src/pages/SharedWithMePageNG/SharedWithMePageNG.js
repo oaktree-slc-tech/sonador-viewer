@@ -61,6 +61,7 @@ export default function SharedWithMePageNG() {
     isForce: forceRerender,
     filters: debouncedFilters,
     tags,
+    requireExplicitAccess: true,
   });
 
   const refreshApp = () => {

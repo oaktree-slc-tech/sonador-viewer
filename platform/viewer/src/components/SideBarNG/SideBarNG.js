@@ -65,9 +65,9 @@ export default function SideBarNG({ children = OHIFLogo() }) {
   return (
     <aside className={styles.ngSidebar}>
       {!isLarge && (
-        <Link to="/" className={styles.logoWrapper}>
+        <div className={styles.logoWrapper}>
           { children }
-        </Link>
+        </div>
       )}
       {isDesktop && <ImageServerPickerNG />}
       <nav className={styles.navigation}>

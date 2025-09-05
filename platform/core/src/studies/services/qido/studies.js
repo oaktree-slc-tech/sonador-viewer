@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import { api } from 'dicomweb-client';
 
 import DICOMWeb from '../../../DICOMWeb/';
@@ -114,7 +116,12 @@ function resultDataToStudies(resultData) {
   return studies;
 }
 
-export default function Studies(server, filter, shouldReturnRow) {
+
+export default function Studies(server, filter, shouldReturnRow, requireExplicitAccess) {
+  // Execute DICOMmweb QIDO-RS search for study objects
+
+  requireExplicitAccess = !_.isNil(requireExplicitAccess) ? requireExplicitAccess : false;
+
   const { staticWado } = server;
   const config = {
     ...server,
@@ -127,7 +134,14 @@ export default function Studies(server, filter, shouldReturnRow) {
   server.qidoSupportsIncludeField =
     server.qidoSupportsIncludeField === undefined ? true : server.qidoSupportsIncludeField;
 
+  // Request query options
   const queryParams = getQIDOQueryParams(filter, server.qidoSupportsIncludeField);
+  if (requireExplicitAccess) {
+
+    // _.defaults is used so that if a requireExplicitAccess option is specified 
+    _.defaults(queryParams, { requireExplicitAccess });
+  }
+
   const options = {
     queryParams,
   };

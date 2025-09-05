@@ -11,7 +11,7 @@ const studySearchPromises = new Map();
  * @param shouldReturnRow
  * @returns {Promise} resolved with an array of studies information or rejected with an error
  */
-export default function searchStudies(server, filter, isForce, shouldReturnRow) {
+export default function searchStudies(server, filter, isForce, shouldReturnRow, requireExplicitAccess) {
   const promiseKeyObj = {
     qidoRoot: server.qidoRoot,
     filter,
@@ -20,7 +20,7 @@ export default function searchStudies(server, filter, isForce, shouldReturnRow) 
   if (studySearchPromises.has(promiseKey) && !isForce) {
     return studySearchPromises.get(promiseKey);
   } else {
-    const promise = Studies(server, filter, shouldReturnRow);
+    const promise = Studies(server, filter, shouldReturnRow, requireExplicitAccess);
 
     studySearchPromises.set(promiseKey, promise);
 
