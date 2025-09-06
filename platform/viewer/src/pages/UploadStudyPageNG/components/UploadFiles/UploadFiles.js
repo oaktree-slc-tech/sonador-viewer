@@ -129,7 +129,7 @@ export default function UploadFiles() {
             onDrop={handleDrop}
           >
             <UploadIcon fill="#D3D3D3" className={styles.uploadIcon} />
-            <p className={styles.dropHereLabel}>{t('Drop here do download')}</p>
+            <p className={styles.dropHereLabel}>{t('Drop files here for immediate upload.')}</p>
             <p className={styles.orLabel}>{t('OR')}</p>
             <div className={styles.inputsContainer}>
               <label htmlFor="file" className={styles.inputFileLabel}>

@@ -10,7 +10,7 @@ export default function useStudiesTable() {
 
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
 
-  const [sorting, setSorting] = useState({ fieldName: 'PatientName', direction: 'asc' });
+  const [sorting, setSorting] = useState({ fieldName: 'Modified', direction: 'desc' });
 
   const debouncedSort = useDebounce(sorting, 200);
 
