@@ -46,6 +46,7 @@ import {
   getAuthToken, 
   getActiveServer, 
   searchImageServerGroups, 
+  fetchServerSystemInfo,
   fetchGroupTags
 } from './api/sonador.js';
 
@@ -56,6 +57,7 @@ const sonador = {
   getAuthToken,
   getActiveServer,
   searchImageServerGroups,
+  fetchServerSystemInfo,
   fetchGroupTags,
 }
 

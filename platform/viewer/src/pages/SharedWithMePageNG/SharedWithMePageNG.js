@@ -1,19 +1,31 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router-dom';
 import qs from 'query-string';
 
+import OHIF from '@ohif/core';
 import { useDebounce } from '@ohif/ui';
 
-import StudyListNG from '../../components/studyList/StudyListNG/StudyListNG';
-import useStudies from '../../hooks/useStudies';
-import useStudiesTable from '../../hooks/useStudiesTable';
-import useTags from '../../hooks/useTags';
-import Layout from '../../layouts/Layout/Layout';
 import { useStudiesTableFilters } from '../../store/useStudiesTableFilters';
 import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTableFiltersAndColumnsStore';
 
+import useStudies from '../../hooks/useStudies';
+import useStudiesTable from '../../hooks/useStudiesTable';
+import useTags from '../../hooks/useTags';
+
+import Layout from '../../layouts/Layout/Layout';
+
+import StudyListNG from '../../components/studyList/StudyListNG/StudyListNG';
+import EmptyStateIndicator from '../../components/emptyState/EmptyStateIndicator';
+
+const { redux } = OHIF;
+
+
 export default function SharedWithMePageNG() {
+  // Studies shared with the active user
+
   const location = useLocation();
+  const serverCount = useSelector(redux.selectors.serverCount);
 
   const { search } = qs.parse(location.search.replace('?', ''));
 
@@ -70,34 +82,40 @@ export default function SharedWithMePageNG() {
 
   return (
     <Layout noHorizontalPadding>
-      <StudyListNG
-        title="Shared"
-        isLoading={isLoading}
-        isFetching={isFetching}
-        studies={studies || []}
-        onClickNextPage={() => updatePageNumber(pageNumber + 1)}
-        onClickPrevPage={() => updatePageNumber(pageNumber - 1)}
-        rowsPerPage={rowsPerPage}
-        pageNumber={pageNumber}
-        onRefresh={refreshApp}
-        onChangeRowsPerPage={updateRowsPerPage}
-        server={activeServer}
-        startDate={studyStartDate}
-        endDate={studyEndDate}
-        onChangeDates={(startDate, endDate) => {
-          setStartStudyDate(startDate);
-          setStudyEndDate(endDate);
-        }}
-        sorting={sorting}
-        onSorting={handleSorting}
-        filters={sharedWithMePageFilters}
-        onChangeFilterValue={setSharedWithMePageFilters}
-        error={error}
-        selectedFilters={sharedStudiesSelectedFilters}
-        selectedColumns={sharedStudiesSelectedColumns}
-        setSelectedColumns={setSharedStudiesSelectedColumns}
-        setSelectedFilters={setSharedStudiesSelectedFilters}
-      />
+      {(serverCount > 0) && (
+        <StudyListNG
+          title="Shared"
+          isLoading={isLoading}
+          isFetching={isFetching}
+          studies={studies || []}
+          onClickNextPage={() => updatePageNumber(pageNumber + 1)}
+          onClickPrevPage={() => updatePageNumber(pageNumber - 1)}
+          rowsPerPage={rowsPerPage}
+          pageNumber={pageNumber}
+          onRefresh={refreshApp}
+          onChangeRowsPerPage={updateRowsPerPage}
+          server={activeServer}
+          startDate={studyStartDate}
+          endDate={studyEndDate}
+          onChangeDates={(startDate, endDate) => {
+            setStartStudyDate(startDate);
+            setStudyEndDate(endDate);
+          }}
+          sorting={sorting}
+          onSorting={handleSorting}
+          filters={sharedWithMePageFilters}
+          onChangeFilterValue={setSharedWithMePageFilters}
+          error={error}
+          selectedFilters={sharedStudiesSelectedFilters}
+          selectedColumns={sharedStudiesSelectedColumns}
+          setSelectedColumns={setSharedStudiesSelectedColumns}
+          setSelectedFilters={setSharedStudiesSelectedFilters}
+        />
+      )}
+
+      {(serverCount == 0) && (
+        <EmptyStateIndicator />
+      )}
     </Layout>
   );
 }

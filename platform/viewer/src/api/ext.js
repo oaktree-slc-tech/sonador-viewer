@@ -1,4 +1,5 @@
-// Methods for retrieving data from the DICOM-EXT API of an imaging server
+// Methods for retrieving data from the DICOM-EXT API of an imaging server.
+
 import { urlUtil } from '@ohif/core/src/utils';
 
 import { getAuthToken } from './sonador';
@@ -33,6 +34,7 @@ export const fetchStudyComments = (server, studyId) => {
 };
 
 
+
 export const createStudyComment = (server, studyId, text) => {
   // Create a comment for the provided series
 
@@ -43,12 +45,10 @@ export const createStudyComment = (server, studyId, text) => {
   });
 };
 
+
 export const fetchDownloadStudies = async (server, studyId) => {
   // Download DICOM Studies data from Orthanc
 
-  // return fetch(urlUtil.urlJoin(server.wadoRoot, 'study', studyId, 'ID', 'archive'), {
-  //   headers: { Authorization: `Bearer ${getAuthToken()}` },
-  // })
   const url = urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'archive');
 
   try {
@@ -84,6 +84,15 @@ export const fetchDownloadSeries = (server, seriesId) => {
   // Download DICOM Series data from Orthanc
 
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'series', seriesId, 'ID', 'archive'), {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  }).then((res) => res.json());
+}
+
+
+export const fetchStudyAclPermissions = (server, studyId) => {
+  // Retrieve ACL permissions for the provided study ID
+  
+  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'resource-acl'), {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   }).then((res) => res.json());
 }

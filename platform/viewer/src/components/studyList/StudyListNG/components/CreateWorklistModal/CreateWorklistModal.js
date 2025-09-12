@@ -76,6 +76,12 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
     createWorklistRequestMutate();
   };
 
+  const errantModalClick = (e) => {
+    // Prevent unintended click events from propagating to associated components
+    
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
   return (
     <ModalNG
@@ -86,6 +92,7 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
         return setIsOpen(false);
       }}
       classes={{ content: styles.modal }}
+      onModalClick={errantModalClick}
     >
       {/* Group*/}
       <div className={styles.inputGroup}>

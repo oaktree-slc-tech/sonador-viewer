@@ -1,9 +1,13 @@
+import _ from 'lodash';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { getCoreRowModel, getExpandedRowModel, useReactTable } from '@tanstack/react-table';
 import moment from 'moment';
 import PropTypes from 'prop-types';
 import { useLocalStorage } from 'usehooks-ts'
 
+import { redux, sonador } from '@ohif/core';
+import { updateServer } from '../../../hooks/useServer';
 import { useMetadataSettingsStore } from '../../../store/useMetadataSettingsStore';
 
 import Filters from './components/Filters/Filters';
@@ -41,6 +45,45 @@ function StudyListNG({ studies = [],
   setSelectedColumns,
   setSelectedFilters,
 }) {
+
+  useEffect(() => {
+    
+    // Retrieve imaging system config (if not already specified on the server model)
+    // and configure feature/attribute flags.    
+
+    // Retrieve sysInfo from imaging server to determine which system config options
+    // should be enabled for the study list.
+    if (!server.sysInfo) {
+
+      sonador.fetchServerSystemInfo(server)
+        .then((res) => {
+          // Parse sysInfo response to JSON
+          
+          if (!res.ok) {
+            return res.text().then(msg => {
+              throw new Error(`HTTP ${res.status}: ${msg}`);
+            });
+          }
+          
+          return res.json();
+        })
+        .then((sysInfo) => {
+          // Update server config/state. Enable server configuration options
+          // based on which plugins and attributes are available.
+
+          // Parse server configuration and update server properties
+          server.sysInfo = sysInfo;
+          if (_.includes(sysInfo.ActivePlugins || [], 'ohif')) {
+            server.ohifEnabled = true;
+          }
+
+          // Update server instance asynchronously to prevent issues with updates
+          // being posted to Redux store during render loop.
+          setTimeout(50, () => updateServer(server));
+        });
+    }
+  }, []);
+  
   const [expanded, setExpanded] = useState({});
 
   const columns = useMemo(() => {

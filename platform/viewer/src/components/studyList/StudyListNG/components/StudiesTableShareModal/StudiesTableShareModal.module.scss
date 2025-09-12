@@ -11,7 +11,7 @@
 }
 
 .modal {
-  min-width: 750px;
+  min-width: 350px;
   color: #FFFFFF;
 
   .blockWithAccess {
@@ -170,6 +170,7 @@
     display: flex;
     flex-direction: column;
     row-gap: 20px;
+    margin-right: 20px;
   }
 
   .bottom {
@@ -196,4 +197,13 @@
     align-items: center;
     min-height: 200px;
   }
+
+  .aclGroupContainer, .aclUserContainer {
+    column-gap: 10px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .aclGroupContainer { padding-top: 25px; }
+  .aclUserContainer { padding-top: 18px; }
 }

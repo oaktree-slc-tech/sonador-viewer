@@ -114,10 +114,25 @@ function getRootUrl(url) {
 }
 
 
+function buildUrl(base, path, query) {
+  // Create a FQDN from the provided base, path, and query parameters.
+
+  // Create URL from base and path
+  const url = new URL(path, base);
+  if (query) {
+
+    // Add query parameters
+    Object.entries(query).forEach(([k, v]) => url.searchParams.append(k, v));  
+  }
+  
+  return url.toString();
+}
+
+
 function buildInstanceWadoRsUri(server, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
   // Create a Wado-RS URI from a server instance and DICOM identifiers
   return `${server.wadoRoot}/studies/${StudyInstanceUID}/series/${SeriesInstanceUID}/instances/${SOPInstanceUID}`;
 }
 
 
-export { parse, queryString, paramString, urlJoin, getRootUrl, buildInstanceWadoRsUri };
+export { parse, queryString, paramString, buildUrl, urlJoin, getRootUrl, buildInstanceWadoRsUri };

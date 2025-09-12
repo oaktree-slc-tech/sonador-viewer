@@ -10,7 +10,8 @@
 
 var _ = require('lodash');
 
-import { SET_ACTIVE_SERVER } from '../constants/ActionTypes';
+
+import { SET_ACTIVE_SERVER, ADD_SERVER, UPDATE_SERVER, SET_SERVERS } from '../constants/ActionTypes';
 import { urlUtil } from '../../utils';
 
 
@@ -29,10 +30,11 @@ const servers = (state = defaultState, action) => {
   // Manage Imaging Servers
 
   switch (action.type) {
-    case 'ADD_SERVER':
+    
+    case ADD_SERVER:
       const servers = action.serversWithTypes;
 
-      // Iterate through server list and ensure and ensrue that servers include all
+      // Iterate through server list and ensure that servers include all
       // components required by the viewer API including an `active` and `rootUrl` properties.
       servers.forEach((s) => {
 
@@ -53,7 +55,20 @@ const servers = (state = defaultState, action) => {
 
       return { ...state, servers };
 
+    
+    case UPDATE_SERVER:
+      // Update (or add) a server entry to the servers list. The properties provided
+      // with the dispatch action will be added to the Redux state.
+
+      return {
+        ...state,
+        servers: _.uniqBy([...state.servers, { ...action.server }], 'wadoRoot'),
+      };
+
+    
     case 'ACTIVATE_SERVER':
+      // Mark the provided server as active. All other servers in the Redux state are marked inactive.
+
       const newServer = { ...action.server, active: true };
       const newServers = state.servers;
       newServers.forEach((s) => (s.active = false));
@@ -62,10 +77,15 @@ const servers = (state = defaultState, action) => {
         servers: _.uniqBy([...newServers, newServer], 'wadoRoot'),
       };
 
-    case 'SET_SERVERS':
+    
+    case SET_SERVERS:
+      // Replace all servers in the Redux state
       return { ...state, servers: action.servers };
 
+    
     case 'SWITCH_SERVER':
+      // Switch to the server instance indicated by the action token value
+
       const allServers = state.servers;
       allServers.forEach((s) => (s.token === action.token ? (s.active = true) : (s.active = false)));
       return {
@@ -73,7 +93,10 @@ const servers = (state = defaultState, action) => {
         servers: allServers,
       };
 
+    
     case SET_ACTIVE_SERVER:
+      // Set the server specified by the server token as active
+
       const updatedServers = state.servers.slice().map((server) => {
         return {
           ...server,
@@ -85,6 +108,8 @@ const servers = (state = defaultState, action) => {
         ...state,
         servers: updatedServers,
       };
+    
+
     default:
       return state;
   }

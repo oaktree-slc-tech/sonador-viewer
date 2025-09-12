@@ -24,20 +24,27 @@ export default function SideBarNG({ children = OHIFLogo() }) {
   const location = useLocation();
   const params = useParams();
 
+  // Number of servers and active server instance
+  const serverCount = useSelector((state) => state.servers?.servers?.length);
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
 
+  // Navigation links
   const isUploadPage = location.pathname.endsWith('/upload');
   const isSettingsPage = location.pathname.endsWith('/settings');
   const isAccountPage = location.pathname.endsWith('/account');
-  const isSharedWithMePage = location.pathname.endsWith('/shared-with-me');
+  const isSharedWithMePage = location.pathname.endsWith('/shared');
   const isStudiesPage = !isUploadPage && !isAccountPage && !isSettingsPage && !isSharedWithMePage;
 
   const [isStudiesSubMenuOpen, setIsStudiesSubMenuOpen] = useState(isStudiesPage);
 
   const { isLarge, isDesktop, isTablet, isMobile } = useDeviceStore();
 
+  // Study list permissions
+  const canQueryStudies = activeServer?.perms?.query;
   const canUpload = activeServer?.perms?.upload;
   const canWorkInWorklist = activeServer?.perms?.worklist;
+  const studyListAccess = canQueryStudies || canWorkInWorklist;
+  
   const studyListPathname = location.pathname.includes('/server') && params.token ? location.pathname : '/';
 
   const enableScrolling = () => {
@@ -64,87 +71,91 @@ export default function SideBarNG({ children = OHIFLogo() }) {
 
   return (
     <aside className={styles.ngSidebar}>
+      
       {!isLarge && (
         <div className={styles.logoWrapper}>
           { children }
         </div>
       )}
-      {isDesktop && <ImageServerPickerNG />}
+      
+      {isDesktop && (serverCount > 0) && <ImageServerPickerNG />}
       <nav className={styles.navigation}>
-        <div>
-          <NavLink
-            to="/"
-            end
-            onClick={handleClickStudiesLink}
-            className={({ isActive }) =>
-              classNames(styles.menuItem, {
-                [styles.active]: isActive,
-              })
-            }
-          >
-            <StudiesIcon fill={isStudiesPage ? '#ffffff' : '#60646D'} />
-            <span className={styles.name}>Studies</span>
-          </NavLink>
-          {isStudiesSubMenuOpen && (
-            <>
+
+        {(studyListAccess || canUpload) && (
+          <div>
+
+            {studyListAccess && (
               <NavLink
-                to={studyListPathname}
+                to="/"
                 end
+                onClick={handleClickStudiesLink}
                 className={({ isActive }) =>
-                  classNames(styles.menuSubItem, {
+                  classNames(styles.menuItem, {
                     [styles.active]: isActive,
                   })
                 }
-                onClick={enableScrolling}
               >
-                <span>All</span>
-                {/*<span className={styles.count}>1,543</span>*/}
+                <StudiesIcon fill={isStudiesPage ? '#ffffff' : '#60646D'} />
+                <span className={styles.name}>Studies</span>
               </NavLink>
-              {canWorkInWorklist && <NavLink
-                to="/worklist"
-                className={({ isActive }) =>
-                  classNames(styles.menuSubItem, {
-                    [styles.active]: isActive,
-                  })
-                }
-                onClick={enableScrolling}
-              >
-                <span>Worklist</span>
-                {/*<span className={styles.count}>12</span>*/}
-              </NavLink>}
-            </>
-          )}
-          <NavLink
-            to="/shared-with-me"
-            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
-            onClick={enableScrolling}
-          >
-            <GroupIcon fill={isSharedWithMePage ? '#ffffff' : '#60646D'} />
-            <span className={styles.name}>Shared with me</span>
-          </NavLink>
-          {canUpload && (
+            )}
+            
+            {isStudiesSubMenuOpen && canQueryStudies && (
+              <>
+                <NavLink
+                  to={studyListPathname}
+                  end
+                  className={({ isActive }) =>
+                    classNames(styles.menuSubItem, {
+                      [styles.active]: isActive,
+                    })
+                  }
+                  onClick={enableScrolling}
+                >
+                  <span>All</span>
+                </NavLink>
+              </>
+            )}
+
+            {isStudiesSubMenuOpen && canWorkInWorklist && (
+              <>
+                <NavLink
+                  to="/worklist"
+                  className={({ isActive }) =>
+                    classNames(styles.menuSubItem, {
+                      [styles.active]: isActive,
+                    })
+                  }
+                  onClick={enableScrolling}
+                >
+                  <span>Worklist</span>                  
+                </NavLink>
+              </>
+            )}
+
             <NavLink
-              to="/upload"
-              onClick={handleClickNotStudiesLink}
+              to="/shared"
               className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
+              onClick={enableScrolling}
             >
-              <UploadIcon fill={isUploadPage ? '#ffffff' : '#60646D'} />
-              <span className={styles.name}>Upload</span>
+              <GroupIcon fill={isSharedWithMePage ? '#ffffff' : '#60646D'} />
+              <span className={styles.name}>Shared</span>
             </NavLink>
-          )}
-        </div>
+            
+            {canUpload && (
+              <NavLink
+                to="/upload"
+                onClick={handleClickNotStudiesLink}
+                className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
+              >
+                <UploadIcon fill={isUploadPage ? '#ffffff' : '#60646D'} />
+                <span className={styles.name}>Upload</span>
+              </NavLink>
+            )}
+          </div>
+        )}
+
         <div className={styles.bottom}>
-          {/*<NavLink*/}
-          {/*  to="/account"*/}
-          {/*  className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}*/}
-          {/*  onClick={(e) => {*/}
-          {/*    e.preventDefault(); // TODO remove once account page is ready*/}
-          {/*    enableScrolling();*/}
-          {/*  }}*/}
-          {/*>*/}
-          {/*  <AccountIcon fill={isAccountPage ? '#ffffff' : '#60646D'} />*/}
-          {/*  <span className={styles.name}>Account</span>*/}
-          {/*</NavLink>*/}
           <NavLink
             to="/settings"
             onClick={handleClickNotStudiesLink}

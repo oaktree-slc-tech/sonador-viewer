@@ -60,6 +60,8 @@
 
 .devicesList {
   overflow: auto;
+
+  :where(table) { width: 100% }
 }
 
 .listHeader {

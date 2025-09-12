@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import dcmjs from 'dcmjs';
 
 import pubSubServiceInterface from '../_shared/pubSubServiceInterface';
@@ -5,6 +6,8 @@ import createStudyMetadata from './createStudyMetadata';
 
 const EVENTS = {
   STUDY_ADDED: 'event::dicomMetadataStore:studyAdded',
+  STUDY_UPDATED: 'event::dicomMetadataStore::studyUpdated',
+  STUDY_META_UPDATED: 'event::dicomMetadataStore::studyMetadataUpdated',
   INSTANCES_ADDED: 'event::dicomMetadataStore:instancesAdded',
   INSTANCE_ADDED: 'event::dicomMetadataStore:instanceAdded',
   SERIES_ADDED: 'event::dicomMetadataStore:seriesAdded',
@@ -54,23 +57,37 @@ function _getStudyInstanceUIDs() {
   return _model.studies.map(aStudy => aStudy.StudyInstanceUID);
 }
 
-/**
- * Gets a study (a collection of series) using it's StudyInstanceUID
- * @param {*} StudyInstanceUID - Unique Identifier for the study
- * @returns {*} A study object
- */
+
+function _findStudy(query) {
+  // Search through studies within the metadata store to find the first which matches
+  
+  if (!_.isFunction(query)) {
+    throw new Error('Unable to locate study instance, invalid query fn');
+  }
+
+  return _model.studies.find(query);
+}
+
+
 function _getStudy(StudyInstanceUID) {
+  /**
+  * Gets a study (a collection of series) using it's StudyInstanceUID
+  * @param {*} StudyInstanceUID - Unique Identifier for the study
+  * @returns {*} A study object
+  */
+
   return _model.studies.find(aStudy => aStudy.StudyInstanceUID === StudyInstanceUID);
 }
 
-/**
- * Gets a series (a collection of images) using both
- * the Study and Series InstanceUID's
- * @param {*} StudyInstanceUID - Unique Identifier for the study
- * @param {*} SeriesInstanceUID - Unique Identifier for the series
- * @returns {*} A series object
- */
+
 function _getSeries(StudyInstanceUID, SeriesInstanceUID) {
+  /**
+  * Gets a series (a collection of images) using both
+  * the Study and Series InstanceUID's
+  * @param {*} StudyInstanceUID - Unique Identifier for the study
+  * @param {*} SeriesInstanceUID - Unique Identifier for the series
+  * @returns {*} A series object
+  */
   if(!StudyInstanceUID) {
     const series = _model.studies.map(study => study.series).flat();
     return series.find(aSeries => aSeries.SeriesInstanceUID === SeriesInstanceUID);
@@ -85,14 +102,15 @@ function _getSeries(StudyInstanceUID, SeriesInstanceUID) {
   return study.series.find(aSeries => aSeries.SeriesInstanceUID === SeriesInstanceUID);
 }
 
-/**
- * Gets an instance (a single image or object)
- * @param {*} StudyInstanceUID - Unique Identifier for the study
- * @param {*} SeriesInstanceUID - Unique Identifier for the series
- * @param {*} SOPInstanceUID Unique Identifier for a specific instance
- * @returns an instance object
- */
+
 function _getInstance(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
+  /**
+  * Gets an instance (a single image or object)
+  * @param {*} StudyInstanceUID - Unique Identifier for the study
+  * @param {*} SeriesInstanceUID - Unique Identifier for the series
+  * @param {*} SOPInstanceUID Unique Identifier for a specific instance
+  * @returns an instance object
+  */
   const series = _getSeries(StudyInstanceUID, SeriesInstanceUID);
 
   if (!series) {
@@ -101,6 +119,7 @@ function _getInstance(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID) {
 
   return series.getInstance(SOPInstanceUID);
 }
+
 
 function _getInstanceByImageId(imageId) {
   for (const study of _model.studies) {
@@ -114,14 +133,15 @@ function _getInstanceByImageId(imageId) {
   }
 }
 
-/**
- * Update the metadata of a specific series
- * @param {*} StudyInstanceUID
- * @param {*} SeriesInstanceUID
- * @param {*} metadata metadata inform of key value pairs
- * @returns
- */
+
 function _updateMetadataForSeries(StudyInstanceUID, SeriesInstanceUID, metadata) {
+  /**
+  * Update the metadata of a specific series
+  * @param {*} StudyInstanceUID
+  * @param {*} SeriesInstanceUID
+  * @param {*} metadata metadata inform of key value pairs
+  * @returns
+  */
   const study = _getStudy(StudyInstanceUID);
 
   if (!study) {
@@ -153,6 +173,7 @@ function _updateMetadataForSeries(StudyInstanceUID, SeriesInstanceUID, metadata)
     madeInClient: true,
   });
 }
+
 
 const BaseImplementation = {
   EVENTS,
@@ -228,6 +249,8 @@ const BaseImplementation = {
     });
   },
   updateSeriesMetadata(seriesMetadata) {
+    // Update series metadata within the DICOM store
+
     const { StudyInstanceUID, SeriesInstanceUID } = seriesMetadata;
     const series = _getSeries(StudyInstanceUID, SeriesInstanceUID);
     if (!series) {
@@ -239,7 +262,10 @@ const BaseImplementation = {
       study.setSeriesMetadata(SeriesInstanceUID, seriesMetadata);
     }
   },
+  
   addSeriesMetadata(seriesSummaryMetadata, madeInClient = false) {
+    // Add series metadata to the DICOM store
+
     if (!seriesSummaryMetadata || !seriesSummaryMetadata.length || !seriesSummaryMetadata[0]) {
       return;
     }
@@ -248,6 +274,7 @@ const BaseImplementation = {
     let study = _getStudy(StudyInstanceUID);
     if (!study) {
       study = createStudyMetadata(StudyInstanceUID);
+      
       // Will typically be undefined with a compliant DICOMweb server, reset later
       study.StudyDescription = seriesSummaryMetadata[0].StudyDescription;
       seriesSummaryMetadata.forEach(item => {
@@ -271,7 +298,16 @@ const BaseImplementation = {
       madeInClient,
     });
   },
-  addStudy(study) {
+  
+  addStudy(study, options) {
+    // Add study to the DICOM store
+
+    options = options || {};
+    _.defaults(options, {
+      headers: [
+        'PatientID', 'PatientName', 'StudyDate', 'ModalitiesInStudy', 'StudyDescription', 'AccessionNumber', 'NumInstances',
+      ]
+    });
     const { StudyInstanceUID } = study;
 
     const existingStudy = _model.studies.find(study => study.StudyInstanceUID === StudyInstanceUID);
@@ -279,23 +315,68 @@ const BaseImplementation = {
     if (!existingStudy) {
       const newStudy = createStudyMetadata(StudyInstanceUID);
 
-      newStudy.PatientID = study.PatientID;
-      newStudy.PatientName = study.PatientName;
-      newStudy.StudyDate = study.StudyDate;
-      newStudy.ModalitiesInStudy = study.ModalitiesInStudy;
-      newStudy.StudyDescription = study.StudyDescription;
-      newStudy.AccessionNumber = study.AccessionNumber;
-      newStudy.NumInstances = study.NumInstances; // todo: Correct naming?
-
+      // Copy headers to model instance
+      _.extend(newStudy, _.pick(study, options.headers));
       _model.studies.push(newStudy);
 
+      // Broadcast change through service
       this._broadcastEvent(EVENTS.STUDY_ADDED, {
         StudyInstanceUID,
       })
+    } else {
+
+      // Update missing headers
+      _.defaults(existingStudy, _.pick(study, options.headers));
+      this._broadcastEvent(EVENTS.STUDY_UPDATED, {
+        StudyInstanceUID,
+      });
     }
   },
+
+  updateStudyMetadata(studyMetadata) {
+    // Add metdata to the study. Study metadata may include local application state in
+    // addition to DICOM header tags.
+
+    const { StudyInstanceUID } = studyMetadata;
+    if (!StudyInstanceUID) {
+      console.warn('Unable to add study metadata, invalid StudyInstanceUID');
+      return undefined;
+    }
+
+    // Retrieve study from service
+    const existingStudy = _model.studies.find(study => study.StudyInstanceUID == StudyInstanceUID);
+    if (!existingStudy) {
+      console.warn('Unable to add study metadta for StudyInstanceUID="'+StudyInstanceUID+'", study is not registered '
+        + 'with the DicomMetadataStore.');
+      return;
+    }
+
+    // Add metadata to the service
+    const _meta = existingStudy.setStudyMetadata(_.omit(studyMetadata, 'StudyInstanceUID'));
+    this._broadcastEvent(EVENTS.STUDY_UPDATED, {
+      StudyInstanceUID, studyMetadata: _meta,
+    });
+
+    return _meta;
+  },
+
+  getStudyMetadata(StudyInstanceUID) {
+    // Retrieve metadata for the provided StudyInstanceUID. Study metadtaa may include local
+    // application state in addition to DICOM header tags.
+
+    const _study = _model.studies.find(study => study.StudyInstanceUID == StudyInstanceUID);
+    if (!_study) {
+      console.warn('Unable to retrieve study metadta for StudyInstanceUID="'+StudyInstanceUID+'", study is not'
+        + 'registered with the DicomMetadataStore.');
+      return;
+    }
+
+    return _study.getStudyMetadata();
+  },
+
   getStudyInstanceUIDs: _getStudyInstanceUIDs,
   getStudy: _getStudy,
+  findStudy: _findStudy,
   getSeries: _getSeries,
   getInstance: _getInstance,
   getInstanceByImageId: _getInstanceByImageId,

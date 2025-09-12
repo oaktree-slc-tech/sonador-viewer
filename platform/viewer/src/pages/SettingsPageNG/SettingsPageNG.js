@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
 import classNames from 'classnames';
 
+import OHIF from '@ohif/core';
 import { AboutContent } from '@ohif/ui';
 
 import DeviceList from '../../components/DevicesListModal/DeviceList';
@@ -18,13 +21,15 @@ import WindowLevelTabNG from './components/WindowLevelTabNG/WindowLevelTabNG';
 
 import styles from './SettingsPageNG.module.scss';
 
+const { redux } = OHIF;
+
 const TOP_TABS = [
-  { id: 'general', label: 'General' },
-  { id: 'hotkeys', label: 'Hotkeys' },
-  { id: 'window-level', label: 'Window Level' },
-  { id: 'about', label: 'About' },
-  { id: 'device-list', label: 'Device List' },
-  { id: 'viewer-metadata', label: 'Viewer Metadata' },
+  { id: 'general', label: 'General', 'perm': null, },
+  { id: 'hotkeys', label: 'Hotkeys', 'perm': null, },
+  { id: 'window-level', label: 'Window Level', 'perm': null, },
+  { id: 'about', label: 'About', 'perm': null, },
+  { id: 'device-list', label: 'Device List', 'perm': 'devices_list', },
+  { id: 'viewer-metadata', label: 'Viewer Metadata', 'perm': null, },
 ];
 
 const BOTTOM_TABS = [
@@ -32,13 +37,20 @@ const BOTTOM_TABS = [
   { id: 'ids', label: 'Acess IDs' },
 ];
 
+
 export default function SettingsPageNG() {
+  // Sonador Viewer Settings Page
+
   const { t } = useTranslation();
+  const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
   const [selectedTabId, setSelectedTabId] = useState(TOP_TABS[0].id);
 
   const { isDesktop } = useDeviceStore();
+  
   const renderTabContent = () => {
+    // Render Setting tab content
+
     if (selectedTabId === 'general') {
       return <GeneralTabNG />;
     }
@@ -59,7 +71,7 @@ export default function SettingsPageNG() {
       </div>;
     }
 
-    if (selectedTabId === 'device-list') {
+    if (selectedTabId === 'device-list' && activeServer && activeServer.perms?.devices_list) {
       return <DeviceList withDefaultHeader />;
     }
 
@@ -70,8 +82,8 @@ export default function SettingsPageNG() {
     if (selectedTabId === 'tokens') {
       return (
         <SecurityTabNG
-          title="API Access Tokens"
-          description="API Access tokens can be used to grant other systems to access additional API functions. API keys should never be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used to access this website with your account."
+          title={t("API Access Tokens")}
+          description={t("API Access tokens can be used to grant other systems to access additional API functions. API keys should never be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used to access this website with your account.")}
           type="tokens"
         />
       );
@@ -80,10 +92,10 @@ export default function SettingsPageNG() {
     if (selectedTabId === 'ids') {
       return (
         <SecurityTabNG
-          title="Access IDs/Secret Keys"
-          description="Access IDs can be used to grant other systems to access additional API functions. Access IDs/Secret Keys should
-        never be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used
-        to access this website with your account."
+          title={t("Access IDs/Secret Keys")}
+          description={t("Access IDs can be used to grant other systems to access additional API functions. Access IDs/Secret Keys should "
+            + "never be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used"
+            + "to access this website with your account.")}
           type="ids"
         />
       );
@@ -104,7 +116,7 @@ export default function SettingsPageNG() {
           {isDesktop && (
             <>
               <div className={styles.tabs}>
-                {TOP_TABS.map(({ id, label }) => {
+                {TOP_TABS.filter(({ perm }) => perm ? (activeServer && (activeServer.perms || {})[perm]) : true).map(({ id, label, perm }) => {
                   return (
                     <button
                       key={id}

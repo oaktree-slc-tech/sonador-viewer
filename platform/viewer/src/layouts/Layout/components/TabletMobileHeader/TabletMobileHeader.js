@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import classNames from 'classnames';
+
+import OHIF from '@ohif/core';
 
 import { ReactComponent as BurgerIcon } from '@ohif/ui/src/elements/Svg/svgs/burger-menu.svg';
 import { ReactComponent as Logo } from '@ohif/ui/src/elements/Svg/svgs/sonador-logo.svg';
@@ -14,6 +17,8 @@ import { useDeviceStore } from '../../../../store/useDeviceStore';
 import toggleScrolling from '../../../../utils/toggleScrolling';
 
 import styles from './TabletMobileHeader.module.scss';
+
+const { redux } = OHIF;
 
 export default function TabletMobileHeader() {
   const { isLarge } = useDeviceStore();
@@ -29,6 +34,8 @@ export default function TabletMobileHeader() {
     setIsOpenedMenu(true);
     toggleScrolling(false);
   };
+
+  const serverCount = useSelector(redux.selectors.serverCount);
 
   return (
     <>
@@ -51,7 +58,9 @@ export default function TabletMobileHeader() {
             </Link>
           )}
         </div>
-        <ImageServerPickerNG />
+        {serverCount && (serverCount > 0) && (
+          <ImageServerPickerNG />
+        )}
       </div>
       {createPortal(
         <>

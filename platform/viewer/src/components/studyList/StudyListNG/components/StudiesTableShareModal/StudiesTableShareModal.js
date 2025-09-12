@@ -311,6 +311,13 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     }
   }, [aclGroups]);
 
+  const errantModalClick = (e) => {
+    // Prevent unintended click events from propagating to associated components
+    
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   return (
     <ModalNG
       isOpen={isOpenedShareModal}
@@ -319,6 +326,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
         setIsOpenedShareModal(false);
       }}
       classes={{ content: styles.modal }}
+      onModalClick={errantModalClick}
     >
       <div className={styles.autoComplete} ref={autocompleteRef}>
         <input
@@ -369,27 +377,31 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
                       if (tableName === 'groups') {
                         return (
                           <div key={acl.ID || 'group-' + acl.Group} className={styles.aclPolicy}>
-                            <div className={styles.avatarGroup}>
-                              <GroupIcon className={styles.groupIcon} />
+                            <div className={styles.aclGroupContainer}>
+                              <div className={styles.avatarGroup}>
+                                <GroupIcon className={styles.groupIcon} />
+                              </div>
+                              <p className={styles.groupName}>{acl.name}</p>
                             </div>
-                            <p className={styles.groupName}>{acl.name}</p>
                           </div>
                         );
                       }
 
                       return (
                         <div key={acl.ID || 'user-' + acl.User} className={styles.aclPolicy}>
-                          <div className={styles.avatar}>
-                            <p className={styles.avatarName}>
-                              {acl.first_name?.slice(0, 1)?.toUpperCase()}
-                              {acl.last_name?.slice(0, 1)?.toUpperCase()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className={styles.userFirstLastName}>
-                              {acl.first_name} {acl.last_name}
-                            </p>
-                            <p className={styles.userEmail}>{acl.email}</p>
+                          <div className={styles.aclUserContainer}>
+                            <div className={styles.avatar}>
+                              <p className={styles.avatarName}>
+                                {acl.first_name?.slice(0, 1)?.toUpperCase()}
+                                {acl.last_name?.slice(0, 1)?.toUpperCase()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className={styles.userFirstLastName}>
+                                {acl.first_name} {acl.last_name}
+                              </p>
+                              <p className={styles.userEmail}>{acl.email}</p>
+                            </div>
                           </div>
                         </div>
                       );

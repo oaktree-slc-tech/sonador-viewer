@@ -6,16 +6,17 @@ import OHIF from '@ohif/core';
 const { urlUtil: UrlUtil } = OHIF.utils;
 
 // Dynamic Import Routes (CodeSplitting)
-const IHEInvokeImageDisplay = lazy(
-  () => import(/* webpackChunkName: "IHEInvokeImageDisplay" */ './IHEInvokeImageDisplay')
-);
-const ViewerRouting = lazy(() => import(/* webpackChunkName: "ViewerRouting" */ './ViewerRouting'));
+const IHEInvokeImageDisplay = lazy(() => import('./IHEInvokeImageDisplay'));
+const ViewerRouting = lazy(() => import('./ViewerRouting'));
 
-const StudyListRouting = lazy(() => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRouting'));
-const StudyListRoutingNG = lazy(
-  () => import(/* webpackChunkName: "StudyListRouting" */ '../studylist/StudyListRoutingNG')
-);
+const StudyListRouting = lazy(() => import('../studylist/StudyListRouting'));
+const StudyListRoutingNG = lazy(() => import('../studylist/StudyListRoutingNG'));
+const WorklistsRoutingNG = lazy(() => import('../studylist/WorklistsRoutingNG'));
+const UploadsRoutingNG = lazy(() => import('../studylist/UploadsRoutingNG'));
+const SharedWithMeRoutingNG = lazy(() => import('../studylist/SharedWithMeRoutingNG'));
+
 const StandaloneRouting = lazy(() => import('../connectedComponents/ConnectedStandaloneRouting'));
+
 const ViewerLocalFileData = lazy(() => import('../connectedComponents/ViewerLocalFileData'));
 const UploadStudyPageNG = lazy(() => import('../pages/UploadStudyPageNG/UploadStudyPageNG'));
 const SettingsPageNG = lazy(() => import('../pages/SettingsPageNG/SettingsPageNG'));
@@ -71,7 +72,7 @@ const ROUTES_DEF = [
   },
   {
     path: '/upload',
-    component: UploadStudyPageNG,
+    component: UploadsRoutingNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },
@@ -81,15 +82,15 @@ const ROUTES_DEF = [
     component: SettingsPageNG,
   },
   {
-    path: '/shared-with-me',
-    component: SharedWithMeNG,
+    path: '/shared',
+    component: SharedWithMeRoutingNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },
   },
   {
     path: '/worklist',
-    component: WorkListPageNG,
+    component: WorklistsRoutingNG,
     condition: (appConfig) => {
       return appConfig.showStudyList;
     },

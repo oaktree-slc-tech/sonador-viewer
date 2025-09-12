@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import classNames from 'classnames';
@@ -8,7 +10,16 @@ import { ReactComponent as CloseCircle } from '@ohif/ui/src/elements/Svg/svgs/cl
 
 import styles from './ModalNG.module.scss';
 
-function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = false }) {
+
+function ModalNG({ isOpen, children, title, onClose, classes, onModalClick, hideDivider=false }) {
+  // Sonador Viewer Modal
+
+  const onModalClickEvent = (e) => {
+    if (_.isFunction(onModalClick)) {
+      onModalClick(e);
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       toggleScrolling(false);
@@ -31,7 +42,7 @@ function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = fals
   }
 
   return createPortal(
-    <>
+    <div className="sonadorModal" onClick={onModalClickEvent}>
       <div
         role="button" tabIndex={0}
         onKeyDown={(e) => {
@@ -42,6 +53,7 @@ function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = fals
         aria-label="Close modal backdrop"
         className={styles.backdrop}
         onClick={(e) => {
+          console.log('Modal click event');
           e.stopPropagation();
           e.preventDefault();
         }}
@@ -54,7 +66,8 @@ function ModalNG({ isOpen, children, title, onClose, classes, hideDivider = fals
         {!hideDivider && <hr className={styles.divider} />}
         {children}
       </div>
-    </>,
+    </div>,
+    
     document.getElementById('body'),
   );
 }
@@ -70,6 +83,7 @@ ModalNG.propTypes = {
     content: PropTypes.string,
   }),
   hideDivider: PropTypes.bool,
+  onModalClick: PropTypes.func,
 };
 
 export default ModalNG;
