@@ -121,6 +121,12 @@ function formatStudyDate(studyDateFrom , studyDateTo) {
 
 
 export const getWorklistItems = ({ server, filters, studyStartDate, studyEndDate  }) => {
+  // Retrieve worklist for the provided server
+  if (!server) {
+    console.warn('Unable to retrieve worklist items, invalid server.', server);
+    return [];
+  }
+
   const url = new URL(urlUtil.urlJoin(server.wadoRoot, 'worklist', 'studies'));
 
   const studyDate = formatStudyDate(studyStartDate, studyEndDate)
@@ -141,5 +147,5 @@ export const getWorklistItems = ({ server, filters, studyStartDate, studyEndDate
     },
     credentials: 'omit',
   })
-    .then((res) => res.json());
+  .then((res) => res.json());
 };

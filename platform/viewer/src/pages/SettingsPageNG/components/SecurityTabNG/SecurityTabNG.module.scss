@@ -118,6 +118,11 @@
       width: 1%;
       white-space: nowrap;
     }
+
+    & p {
+      width: 100%;
+      max-width: 100%;
+    }
   }
 }
 
@@ -219,6 +224,7 @@
   font-size: 30px;
   color: #d3d3d3;
   font-weight: 500;
+  max-width: 100%;
 }
 
 .createdColumn {

@@ -64,6 +64,21 @@ function searchImageServerGroups(server, search, group_query) {
 }
 
 
+function fetchServerSystemInfo(server) {
+	// Retrieve the system info ('/system') for the provided server
+
+	// Ensure that the server has a rootUrl property
+	if (!server.rootUrl) {
+		throw new Error('Unable to retrieve system information for the server. Server instance does not have a root URL attribute.');
+	}
+
+	return fetch(urlUtil.urlJoin(server.rootUrl, 'system'), {
+		headers: { Authorization: `Bearer ${getAuthToken()}` },
+		credentials: 'omit',
+	});
+}
+
+
 function fetchGroupTags(server, group) {
 	// Retrieve group tags from the server
 
@@ -86,5 +101,5 @@ function fetchGroupTags(server, group) {
 }
 
 
-export { sonadorUrl, getAuthToken, getActiveServer, searchImageServerGroups, fetchGroupTags };
+export { sonadorUrl, getAuthToken, getActiveServer, searchImageServerGroups, fetchServerSystemInfo, fetchGroupTags };
 

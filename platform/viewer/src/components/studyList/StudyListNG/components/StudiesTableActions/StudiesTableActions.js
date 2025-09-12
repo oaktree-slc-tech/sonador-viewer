@@ -1,8 +1,10 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
+
+import OHIF, { display, redux, DicomMetadataStore } from '@ohif/core';
 
 import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
@@ -14,6 +16,7 @@ import AppContext from '../../../../../context/AppContext';
 import { parseViewerPath } from '../../../../../routes/routesUtil';
 import { useWorkListStore } from '../../../../../store/useWorkListStore';
 import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
+import { _getStudyInstanceUID } from '../SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell.js';
 
 import UpdateWorklistModal from './components/UpdateWorklistModal';
 
@@ -21,9 +24,12 @@ import styles from './StudiesTableActions.module.scss';
 
 
 export default function StudiesTableActions({  selectedRows, isWorkList }) {
-  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
+  // Sonador study list viewer actions
+
+  const { activeServer } = useSelector(redux.selectors.activeOhifServer);
   const { appConfig } = useContext(AppContext);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [openUpdateWorklistModal, setOpenUpdateWorklistModal] = useState(false);
 
   const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
@@ -31,8 +37,9 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
 
   const handleViewAllSelectedStudies = () => {
     selectedRows.forEach(({ id }) => {
+      const _id = _getStudyInstanceUID({ row: { id, }, worklist: pathname.includes('worklist') });
       const link = parseViewerPath(appConfig, activeServer, {
-        studyInstanceUIDs: id,
+        studyInstanceUIDs: _id,
       });
 
       window.open(link, '_blank');
@@ -44,6 +51,9 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
       setIsOpenedShareModal(true);
     }
   };
+
+  // Permissions
+  const aclShare = activeServer?.perms?.acl;
 
   return (
     <>
@@ -88,10 +98,12 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
           </button>
         ) : (
           <div className={styles.shareContainer}>
-            <button className={styles.action} disabled={selectedRows.length !== 1} onClick={handleClickShare}>
-              <ShareIcon />
-              Share
-            </button>
+            {aclShare && (
+              <button className={styles.action} disabled={selectedRows.length !== 1} onClick={handleClickShare}>
+                <ShareIcon />
+                Share
+              </button>
+            )}
             {selectedRows.length > 1 && (
               <span className={styles.tooltipText}>Only one resource at a time can be shared</span>
             )}
@@ -106,9 +118,9 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
         />
       )}
       {isWorkList && openUpdateWorklistModal &&
-        <UpdateWorklistModal isOpen={openUpdateWorklistModal}
-                             selectedWorklists={selectedRows}
-                             setIsOpen={setOpenUpdateWorklistModal} />}
+        <UpdateWorklistModal
+          isOpen={openUpdateWorklistModal} selectedWorklists={selectedRows}
+          setIsOpen={setOpenUpdateWorklistModal} />}
     </>
   );
 }

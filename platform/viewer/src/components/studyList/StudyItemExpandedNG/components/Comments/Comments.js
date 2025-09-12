@@ -14,9 +14,10 @@ import { useCreateSeriesComment, useCreateStudyComment, useSeriesComments, useSt
 import styles from './Comments.module.scss';
 
 export default function Comments({  series, studyId }) {
-  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   // Manage and display series comments
 
+  const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
+  
   // State management: comments array and new comment text
   const [newCommentText, setNewCommentText] = useState('');
   const { data: seriesCommentsArr = [], isLoading: isLoadingSeriesComments } = useSeriesComments(activeServer, series);

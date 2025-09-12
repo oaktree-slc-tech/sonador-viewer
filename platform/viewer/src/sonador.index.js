@@ -129,9 +129,11 @@ if (window && window.sonador && window.sonador.host) {
 
       // Logos and branding for viewer
       window.config.whiteLabeling = {
+        
         // Logo
         createLogoComponentFn: function (React) {
           return React.createElement('a', {
+            // Create link with Sonador message
             target: '_self',
             href: '/',
             className: 'header-brand',
@@ -146,6 +148,10 @@ if (window && window.sonador && window.sonador.host) {
             },
           });
         },
+        emptyStateMessageFn: function(React) {
+          return window.config?.branding?.empty_state 
+            || 'Your user account is not associated with any imaging servers. Please contact your system administrator';
+        }
       };
 
       // Start empty set of servers (populated after session token is retrieved and

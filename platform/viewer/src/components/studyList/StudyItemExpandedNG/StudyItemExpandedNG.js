@@ -6,15 +6,23 @@ import classNames from 'classnames';
 import moment from 'moment';
 import PropTypes from 'prop-types';
 
-import OHIF, { display, redux } from '@ohif/core';
+import { DropdownMenu } from 'radix-ui';
+import {
+  ChevronDownIcon, 
+} from '@radix-ui/react-icons';
+
+import OHIF, { display, redux, DicomMetadataStore, utils, sonador } from '@ohif/core';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
+import { ReactComponent as Cube3dIcon } from '@ohif/ui/src/elements/Icon/icons/cube-3d-solid.svg';
+import { ReactComponent as InelineEditIcon } from '@ohif/ui/src/elements/Icon/icons/inline-edit.svg';
 
 import AppContext from '@ohif/sonador-viewer/src/context/AppContext';
 import useSeriesMetadata from '@ohif/sonador-viewer/src/hooks/useSeriesMetadata';
 import * as RoutesUtil from '@ohif/sonador-viewer/src/routes/routesUtil';
 
 import { useDeviceStore } from '../../../store/useDeviceStore';
+import { fetchStudyAclPermissions } from '../../../api/ext';
 
 import Comments from './components/Comments/Comments';
 import { useAllSeriesComments, useStudyComments } from './components/Comments/logic';
@@ -34,8 +42,29 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   
   // Show details for the currently selected study
   const { appConfig } = useContext(AppContext);
+  const _study = DicomMetadataStore.getStudy(studyId);
+  if (!_study) {
+    DicomMetadataStore.addStudy({ StudyInstanceUID: studyId });
+  }
+  const studyMeta = DicomMetadataStore.getStudyMetadata(studyId);
+
+  // Access permissions
+  const ohif3Enabled = activeServer?.ohifEnabled;
+  const [aclView, setAclView] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);  
 
   useEffect(() => {
+    // Sonador Viewer Service Integration
+
+    // Subscribe to changes in series metadata to update permissions/display
+    const dcm_meta_studychange_subscription = DicomMetadataStore.subscribe(
+      DicomMetadataStore.EVENTS.STUDY_UPDATED, ({ StudyInstanceUID, studyMetadata }) => {
+        if (StudyInstanceUID == studyId) {
+
+          if (!aclView && studyMetadata?.perms?.View) {
+            setAclView(studyMetadata?.perms?.View);
+          }
+        }
+      });
 
     return () => {
 
@@ -43,8 +72,25 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
       _.each(displaySetApi.displaySetService.getDisplaySetsForStudy(studyId), (ds) => {
         displaySetApi.displaySetService.deleteDisplaySet(ds.displaySetInstanceUID);
       });
+
+      // Unsubscribe from external service subscriptions
+      dcm_meta_studychange_subscription.unsubscribe();
     }
-  }, [])
+  }, []);
+
+
+  useEffect(() => {    
+    // Retrieve ACL permissions (if not already specified in DicomMetadataStore)
+    
+    const _fetchAcl = async () => {
+      const resourcePerms = await fetchStudyAclPermissions(activeServer, studyId);
+      DicomMetadataStore.updateStudyMetadata(_.omit(resourcePerms, 'Level'));
+    }
+
+    if (activeServer && studyMeta && !aclView && !studyMeta.perms) {
+      _fetchAcl();
+    }
+  }, []);
 
   // Initialize displaySets for the drawer and retrieve thumbnail data
   const { data } = useSeriesMetadata({ studyId, server: activeServer });
@@ -59,13 +105,31 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(activeServer, allSeries);
   const { data: studyCommentsArr = [] } = useStudyComments(activeServer, studyId);
 
+  
   const handleClickOpenInViewer = () => {
+    // Open link in Sonador Viewer
+
     const link = RoutesUtil.parseViewerPath(appConfig, activeServer, {
       studyInstanceUIDs: studyId,
     });
 
     window.open(link, '_blank');
   };
+
+
+  const handleClickOpenOhif3 = (link, queryOptions) => {
+    // Open link in OHIF v3 instance on Orthanc
+    queryOptions = queryOptions || {};
+
+    // Add StudyInstance UID to the query options
+    _.extend(queryOptions, {
+      StudyInstanceUIDs: studyId,
+    });
+      
+    // Create Sonador / Orthanc OHIF URL
+    const _url = utils.urlUtil.buildUrl(activeServer.rootUrl, link, queryOptions);
+    window.open(`${_url}&token=${sonador.getAuthToken()}`, '_blank');
+  }
 
 
   return (
@@ -143,10 +207,44 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
               {study.StudyDate && moment(study.StudyDate.value, 'YYYYMMDD').format('MMM DD, YYYY')}
             </p>
           </div>
-          <button className={styles.openInViewer} onClick={handleClickOpenInViewer}>
-            <EyeIcon />
-            <span>Open in Viewer</span>
-          </button>
+          {aclView && (
+            <div className={styles.viewerLinksContainer}>
+              <button className={ohif3Enabled ? styles.openInViewerSplit : styles.openInViewer} 
+                  onClick={handleClickOpenInViewer}>
+                <EyeIcon className={styles.icon15x} />
+               <span>Open in Viewer</span>
+             </button>
+             {ohif3Enabled && (
+                <DropdownMenu.Root>
+                
+                  <DropdownMenu.Trigger asChild>
+                    <button className={styles.IconButton} aria-label="Open In Viewer Links">
+                      <ChevronDownIcon height={25} width={25} />
+                    </button>
+                  </DropdownMenu.Trigger>
+
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content className={styles.Content} sideOffset={5}>
+                      <DropdownMenu.Item className={styles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/viewer')}>
+                          <EyeIcon className={classNames(styles.icon15x, styles.DropDownSvgIcon)} />
+                          <span>View in Sonador / OHIF</span>
+                        </DropdownMenu.Item>
+                      <DropdownMenu.Item className={styles.DropdownItem}
+                          onClick={() => handleClickOpenOhif3('/ohif/viewer', { hangingprotocolId: 'mprAnd3DVolumeViewport' })}>
+                        <Cube3dIcon className={classNames(styles.icon12x, styles.DropDownSvgIcon)} />
+                        <span>View in Volume Rendering Mode</span>
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item className={styles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/segmentation')}>
+                        <InelineEditIcon className={styles.DropDownSvgIcon} />
+                        <span>View in Segmentation Editor</span>
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+
+               </DropdownMenu.Root>
+             )}
+            </div>
+          )}
         </div>
         {isDesktop || isLarge ? (
           <div className={styles.contentData}>

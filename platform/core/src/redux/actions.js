@@ -15,6 +15,11 @@ import {
   SET_VIEWPORT_LAYOUT_AND_DATA,
 } from './constants/ActionTypes.js';
 
+
+/**
+ * VIEWPORT
+ */
+
 /**
  * The definition of a viewport layout.
  *
@@ -24,36 +29,36 @@ import {
  * @property {array} viewports -
  */
 
-/**
- * VIEWPORT
- */
 export const setViewportSpecificData = (viewportIndex, viewportSpecificData) => ({
   type: SET_VIEWPORT,
   viewportIndex,
   viewportSpecificData,
 });
 
+
 export const setViewportActive = (viewportIndex) => ({
   type: SET_VIEWPORT_ACTIVE,
   viewportIndex,
 });
 
-/**
- * @param {ViewportLayout} layout
- */
+
 export const setLayout = ({ numRows, numColumns, viewports }) => ({
+  /**
+  * @param {ViewportLayout} layout
+  */
   type: SET_VIEWPORT_LAYOUT,
   numRows,
   numColumns,
   viewports,
 });
 
-/**
- * @param {number} layout.numRows
- * @param {number} layout.numColumns
- * @param {array} viewports
- */
+
 export const setViewportLayoutAndData = ({ numRows, numColumns, viewports }, viewportSpecificData) => ({
+  /**
+  * @param {number} layout.numRows
+  * @param {number} layout.numColumns
+  * @param {array} viewports
+  */
   type: SET_VIEWPORT_LAYOUT_AND_DATA,
   numRows,
   numColumns,
@@ -61,20 +66,24 @@ export const setViewportLayoutAndData = ({ numRows, numColumns, viewports }, vie
   viewportSpecificData,
 });
 
+
 // TODO probably we don't need this action, and need to use only 'clearEntireViewportSpecificData'
 export const clearViewportSpecificData = (viewportIndex) => ({
   type: CLEAR_VIEWPORT,
   viewportIndex,
 });
 
+
 export const clearEntireViewportSpecificData = () => ({
   type: CLEAR_VIEWPORT_SPECIFIC_DATA,
 });
+
 
 export const setActiveViewportSpecificData = (viewportSpecificData) => ({
   type: SET_ACTIVE_SPECIFIC_DATA,
   viewportSpecificData,
 });
+
 
 /**
  * NOT-VIEWPORT
@@ -118,7 +127,10 @@ export const setActiveServer = (token) => {
   };
 };
 
+
+
 const actions = {
+  
   /**
    * VIEWPORT
    */
@@ -129,6 +141,7 @@ const actions = {
   clearViewportSpecificData,
   clearEntireViewportSpecificData,
   setActiveViewportSpecificData,
+  
   /**
    * NOT-VIEWPORT
    */

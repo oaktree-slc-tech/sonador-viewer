@@ -28,4 +28,11 @@ const activeOhifServer = (state) => {
 };
 
 
-export { getActiveViewportData, activeOhifServer };
+const serverCount = (state) => {
+  // Retrieve the count of servers registered with the viewer
+  
+  return state.servers?.servers?.length;
+}
+
+
+export { getActiveViewportData, activeOhifServer, serverCount };

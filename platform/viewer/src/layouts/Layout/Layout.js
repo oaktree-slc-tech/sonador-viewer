@@ -2,13 +2,16 @@ import React, { useEffect } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
-import WhiteLabelingContext from '../../context/WhiteLabelingContext';
-import SideBarNG from '../../components/SideBarNG/SideBarNG';
 import { useDeviceStore } from '../../store/useDeviceStore';
+import WhiteLabelingContext from '../../context/WhiteLabelingContext';
+
+import SideBarNG from '../../components/SideBarNG/SideBarNG';
+import EmptyStateIndicator from '../../components/emptyState/EmptyStateIndicator';
 
 import TabletMobileHeader from './components/TabletMobileHeader/TabletMobileHeader';
 
 import styles from './Layout.module.scss';
+
 
 export default function Layout({ children, type, noHorizontalPadding = false }) {
   const { setDevice, isDesktop } = useDeviceStore();
@@ -54,6 +57,7 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
     </>
   );
 }
+
 
 Layout.propTypes = {
   children: PropTypes.node.isRequired,

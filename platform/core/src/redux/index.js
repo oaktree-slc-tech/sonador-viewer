@@ -1,10 +1,15 @@
-import actions from './actions.js';
+import actionTypes from './constants/ActionTypes.js';
 import localStorage from './localStorage.js';
-import reducers from './reducers';
-import { getActiveViewportData, activeOhifServer } from './selectors.js';
 import sessionStorage from './sessionStorage.js';
 
+import actions from './actions.js';
+import reducers from './reducers';
+
+import { getActiveViewportData, activeOhifServer, serverCount } from './selectors.js';
+
+
 const redux = {
+  actionTypes,
   reducers,
   actions,
   localStorage,
@@ -12,7 +17,9 @@ const redux = {
   selectors: {
     getActiveViewportData,
     activeOhifServer,
+    serverCount,
   },
 };
+
 
 export default redux;
