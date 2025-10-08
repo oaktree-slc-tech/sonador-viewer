@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
 import * as _ from 'lodash';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import Icon from '../../elements/Icon/Icon.js';
@@ -139,7 +139,7 @@ const LabellingFlow = ({
   };
 
   /*
-   * Waits for 1 sec to dismiss the labelling component.
+   * Waits to dismiss the labelling component.
    *
    */
   const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, fadeOutTimeout));

@@ -6,6 +6,9 @@ import { getAuthToken, sonadorUrl } from './sonador';
 
 
 export const getWorklistGroup = (server, term) => {
+  // Retrieve the list of groups with worklists enabled which match the provided search term.
+  // Only groups of which the user is a member will be retrieved.
+
   return fetch(sonadorUrl(urlUtil.urlJoin(`/visionaire/api/pacs/${server.token}/group/search/`)), {
     method: 'POST',
     headers: {
@@ -13,7 +16,7 @@ export const getWorklistGroup = (server, term) => {
     },
     credentials: 'omit',
     body: JSON.stringify({
-      term,
+      name: term,
       worklist: true,
     }),
   }).then((res) => res.json())
@@ -22,6 +25,8 @@ export const getWorklistGroup = (server, term) => {
 
 
 export const getWorklistMembership = ({ server, groupId, term }) => {
+  // Sarch the group for users which match the provided search term.
+
   return fetch(sonadorUrl(urlUtil.urlJoin(`/visionaire/api/pacs/${server.token}/group/${groupId}/membership`)), {
     method: 'POST',
     headers: {
@@ -37,6 +42,8 @@ export const getWorklistMembership = ({ server, groupId, term }) => {
 
 
 export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userId, State }) => {
+  // Create a worklist request
+
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', StudyInstanceUID, 'worklists'), {
     method: 'POST',
     headers: {
@@ -61,6 +68,8 @@ export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userI
 
 
 export const updateWorklist = ({ server, StudyInstanceUID, worklistId, State, Comment }) => {
+  // Update the provided worklist item
+
   const payload = {
     State,
     ...(Comment ? { Comment: { Text: Comment } } : {}),
@@ -107,6 +116,8 @@ function toDateIfMoment(value ) {
 
 
 function formatStudyDate(studyDateFrom , studyDateTo) {
+  // Format the study date to match the DICOM standard
+
   if (!studyDateFrom) return null;
   const from = toDateIfMoment(studyDateFrom)
   const to = toDateIfMoment(studyDateTo)
@@ -121,7 +132,9 @@ function formatStudyDate(studyDateFrom , studyDateTo) {
 
 
 export const getWorklistItems = ({ server, filters, studyStartDate, studyEndDate  }) => {
-  // Retrieve worklist for the provided server
+  // Retrieve worklist for the provided server. Is a server is not provided, the
+  // an empty array is returned.
+
   if (!server) {
     console.warn('Unable to retrieve worklist items, invalid server.', server);
     return [];

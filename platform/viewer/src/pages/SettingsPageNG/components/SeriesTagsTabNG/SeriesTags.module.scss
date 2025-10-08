@@ -1,0 +1,74 @@
+.header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+
+.addNewBtn {
+  all: unset;
+  background-color: #58BC82;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  column-gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #FFFFFF;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+
+.inputGroup {
+  position: relative;
+  margin-top: 1rem;
+  margin-bottom: 20px;
+
+  .input {
+    width: 100%;
+    padding: 8px;
+    font-size: 1rem;
+  }
+}
+
+
+.tagList {
+  overflow: auto;
+
+  :where(table) { width: 100% }
+}
+
+
+.cancel, .save {
+  all: unset;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 22px;
+  color: #FFFFFF;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.cancel {
+  background-color: #89898B;
+}
+
+.save {
+  background-color: #2E46E9;
+  margin-left: 10px;
+}
+
+.footer, .addNewContainer {
+  display: flex;
+  justify-content: flex-end;
+  position: fixed;
+  right: 75px;
+}
+
+.footer {
+  bottom: 10px;
+}

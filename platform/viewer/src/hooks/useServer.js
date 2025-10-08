@@ -124,6 +124,13 @@ const updateServer = (server) => {
 }
 
 
+const activateServer = (serverToken) => {
+  // Mark the specified server as active
+
+  useDispatch()(redux.actions.setActiveServer(serverToken));
+}
+
+
 export default function useServer({ project, location, dataset, dicomStore, token } = {}) {
   // userServer hook
 
@@ -162,4 +169,4 @@ export default function useServer({ project, location, dataset, dicomStore, toke
 }
 
 
-export { useServer, updateServer }
+export { useServer, updateServer, activateServer }

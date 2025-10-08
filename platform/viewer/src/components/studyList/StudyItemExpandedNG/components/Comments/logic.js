@@ -7,6 +7,7 @@ import {
   fetchStudyComments,
 } from '../../../../../api/ext';
 
+
 export const useAllSeriesComments = (server, allSeries) => {
 
   const enabled = !!allSeries?.length > 0;
@@ -25,6 +26,8 @@ export const useAllSeriesComments = (server, allSeries) => {
     enabled,
   });
 };
+
+
 export const useSeriesComments = (server, series) => {
   // Create query methods for DICOM series comments
 
@@ -35,6 +38,7 @@ export const useSeriesComments = (server, series) => {
     enabled,
   });
 };
+
 
 export const useCreateSeriesComment = (server, series, onSuccessCallback) => {
   // Create a new comment for the provided series
@@ -55,8 +59,14 @@ export const useCreateSeriesComment = (server, series, onSuccessCallback) => {
   });
 };
 
+
 export const useStudyComments = (server, studyId) => {
-  // Create query methods for DICOM study comments
+  // Create query methods for DICOM study comments.
+  
+  // @input server (object): server from which the study comments should be retrieved.
+  // @input studyId (str or null/undefined): studyId for which the comments should be retrieved.
+  //   if a null/undefined study is provided, an empty array will be returned. This is done to 
+  //   accomodate ACL permission checks within components.
 
   return useQuery({
     queryKey: ['studyDicomExtComments', studyId],
@@ -64,6 +74,7 @@ export const useStudyComments = (server, studyId) => {
     enabled: !!studyId,
   });
 };
+
 
 export const useCreateStudyComment = (server, studyId, onSuccessCallback) => {
   // Create a new comment for the provided series

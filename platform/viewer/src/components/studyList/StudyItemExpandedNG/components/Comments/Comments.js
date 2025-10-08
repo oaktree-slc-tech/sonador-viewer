@@ -13,7 +13,7 @@ import { useCreateSeriesComment, useCreateStudyComment, useSeriesComments, useSt
 
 import styles from './Comments.module.scss';
 
-export default function Comments({  series, studyId }) {
+export default function Comments({  series, studyId, commentsEdit=true }) {
   // Manage and display series comments
 
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
@@ -60,35 +60,37 @@ export default function Comments({  series, studyId }) {
             <div className={styles.commentItemHeader}>
               <UserRow User={User} LastUpdate={LastUpdate} />
             </div>
-            <p className={styles.commentItemText}>
+            <div className={styles.commentItemText}>
               <ReactMarkdown>{Text}</ReactMarkdown>
-            </p>
+            </div>
           </div>
         ))
       ) : (
         <NoCommentsPlaceholder studyId={studyId} />
       )}
 
-
-      <div className={styles.commentsNewCommentForm}>
-        {/* TODO: Add back avatar styling when author added to response. className={styles.commentsNewCommentAvatar} */}
-        {isDesktop && <div />}
-        <textarea
-          value={newCommentText}
-          onChange={handleChangeNewComment}
-          placeholder="Write a comment..."
-          className={styles.commentsNewCommentTextarea}
-        />
-        <button
-          onClick={() => {
-            studyId ? createStudyComment(newCommentText) : createSeriesComment(newCommentText);
-          }}
-          className={styles.commentsNewCommentSubmit}
-          disabled={isMutating}
-        >
-          Submit
-        </button>
-      </div>
+      {commentsEdit && (
+        <div className={styles.commentsNewCommentForm}>
+          {/* TODO: Add back avatar styling when author added to response. className={styles.commentsNewCommentAvatar} */}
+          {isDesktop && <div />}
+          <textarea
+            value={newCommentText}
+            onChange={handleChangeNewComment}
+            placeholder="Write a comment..."
+            className={styles.commentsNewCommentTextarea}
+          />
+          <button
+            onClick={() => {
+              studyId ? createStudyComment(newCommentText) : createSeriesComment(newCommentText);
+            }}
+            className={styles.commentsNewCommentSubmit}
+            disabled={isMutating}
+          >
+            Submit
+          </button>
+        </div>
+      )}
+      
     </div>
   );
 }

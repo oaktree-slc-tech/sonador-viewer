@@ -31,6 +31,7 @@ import Metadata from './components/Metadata/Metadata';
 import TabletMobileTabs from './components/TabletMobileTabs/TabletMobileTabs';
 import { ReactComponent as StudyCopyIcon } from './study-copy.svg';
 
+import radixStyles from '../../../styles/radixUi.module.scss';
 import styles from './StudyItemExpandedNG.module.scss';
 
 
@@ -50,7 +51,10 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
 
   // Access permissions
   const ohif3Enabled = activeServer?.ohifEnabled;
-  const [aclView, setAclView] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);  
+  const aclUpload = activeServer.perms.upload;
+  const [aclView, setAclView] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);
+  const [aclComments, setAclComments] = useState(activeServer?.perms?.comment_view || studyMeta.perms?.CommentView || aclView || false);
+  const [aclCommentEdit, setAclCommentEdit] = useState(activeServer?.perms?.comment_edit || studyMeta.perms?.CommentEdit || false);
 
   useEffect(() => {
     // Sonador Viewer Service Integration
@@ -62,6 +66,14 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
 
           if (!aclView && studyMetadata?.perms?.View) {
             setAclView(studyMetadata?.perms?.View);
+          }
+
+          if (!aclComments && (studyMetadata?.perms?.CommentView || aclView)) {
+            setAclComments(studyMetadata?.perms?.CommentView || aclView);
+          }
+
+          if (!aclCommentEdit && studyMetadata?.perms?.CommentEdit) {
+            setAclCommentEdit(studyMetadata?.perms?.CommentEdit);
           }
         }
       });
@@ -77,6 +89,14 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
       dcm_meta_studychange_subscription.unsubscribe();
     }
   }, []);
+
+  useEffect(() => {
+    // Update permissions dependent on the series "view" permission
+    
+    if (!aclComments && aclView) {
+      setAclComments(aclView);
+    }
+  }, [aclView]);
 
 
   useEffect(() => {    
@@ -102,8 +122,8 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   const [selectedStudy, setSelectedStudy] = useState(studyId);
 
   const allSeries = data?.[0]?.thumbnails;
-  const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(activeServer, allSeries);
-  const { data: studyCommentsArr = [] } = useStudyComments(activeServer, studyId);
+  const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(activeServer, aclComments ? allSeries : []);
+  const { data: studyCommentsArr = [] } = useStudyComments(activeServer, aclComments ? studyId : undefined);
 
   
   const handleClickOpenInViewer = () => {
@@ -134,71 +154,75 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
 
   return (
     <div className={styles.container}>
-      <div className={styles.list}>
-        {!data ? (
-          <Loader />
-        ) : (
-          <>
-            <div
-              role="button"
-              className={classNames(styles.studyItem, {
-                [styles.active]: selectedStudy,
-              })}
-              onClick={() => {
-                setSelectedThumbnail(null);
-                setSelectedStudy(studyId);
-                // TODO set study as selected
-              }}
-            >
-              {studyCommentsArr.length ? <div className={styles.countWrapper}>
-                      <span className={styles.countNumber}>
-                    {studyCommentsArr.length}
-                    </span>
-                </div>
-                : null}
-              <StudyCopyIcon />
-              <span>STUDY</span>
-            </div>
-            <div className={styles.spacer} />
-            {data?.[0]?.thumbnails?.map((thumbnail, index) => {
-              const currentElementInCommentsArray = allSeriesCommentsArr.find(el => el.SeriesInstanceUID === thumbnail.SeriesInstanceUID);
-              const count = currentElementInCommentsArray?.response?.length;
 
-              return (
-                <div
-                  role="button"
-                  key={index}
-                  className={classNames(styles.item, {
-                    [styles.active]: selectedThumbnail?.SeriesInstanceUID === thumbnail.SeriesInstanceUID,
-                  })}
-                  onClick={() => {
-                    setSelectedThumbnail(thumbnail);
-                    setSelectedStudy(null);
-                  }}
-                >
-                  {count ? <div className={styles.countWrapper}>
-                      <span className={styles.countNumber}>
-                    {count}
-                    </span>
-                    </div>
-                    : null}
-                  <ImageThumbnailNG
-                    key={thumbnail.imageId}
-                    active={selectedThumbnail?.imageId === thumbnail.imageId}
-                    imageSrc=""
-                    imageId={thumbnail.imageId}
-                    error={false}
-                    width={120}
-                    height={120}
-                    altImageText={thumbnail.altImageText}
-                  />
-                  <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}</p>
-                </div>
-              );
-            })}
-          </>
-        )}
-      </div>
+      {aclView && (
+        <div className={styles.list}>
+          {!data ? (
+            <Loader />
+          ) : (
+            <>
+              <div
+                role="button"
+                className={classNames(styles.studyItem, {
+                  [styles.active]: selectedStudy,
+                })}
+                onClick={() => {
+                  setSelectedThumbnail(null);
+                  setSelectedStudy(studyId);
+                  // TODO set study as selected
+                }}
+              >
+                {(aclComments && studyCommentsArr.length) ? <div className={styles.countWrapper}>
+                        <span className={styles.countNumber}>
+                      {studyCommentsArr.length}
+                      </span>
+                  </div>
+                  : null}
+                <StudyCopyIcon />
+                <span>STUDY</span>
+              </div>
+              <div className={styles.spacer} />
+              {data?.[0]?.thumbnails?.map((thumbnail, index) => {
+                const currentElementInCommentsArray = allSeriesCommentsArr.find(el => el.SeriesInstanceUID === thumbnail.SeriesInstanceUID);
+                const count = currentElementInCommentsArray?.response?.length;
+
+                return (
+                  <div
+                    role="button"
+                    key={index}
+                    className={classNames(styles.item, {
+                      [styles.active]: selectedThumbnail?.SeriesInstanceUID === thumbnail.SeriesInstanceUID,
+                    })}
+                    onClick={() => {
+                      setSelectedThumbnail(thumbnail);
+                      setSelectedStudy(null);
+                    }}
+                  >
+                    {count ? <div className={styles.countWrapper}>
+                        <span className={styles.countNumber}>
+                      {count}
+                      </span>
+                      </div>
+                      : null}
+                    <ImageThumbnailNG
+                      key={thumbnail.imageId}
+                      active={selectedThumbnail?.imageId === thumbnail.imageId}
+                      imageSrc=""
+                      imageId={thumbnail.imageId}
+                      error={false}
+                      width={120}
+                      height={120}
+                      altImageText={thumbnail.altImageText}
+                    />
+                    <p className={styles.thumbnailName}>{thumbnail.SeriesDescription}</p>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+      
       <div className={styles.content}>
         <div className={styles.contentHeader}>
           <div>
@@ -211,33 +235,35 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
             <div className={styles.viewerLinksContainer}>
               <button className={ohif3Enabled ? styles.openInViewerSplit : styles.openInViewer} 
                   onClick={handleClickOpenInViewer}>
-                <EyeIcon className={styles.icon15x} />
+                <EyeIcon className={radixStyles.icon15x} />
                <span>Open in Viewer</span>
              </button>
              {ohif3Enabled && (
                 <DropdownMenu.Root>
                 
                   <DropdownMenu.Trigger asChild>
-                    <button className={styles.IconButton} aria-label="Open In Viewer Links">
+                    <button className={classNames(radixStyles.IconButton, styles.moreViewersIconButton)} aria-label="Open In Viewer Links">
                       <ChevronDownIcon height={25} width={25} />
                     </button>
                   </DropdownMenu.Trigger>
 
                   <DropdownMenu.Portal>
-                    <DropdownMenu.Content className={styles.Content} sideOffset={5}>
-                      <DropdownMenu.Item className={styles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/viewer')}>
-                          <EyeIcon className={classNames(styles.icon15x, styles.DropDownSvgIcon)} />
+                    <DropdownMenu.Content className={classNames(radixStyles.Content, styles.moreViewersContentContainer)} sideOffset={5}>
+                      <DropdownMenu.Item className={radixStyles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/viewer')}>
+                          <EyeIcon className={classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon)} />
                           <span>View in Sonador / OHIF</span>
                         </DropdownMenu.Item>
-                      <DropdownMenu.Item className={styles.DropdownItem}
+                      <DropdownMenu.Item className={radixStyles.DropdownItem}
                           onClick={() => handleClickOpenOhif3('/ohif/viewer', { hangingprotocolId: 'mprAnd3DVolumeViewport' })}>
-                        <Cube3dIcon className={classNames(styles.icon12x, styles.DropDownSvgIcon)} />
+                        <Cube3dIcon className={classNames(radixStyles.icon12x, radixStyles.DropDownSvgIcon)} />
                         <span>View in Volume Rendering Mode</span>
                       </DropdownMenu.Item>
-                      <DropdownMenu.Item className={styles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/segmentation')}>
-                        <InelineEditIcon className={styles.DropDownSvgIcon} />
-                        <span>View in Segmentation Editor</span>
-                      </DropdownMenu.Item>
+                      {aclUpload && (
+                        <DropdownMenu.Item className={radixStyles.DropdownItem} onClick={() => handleClickOpenOhif3('/ohif/segmentation')}>
+                          <InelineEditIcon className={radixStyles.DropDownSvgIcon} />
+                          <span>View in Segmentation Editor</span>
+                        </DropdownMenu.Item>
+                      )}
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
 
@@ -261,19 +287,24 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
                 />
               </div>
             )}
+            
             <Metadata 
               study={study} seriesCount={data?.[0]?.thumbnails?.length??0} 
               selectedSeries={selectedThumbnail}
             />
-            <Comments  series={selectedThumbnail} studyId={selectedStudy} />
+            
+            {aclComments && (
+              <Comments  series={selectedThumbnail} studyId={selectedStudy} commentsEdit={aclCommentEdit} />
+            )}
           </div>
         ) : (
-          <TabletMobileTabs  study={study} series={selectedThumbnail} />
+          <TabletMobileTabs study={study} series={selectedThumbnail} />
         )}
       </div>
     </div>
   );
 }
+
 
 StudyItemExpandedNG.propTypes = {
   studyId: PropTypes.string.isRequired,

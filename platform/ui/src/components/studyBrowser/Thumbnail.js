@@ -1,10 +1,14 @@
+// Module provides components with a preview and summary of the DICOM data for a series.
+import _ from 'lodash';
+import throttle from 'lodash.throttle';
+
 import React, { useEffect, useState } from 'react';
 import { useDrag } from 'react-dnd';
 import classNames from 'classnames';
-import throttle from 'lodash.throttle';
+
 import PropTypes from 'prop-types';
 
-import { classes } from '@ohif/core';
+import OHIF, { classes } from '@ohif/core';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { Tooltip } from '../tooltip';
@@ -16,26 +20,40 @@ import './Thumbnail.styl';
 
 const StudyLoadingListener = classes.StudyLoadingListener;
 
-function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets }) {
+
+function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets, hasClientWarnings }) {
+  // Footer which summarizes the attributes of an imaging series including description, series number, 
+  // warnings, and other information to be summarized for the user.
+
   const [inconsistencyWarnings, inconsistencyWarningsSet] = useState([]);
   const [derivedDisplaySetsActive, derivedDisplaySetsActiveSet] = useState([]);
+  const [clientWarnings, setClientWarnings] = useState([]);
 
   useEffect(() => {
+    // Update warning lists from background promises
     let unmounted = false;
+
+    // Series inconsistency warnings (set during init by SOP Class Handlers)
     hasWarnings.then((response) => {
       if (!unmounted) {
         inconsistencyWarningsSet(response);
       }
     });
+
+    // Derived displaySet warnings (created by SOP Class Handlers about reference series)
     hasDerivedDisplaySets.then((response) => {
       if (!unmounted) {
         derivedDisplaySetsActiveSet(response);
       }
     });
-    return () => {
-      unmounted = true;
-    };
-  }, [hasWarnings, hasDerivedDisplaySets]);
+
+    // Client warnings: created by OHIF display components
+    if (hasClientWarnings) {
+      setClientWarnings(hasClientWarnings);
+    }
+
+    return () => { unmounted = true; };
+  }, [hasWarnings, hasDerivedDisplaySets, hasClientWarnings]);
 
   const infoOnly = !SeriesDescription;
 
@@ -48,11 +66,25 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
     );
   };
 
-  const getWarningContent = (inconsistencyWarnings) => {
-    if (Array.isArray(inconsistencyWarnings)) {
-      const listedWarnings = inconsistencyWarnings.map((warn, index) => {
-        return <li key={index}>{warn}</li>;
+  const getWarningContent = (inconsistencyWarnings, clientWarnings) => {
+    // Retrieve content for inconsistency and client warnings.
+    inconsistencyWarnings = inconsistencyWarnings || [];
+    clientWarnings = clientWarnings || [];    
+
+    if (inconsistencyWarnings || clientWarnings) {
+
+      // Series inconsistency warnings
+      const _inconsistency = inconsistencyWarnings.map((warn, index) => {
+        return <li key={index}>{warn}</li>
       });
+
+      // Combined warnings list
+      const listedWarnings = [
+        ..._inconsistency, 
+        ...clientWarnings.map((warn, index) => {
+          return <li key={_inconsistency.length+index}>{warn}</li>
+        }),
+      ];
 
       return <ol>{listedWarnings}</ol>;
     }
@@ -60,8 +92,8 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
     return <>{inconsistencyWarnings}</>;
   };
 
-  const getWarningInfo = (SeriesNumber, inconsistencyWarnings) => {
-    if (!inconsistencyWarnings?.length) {
+  const getWarningInfo = (SeriesNumber, inconsistencyWarnings, clientWarnings) => {
+    if (!inconsistencyWarnings?.length && !clientWarnings?.length) {
       return null;
     }
 
@@ -71,8 +103,8 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
         placement="left"
         overlay={
           <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
-            <div className="warningTitle">Series Inconsistencies</div>
-            <div className="warningContent">{getWarningContent(inconsistencyWarnings)}</div>
+            <div className="warningTitle">Series Warnings</div>
+            <div className="warningContent">{getWarningContent(inconsistencyWarnings, clientWarnings)}</div>
           </Tooltip>
         }
       >
@@ -97,7 +129,7 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
     );
   };
 
-  const getSeriesInformation = (SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive) => {
+  const getSeriesInformation = (SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive, clientWarnings) => {
     if (!SeriesNumber && !numImageFrames) {
       return null;
     }
@@ -107,7 +139,7 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
         {SeriesNumber !== undefined && getInfo(SeriesNumber, 'S:')}
         {numImageFrames !== undefined && getInfo(numImageFrames, '', 'image-frames')}
         {getDerivedInfo(derivedDisplaySetsActive)}
-        {getWarningInfo(SeriesNumber, inconsistencyWarnings)}
+        {getWarningInfo(SeriesNumber, inconsistencyWarnings, clientWarnings)}
       </div>
     );
   };
@@ -115,12 +147,15 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
   return (
     <div className={classNames('series-details', { 'info-only': infoOnly })}>
       <div className="series-description">{SeriesDescription}</div>
-      {getSeriesInformation(SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive)}
+      {getSeriesInformation(SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive, clientWarnings)}
     </div>
   );
 }
 
+
 function Thumbnail(props) {
+  // Summary of the medical imaging displayed to the user in the viewer sidepanel.
+
   const {
     active,
     altImageText,
@@ -136,8 +171,38 @@ function Thumbnail(props) {
     showProgressBar,
   } = props;
 
+
+  // Component state
   const [stackPercentComplete, setStackPercentComplete] = useState(0);
+  const [clientWarnings, setClientWarnings] = useState([]);
+  
+  // Update state properties from displaySet
+  const displaySetApi = OHIF.display.DisplaySetApi.Instance;
   useEffect(() => {
+    // Subscribe to display set events
+    const displayset_update = displaySetApi.displaySetService.subscribe(
+      displaySetApi.displaySetService.EVENTS.DISPLAY_SET_CHANGED, ({ displaySetInstanceUID: _dsUid, displaySet: _ds }) => {
+
+        // Update series warnings and notifications from displayset including distortion filter
+        // and other service side checks. 
+        if (_dsUid == displaySetInstanceUID) {
+          if (_ds.clientWarnings) {
+            setClientWarnings(_ds.clientWarnings);
+          }
+        }
+      });
+
+    return () => {
+
+      // Clear service subscriptions
+      displayset_update.unsubscribe();
+    }
+  }, [])
+
+  // Loading indicator
+  useEffect(() => {
+    // Update the progress bar to reflect the status of the series as it loads
+
     const onProgressChange = throttle(({ detail }) => {
       const { progressId, progressData } = detail;
       if (`StackProgress:${displaySetInstanceUID}` === progressId) {
@@ -180,7 +245,7 @@ function Thumbnail(props) {
       onMouseDown={onMouseDown}
     >
       {/* SHOW IMAGE */}
-      {hasImage && (
+      {hasImage && (        
         <ImageThumbnail
           active={active}
           imageSrc={imageSrc}
@@ -196,12 +261,13 @@ function Thumbnail(props) {
           <h1>{altImageText}</h1>
         </div>
       )}
-      {ThumbnailFooter(props)}
+      {ThumbnailFooter({ ...props, hasClientWarnings: clientWarnings })}
     </div>
   );
 }
 
 const noop = () => {};
+
 
 Thumbnail.propTypes = {
   supportsDrag: PropTypes.bool,
@@ -230,6 +296,7 @@ Thumbnail.propTypes = {
   showProgressBar: PropTypes.bool,
 };
 
+
 Thumbnail.defaultProps = {
   supportsDrag: false,
   active: false,
@@ -239,5 +306,6 @@ Thumbnail.defaultProps = {
   onClick: noop,
   onMouseDown: noop,
 };
+
 
 export { Thumbnail };

@@ -8,7 +8,7 @@ import classNames from 'classnames';
 import OHIF from '@ohif/core';
 import { AboutContent } from '@ohif/ui';
 
-import DeviceList from '../../components/DevicesListModal/DeviceList';
+import DeviceList from '../../components/DistortionFilter/DeviceList';
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import Layout from '../../layouts/Layout/Layout';
 import { useDeviceStore } from '../../store/useDeviceStore';
@@ -18,18 +18,20 @@ import HotkeysTabNG from './components/HotkeysTabNG/HotkeysTabNG';
 import SecurityTabNG from './components/SecurityTabNG/SecurityTabNG';
 import TabHeaderNG from './components/TabHeaderNG/TabHeaderNG';
 import WindowLevelTabNG from './components/WindowLevelTabNG/WindowLevelTabNG';
+import SeriesTagsTabNG from './components/SeriesTagsTabNG/SeriesTags';
 
 import styles from './SettingsPageNG.module.scss';
 
 const { redux } = OHIF;
 
 const TOP_TABS = [
-  { id: 'general', label: 'General', 'perm': null, },
-  { id: 'hotkeys', label: 'Hotkeys', 'perm': null, },
-  { id: 'window-level', label: 'Window Level', 'perm': null, },
+  { id: 'general', label: 'General', perm: null, },
+  { id: 'hotkeys', label: 'Hotkeys', perm: null, },
+  { id: 'window-level', label: 'Window Level', perm: null, },
   { id: 'about', label: 'About', 'perm': null, },
-  { id: 'device-list', label: 'Device List', 'perm': 'devices_list', },
-  { id: 'viewer-metadata', label: 'Viewer Metadata', 'perm': null, },
+  { id: 'distortion-filter', label: 'Distortion Filter', perm: 'devices_list', },
+  { id: 'series-tags', label: 'Series Tags', perm: 'tag', },
+  { id: 'viewer-metadata', label: 'Viewer Metadata', perm: null, },
 ];
 
 const BOTTOM_TABS = [
@@ -42,12 +44,11 @@ export default function SettingsPageNG() {
   // Sonador Viewer Settings Page
 
   const { t } = useTranslation();
+  const { isDesktop } = useDeviceStore();
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
-  const [selectedTabId, setSelectedTabId] = useState(TOP_TABS[0].id);
+  const [selectedTabId, setSelectedTabId] = useState(TOP_TABS[0].id);  
 
-  const { isDesktop } = useDeviceStore();
-  
   const renderTabContent = () => {
     // Render Setting tab content
 
@@ -71,8 +72,12 @@ export default function SettingsPageNG() {
       </div>;
     }
 
-    if (selectedTabId === 'device-list' && activeServer && activeServer.perms?.devices_list) {
+    if (selectedTabId === 'distortion-filter' && activeServer && activeServer.perms?.devices_list) {
       return <DeviceList withDefaultHeader />;
+    }
+
+    if (selectedTabId == 'series-tags' && activeServer && activeServer.perms?.tag) {
+      return <SeriesTagsTabNG withDefaultHeader />;
     }
 
     if (selectedTabId === 'viewer-metadata') {

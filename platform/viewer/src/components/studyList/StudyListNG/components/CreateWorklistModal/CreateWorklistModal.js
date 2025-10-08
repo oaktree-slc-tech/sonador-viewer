@@ -4,6 +4,8 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 
+import OHIF, { redux } from '@ohif/core';
+
 import BouncingLoader from '@ohif/ui/src/components/Loader/BouncingLoader';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 
@@ -11,22 +13,30 @@ import { createWorklistRequest } from '../../../../../api/worklist';
 import { getDisplayName } from '../../../../../lib/getDisplayName';
 import { useGroupMembership, useGroupSearch } from '../../../../../queries/worklist';
 
+import groupSearchStyles from '../../../../../styles/groupSearch.module.scss';
 import styles from './CreateWorklistModal.module.scss';
 
+
 export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUIDs }) {
-  const activeServer = useSelector((state) =>
-    state.servers.servers.find((s) => s.active),
-  );
+  // Modal dialog which can be used to create worklist items
+
+  const { activeServer } = useSelector(redux.selectors.activeOhifServer);
+
   const [groupSearchTerm, setGroupSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [showGroupSearchResponse, setShowGroupSearchResponse] = useState(true);
   const { data: groupSearch = [] } = useGroupSearch(activeServer, groupSearchTerm);
+  
   const handleGroupInputChange = (e) => {
+    // Update group search term
+
     setShowGroupSearchResponse(true);
     setGroupSearchTerm(e.target.value);
   };
 
   const handleSelectGroup = (group) => {
+    // Set currently selected group and update the input name to the group name
+
     setSelectedGroup(group);
     setGroupSearchTerm(group.name);
     setShowGroupSearchResponse(false);
@@ -107,11 +117,11 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
           className={styles.input}
         />
         {showGroupSearchResponse && groupSearch.length > 0 && (
-          <ul className={styles.dropdown}>
+          <ul className={groupSearchStyles.dropdown}>
             {groupSearch.map((group) => (
               <li
                 key={group.id}
-                className={styles.dropdownItem}
+                className={groupSearchStyles.dropdownItem}
                 onClick={() => handleSelectGroup(group)}
               >
                 {group.name}
@@ -135,14 +145,14 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
             className={styles.input}
           />
           {showMembershipSearchResponse && groupMembership.length > 0 && (
-            <ul className={styles.dropdown}>
-              {groupMembership.map((memeber) => (
+            <ul className={groupSearchStyles.dropdown}>
+              {groupMembership.map((member) => (
                 <li
-                  key={memeber.id}
-                  className={styles.dropdownItem}
-                  onClick={() => handleSelectMember(memeber)}
+                  key={member.id}
+                  className={groupSearchStyles.dropdownItem}
+                  onClick={() => handleSelectMember(member)}
                 >
-                  {getDisplayName(memeber)}
+                  {getDisplayName(member)}
                 </li>
               ))}
             </ul>

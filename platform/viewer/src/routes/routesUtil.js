@@ -29,7 +29,7 @@ const reload = () => window.location.reload();
 const ROUTES_DEF = [
   // Load viewer for specific studies
   {
-    path: '/server/:token/viewer/study/:studyInstanceUIDs',
+    path: '/server/:token/viewer/study/:studyInstanceUIDs',    
     component: ViewerRouting,
   },
   {
@@ -109,13 +109,6 @@ const ROUTES_DEF = [
   {
     path: '/IHEInvokeImageDisplay',
     component: IHEInvokeImageDisplay,
-  },
-  {
-    path: '/server/:token/viewer/study/:studyInstanceUIDs',
-    component: ViewerRouting,
-    condition: (appConfig) => {
-      return !!appConfig.enableGoogleCloudAdapter;
-    },
   },
   {
     path: '/server/:token/viewer',

@@ -48,6 +48,7 @@ import {
   // Viewer workflow components
   LabellingFlow,
   SeriesTagLabellingFlow,
+  DistortionFilterFlow,
 } from './components';
 import {
   DialogProvider,
@@ -107,6 +108,7 @@ const workflow = {
   // Components which can be used to help create and interface with workflows
   LabellingFlow,
   SeriesTagLabellingFlow,
+  DistortionFilterFlow,
 }
 
 

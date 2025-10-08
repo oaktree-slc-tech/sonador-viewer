@@ -1,8 +1,9 @@
+import _ from 'lodash';
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import _ from 'lodash';
 import PropTypes from 'prop-types';
 
 import { useDebounce } from '@ohif/ui';
@@ -37,6 +38,8 @@ const permissions = [
 ];
 
 export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpenedShareModal,  selectedStudy }) {
+  // ACL dialog for updating the share permissions for a study
+
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
   const queryClient = useQueryClient();
 
@@ -44,18 +47,22 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     queryFn: () => getAclUsers(activeServer, selectedStudy.id),
     queryKey: ['aclUsers'],
   });
+  
   const { mutateAsync: createUserAsync } = useMutation({
     mutationFn: async (user) => {
       if (!user.ID) {
-        // User does not yet exist on the server, create and then update local copy with ID
+        // User ACL policy does not yet exist on the server, create and then update local copy with ID
         const _data = await createAclUser(activeServer, selectedStudy.id, user)
-        createUserAsync({ User: user.User, ID: _data.ID });
+        createUserAsync({ User: user.User, ID: _data.ID, isUpdated: false, });
       }
+
+      return user;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclUsers']);
     },
   });
+  
   const { mutateAsync: updateUserAsync } = useMutation({
     mutationFn: (user) => updateAclUser(activeServer, selectedStudy.id, user),
     onSuccess: async () => {
@@ -67,24 +74,27 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     queryFn: () => getAclGroups(activeServer, selectedStudy.id),
     queryKey: ['aclGroups'],
   });
+  
   const { mutateAsync: createGroupAsync } = useMutation({
     mutationFn: async (group) => {
       if (!group.ID) {
         // Group does not yet exist on the server, create and then update local copy with ID
         const _data = await createAclGroup(activeServer, selectedStudy.id, group)
-        createGroupAsync({ Group: group.Group, ID: _data.ID });
-      }
+        createGroupAsync({ Group: group.Group, ID: _data.ID, isUpdated: false, });
+      }      
     },
     onSuccess: async (_response ) => {
       await queryClient.invalidateQueries(['aclGroups']);
     },
   });
+  
   const { mutateAsync: updateGroupAsync } = useMutation({
     mutationFn: (group) => updateAclGroup(activeServer, selectedStudy.id, group),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['aclGroups']);
     },
   });
+  
   const { mutate: mutateDeleteGroupPermission, isPending: isPendingDeleteGroupPermission } = useMutation({
     mutationFn: ({ permissionId }) => {
       deleteAclGroupPermission(activeServer, selectedStudy.id, permissionId);
@@ -94,6 +104,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
       setGroupsWithAccess((prevState) => prevState.filter((g) => g.Group !== payload.groupId));
     },
   });
+  
   const { mutate: mutateDeleteUserPermission, isPending: isPendingDeleteUserPermision } = useMutation({
     mutationFn: ({ permissionId }) => {
       deleteAclUserPermission(activeServer, selectedStudy.id, permissionId);
@@ -119,8 +130,24 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
 
   const [searchValue, setSearchValue] = useState('');
   const [showList, setShowList] = useState(false);
+
+  // Users and groups
   const [usersWithAccess, setUsersWithAccess] = useState([]);
   const [groupsWithAccess, setGroupsWithAccess] = useState([]);
+
+   // Save / Cancel state
+  const [changesPending, setChangesPending] = useState(false);
+  useEffect(() => {
+    // Toggle changes pending based on the state of the user / group ACL lists
+    
+    const _pending_user = (usersWithAccess && usersWithAccess.length > 0
+      && !_.every(usersWithAccess, (uAcl) => !uAcl.isUpdated)) ?? false;
+    const _pending_group = (groupsWithAccess && groupsWithAccess.length > 0
+      && !_.every(groupsWithAccess, (gAcl) => !gAcl.isUpdated)) ?? false;
+    const _pending = (_pending_user || _pending_group) ?? false;
+
+    setChangesPending(_pending);
+  }, [usersWithAccess, groupsWithAccess]);
 
   const autocompleteRef = useRef(null);
 
@@ -140,6 +167,9 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
   };
 
   const handleSelectUserOrGroup = (userGroup) => {
+    // Create a placeholder policy for user/group search result after it has been
+    // selected from the search dropdown.
+
     const isUser = userGroup['result-type'] === 'user';
     const isExistUserInAclList = isUser && usersWithAccess.some(({ User }) => User === userGroup.id);
     const isExistGroupInAclList = !isUser && groupsWithAccess.some(({ Group }) => Group === userGroup.id);
@@ -149,14 +179,14 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
       Group: isUser ? undefined : userGroup.id,
       View: false,
       Modify: false,
-      Remove: false,
-      // CommentView: false,
+      Remove: false,      
       ACL: false,
       first_name: userGroup.first_name,
       last_name: userGroup.last_name,
       email: userGroup.email,
       name: userGroup.name,
       'result-type': userGroup['result-type'],
+      isUpdated: true,
     };
     if (isUser && !isExistUserInAclList) {
       setUsersWithAccess((prevState) => [...prevState, dataToSet]);
@@ -172,6 +202,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
 
   const handleDeleteUserOrGroup = (userGroupId, isUser, permissionId) => {
     // Remove the selected access policy
+
     if ((isUser && isPendingDeleteUserPermision) || (!isUser && isPendingDeleteGroupPermission)) {
       return;
     }
@@ -183,15 +214,19 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
 
     // Determine current state of the ACL policy
     if (isUser && !userHasAccess) {
+      
       // User policy not yet pesisted
       setUsersWithAccess((prevState) => prevState.filter((u) => u.User !== userGroupId));
     } else if (isUser && userHasAccess) {
+      
       // Delete remote user policy and remove user from list
       mutateDeleteUserPermission({ permissionId, userId: userGroupId });
     } else if (!isUser && !groupHasAccess) {
+      
       // Group policy not yet persisted
       setGroupsWithAccess((prevState) => prevState.filter((g) => g.Group !== userGroupId));
     } else if (!isUser && groupHasAccess) {
+      
       // Delete remote group policy and remove user from list
       mutateDeleteGroupPermission({ permissionId, groupId: userGroupId });
     }
@@ -210,6 +245,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
           return {
             ...item,
             [permissionId]: event.target.checked,
+            isUpdated: true,
           };
         });
       });
@@ -223,6 +259,7 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
           return {
             ...item,
             [permissionId]: event.target.checked,
+            isUpdated: true,
           };
         });
       });
@@ -241,7 +278,6 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
           foundUser.View !== userWithAccess.View ||
           foundUser.Modify !== userWithAccess.Modify ||
           foundUser.Remove !== userWithAccess.Remove ||
-          // foundUser.CommentView !== userWithAccess.CommentView ||
           foundUser.ACL !== userWithAccess.ACL;
 
         if (isChanged) {
@@ -261,7 +297,6 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
           foundGroup.View !== groupWithAccess.View ||
           foundGroup.Modify !== groupWithAccess.Modify ||
           foundGroup.Remove !== groupWithAccess.Remove ||
-          foundGroup.CommentView !== groupWithAccess.CommentView ||
           foundGroup.ACL !== groupWithAccess.ACL;
 
         if (isChanged) {
@@ -316,6 +351,14 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     
     e.preventDefault();
     e.stopPropagation();
+  }
+
+
+  const handleCancel = () => {
+    // Clear pending items and restore tags to previou state
+
+    setUsersWithAccess(aclUsers);
+    setGroupsWithAccess(aclGroups);
   }
 
   return (
@@ -462,9 +505,16 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
         </>
       )}
       <div className={styles.bottom}>
-        <button className={styles.saveBtn} onClick={handleSave}>
-          Save
-        </button>
+        {changesPending && (
+          <>
+          <button className={styles.cancelBtn} onClick={handleCancel}>
+            Cancel
+          </button>
+          <button className={styles.saveBtn} onClick={handleSave}>
+            Save
+          </button>
+          </>
+        )}
       </div>
     </ModalNG>
   );

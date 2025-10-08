@@ -284,6 +284,53 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       return promise;
     },
 
+    checkDistortionFilterDialog: ({ viewports, servers, dialogProps }) => {
+      // Check current series to ensure that it passes all distortion filter tests
+      
+      dialogProps = dialogProps || {};
+      const { UINotificationService, UIDialogService } = servicesManager.services;
+
+      // Retrieve currently active server
+      const activeServer = sonador.getActiveServer(servers.servers);
+      const { StudyInstanceUID } = viewports.viewportSpecificData?.[0];
+      if (!StudyInstanceUID) {
+        throw new Error('Unable to check distortion filter, invalid StudyInstanceUID');
+      }      
+
+      if (UIDialogService && activeServer && activeServer.rootUrl) {
+
+        // Clear any active distortion filter dialogs
+        UIDialogService.dismiss({ id: 'checkDistortionFilter' });
+
+        // Retrieve list of groups with active tags
+        sonador.searchImageServerGroups(activeServer, '', { devices_list: true })
+          .then((res) => res.json())
+          .then((res) => {
+
+            if (res.results) {
+
+              // Dismiss labelling service dialog
+              UIDialogService.dismiss({ id: 'labelling' });
+              UIDialogService.create({
+                id: 'checkDistortionFilter',
+                centralize: true,
+                isDraggable: false,
+                showOverlay: true,
+                content: workflow.DistortionFilterFlow,
+                contentProps: {                  
+                  server: activeServer,
+                  groups: res.results,
+                  StudyInstanceUID,
+                  UINotificationService,
+                  distortionFilterDoneCallback: () => UIDialogService.dismiss({ id: 'checkDistortionFilter' }),
+                },
+                ...dialogProps,
+              });
+            }
+          });
+      }
+    },
+
     resetViewport: ({ viewports }) => {
       // Reset viewport to the state of the images when first loaded
 
@@ -641,6 +688,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     labellingDialog: {
       commandFn: actions.labellingDialog,
       storeContexts: ['viewports'],
+      options: {},
+    },
+    checkDistortionFilterDialog: {
+      commandFn: actions.checkDistortionFilterDialog,
+      storeContexts:  ['viewports', 'servers'],
       options: {},
     },
     clearAnnotations: {

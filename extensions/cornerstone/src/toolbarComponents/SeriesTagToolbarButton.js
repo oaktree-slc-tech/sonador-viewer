@@ -10,7 +10,7 @@ import { ToolbarButton } from '@ohif/ui';
 
 
 function SeriesTagToolbarButton({ toolbarClickCallback, button, isActive }) {
-	//  Toolbar button which shows itself if a user is able to tag specific
+	//  Toolbar button which shows itself if a user is able to tag a series
 
 	const { id, label, icon } = button;
 	const { viewportSpecificData, activeViewportIndex }	 = useSelector(redux.selectors.getActiveViewportData);
@@ -77,4 +77,5 @@ SeriesTagToolbarButton.propTypes = {
 };
 
 
+export default SeriesTagToolbarButton;
 export { SeriesTagToolbarButton };

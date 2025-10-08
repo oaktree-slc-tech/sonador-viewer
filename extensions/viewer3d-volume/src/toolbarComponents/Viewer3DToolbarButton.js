@@ -29,10 +29,12 @@ function Viewer3DCTToolbarButton({ toolbarClickCallback, button, isActive }) {
   const { id, label, icon } = button;
 
   // Determine which viewport is active
+  const { numColumns = 0, numRows = 0} = useSelector((state) => state.viewports);
   const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 
   // Should the 3D volume rendering button be visible
-  const isVisible = isCTVolumeReconstructable(viewportSpecificData, activeViewportIndex);
+  const isVisible = numColumns == 1 && numRows == 1
+    && isCTVolumeReconstructable(viewportSpecificData, activeViewportIndex);
 
   return (
     <>

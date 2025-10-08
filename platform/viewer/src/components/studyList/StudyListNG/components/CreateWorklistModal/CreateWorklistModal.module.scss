@@ -16,27 +16,6 @@
     font-size: 1rem;
   }
 
-  .dropdown {
-    border: 1px solid #ccc;
-    z-index: 1000;
-    max-height: 200px;
-    overflow-y: auto;
-    list-style: none;
-    padding: 0;
-    margin: 4px 0 0;
-  }
-
-  .dropdownItem {
-    padding: 8px;
-    cursor: pointer;
-    color: #fff;
-  }
-
-  .dropdownItem:hover {
-    background-color: #f0f0f0;
-    color: black;
-  }
-
 
   .createButtonWrapper {
     display: flex;

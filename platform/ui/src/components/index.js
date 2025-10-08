@@ -28,6 +28,7 @@ import SaveDicomSeriesDialog from './SaveDicomSeriesDialog/SaveDicomSeriesDialog
 
 import LabellingFlow from './Labelling/LabellingFlow.js';
 import SeriesTagLabellingFlow from './Labelling/SeriesLabellingFlow.js';
+import DistortionFilterFlow from './DistortionFilter/DistortionFilter.js';
 
 export {
   ContextMenu,
@@ -73,4 +74,5 @@ export {
   // Workflow components
   LabellingFlow,
   SeriesTagLabellingFlow,
+  DistortionFilterFlow,
 };

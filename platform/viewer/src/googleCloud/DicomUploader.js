@@ -22,6 +22,7 @@ import './styles/dicom-uploader.css';
 const retryLimit = 100;
 const notValidDicomFileError = 'This is not a valid DICOM file.';
 
+
 const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
   const { t } = useTranslation('Common');
 

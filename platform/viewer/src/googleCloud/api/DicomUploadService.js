@@ -1,35 +1,42 @@
+import _ from 'lodash';
 import { api } from 'dicomweb-client';
 
 import { errorHandler } from '@ohif/core';
 
 import { checkDicomFile, httpErrorToStr } from '../utils/helpers';
 
+
 class DicomUploadService {
-  // DICOMweb upload service
+  // DICOMweb upload service: provides methods for transferring files to Sonador / Orthanc
+  // and tracking progress.
 
-  async smartUpload(files, url, uploadCallback, cancellationToken) {
+  async smartUpload(files, url, uploadCallback, cancellationToken, options) {
     // Upload file to the web server
-
-    const CHUNK_SIZE = 1; // Only one file per request is supported so far
-    const MAX_PARALLEL_JOBS = 50; // FIXME: tune MAX_PARALLEL_JOBS number
+    options = options || {};
+    _.defaults(options, { workers: 5, chunk: 1, });
 
     let filesArray = Array.from(files);
     if (filesArray.length === 0) {
       throw new Error('No files were provided.');
     }
 
-    let parallelJobsCount = Math.min(filesArray.length, MAX_PARALLEL_JOBS);
+    let parallelJobsCount = Math.min(filesArray.length, options.workers);
     let completed = false;
 
     const processJob = async (resolve, reject) => {
+      
       // Process files in the upload array (queue) until they have all been removed
       while (filesArray.length > 0) {
+        
         // Stop all uploads if cancellation token is true
-        if (cancellationToken.get()) return;
+        if (cancellationToken.get()) {
+          console.warn('DICOM service upload cancelled: pending-uploads='+filesArray.length);
+          return completed;
+        }
 
         // Pull file from queue
-        let chunk = filesArray.slice(0, CHUNK_SIZE);
-        filesArray = filesArray.slice(CHUNK_SIZE);
+        let chunk = filesArray.slice(0, options.chunk);
+        filesArray = filesArray.slice(options.chunk);
         let error = null;
 
         try {
@@ -37,6 +44,7 @@ class DicomUploadService {
 
           if (chunk.length > 1) throw new Error('DICOMweb upload service does not support parallel uploads');
           if (chunk.length === 1) await this.simpleUpload(chunk[0], url);
+
         } catch (err) {
           // Catch error and convert to string reprsentation
 
@@ -52,8 +60,12 @@ class DicomUploadService {
         // All files in queue have been processed, exit
         if (!completed && filesArray.length === 0) {
           completed = true;
+          if (options.success && _.isFunction(options.success)) {
+            options.success();
+          }
+
           resolve();
-          return;
+          return completed;
         }
       }
     };
@@ -110,4 +122,11 @@ class DicomUploadService {
   }
 }
 
-export default new DicomUploadService();
+
+// Create default instance of the class which can be used by service workers.
+// Also export the DicomUploadService class so that it can be used as a batch
+// service manager.
+const Instance = new DicomUploadService();
+
+export default Instance;
+export { Instance, DicomUploadService }

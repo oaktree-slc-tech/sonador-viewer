@@ -100,7 +100,7 @@ export default function StudyListPageNG() {
       
       // Redirect to "Shared with me" if the user does not have access to `query` or `worklist`, 
       // but does have access to `upload`
-      navigate('/shared-with-me');
+      navigate('/shared');
     }
 
   }, [shouldRedirectWorklists, shouldRedirectShared]);

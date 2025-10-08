@@ -12,7 +12,6 @@ import { ReactComponent as ListIcon } from '@ohif/ui/src/elements/Svg/svgs/list.
 
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import { useViewerSidePanels } from '../../store/useViewerSidePanels';
-import DevicesListModal from '../DevicesListModal/DevicesListModal';
 import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 import { UserPreferences } from '../UserPreferences';
 
@@ -26,8 +25,6 @@ function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, 
 
   const user = useSelector((state) => state.oidc && state.oidc.user);
 
-  const [isOpenDevicesList, setIsOpenDevicesList] = useState(false);
-
   const options = [
     {
       title: t('About'),
@@ -37,11 +34,6 @@ function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, 
           content: AboutContent,
           title: t('OHIF Viewer - About'),
         }),
-    },
-    {
-      title: t('Device List'),
-      IconComponent: ListIcon,
-      onClick: () => setIsOpenDevicesList(true),
     },
     {
       title: t('Preferences'),
@@ -92,18 +84,8 @@ function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, 
             <span className="research-use">{t('INVESTIGATIONAL USE ONLY')}</span>
             <Dropdown title={t('Options')} list={options} align="right" />
           </div>
-          {!!token &&
-            !!studyInstanceUIDs &&
-            location.pathname.includes('server') &&
-            location.pathname.includes('/viewer/study/') && (
-              <div className="issuesAndSettings">
-                <IssuesButton />
-                <ViewerMetadataSettings />
-              </div>
-            )}
         </div>
       </div>
-      {isOpenDevicesList && <DevicesListModal setIsOpen={setIsOpenDevicesList} />}
     </>
   );
 }

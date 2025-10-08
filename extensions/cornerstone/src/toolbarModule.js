@@ -20,6 +20,7 @@
 import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
 
 import { SeriesTagToolbarButton } from './toolbarComponents/SeriesTagToolbarButton.js';
+import { DistortionFilterToolbarButton } from './toolbarComponents/DistortionFilterToolbarButton.js';
 
 /* TODO: Export enums through a extension manager. */
 const enums = {
@@ -59,14 +60,6 @@ const definitions = [
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
     commandName: 'setToolActive',
     commandOptions: { toolName: 'Pan' },
-  },
-  {
-    id: 'SeriesTag',
-    label: 'Series Tag',
-    icon: 'tags',
-    CustomComponent: SeriesTagToolbarButton,
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'seriesTagDialog',
   },
   {
     id: 'AnnotationTools',
@@ -120,6 +113,24 @@ const definitions = [
         type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
         commandName: 'setToolActive',
         commandOptions: { toolName: 'RectangleRoi' },
+      },
+      { 
+        // Add tag to the current series
+        id: 'SeriesTag',
+        label: 'Series Tag',
+        icon: 'tags',
+        CustomComponent: SeriesTagToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'seriesTagDialog',
+      },
+      {
+        // Check study against distortion filter API
+        id: 'DistortionFilter',
+        label: 'Check Distortion',
+        icon: 'microscope',
+        CustomComponent: DistortionFilterToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'checkDistortionFilterDialog',
       },
       {
         // Clear and reload annotations

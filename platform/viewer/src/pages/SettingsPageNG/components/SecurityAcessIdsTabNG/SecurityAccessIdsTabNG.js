@@ -16,6 +16,7 @@ import { useDeviceStore } from '../../../../store/useDeviceStore';
 
 import { useAccesses, useCreateAccess, useDeleteAccess } from './logic';
 
+import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
 
 /**
@@ -200,7 +201,7 @@ export default function SecurityAccessIdsTabNG() {
           </>
         )}
       </div>
-      <p className={styles.description}>
+      <p className={globalTableStyles.description}>
         Access IDs can be used to grant other systems to access additional API functions. Access IDs/Secret Keys should
         never be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used
         to access this website with your account.
@@ -236,7 +237,7 @@ export default function SecurityAccessIdsTabNG() {
           {!isLoadingAccesses && (!tableData.length || idsError) && (
             <tr>
               <td colSpan={headers[0].headers.length}>
-                <p className={styles.noMatchingResults}>
+                <p className={globalTableStyles.noMatchingResults}>
                   {idsError ? `Error: ${JSON.stringify(idsError)}` : t('No matching results')}
                 </p>
               </td>

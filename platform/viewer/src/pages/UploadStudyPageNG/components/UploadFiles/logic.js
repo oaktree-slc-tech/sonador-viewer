@@ -1,5 +1,6 @@
 import { flatten } from 'lodash';
 
+
 export const processFileEntry = async (entry) => {
   return new Promise((resolve) => {
     if (entry.isFile) {
@@ -17,6 +18,7 @@ export const processFileEntry = async (entry) => {
   });
 };
 
+
 export const getStatusLabel = (failed, processed) => {
   if (!failed && processed) {
     return 'Completed!';
@@ -28,6 +30,7 @@ export const getStatusLabel = (failed, processed) => {
 
   return '';
 };
+
 
 export const retryLimit = 100;
 export const notValidDicomFileError = 'This is not a valid DICOM file.';
