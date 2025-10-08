@@ -35,6 +35,7 @@ import roundNumber from './roundNumber.js'
 import formatPN from './formatPN';
 import formatDate from './formatDate';
 import formatTime from './formatTime';
+import formatBytes from './formatBytes';
 import getImageId from './getImageId';
 
 
@@ -106,6 +107,7 @@ const utils = {
   formatPN,
   formatDate,
   formatTime,
+  formatBytes,
   
   cornerstone3dUtils,
   cornerstoneUtils,

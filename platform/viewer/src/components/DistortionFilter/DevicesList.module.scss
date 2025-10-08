@@ -72,72 +72,14 @@
   border-top: 2px solid #D9D9D9;
 }
 
-table {
-  color: #FFFFFF;
+.inputGroup {
+  position: relative;
+  margin-top: 1rem;
+  margin-bottom: 20px;
 
-  th {
-    font-size: 16px;
-    line-height: 18px;
-    white-space: nowrap;
-    border-bottom: 2px solid #D9D9D9;
-    border-top: 2px solid #D9D9D9;
-
-    .listHeaderFirstItem {
-      width: 25px;
-    }
-
-    .listHeaderLastItem {
-      width: 28px;
-    }
-  }
-
-  td {
-    border-bottom: 1px solid #D9D9D9;
-
-    .rowActions {
-      display: flex;
-      align-items: center;
-      column-gap: 5px;
-      padding: 0 5px;
-
-      button {
-        all: unset;
-        cursor: pointer;
-      }
-    }
-
-    input {
-      font-size: 16px;
-      line-height: 20px;
-      padding: 10px 12px;
-      border-radius: 5px;
-      border: 1px solid #60646D;
-      color: #FFFFFF;
-      background-color: transparent;
-      outline: none;
-    }
-
-    p {
-      margin: 0;
-      padding: 0 5px;
-      flex: 1;
-    }
-
-    input, p {
-      min-width: 196px;
-      max-width: 196px;
-    }
-
-    .listItemNumber {
-      width: 25px;
-      font-weight: 500;
-      color: #FFFFFF;
-      font-size: 16px;
-      line-height: 18px;
-    }
-  }
-
-  th, td {
-    padding: 15px 5px;
+  .input {
+    width: 100%;
+    padding: 8px;
+    font-size: 1rem;
   }
 }

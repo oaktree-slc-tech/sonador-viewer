@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import _ from 'lodash';
+
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import classNames from 'classnames';
 
@@ -36,6 +38,8 @@ const options = [
 const LIMIT_CORNER_ITEMS = 10;
 
 export default function ViewerMetadataSettings({ asTab = false, withHeader = false }) {
+  // Configure metadata display settings for the viewer
+
   const [isOpen, setIsOpen] = useState(false);
 
   const {
@@ -55,6 +59,8 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
   const [bottomRightCornerState, setBottomRightCornerState] = useState(bottomRightCorner);
 
   const handleSave = () => {
+    // Save pending changes to display settings
+
     const filteredTopLeftCornerState = topLeftCornerState.filter(({ value }) => value !== null);
     const filteredTopRightCornerState = topRightCornerState.filter(({ value }) => value !== null);
     const filteredBottomLeftCornerState = bottomLeftCornerState.filter(({ value }) => value !== null);
@@ -69,6 +75,8 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
     setTopRightCornerState(filteredTopRightCornerState);
     setBottomLeftCornerState(filteredBottomLeftCornerState);
     setBottomRightCornerState(filteredBottomRightCornerState);
+
+    setChangesPending(null);
 
     if (!asTab) {
       setIsOpen(false);
@@ -86,10 +94,14 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
   };
 
   const handleCancel = () => {
+    // Restore display options to most recent saved configuration
+
     setTopLeftCornerState(topLeftCorner);
     setTopRightCornerState(topRightCorner);
     setBottomLeftCornerState(bottomLeftCorner);
     setBottomRightCornerState(bottomRightCorner);
+
+    setChangesPending(null);
 
     if (!asTab) {
       setIsOpen(false);
@@ -103,6 +115,24 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
     };
     return { viewerSettings };
   };
+
+  // Save / Cancel state
+  const [changesPending, setChangesPending] = useState(null);
+  useEffect(() => {
+    // Set changes pending to true when the local (unsaved) state is modified.
+    // An initial state value of null is used since resetting and persisting
+    // the application state involves multiple state changes. In the first
+    // state change, the pending value is set to a boolean, which indicates
+    // to the component that it should begin tracking state and should display
+    // the save / cancel buttons.
+
+    // Set initial value of changesPending to false on first load of the component.
+    if (_.isNil(changesPending)) {
+      setChangesPending(false);
+    } else {
+      setChangesPending(true);
+    }
+  }, [topLeftCornerState, topRightCornerState, bottomLeftCornerState, bottomRightCornerState]);
 
   const renderContent = () => (
     <>
@@ -273,7 +303,9 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
           })}
         </div>
       </div>
+      
       <div className={styles.actions}>
+        {changesPending && (<>
         <button className={styles.cancelBtn} onClick={handleCancel}>
           Cancel
         </button>
@@ -281,6 +313,7 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
           <span>Save</span>
           <SaveIcon />
         </button>
+        </>)}
       </div>
     </>
   );

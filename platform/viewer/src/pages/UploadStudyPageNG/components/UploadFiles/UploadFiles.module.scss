@@ -126,6 +126,7 @@
 
   .uploadedFilesContainer {
     flex: 1;
+    overflow-y: auto;
 
     @include md {
       flex: none;
@@ -144,24 +145,13 @@
         font-weight: 700;
         color: #d3d3d3;
       }
-
-      .viewAll {
-        color: #d3d3d3;
-        font-size: 16px;
-        line-height: 18.75px;
-        margin: 0;
-        text-decoration: underline;
-        background: none;
-        border: none;
-        cursor: pointer;
-      }
     }
 
     .uploadedFiles {
       display: flex;
       flex-direction: column;
       row-gap: 10px;
-      max-height: 428px;
+      max-height: 200px;
       overflow-y: auto;
 
       .uploadedFile {
@@ -210,37 +200,79 @@
               }
             }
           }
-
-          .progressBarWrapper {
-            border-radius: 9px;
-            height: 10px;
-            background-color: #2e363e;
-            padding: 2px 2px 2px 3px;
-
-            .progressBar {
-              height: 6px;
-              border-radius: 9px;
-              background-color: #2e46e9;
-
-              &.completed {
-                background-color: #2ee979;
-              }
-
-              &.error {
-                background-color: #d8a059;
-              }
-            }
-          }
         }
       }
     }
   }
 }
 
+
+
+.progressBarWrapper {
+  border-radius: 9px;
+  height: 10px;
+  background-color: #2e363e;
+  padding: 2px 2px 2px 3px;
+
+  .progressBar {
+    height: 6px;
+    border-radius: 9px;
+    background-color: #2e46e9;
+
+    &.completed {
+      background-color: #2ee979;
+    }
+
+    &.error {
+      background-color: #d8a059;
+    }
+  }
+}
+
+
+.viewAll {
+  color: #d3d3d3;
+  font-size: 16px;
+  line-height: 18.75px;
+  margin: 0;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+
+.progressInline {
+  display: flex;
+  align-items: center;
+  column-gap: 8px;
+  flex: 1;
+  max-width: 50%;
+
+  .progressBarWrapper {
+    flex: 1;
+    height: 10px;
+  }
+
+  .progressPct {
+    color: #d3d3d3;
+    font-size: 12px;
+    line-height: 14px;
+    min-width: 36px;
+    text-align: right;
+  }
+}
+
 .modalContent {
   width: 100vw;
   max-width: 826px;
-  max-height: 80vh;
+  max-height: 90vh;
+}
+
+.modalContentWrapper {  
+  height: 80vh;
+  overflow-y: auto;
 }
 
 .modalTable {
@@ -283,6 +315,87 @@
       display: flex;
       align-items: center;
       column-gap: 10px;
+    }
+  }
+}
+
+
+.expander {
+  cursor: pointer;
+}
+
+
+.expanderIcon {
+  rotate: -90deg;  
+  margin-right: 5px;
+  fill: rgb(255,255,255);
+
+  &.expanded { rotate: 0deg; }
+}
+
+.closeIcon {
+  margin-top: -0.25px;
+  margin-left: 5px;
+}
+
+
+.uploadBatchMeta {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 12px;
+
+  .summaryLeft {
+    display: flex;
+    align-items: center;
+    column-gap: 16px;
+    cursor: pointer;
+
+    .metaStat {
+      display: flex;
+      align-items: baseline;
+      column-gap: 6px;
+
+      .metaValue {
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 16px;
+        line-height: 18.75px;
+      }
+
+      .metaLabel {
+        color: #d3d3d3;
+        font-size: 12px;
+        line-height: 14px;
+      }
+    }
+  }
+
+  .summaryRight {
+    display: flex;
+    align-items: center;
+
+    .cancelBtn {
+      display: inline-flex;
+      align-items: center;
+      column-gap: 6px;
+      background: none;
+      border: 1px solid #60646d;
+      border-radius: 5px;
+      padding: 10px 15px;
+      cursor: pointer;
+      color: #d3d3d3;
+
+      &:hover {
+        border-color: #d3d3d3;
+      }
+    }
+
+    .cancelText {
+      font-size: 14px;
+      line-height: 16px;
     }
   }
 }

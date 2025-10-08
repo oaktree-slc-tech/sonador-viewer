@@ -16,6 +16,7 @@ import { useDeviceStore } from '../../../../store/useDeviceStore';
 
 import { useCreateToken, useDeleteToken, useTokens } from './logic';
 
+import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
 
 /**
@@ -167,7 +168,7 @@ export default function SecurityAPITokensTabNG() {
           </>
         )}
       </div>
-      <p className={styles.description}>
+      <p className={globalTableStyles.description}>
         API Access tokens can be used to grant other systems to access additional API functions. API keys should never
         be exposed to the public, such as front-end code or GitHub. They should be kept secret as they can be used to
         access this website with your account.
@@ -203,7 +204,7 @@ export default function SecurityAPITokensTabNG() {
           {!isLoadingTokens && (!tableData.length || tokensError) && (
             <tr>
               <td colSpan={headers[0].headers.length}>
-                <p className={styles.noMatchingResults}>
+                <p className={globalTableStyles.noMatchingResults}>
                   {tokensError ? `Error: ${JSON.stringify(tokensError)}` : t('No matching results')}
                 </p>
               </td>

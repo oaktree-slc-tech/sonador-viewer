@@ -9,6 +9,9 @@ import Icon from '../../elements/Icon/Icon.js';
 import SelectTree from '../selectTree/SelectTree.js';
 
 import LabellingFlow from './LabellingFlow.js';
+import LabellingTransition from './LabellingTransition.js';
+
+import './LabellingFlow.css';
 
 
 const SeriesTagLabellingFlow = ({
@@ -17,19 +20,34 @@ const SeriesTagLabellingFlow = ({
 
   //  Workflow steps:
   //  * Step 0: Retrieve groups list and prompt user to select one.
-    //  * Step 1: Retrieve tags from server and render using th LabellingFlow component.
-    //  * Step 2: When an item is selected from the dropdown list, proceed to a "confirm" dialog
-    //    which shows the selected label and provides the option to create a description.
-    //  * Step 3: Once label/tag and description are confirmed, the annotation can be confirmed
-    //    by clicking on an "Accept" button.
+  //  * Step 1: Retrieve tags from server and render using th LabellingFlow component.
+  //  * Step 2: When an item is selected from the dropdown list, proceed to a "confirm" dialog
+  //    which shows the selected label and provides the option to create a description.
+  //  * Step 3: Once label/tag and description are confirmed, the annotation can be confirmed
+  //    by clicking on an "Accept" button.
 
   groups,
   server,
   groupSelectTitle,
   groupSearchPlaceholder,
   updateLabelling,
+  fadeOutTimeout,
+  labellingDoneCallback,
   ...props
 }) => {
+  const [fadeOutTimer, setFadeOutTimer] = useState();
+  const [showComponent, setShowComponent] = useState(true);
+
+  // Clear workflow widget
+  const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, fadeOutTimeout));
+  const fadeOutAndLeaveFast = () => setShowComponent(false);
+
+  const clearFadeOutTimer = () => {
+    if (fadeOutTimer) {
+      clearTimeout(fadeOutTimer);
+      setFadeOutTimer(null);
+    }
+  };
 
   // Manage state for group selection
   const [selectedGroup, setSelectedGroup] = useState(undefined);
@@ -105,6 +123,8 @@ const SeriesTagLabellingFlow = ({
     return (
       <LabellingFlow
         {...props}
+        labellingDoneCallback={labellingDoneCallback}
+        fadeOutTimeout={fadeOutTimeout}
         labelData={seriesTags}
         updateLabelling={onUpdateLabelling}
         locationAttr='value'
@@ -119,13 +139,19 @@ const SeriesTagLabellingFlow = ({
     });
 
     return (
-      <SelectTree
-        items={displayGroups}
-        columns={1}
-        onSelected={onGroupSelected}
-        selectTreeFirstTitle={groupSelectTitle}
-        searchPlaceholder={groupSearchPlaceholder}
-      />
+      <LabellingTransition displayComponent={showComponent} onTransitionExit={labellingDoneCallback}>
+        <>
+        <div onMouseLeave={fadeOutAndLeave} onMouseEnter={clearFadeOutTimer}>
+          <SelectTree
+            items={displayGroups}
+            columns={1}
+            onSelected={onGroupSelected}
+            selectTreeFirstTitle={groupSelectTitle}
+            searchPlaceholder={groupSearchPlaceholder}
+          />
+        </div>
+        </>
+      </LabellingTransition>
     );
   }
 };
@@ -136,6 +162,7 @@ SeriesTagLabellingFlow.propTypes = {
   server: PropTypes.object.isRequired,
   groups: PropTypes.array.isRequired,
   groupSelectTitle: PropTypes.string,
+  groupSearchPlaceholder: PropTypes.string,
   labellingCanceledCallback: PropTypes.func.isRequired,
 }
 

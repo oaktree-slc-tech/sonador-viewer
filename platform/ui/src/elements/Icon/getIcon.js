@@ -55,6 +55,7 @@ import lock from './icons/lock.svg';
 import lockAlt from './icons/lock-alt.svg';
 import lung from './icons/lung.svg';
 import measureNonTarget from './icons/measure-non-target.svg';
+import microscope from './icons/microscope.svg';
 import measureTarget from './icons/measure-target.svg';
 import measureTargetCr from './icons/measure-target-cr.svg';
 import measureTargetNe from './icons/measure-target-ne.svg';
@@ -196,6 +197,7 @@ const ICONS = {
   'grid-multi': gridMulti,
   'compass-drafting': compassDrafting,
   'cobb-angle': cobbAngle,
+  microscope,
 };
 
 /**

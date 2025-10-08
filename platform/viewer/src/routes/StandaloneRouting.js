@@ -13,7 +13,10 @@ const { log, metadata, utils } = OHIF;
 const { studyMetadataManager } = utils;
 const { OHIFStudyMetadata } = metadata;
 
+
 class StandaloneRouting extends Component {
+  // Provides core routing and state management for the Sonador Viewer
+
   state = {
     studies: null,
     server: null,

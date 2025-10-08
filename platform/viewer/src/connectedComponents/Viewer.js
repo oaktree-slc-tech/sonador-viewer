@@ -9,7 +9,6 @@ import PropTypes from 'prop-types';
 import OHIF, { DICOMSR, MODULE_TYPES } from '@ohif/core';
 import { useDialog, useSnackbarContext } from '@ohif/ui';
 
-import { getDistortionCheck } from '../api/deviceList';
 import { extensionManager, servicesManager, commandsManager } from '../App';
 import Header from '../components/Header/Header';
 import StudyLoadingMonitor from '../components/StudyLoadingMonitor';
@@ -17,6 +16,7 @@ import StudyPrefetcher from '../components/StudyPrefetcher/StudyPrefetcher';
 import { WORK_LIST_VIEWER_PARAM } from '../constants/worklist';
 import AppContext from '../context/AppContext';
 import UserManagerContext from '../context/UserManagerContext';
+
 // Contexts
 import WhiteLabelingContext from '../context/WhiteLabelingContext';
 import { useViewerSidePanels } from '../store/useViewerSidePanels';
@@ -83,12 +83,6 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
  
   const dialog = useDialog();
   const snackbar = useSnackbarContext();
-
-  const { data: distortionCheckResponse } = useQuery({
-    queryKey: ['distortionCheck'],
-    queryFn: () => getDistortionCheck(activeServer, studyInstanceUIDs),
-    enabled: !!activeServer && !!studyInstanceUIDs,
-  });
 
   const isWorkList = searchParams.get(WORK_LIST_VIEWER_PARAM) === 'true';
 
@@ -234,30 +228,7 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
   }, [isStudyLoaded]);
 
   
-  useEffect(() => {
-    if (distortionCheckResponse) {
-      const devicesWithErrors = [];
-
-      Object.values(distortionCheckResponse).forEach(({ results }) => {
-        results?.forEach((device) => {
-          if (device.error) {
-            devicesWithErrors.push(device);
-          }
-        });
-      });
-
-      if (devicesWithErrors.length) {
-        devicesWithErrors.forEach((device) => {
-          snackbar.show({
-            title: '',
-            message: `Error for device id ${device.device_id} device name ${device['Device Model']} error - ${device.error}`,
-            type: 'error',
-            autoClose: false,
-          });
-        });
-      }
-    }
-  }, [distortionCheckResponse]);
+  
 
   
   const getActiveViewport = () => {

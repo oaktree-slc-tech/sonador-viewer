@@ -8,6 +8,8 @@ import { getDisplayName } from '../lib/getDisplayName';
 
 
 export const useGroupSearch = (server, searchTerm) => {
+  // Cache function the worklist group search
+  
   return useQuery({
     queryKey: ['worklist', 'groupSearch', server, searchTerm],
     queryFn: () => getWorklistGroup(server, searchTerm),

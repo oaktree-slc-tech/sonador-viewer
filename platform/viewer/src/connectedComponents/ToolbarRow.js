@@ -2,6 +2,7 @@
 // and viewport.
 
 import React, { Component } from 'react';
+import { ReactReduxContext } from 'react-redux';
 import { withTranslation } from 'react-i18next';
 import _ from 'lodash';
 import PropTypes from 'prop-types';
@@ -204,7 +205,10 @@ class ToolbarRow extends Component {
  * active, and what their onClick behavior should be.
  */
 function getButtonComponents(toolbarButtons, activeButtons) {
+
   return toolbarButtons.map((button) => {
+    // Initialize toolbar buttons and component widgets
+
     const hasCustomComponent = button.CustomComponent;
     const hasNestedButtonDefinitions = button.buttons && button.buttons.length;
 
@@ -242,16 +246,21 @@ function getButtonComponents(toolbarButtons, activeButtons) {
         }
 
         return childButton;
-      });
+      });      
 
       return (
-        <ExpandableToolMenu
-          key={button.id}
-          label={button.label}
-          icon={button.icon}
-          buttons={childButtons}
-          activeCommand={activeCommand}
-        />
+        <ReactReduxContext.Consumer key={button.id}>
+          {ctx => (
+            <ExpandableToolMenu
+              key={button.id}
+              label={button.label}
+              icon={button.icon}
+              buttons={childButtons}
+              activeCommand={activeCommand}
+              reduxStore={ctx?.store}
+            />
+          )}
+        </ReactReduxContext.Consumer>
       );
     }
 

@@ -52,7 +52,7 @@ function searchImageServerGroups(server, search, group_query) {
 	group_query = group_query || {};
 
 	const _search = _.extend(group_query, {
-		term: search,
+		name: search,
 	});
 
 	return fetch(sonadorUrl(urlUtil.urlJoin('/visionaire/api/pacs', server.token, 'group/search')), {

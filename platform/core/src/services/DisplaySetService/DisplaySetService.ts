@@ -78,7 +78,7 @@ export default class DisplaySetService extends PubSubService {
       
       // Determine type of event      
       let _event;
-      if (!_existing) {
+      if (_existing) {
         _event = EVENTS.DISPLAY_SET_CHANGED;
       } else {
         _event = EVENTS.DISPLAY_SET_ADDED;

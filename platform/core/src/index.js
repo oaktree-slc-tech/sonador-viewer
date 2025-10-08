@@ -49,6 +49,7 @@ import {
   fetchServerSystemInfo,
   fetchGroupTags
 } from './api/sonador.js';
+import { getDistortionCheck } from './api/distortionFilter';
 
 
 // Sonador Utilities
@@ -59,6 +60,9 @@ const sonador = {
   searchImageServerGroups,
   fetchServerSystemInfo,
   fetchGroupTags,
+  distortionFilter: {
+    getDistortionCheck,
+  }
 }
 
 

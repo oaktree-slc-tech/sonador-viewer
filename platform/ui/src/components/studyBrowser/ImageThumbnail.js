@@ -106,6 +106,7 @@ function ImageThumbnail(props) {
   );
 }
 
+
 ImageThumbnail.propTypes = {
   active: PropTypes.bool,
   imageSrc: PropTypes.string,
@@ -116,6 +117,7 @@ ImageThumbnail.propTypes = {
   stackPercentComplete: PropTypes.number.isRequired,
   showProgressBar: PropTypes.bool,
 };
+
 
 ImageThumbnail.defaultProps = {
   active: false,

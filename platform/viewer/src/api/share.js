@@ -1,8 +1,9 @@
-import { extend, pick } from 'lodash';
+import _, { extend, pick } from 'lodash';
 
 import { urlUtil } from '@ohif/core/src/utils';
 
 import { getAuthToken, sonadorUrl } from './sonador';
+
 
 export const getAclUsers = (server, studyId) => {
   // Retrieve user authorization policies for provided server and study UID via
@@ -26,7 +27,11 @@ export const getAclUsers = (server, studyId) => {
     });
 };
 
-export const createAclUser = async (server, studyId, newUser) => {
+
+export const createAclUser = async (server, studyId, newUser, options) => {
+  // Create a user ACL policy
+  options = options || {};
+
   const response = await fetch(
     urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user'),
     {
@@ -41,11 +46,20 @@ export const createAclUser = async (server, studyId, newUser) => {
     throw new Error(`Failed to create ACL user: ${response.status} ${message}`);
   }
 
-  return response.json(); // or response.text() or void, depending on your API
+  // Parse response to JSON and trigger callbacks
+  const _json = await response.json();
+  if (options && _.isFunction(options.success)) {
+    options.success(_json, { server, StudyInstanceUID: studyId, payload: newUser, });
+  }
+  
+  return _json;
 };
 
 
-export const updateAclUser = async (server, studyId, user) => {
+export const updateAclUser = async (server, studyId, user, options) => {
+  // Update the provided user ACL policy
+  options = options || {};
+
   const response = await fetch(
     urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user', user.ID),
     {
@@ -60,7 +74,13 @@ export const updateAclUser = async (server, studyId, user) => {
     throw new Error(`Failed to update ACL user: ${response.status} ${message}`);
   }
 
-  return response.json(); // or response.text(), depending on your API
+  // Parse response to JSON and trigger callbacks
+  const _json = await response.json();
+  if (options && _.isFunction(options.success)) {
+    options.success(_json, { server, StudyInstanceUID: studyId, payload: user });
+  }
+
+  return _json;
 };
 
 
@@ -73,6 +93,7 @@ export const getAclGroups = (server, studyId) => {
   })
     .then((res) => res.json())
     .then((res) => {
+      
       // Modify API response so that rather than a nested object, group name is at the
       // root of the JSON.
       return res.map((p) => {
@@ -87,8 +108,10 @@ export const getAclGroups = (server, studyId) => {
 };
 
 
-export const createAclGroup = async (server, studyId, newGroup) => {
+export const createAclGroup = async (server, studyId, newGroup, options) => {
   // Create group access control policy
+  options = options || {};
+
   const response = await fetch(
     urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group'),
     {
@@ -107,7 +130,10 @@ export const createAclGroup = async (server, studyId, newGroup) => {
 };
 
 
-export const updateAclGroup = async (server, studyId, group) => {
+export const updateAclGroup = async (server, studyId, group, options) => {
+  // Update a group access control policy
+  options = options || {};
+
   const response = await fetch(
     urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group', group.ID),
     {
@@ -122,7 +148,13 @@ export const updateAclGroup = async (server, studyId, group) => {
     throw new Error(`Failed to update ACL group: ${response.status} ${message}`);
   }
 
-  return response.json();
+  // Parse response to JSON and trigger callbacks
+  const _json = await response.json();
+  if (options && _.isFunction(options.success)) {
+    options.success(_json, { server, StudyInstanceUID: studyId, payload: group });
+  }
+
+  return _json;
 };
 
 
@@ -139,12 +171,14 @@ export const searchAcl = (server, searchParams) => {
     .then((res) => res.results);
 };
 
+
 export const deleteAclGroupPermission = (server, studyId, permissionId) => {
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'group', permissionId), {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
 };
+
 
 export const deleteAclUserPermission = (server, studyId, permissionId) => {
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'acl', 'user', permissionId), {

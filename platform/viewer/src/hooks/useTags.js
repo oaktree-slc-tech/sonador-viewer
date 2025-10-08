@@ -3,7 +3,10 @@ import { uniqBy } from 'lodash';
 
 import DICOMWeb from '@ohif/core/src/DICOMWeb';
 
+
 export default function useTags({ server }) {
+  // Retrieve DICOM tags from the server instance
+  
   const [domain] = server?.qidoRoot
     ? server?.qidoRoot?.match(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?(?:www\.)?([^:\/?\n]+)/gim) || ['']
     : [''];

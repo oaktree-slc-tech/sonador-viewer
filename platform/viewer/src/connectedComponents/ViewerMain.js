@@ -15,7 +15,6 @@ import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { eventTypes as uiEvents } from '@ohif/ui';
 
-import { getDistortionCheck } from '../api/deviceList';
 import { servicesManager } from '../App';
 
 import ViewportGrid from './../components/ViewportGrid/ViewportGrid';
@@ -64,32 +63,6 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
 
     return newDisplaySets;
   };
-
-  const { data: distortionCheckData } = useQuery({
-    queryKey: ['distortion-check', studyInstanceUIDs],
-    queryFn: () => getDistortionCheck(activeServer, studyInstanceUIDs),
-  });
-
-
-  useEffect(() => {
-    if (distortionCheckData) {
-      try {
-        for (const series of Object.values(distortionCheckData)) {
-          for (const result of series.results) {
-            if (result.result !== 'Ignore') {
-              if (result.result === 'Filter Applied') {
-                toast.success(result.message, { duration: 10000 });
-              } else {
-                toast.error(`${result.result} ${result.error}`, { duration: 1000 });
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.log('error while parsing distortionCheckData', error);
-      }
-    }
-  }, [distortionCheckData]);
 
 
   const findDisplaySet = (studies, StudyInstanceUID, displaySetInstanceUID) => {
@@ -295,10 +268,33 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
         }
       });
 
-    return () => {      
+    const displaysets_added = DisplaySetApi.Instance.displaySetService.subscribe(
+      DisplaySetApi.Instance.displaySetService.EVENTS.DISPLAY_SET_ADDED, ({ displaySetInstanceUID, displaySet }) => {
+        console.log('Display set added: ', displaySetInstanceUID, displaySet);
+      });
+
+    const displaysets_dataupdate = DisplaySetApi.Instance.displaySetService.subscribe(
+      DisplaySetApi.Instance.displaySetService.EVENTS.DISPLAY_SET_CHANGED, ({ displaySetInstanceUID, displaySet }) => {
+
+        // When service state updates, copy the attributes to the component state so that viewer attributes
+        // are updated and components 
+        setDisplaySets((prevState) => {
+          return prevState.map((ds) => {
+            if (ds.displaySetInstanceUID == displaySetInstanceUID) {
+              return { ...ds, ...displaySet }
+            }
+
+            return ds;
+          });
+        })
+      });    
+
+    return () => {
 
       // Clear service susbscriptions
       displaysets_apisync.unsubscribe();
+      displaysets_added.unsubscribe();
+      displaysets_dataupdate.unsubscribe();
     }
   }, []);
 

@@ -1,6 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
+import OHIF from '@ohif/core';
+
 import { Thumbnail } from './Thumbnail';
 
 import './StudyBrowser.styl';
@@ -11,6 +13,8 @@ function StudyBrowser({
   supportsDrag = true,
   showThumbnailProgressBar = true,
 }) {
+  // View sidepanel / study browser
+
   return (
     <div className="study-browser">
       <div className="scrollable-study-thumbnails">
@@ -26,6 +30,7 @@ function StudyBrowser({
                 imageId,
                 derivedDisplaySetsNumber,
                 numImageFrames,
+                SeriesInstanceUID,
                 SeriesDescription,
                 SeriesNumber,
                 hasWarnings,
@@ -39,18 +44,24 @@ function StudyBrowser({
                     supportsDrag={supportsDrag}
                     key={`${studyIndex}_${thumbIndex}`}
                     id={`${studyIndex}_${thumbIndex}`} // Unused?
+                    
                     // Study
                     StudyInstanceUID={StudyInstanceUID} // used by drop
+
+                    // Series metadata
+                    SerieInstanceUID={SeriesInstanceUID}
+                    SeriesDescription={SeriesDescription}
+                    SeriesNumber={SeriesNumber}
+                    
                     // Thumb
                     altImageText={altImageText}
                     imageId={imageId}
                     derivedDisplaySetsNumber={derivedDisplaySetsNumber}
                     displaySetInstanceUID={displaySetInstanceUID} // used by drop
                     numImageFrames={numImageFrames}
-                    SeriesDescription={SeriesDescription}
-                    SeriesNumber={SeriesNumber}
                     hasWarnings={hasWarnings}
                     hasDerivedDisplaySets={hasDerivedDisplaySets}
+                    
                     // Events
                     onClick={onThumbnailClick.bind(undefined, displaySetInstanceUID)}
                     showProgressBar={showThumbnailProgressBar}
