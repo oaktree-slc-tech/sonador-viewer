@@ -51,9 +51,6 @@
   }
 
   .commentsNewCommentForm {
-    display: flex;
-    align-items: center;
-    column-gap: 10px;
 
     @include lg {
       flex-direction: column;
@@ -69,6 +66,7 @@
     }
 
     .commentsNewCommentTextarea {
+      width: 100%; min-height: 150px;
       background-color: #000000;
       font-size: 16px;
       line-height: 18.75px;
@@ -78,6 +76,7 @@
       border-radius: 10px;
       flex-grow: 1;
       outline: none;
+      resize: vertical;
 
       @include lg {
         width: 100%;
@@ -87,6 +86,7 @@
 
     .commentsNewCommentSubmit {
       background-color: #2e46e9;
+      width: 100%;
       padding: 15px 20px;
       color: #ffffff;
       font-size: 16px;

@@ -429,7 +429,9 @@ function ViewerRetrieveStudyData({
         .then((result) => {
           if (result && !result.isCanceled) {
             processStudies(result, filters);
-            displaySetService.triggerApiEvent(OHIF.display.Enums.EVENTS.STUDY_DATA_FETCH_RAW, { result, });
+            displaySetService.triggerApiEvent(OHIF.display.Enums.EVENTS.STUDY_DATA_FETCH_RAW, {
+              result, forceReload: options.force_fetch,
+            });
           }
         })
         .catch((error) => {
@@ -464,7 +466,7 @@ function ViewerRetrieveStudyData({
 
     // Re-load studies
     setTimeout(() => {      
-      loadStudies({ force_fetch:  true });
+      loadStudies({ force_fetch: true });
     }, 50);
   }
 

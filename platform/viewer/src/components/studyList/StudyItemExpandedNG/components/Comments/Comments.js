@@ -13,7 +13,8 @@ import { useCreateSeriesComment, useCreateStudyComment, useSeriesComments, useSt
 
 import styles from './Comments.module.scss';
 
-export default function Comments({  series, studyId, commentsEdit=true }) {
+
+export default function Comments({  series, studyId, commentsEdit=false }) {
   // Manage and display series comments
 
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
@@ -71,8 +72,6 @@ export default function Comments({  series, studyId, commentsEdit=true }) {
 
       {commentsEdit && (
         <div className={styles.commentsNewCommentForm}>
-          {/* TODO: Add back avatar styling when author added to response. className={styles.commentsNewCommentAvatar} */}
-          {isDesktop && <div />}
           <textarea
             value={newCommentText}
             onChange={handleChangeNewComment}
@@ -94,6 +93,7 @@ export default function Comments({  series, studyId, commentsEdit=true }) {
     </div>
   );
 }
+
 
 Comments.propTypes = {
   series: PropTypes.object,

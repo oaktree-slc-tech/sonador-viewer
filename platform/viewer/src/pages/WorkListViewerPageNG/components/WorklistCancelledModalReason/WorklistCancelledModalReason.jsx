@@ -47,7 +47,7 @@ export default function WorklistCancelledModalReason({ isOpen, setIsOpen,  selec
   return (
     <ModalNG
       isOpen={isOpen}
-      title="Add Reject Reason"
+      title="Add Reason for Cancellation"
       onClose={() => setIsOpen(false)}
       classes={{ content: styles.modal }}
     >
