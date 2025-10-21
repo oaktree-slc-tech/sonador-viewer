@@ -53,7 +53,7 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   const ohif3Enabled = activeServer?.ohifEnabled;
   const aclUpload = activeServer.perms.upload;
   const [aclView, setAclView] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);
-  const [aclComments, setAclComments] = useState(activeServer?.perms?.comment_view || studyMeta.perms?.CommentView || aclView || false);
+  const [aclComments, setAclComments] = useState(activeServer?.perms?.comment_view || studyMeta.perms?.CommentView || false);
   const [aclCommentEdit, setAclCommentEdit] = useState(activeServer?.perms?.comment_edit || studyMeta.perms?.CommentEdit || false);
 
   useEffect(() => {
@@ -68,8 +68,8 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
             setAclView(studyMetadata?.perms?.View);
           }
 
-          if (!aclComments && (studyMetadata?.perms?.CommentView || aclView)) {
-            setAclComments(studyMetadata?.perms?.CommentView || aclView);
+          if (!aclComments && (studyMetadata?.perms?.CommentView)) {
+            setAclComments(studyMetadata?.perms?.CommentView);
           }
 
           if (!aclCommentEdit && studyMetadata?.perms?.CommentEdit) {
@@ -293,7 +293,7 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
               selectedSeries={selectedThumbnail}
             />
             
-            {aclComments && (
+            {aclView && aclComments && (
               <Comments  series={selectedThumbnail} studyId={selectedStudy} commentsEdit={aclCommentEdit} />
             )}
           </div>

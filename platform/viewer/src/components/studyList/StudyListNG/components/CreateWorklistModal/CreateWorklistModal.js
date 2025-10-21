@@ -65,16 +65,13 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
   };
 
   // create worklist
-  const navigate = useNavigate();
-
   const { mutate: createWorklistRequestMutate, isLoading: isLoadingCreateWorklistRequest } = useMutation({
     mutationFn: () => createWorklistRequest({
       server: activeServer, groupId: selectedGroup.id, userId: selectedMembership.id,
       State: 'Scheduled', StudyInstanceUID: studyInstanceUIDs,
     }),
     onSuccess: () => {
-      setIsOpen(false);
-      navigate('/worklist');
+      setIsOpen(false);      
     },
     onError: () => {
       toast.error('Failed to create worklist request');
@@ -92,6 +89,16 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
     e.preventDefault();
     e.stopPropagation();
   }
+
+  const filteredGroupMembership = groupMembership && groupMembership.length
+    && groupMembership.filter((member)=> {
+
+      return membershipSearchTerm == ''
+        || (member.first_name || '').includes(membershipSearchTerm)
+        || (member.last_name || '').includes(membershipSearchTerm)
+        || (member.email || '').includes(membershipSearchTerm)
+        || (getDisplayName(member) || '').includes(membershipSearchTerm);
+    });  
 
   return (
     <ModalNG
@@ -144,9 +151,9 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
             placeholder="Search for a member"
             className={styles.input}
           />
-          {showMembershipSearchResponse && groupMembership.length > 0 && (
+          {showMembershipSearchResponse && filteredGroupMembership.length > 0&& (
             <ul className={groupSearchStyles.dropdown}>
-              {groupMembership.map((member) => (
+              {filteredGroupMembership.map((member) => (
                 <li
                   key={member.id}
                   className={groupSearchStyles.dropdownItem}

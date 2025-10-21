@@ -258,13 +258,36 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
             && apiData.study && _.isArray(apiData.study.displaySets) && apiData.study.displaySets.length) {
 
           const _ds = apiData.study.displaySets[0];
-          setTimeout(() => {            
+          setTimeout(() => {
             setViewportData({
               viewportIndex: 0,
               StudyInstanceUID: apiData.study.StudyInstanceUID,
               displaySetInstanceUID: _ds.displaySetInstanceUID
             });            
           }, 50);
+        } else if (apiEvent == OHIF.display.Enums.EVENTS.STUDY_DATA_FETCH_RAW && apiData.forceReload) {
+
+          // Forced reload of viewport: refresh displaySets, check for active viewport instance
+          if (!viewportSpecificData || !viewportSpecificData?.plugin) {
+     
+            setDisplaySets(getDisplaySets(studiesRef.current));            
+            setTimeout(() => {
+
+              if (studiesRef.current && studiesRef.current[0]?.StudyInstanceUID) {
+
+                // Reload primary viewport from first displaySet
+                const _studyId = studiesRef.current[0]?.StudyInstanceUID;
+                const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetsForStudy(_studyId);
+                if (_ds && _ds.length) {
+                  setViewportData({
+                    viewportIndex: 0,
+                    StudyInstanceUID: _studyId,
+                    displaySetInstanceUID: _ds[0].displaySetInstanceUID
+                  });
+                }                
+              }
+            }, 250);
+          }
         }
       });
 
