@@ -107,7 +107,7 @@ export default function StudyListPageNG() {
   
 
   return (
-    <Layout noHorizontalPadding>
+    <Layout noHorizontalPadding fixedHeight>
 
       {(serverCount > 0) && studyListAccess && canQueryStudies && (
         

@@ -153,27 +153,29 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
 }
 
 
-function Thumbnail(props) {
-  // Summary of the medical imaging displayed to the user in the viewer sidepanel.
+const noop = () => {};
 
-  const {
-    active,
-    altImageText,
-    error,
-    displaySetInstanceUID,
-    imageId,
-    imageSrc,
-    StudyInstanceUID,
-    onClick,
-    onDoubleClick,
-    onMouseDown,
-    supportsDrag,
-    showProgressBar,
-  } = props;
+
+function Thumbnail({
+  supportsDrag = false,
+  active = false,
+  error = false,
+  onDoubleClick = noop,
+  onClick = noop,
+  onMouseDown = noop,
+  altImageText,
+  displaySetInstanceUID,
+  imageId,
+  imageSrc,
+  StudyInstanceUID,
+  showProgressBar,
+  ...props
+}) {
+  // Summary of the medical imaging displayed to the user in the viewer sidepanel.
 
 
   // Component state
-  const [stackPercentComplete, setStackPercentComplete] = useState(0);
+  const [stackPercentComplete, setStackPercentComplete] = useState(props.stackPercentComplete || 0);
   const [clientWarnings, setClientWarnings] = useState([]);
   
   // Update state properties from displaySet
@@ -266,8 +268,6 @@ function Thumbnail(props) {
   );
 }
 
-const noop = () => {};
-
 
 Thumbnail.propTypes = {
   supportsDrag: PropTypes.bool,
@@ -294,17 +294,6 @@ Thumbnail.propTypes = {
   onClick: PropTypes.func,
   onMouseDown: PropTypes.func,
   showProgressBar: PropTypes.bool,
-};
-
-
-Thumbnail.defaultProps = {
-  supportsDrag: false,
-  active: false,
-  error: false,
-  stackPercentComplete: 0,
-  onDoubleClick: noop,
-  onClick: noop,
-  onMouseDown: noop,
 };
 
 

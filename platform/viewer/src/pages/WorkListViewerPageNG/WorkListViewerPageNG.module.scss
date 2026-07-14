@@ -1,4 +1,12 @@
 .workListViewer {
+  // Viewport-locked stack: the header takes its natural height and the viewer iframe flexes
+  // to exactly the remainder, so header + viewer never exceed 100dvh (no page scrollbar, no
+  // scroll "hop" when stack-scrolling a viewport)
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+
   p {
     margin: 0;
   }
@@ -8,23 +16,45 @@
     justify-content: space-between;
     align-items: center;
     background-color: #1e1f23;
+    flex-shrink: 0;
 
     .leftHeader {
       display: flex;
+
+      // Buttons and study-data columns center on a shared horizontal axis at container level
       align-items: center;
-      column-gap: 30px;
+      column-gap: 20px;
       padding: 10px 30px;
 
-      .exit, .filters {
+      // Mirrors the primary viewer toolbar buttons (platform/ui viewer/toolbar-button.styl):
+      // 21px icon slot with 2px margins, 12px/500 label directly beneath, glyph centered
+      // above the label via block display + flex centering.
+      .exit {
         all: unset;
         display: flex;
         flex-direction: column;
         align-items: center;
-        row-gap: 10px;
-        font-size: 8px;
-        line-height: 10px;
+        font-size: 12px;
+        line-height: 14px;
+        font-weight: 500;
         cursor: pointer;
         color: #FFFFFF;
+        user-select: none;
+
+        svg {
+          width: 21px;
+          height: 21px;
+          margin: 2px;
+          display: block;
+        }
+      }
+
+      // Draw the X at ~80% (13px) inside the same 21px slot: the button height is
+      // unchanged and the glyph stays centered. Sizing the svg itself would shrink
+      // the slot and shift the label.
+      .exit svg {
+        padding: 4px;
+        box-sizing: border-box;
       }
     }
 
@@ -67,7 +97,8 @@
   }
 
   .iframe {
-    height: calc(100dvh - 64px);
+    flex: 1;
+    min-height: 0;
   }
 }
 .studyItemData{
@@ -75,9 +106,27 @@
   gap: 16px;
   color: #fff;
 
+  // Extra separation between the Exit/Filters controls cluster and the study data labels
+  // (on top of the header's 20px column-gap)
+  padding-left: 10px;
+
   .studyDataItem{
     display: flex;
     flex-direction: column;
+
+    // Captions match the toolbar-style button label type so the header reads as one system
+    > span:first-child {
+      font-size: 12px;
+      line-height: 14px;
+      font-weight: 500;
+    }
+
+    .longValue{
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
 }

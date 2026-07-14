@@ -5,7 +5,7 @@ import { Icon } from '@ohif/ui';
 
 import './ErrorPage.css';
 
-const ErrorPage = ({ error, title, description, onRetry }) => {
+const ErrorPage = ({ error, title, description = 'Oh snap, something went wrong, please try reloading', onRetry = () => window.location.reload() }) => {
   return (
     <div className="ErrorPage">
       {title && <h3>{title}</h3>}
@@ -28,9 +28,5 @@ ErrorPage.propTypes = {
   onRetry: PropTypes.func,
 };
 
-ErrorPage.defaultProps = {
-  description: 'Oh snap, something went wrong, please try reloading',
-  onRetry: () => window.location.reload(),
-};
 
 export default ErrorPage;

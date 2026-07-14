@@ -6,7 +6,7 @@ import ImageServerPickerModal from '../ImageServerPickerModal/ImageServerPickerM
 // Study List styles
 import './ImageServerPicker.css';
 
-const ImageServerPicker = ({ activeServer, user, onServerChange }) => {
+const ImageServerPicker = ({ activeServer = { name: 'Example' }, user, onServerChange }) => {
   const [activeModalId, setActiveModalId] = useState(null);
 
   // Event handlers
@@ -36,9 +36,5 @@ ImageServerPicker.propTypes = {
   onServerChange: PropTypes.func,
 };
 
-ImageServerPicker.defaultProps = {
-  // Default properties for image server picker
-  activeServer: { name: 'Example' },
-};
 
 export default ImageServerPicker;

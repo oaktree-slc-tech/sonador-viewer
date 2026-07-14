@@ -2,21 +2,37 @@
 import viewer3dPackage from '../package.json';
 
 import commandsModule from './commandsModule.js';
-import ConnectedOHIFDicomM3DViewport from './ConnectedOHIFDicomM3DViewport';
-import OHIFDicom3DSopClassHandler from './OHIFDicom3DSopClassHandler';
+import ConnectedOHIFDicomM3DViewport from './connectedComponents/ConnectedOHIFDicomM3DViewport';
+import OHIFDicom3DSopClassHandler, {
+  M3D_MIMETYPES,
+  getM3DModelType,
+  isSTLDisplaySet,
+} from './sopClassHandlers/OHIFDicom3DSopClassHandler';
 import toolbarModule from './toolbarModule';
-import withCommandsManager from './withCommandsManager';
+import M3DViewerSidebarPanel from './components/panels/M3DViewerPanel';
+import withCommandsManager from './connectedComponents/withCommandsManager';
+
+import { registerM3DGeometryLoader } from './m3dCache';
+
+import Enums from './enums';
+
 
 // 3D Model Viewer
 export default {
+
   id: 'viewerm3d',
   version: viewer3dPackage.version,
-  preRegistration() {},
+  preRegistration() {
+    // Register the M3D geometry loader so STL/GLB models can be stored in and retrieved from the
+    // Cornerstone3D geometry cache via the `m3d:` scheme.
+    registerM3DGeometryLoader();
+  },
   getSopClassHandlerModule() {
     return OHIFDicom3DSopClassHandler;
   },
-  getViewportModule({ commandsManager }) {
-    return withCommandsManager(ConnectedOHIFDicomM3DViewport, commandsManager);
+  getViewportModule({ commandsManager, servicesManager }) {
+    // servicesManager provides segmentationService for the STL presentation-state segmentation
+    return withCommandsManager(ConnectedOHIFDicomM3DViewport, commandsManager, { servicesManager });
   },
   getToolbarModule() {
     return toolbarModule;
@@ -25,3 +41,6 @@ export default {
     return commandsModule({ commandsManager, servicesManager, appConfig });
   },
 };
+
+
+export { Enums, M3DViewerSidebarPanel, M3D_MIMETYPES, getM3DModelType, isSTLDisplaySet, };

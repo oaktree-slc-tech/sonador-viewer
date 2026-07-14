@@ -5,6 +5,8 @@ import sessionStorage from './sessionStorage.js';
 import actions from './actions.js';
 import reducers from './reducers';
 
+import createViewportGridMiddleware from './middleware/createViewportGridMiddleware';
+
 import { getActiveViewportData, activeOhifServer, serverCount } from './selectors.js';
 
 
@@ -19,6 +21,9 @@ const redux = {
     activeOhifServer,
     serverCount,
   },
+  middleware: {
+    createViewportGridMiddleware,
+  }
 };
 
 

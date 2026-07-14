@@ -1,3 +1,6 @@
 .filtersActionsDivider {
   color: #3c4247;
+
+  // Keep the filter-bar -> results gap tight (browser default hr margins are ~16px)
+  margin: 0 0 10px;
 }

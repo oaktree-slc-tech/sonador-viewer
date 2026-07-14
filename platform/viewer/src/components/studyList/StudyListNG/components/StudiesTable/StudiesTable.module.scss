@@ -90,8 +90,32 @@
   }
 }
 
+// Fills the height remaining below the filters inside a fixed-height page (see Layout's
+// fixedHeight mode) so the results container below is the page's single scroller. In normal
+// (scrolling) pages the flex properties are inert and the section lays out as before.
+.tableSection {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .studiesTableContainer {
-  overflow-x: auto;
+  // The single scroller for the study results: rows scroll vertically inside the container
+  // and wide tables scroll horizontally, keeping both scrollbars at the container's edges
+  // (flush with the window in fixed-height pages) while the filters/toolbar above stay put.
+  //
+  // IMPORTANT: no horizontal padding here — sticky insets resolve against the scrollport, so
+  // padding would pin the sticky first column inboard of the container edge and columns
+  // scrolled out to the left would remain visible in the padding gutter. The table's
+  // horizontal inset lives on the first/last cells instead.
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  // Size container so sticky drawer content (StudyItemExpandedNG) can span the visible
+  // scrollport via cqw units instead of hardcoded viewport math
+  container-type: inline-size;
 
   &.disabledScroll {
     overflow-x: hidden;
@@ -132,16 +156,32 @@
       text-transform: uppercase;
       background-color: #1e1f23;
 
+      // Keep headers visible while rows scroll vertically inside the container
+      position: sticky;
+      top: 0;
+      z-index: 2;
+
       &:first-of-type {
-        padding-left: 20px;
-        position: sticky;
+        padding-left: 40px;
         left: 0;
-        z-index: 1;
+
+        // Corner cell is sticky on both axes; keep it above headers and the sticky first column
+        z-index: 3;
+
+        // Tablet/mobile rows carry no dots/checkbox controls; keep the original tighter inset
+        // so the header lines up with the row expanders and the drawer's 20px content edge
+        @include lg {
+          padding-left: 20px;
+        }
       }
 
       &:last-of-type {
-        padding-right: 20px;
+        padding-right: 40px;
         text-align: center;
+
+        @include lg {
+          padding-right: 20px;
+        }
       }
     }
 
@@ -152,20 +192,29 @@
 
         &:first-of-type {
           border-radius: 10px 0 0 10px;
-          width: 130px;
+          width: 150px;
           position: sticky;
           left: 0;
           z-index: 1;
-          padding-left: 20px;
+          padding-left: 40px;
 
+          // Original tablet geometry: no dots/checkbox in the cell, so the wider desktop
+          // inset just pushes the expander/eye right of the drawer's 20px content edge.
+          // Width includes breathing room between the (1.5x-scaled) eye icon and the
+          // cell's vertical rule.
           @include lg {
-            width: 90px;
+            width: 100px;
+            padding-left: 20px;
           }
         }
 
         &:last-of-type {
           border-radius: 0 10px 10px 0;
-          padding-right: 20px;
+          padding-right: 40px;
+
+          @include lg {
+            padding-right: 20px;
+          }
         }
       }
 
@@ -220,12 +269,12 @@
 }
 
 .horizontalPadding {
-  padding-left: 75px;
-  padding-right: 75px;
+  padding-left: 40px;
+  padding-right: 40px;
 
   @include lg {
-    padding-left: 50px;
-    padding-right: 50px;
+    padding-left: 30px;
+    padding-right: 30px;
   }
 
   @include xs {

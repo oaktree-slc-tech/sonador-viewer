@@ -8,10 +8,8 @@ import { Icon } from './../elements/Icon';
 import './toolbar-button.styl';
 
 
-export function ToolbarButton(props) {
+export function ToolbarButton({ isActive = false, className = 'toolbar-button', label = '', icon, iconWhenActive, labelWhenActive, onClick, isExpandable, isExpanded, id }) {
   const { t } = useTranslation('Buttons');
-
-  const { isActive, icon, iconWhenActive, labelWhenActive, onClick } = props;
 
   // Determine icon display properties
   let iconProps;
@@ -22,24 +20,24 @@ export function ToolbarButton(props) {
   }
 
   // Icon label
-  const label = isActive && labelWhenActive ? labelWhenActive : props.label;
+  const displayLabel = isActive && labelWhenActive ? labelWhenActive : label;
 
   const handleClick = (event) => {
     if (onClick) {
-      onClick(event, props);
+      onClick(event, { isActive, className, label, icon, iconWhenActive, labelWhenActive, onClick, isExpandable, isExpanded, id });
     }
   };
 
   return (
     <div
-      className={classNames(props.className, { active: isActive })}
+      className={classNames(className, { active: isActive })}
       onClick={handleClick}
-      data-cy={props.label.toLowerCase()}
+      data-cy={label.toLowerCase()}
     >
       {iconProps && <Icon {...iconProps} />}
       <div className="toolbar-button-label">
-        {t(label)}
-        {props.isExpandable && <Icon name={props.isExpanded ? 'caret-up' : 'caret-down'} className="expand-caret" />}
+        {t(displayLabel)}
+        {isExpandable && <Icon name={isExpanded ? 'caret-up' : 'caret-down'} className="expand-caret" />}
       </div>
     </div>
   );
@@ -79,11 +77,6 @@ ToolbarButton.propTypes = {
   isExpanded: PropTypes.bool,
 };
 
-ToolbarButton.defaultProps = {
-  isActive: false,
-  className: 'toolbar-button',
-  label: '',
-};
 
 
 export default ToolbarButton;

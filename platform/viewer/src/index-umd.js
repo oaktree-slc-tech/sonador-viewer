@@ -2,7 +2,7 @@
  * Entry point index.js for UMD packaging
  */
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 
 // OHIF Server Components
 import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
@@ -33,7 +33,8 @@ function installViewer(config, containerId = 'root', callback) {
     );
   }
 
-  return ReactDOM.render(<App config={config} />, container, callback);
+  createRoot(container).render(<App config={config} />);
+  if (callback) callback();
 }
 const version = viewerPackage.version;
 export {

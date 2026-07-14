@@ -20,10 +20,19 @@
   .rowEyeIcon {
     transform: scale(1.5);
     visibility: hidden;
+
+    // Clears the row checkbox's absolutely-positioned checkmark (its container has no
+    // layout width), which paints in the 24px to the left of the icon
     margin-left: 24px;
 
+    // Tablet rows render no checkbox, so drop most of the clearance and let the icon sit
+    // centered in the cell next to the expander instead of crowding the right edge
     @include lg {
       visibility: visible;
+      margin-left: 8px;
+
+      // Keep the scaled glyph clear of the cell's vertical rule
+      margin-right: 12px;
     }
   }
 }

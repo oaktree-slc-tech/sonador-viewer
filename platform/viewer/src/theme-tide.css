@@ -20,6 +20,7 @@
   /* Common palette */
   --ui-yellow: #e29e4a;
   --ui-sky-blue: #6fbde2;
+  
   /* State palette */
   --ui-state-error: #ffcccc;
   --ui-state-error-border: #993333;
@@ -29,6 +30,10 @@
   --ui-gray-dark: #16202b;
   --ui-gray-darker: #151a1f;
   --ui-gray-darkest: #14202a;
+
+  /* Sonador Element Colors */
+  --sonador-ui-primary: #2e6da4;
+  --sonador-ui-default: #fff;
 
   /* Text Colors */
   --text-color-active: #000000;

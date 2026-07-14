@@ -65,6 +65,19 @@ export const useWorklistItems = (params) => {
         }, {});
 
       return response.map((study) => {
+        // Server-owned Requested Procedure lives in the worklist item's Meta (round-tripped from
+        // the orthanc JSONB). Surface the reason/description so they can drive the table column
+        // and the worklist viewer topbar.
+        const requestedProcedure = study.Meta?.RequestedProcedure || {};
+        const reasonForReview = {
+          value: requestedProcedure.ReasonForTheRequestedProcedure,
+          label: 'Reason for Review',
+        };
+        const requestedProcedureDescription = {
+          value: requestedProcedure.RequestedProcedureDescription,
+          label: 'Requested Procedure',
+        };
+
         return Object.entries(study).reduce((acc, [key, value]) => {
           const res = requiredTags[key.toLowerCase()];
 
@@ -76,6 +89,8 @@ export const useWorklistItems = (params) => {
               AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User', id: study.User.id },
               GroupName: { value: study.Group?.name, label: 'Group Name', id: study.Group.id },
               Status: { value: study.State },
+              ReasonForReview: reasonForReview,
+              RequestedProcedure: requestedProcedureDescription,
               PatientName: { value: DICOMWeb.getName(study['00100010']), label: 'Patient Name' },
               PatientID: { value: DICOMWeb.getName(study['00100020']), label: 'Patient Id' },
               PatientSex: { value: DICOMWeb.getName(study['00100040']), label: 'Patient Sex' },
@@ -108,6 +123,8 @@ export const useWorklistItems = (params) => {
             AssignedUser: { value: getDisplayName(study.User), label: 'Assigned User', id: study.User.id },
             GroupName: { value: study.Group?.name, label: 'Group Name', id: study.Group.id },
             Status: { value: study.State },
+            ReasonForReview: reasonForReview,
+            RequestedProcedure: requestedProcedureDescription,
             PatientName: { value: DICOMWeb.getString(study['00100010']), label: 'Patient Name' },
             id: study.ID,
             mrn: { value: DICOMWeb.getString(study['00100020']) },

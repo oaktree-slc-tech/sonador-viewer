@@ -13,7 +13,7 @@ ColoredCircle.propTypes = {
   color: PropTypes.array.isRequired,
 };
 
-const SegmentItem = ({ index, label, onClick, itemClass, color, labelmap3D, visible, onVisibilityChange }) => {
+const SegmentItem = ({ index, label, onClick = () => {}, itemClass = '', color, labelmap3D, visible, onVisibilityChange }) => {
   const [isVisible, setIsVisible] = useState(visible);
 
   useEffect(() => {
@@ -93,9 +93,5 @@ SegmentItem.propTypes = {
   color: PropTypes.array.isRequired,
 };
 
-SegmentItem.defaultProps = {
-  itemClass: '',
-  onClick: () => {},
-};
 
 export default SegmentItem;

@@ -3,6 +3,12 @@
   align-items: center;
   column-gap: 10px;
 
+  // Extra breathing room between the selection count and the bulk-action buttons
+  // (20px total with the column-gap) without widening the gaps between the buttons
+  .selectedRows {
+    margin-right: 10px;
+  }
+
   .action {
     border: none;
     border-radius: 30px;

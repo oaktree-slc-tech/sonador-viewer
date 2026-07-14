@@ -7,6 +7,7 @@ import {
   init as c3dCoreInit,
 
   RenderingEngine as C3dRenderingEngine,
+  getRenderingEngine as c3dGetRenderingEngine,
   Enums as c3dEnums,
   volumeLoader as c3dVolumeLoader,
   cache as c3dCache,
@@ -25,11 +26,8 @@ import {
   addTool as c3dAddTool,
 } from '@cornerstonejs/tools';
 
-import { OHIFModal } from '@ohif/ui';
-
 import { vtkImage2CornerstoneImageOptions, cacheVtkImage, purgeLocalVolume } from '../utils/cornerstone3d.js';
-
-import styles from './Cornerstone3DInspectionView.css';
+import styles from './Cornerstone3DBaseView.css';
 
 const { ViewportType, Events } = c3dEnums;
 
@@ -64,6 +62,9 @@ class Cornerstone3DBaseView extends Component {
     cornerstone3dViewProps: PropTypes.object,
     eventTimeout: PropTypes.number,
     orientation: PropTypes.string,
+    onImageLoad: PropTypes.func,
+    volumeCleanup: PropTypes.bool,
+    engineCleanup: PropTypes.bool,
   }
 
   static defaultProps = {
@@ -74,12 +75,14 @@ class Cornerstone3DBaseView extends Component {
       type: ViewportType.ORTHOGRAPHIC, defaultOptions: {},
     },
     eventTimeout: 50,
+    volumeCleanup: true,
+    engineCleanup: true,
   }
 
   _initViewProps() {
     // Initialize properties for the view
     
-    this.cornerstone3dViewProps = _.clone(this.props.cornerstone3dViewProps);
+    this.cornerstone3dViewProps = _.cloneDeep(this.props.cornerstone3dViewProps);
     this.cornerstone3dViewProps.defaultOptions.orientation = this.props.orientation;
   }
 
@@ -165,29 +168,77 @@ class Cornerstone3DBaseView extends Component {
     component.setState({ imgToolsInit: true, toolMode: 'default' });
   }
 
-  loadImageVolume() {
-    // Initialize Cornerstone volume and load image volume to Cornerstone3D
+  _getImageVolumeId() {
+    // Retrieve the volumeId
+
     const component = this;
     const { displaySet } = component.props.viewportData;
 
+    return displaySet.displaySetInstanceUID; 
+  }
+
+  _getImageVolumeMeta() {
+    // Retrieve the metadata to be cached alongside the image volume
+    const component = this;
+    const { displaySet } = component.props.viewportData;
+
+    return displaySet;
+  }
+
+  _initImageVolume() {
+    // Retrieve and initialize the image volume to be used by the view
+    const component = this;
+
+    if (component.props?.volumes && component.props?.volumes.length) {
+      return component.props.volumes[0];
+    }
+
+    return undefined;
+  }
+
+  loadImageVolume() {
+    // Initialize Cornerstone volume and load image volume to Cornerstone3D
+    const component = this;
+    const { onImageLoad } = component.props;
+    const { displaySet } = component.props.viewportData;
+
     // Create volume
-    const vol = c3dCache.getVolume(displaySet.displaySetInstanceUID);
+    const vol = c3dCache.getVolume(component._getImageVolumeId());
     if (!vol) {
       if (component.props.volumes) {
-        const img = component.props.volumes[0]  
+        const img = component._initImageVolume();
+        const meta = component._getImageVolumeMeta();
 
         // Volume not yet initialized, create instance and add to cache
-        cacheVtkImage(displaySet.displaySetInstanceUID, displaySet, img);
+        cacheVtkImage(component._getImageVolumeId(), displaySet, img);
+
+        // Trigger callback
+        if (_.isFunction(onImageLoad)) {
+          onImageLoad({ volumeId: component._getImageVolumeId(), meta, vol: img, });
+        }
       }
     }
   }
 
-  renderImageData() {
+  async _setImageVolume(options) {
+    // Set the image volume for the view
+    const component = this;
+    const { displaySet } = component.props.viewportData;
+
+    const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive(options);
+    if (_view3d) {
+      await _view3d.setVolumes([ { volumeId: component._getImageVolumeId() } ]);
+    }
+  }
+
+  async renderImageData(options) {
     // Render image data
+    options = options || {};
+    _.defaults(options, { setState: true, });
 
     const component = this;    
     const { uiInit, imgRenderInit } = component.state;
-    const { displaySet } = component.props.viewportData;
+    const { displaySet, eventTimeout } = component.props.viewportData;
     const { orientation } = component.props;
 
     if (uiInit && !imgRenderInit) {
@@ -196,17 +247,18 @@ class Cornerstone3DBaseView extends Component {
       component.loadImageVolume();
 
       // Set viewport instance
-      const _v3d_id = component.getViewportId();
-      const _view3d = component.renderEngine.getViewport(_v3d_id);
-
+      const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive();
       if (_view3d) {
 
         // Set volumes for viewport
-        _view3d.setVolumes([ { volumeId: displaySet.displaySetInstanceUID } ]);
+        await component._setImageVolume();
 
         // Render viewport
-        component.renderEngine.render();
-        component.setState({ imgRenderInit: true });
+        setTimeout(component.render3d.bind(component), eventTimeout);
+
+        if (options.setState) {
+          component.setState({ imgRenderInit: true });
+        }
       }
       
     }
@@ -218,9 +270,9 @@ class Cornerstone3DBaseView extends Component {
     const component = this;
     const { renderId, isLoaded } = this.props;
     const { imgRenderInit, imgToolsInit } = this.state;
-
-    // Initialize render engine
-    component.renderEngine = new C3dRenderingEngine(renderId);
+    
+    // Initialize render engine 
+    component.renderEngine = c3dGetRenderingEngine(renderId) || new C3dRenderingEngine(renderId);
     component.initUi();
   }
 
@@ -246,8 +298,9 @@ class Cornerstone3DBaseView extends Component {
       component.initTools();
     }
 
-    // Resize and re-render
-    if (isLoaded && imgViewportInit && imgRenderInit && imgToolsInit) {
+    // Resize and re-render once when all init flags first become true
+    const wasFullyInit = prevState.imgViewportInit && prevState.imgRenderInit && prevState.imgToolsInit;
+    if (isLoaded && !wasFullyInit && imgViewportInit && imgRenderInit && imgToolsInit) {
       setTimeout(component.render3d.bind(component), eventTimeout);
     }
   }
@@ -269,21 +322,60 @@ class Cornerstone3DBaseView extends Component {
     // 1. Destroy tool groups and remove viewport references
     // 2. Destroy DOM references
     // 3. Clear loaded volumes
-    // 4. Destroy the render engine
+    // 4. Destroy the render engine (or just disable the viewport when engineCleanup=false)
+
+    console.log('[Cornerstone3DBaseView-componentWillUnmount] begin cleanup');
 
     const component = this;
-    const { renderId, volumes } = component.props;
+    const { renderId, volumes, volumeCleanup, engineCleanup } = component.props;
     const { displaySet } = component.props.viewportData;
 
     if (component.renderEngine) {
 
-      // Destroy render engine
-      component.renderEngine.destroy();
+      if (engineCleanup !== false) {
+
+        // Destroy render engine
+        await component.renderEngine.destroy();
+      } else {
+
+        // Engine is shared with other viewports — only remove this viewport.
+        // disableElement may throw if the viewport was already disabled from the onClose
+        // callback or was never fully initialized; use a separate try/catch so the
+        // resize+render that follows always executes regardless.
+        try {
+          component.renderEngine.disableElement(component.getViewportId());
+        } catch(e) {
+          console.warn('[Cornerstone3DBaseView-componentWillUnmount] Failed to disable viewport element:', e);
+        }
+        try {
+          component.renderEngine.resize();
+          component.renderEngine.render();
+        } catch(re) {
+          console.warn('[Cornerstone3DBaseView-componentWillUnmount] Failed to refresh viewports after element disable:', re);
+        }
+      }
       component.renderEngine = undefined;
     }
 
-    // Remove volumes
-    purgeLocalVolume(displaySet.displaySetInstanceUID);
+    // Remove local volume from Cornerston3D cache
+    if (volumeCleanup) {
+      component.purgeLocalVolume();
+    }
+
+    console.log('[Cornerstone3DBaseView-componentWillUnmount] cleanup complete');
+  }
+
+  purgeLocalVolume() {
+    // Remove local volume from Cornerstone3D cache
+    const component = this;
+    const { displaySet } = this.props.viewportData;
+
+    // Retrieve image volumeId
+    const imgVolumeId = component._getImageVolumeId();
+    
+    if (displaySet && displaySet.displaySetInstanceUID && c3dCache.getVolume(imgVolumeId)) {
+      purgeLocalVolume(imgVolumeId);
+    }
   }
 
   render() {

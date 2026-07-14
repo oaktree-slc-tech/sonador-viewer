@@ -301,6 +301,5 @@ RTPanel.propTypes = {
   isOpen: PropTypes.bool.isRequired,
 };
 
-RTPanel.defaultProps = {};
 
 export default RTPanel;

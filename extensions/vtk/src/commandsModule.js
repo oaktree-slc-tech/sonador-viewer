@@ -1,566 +1,488 @@
-import Constants from '@kitware/vtk.js/Rendering/Core/VolumeMapper/Constants.js';
 import {
-  getImageData,
-  vtkInteractorStyleMPRRotate,
-  vtkInteractorStyleMPRWindowLevel,
-  vtkInteractorStyleRotatableMPRCrosshairs,
-  vtkSVGRotatableCrosshairsWidget,
-} from '@sonador/react-vtkjs-viewport';
-import { vec3 } from 'gl-matrix';
-import throttle from 'lodash.throttle';
+  ToolGroupManager as C3dToolGroupManager,
+  SynchronizerManager as C3dSynchronizerManager,
 
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
-import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
+  // Viewport Tools
+  WindowLevelTool as C3dWindowLevelTool,
+  CrosshairsTool as C3dCrosshairsTool,
+  ZoomTool as C3dZoomTool,
+  PanTool as C3dPanTool,
+  StackScrollTool as C3dStackScrollTool,
+  TrackballRotateTool as C3dTrackballRotateTool,
+  Enums as c3dToolsEnums,
+  addTool as c3dAddTool,
+
+  // Segmentation state
+  segmentation as c3dSegmentations,
+} from '@cornerstonejs/tools';
+import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
+import {
+  createVOISynchronizer as c3dCreateVOISynchronizer,
+} from '@cornerstonejs/tools/synchronizers';
+import {
+  getRenderingEngine as c3dGetRenderingEngine,
+} from '@cornerstonejs/core';
+
+import OHIF from '@ohif/core';
+import { utils as cextUtils } from '@ohif/extension-cornerstone';
 
 import setMPRLayout from './utils/setMPRLayout.js';
-import setViewportToVTK from './utils/setViewportToVTK.js';
-import OHIFVTKViewport from './OHIFVTKViewport';
+import { getCornerstone3dViewport } from './utils/cornerstone3d.js';
 
-const { BlendMode } = Constants;
+import { Enums as vtkEnums } from './enums';
+
+const { DisplaySetApi } = OHIF.display;
+
 
 const commandsModule = ({ commandsManager, servicesManager }) => {
   const { UINotificationService, LoggerService } = servicesManager.services;
 
-  // TODO: Put this somewhere else
-  let apis = {};
-  let defaultVOI;
-
-  async function _getActiveViewportVTKApi(viewports) {
-    const { numRows, numColumns, layout, viewportSpecificData, activeViewportIndex } = viewports;
-
-    const currentData = layout.viewports[activeViewportIndex];
-    if (currentData && currentData.plugin === 'vtk') {
-      // TODO: I was storing/pulling this from Redux but ran into weird issues
-      if (apis[activeViewportIndex]) {
-        return apis[activeViewportIndex];
+  function createSetStyleCommand(propertyName) {
+    // Creates a command function that sets a style property for a particular segmentation type.
+    // If type is provided, sets the property for that type only. If type is not provided,
+    // sets the property for both Labelmap and Contour types.
+    return ({ type, value, segmentationId }) => {
+      const { segmentationService } = servicesManager.services;
+      if (type) {
+        segmentationService.setStyle({ type, segmentationId }, { [propertyName]: value });
+      } else {
+        segmentationService.setStyle(
+          { type: SegmentationRepresentations.Labelmap, segmentationId }, { [propertyName]: value });
+        segmentationService.setStyle(
+          { type: SegmentationRepresentations.Contour, segmentationId }, { [propertyName]: value });
       }
-    }
-
-    const displaySet = viewportSpecificData[activeViewportIndex];
-    let api;
-    if (!api) {
-      try {
-        api = await setViewportToVTK(
-          displaySet,
-          activeViewportIndex,
-          numRows,
-          numColumns,
-          layout,
-          viewportSpecificData
-        );
-      } catch (error) {
-        throw new Error(error);
-      }
-    }
-
-    return api;
+    };
   }
 
-  function _setView(api, sliceNormal, viewUp) {
-    const renderWindow = api.genericRenderWindow.getRenderWindow();
-    const istyle = renderWindow.getInteractor().getInteractorStyle();
-    istyle.setSliceNormal(...sliceNormal);
-    istyle.setViewUp(...viewUp);
-
-    renderWindow.render();
+  function _registerMpRTools() {
+    // Register tools with Cornerstone3D
+    c3dAddTool(C3dCrosshairsTool);
+    c3dAddTool(C3dZoomTool);
+    c3dAddTool(C3dWindowLevelTool);
+    c3dAddTool(C3dPanTool);
+    c3dAddTool(C3dStackScrollTool);
+    c3dAddTool(C3dTrackballRotateTool);
   }
-
-  function getVOIFromCornerstoneViewport() {
-    const dom = commandsManager.runCommand('getActiveViewportEnabledElement');
-    const cornerstoneElement = cornerstone.getEnabledElement(dom);
-
-    if (cornerstoneElement) {
-      const imageId = cornerstoneElement.image.imageId;
-
-      const Modality = cornerstone.metaData.get('Modality', imageId);
-
-      if (Modality !== 'PT') {
-        const { windowWidth, windowCenter } = cornerstoneElement.viewport.voi;
-
-        return {
-          windowWidth,
-          windowCenter,
-        };
-      }
-    }
-  }
-
-  function setVOI(voi) {
-    const { windowWidth, windowCenter } = voi;
-    const lower = windowCenter - windowWidth / 2.0;
-    const upper = windowCenter + windowWidth / 2.0;
-
-    const rgbTransferFunction = apis[0].volumes[0].getProperty().getRGBTransferFunction(0);
-
-    rgbTransferFunction.setRange(lower, upper);
-
-    apis.forEach((api) => {
-      api.updateVOI(windowWidth, windowCenter);
-    });
-  }
-
-  const _convertModelToWorldSpace = (position, vtkImageData) => {
-    const indexToWorld = vtkImageData.getIndexToWorld();
-    const pos = vec3.create();
-
-    position[0] += 0.5; /* Move to the centre of the voxel. */
-    position[1] += 0.5; /* Move to the centre of the voxel. */
-    position[2] += 0.5; /* Move to the centre of the voxel. */
-
-    vec3.set(pos, position[0], position[1], position[2]);
-    vec3.transformMat4(pos, pos, indexToWorld);
-
-    return pos;
-  };
-
+  
+  
   const actions = {
-    getVtkApis: ({ index }) => {
-      return apis[index];
-    },
-    resetMPRView() {
-      // Reset orientation
-      apis.forEach((api) => api.resetOrientation());
 
-      // Reset VOI
-      if (defaultVOI) setVOI(defaultVOI);
-
-      // Reset the crosshairs
-      apis[0].svgWidgets.rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
-    },
-    axial: async ({ viewports }) => {
-      const api = await _getActiveViewportVTKApi(viewports);
-
-      apis[viewports.activeViewportIndex] = api;
-
-      _setView(api, [0, 0, 1], [0, -1, 0]);
-    },
-    sagittal: async ({ viewports }) => {
-      const api = await _getActiveViewportVTKApi(viewports);
-
-      apis[viewports.activeViewportIndex] = api;
-
-      _setView(api, [1, 0, 0], [0, 0, 1]);
-    },
-    coronal: async ({ viewports }) => {
-      const api = await _getActiveViewportVTKApi(viewports);
-
-      apis[viewports.activeViewportIndex] = api;
-
-      _setView(api, [0, 1, 0], [0, 0, 1]);
-    },
-    requestNewSegmentation: async ({ viewports }) => {
-      const allViewports = Object.values(viewports.viewportSpecificData);
-      const promises = allViewports.map(async (viewport, viewportIndex) => {
-        let api = apis[viewportIndex];
-
-        if (!api) {
-          api = await _getActiveViewportVTKApi(viewports);
-          apis[viewportIndex] = api;
-        }
-
-        api.requestNewSegmentation();
-        api.updateImage();
-      });
-      await Promise.all(promises);
-    },
-    jumpToSlice: async ({
-      viewports,
-      studies,
-      StudyInstanceUID,
-      displaySetInstanceUID,
-      SOPClassUID,
-      SOPInstanceUID,
-      segmentNumber,
-      frameIndex,
-      frame,
-      done = () => {},
-    }) => {
-      let api = apis[viewports.activeViewportIndex];
-
-      if (!api) {
-        api = await _getActiveViewportVTKApi(viewports);
-        apis[viewports.activeViewportIndex] = api;
-      }
-
-      const stack = OHIFVTKViewport.getCornerstoneStack(
-        studies,
-        StudyInstanceUID,
-        displaySetInstanceUID,
-        SOPClassUID,
-        SOPInstanceUID,
-        frameIndex
-      );
-
-      const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
-
-      let pixelIndex = 0;
-      let x = 0;
-      let y = 0;
-      let count = 0;
-
-      const rows = imageDataObject.dimensions[1];
-      const cols = imageDataObject.dimensions[0];
-
-      for (let j = 0; j < rows; j++) {
-        for (let i = 0; i < cols; i++) {
-          // [i, j] =
-          const pixel = frame.pixelData[pixelIndex];
-          if (pixel === segmentNumber) {
-            x += i;
-            y += j;
-            count++;
-          }
-          pixelIndex++;
-        }
-      }
-      x /= count;
-      y /= count;
-
-      const position = [x, y, frameIndex];
-      const worldPos = _convertModelToWorldSpace(position, imageDataObject.vtkImageData);
-
-      api.svgWidgets.rotatableCrosshairsWidget.moveCrosshairs(worldPos, apis);
-      done();
-    },
     setSegmentationConfiguration: async ({ viewports, globalOpacity, visible, renderOutline, outlineThickness }) => {
-      const allViewports = Object.values(viewports.viewportSpecificData);
-      const promises = allViewports.map(async (viewport, viewportIndex) => {
-        let api = apis[viewportIndex];
-
-        if (!api) {
-          api = await _getActiveViewportVTKApi(viewports);
-          apis[viewportIndex] = api;
-        }
-
-        api.setGlobalOpacity(globalOpacity);
-        api.setVisibility(visible);
-        api.setOutlineThickness(outlineThickness);
-        api.setOutlineRendering(renderOutline);
-        api.updateImage();
-      });
-      await Promise.all(promises);
+      console.log(`[VTK:setSegmentationConfiguration] globalOpacity=${globalOpacity} visible=${visible}`
+        +`renderOutline=${renderOutline} outlineThickness=${outlineThickness}`);
     },
     setSegmentConfiguration: async ({ viewports, visible, segmentNumber }) => {
-      const allViewports = Object.values(viewports.viewportSpecificData);
-      const promises = allViewports.map(async (viewport, viewportIndex) => {
-        let api = apis[viewportIndex];
-
-        if (!api) {
-          api = await _getActiveViewportVTKApi(viewports);
-          apis[viewportIndex] = api;
-        }
-
-        api.setSegmentVisibility(segmentNumber, visible);
-        api.updateImage();
-      });
-      await Promise.all(promises);
+      console.log(`[VTK:setSegmentConfiguration] visible=${visible} segmentNumber=${segmentNumber}`);
     },
-    enableRotateTool: () => {
-      apis.forEach((api, apiIndex) => {
-        const istyle = vtkInteractorStyleMPRRotate.newInstance();
 
-        api.setInteractorStyle({
-          istyle,
-          configuration: { apis, apiIndex, uid: api.uid },
-        });
-      });
-    },
-    enableCrosshairsTool: () => {
-      apis.forEach((api, apiIndex) => {
-        const istyle = vtkInteractorStyleRotatableMPRCrosshairs.newInstance();
+    initMprTools: ({ toolGroupId, component }) => {
+      // Initialize MPR navigation tools for the provided component. The VTK MPR view spans multiple
+      // cells in the layout manager but utilizes a single tool group instance. To prevent race conditions
+      // during initalization, this central management method should be used for creating and controlling tools.
 
-        api.setInteractorStyle({
-          istyle,
-          configuration: {
-            apis,
-            apiIndex,
-            uid: api.uid,
-          },
-        });
-      });
+      let mprTools = C3dToolGroupManager.getToolGroup(toolGroupId);
+      const { viewportId, viewport } = component._checkViewportActive();
 
-      const rotatableCrosshairsWidget = apis[0].svgWidgets.rotatableCrosshairsWidget;
+      if (!mprTools && viewport) {
 
-      const referenceLines = rotatableCrosshairsWidget.getReferenceLines();
+        // Register tools with Cornerstone3D
+        _registerMpRTools();
 
-      // Initilise crosshairs if not initialised.
-      if (!referenceLines) {
-        rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
+        // Initialize tool group and add window/zoom interaction
+        mprTools = C3dToolGroupManager.createToolGroup(toolGroupId);
+        component.mprTools = mprTools;
+
+        // Add tools to the group
+        mprTools.addTool(C3dCrosshairsTool.toolName);
+        mprTools.addTool(C3dZoomTool.toolName);
+        mprTools.addTool(C3dWindowLevelTool.toolName);
+        mprTools.addTool(C3dPanTool.toolName);
+        mprTools.addTool(C3dStackScrollTool.toolName);
+
+        // Add viewport to the tool
+        mprTools.addViewport(viewportId);
+
+        // Activate tools
+        actions.activateMprTools({ toolGroupId, toolMode: component.state.toolMode });
+
+        console.log('[VTK:MPR] initialize tools viewportId='+viewportId);
+      } else if (mprTools && !component.mprTools) {
+
+        // Tools already initialized, but not referenced by component. Activate and add reference.
+        component.mprTools = mprTools;
+        mprTools.addViewport(viewportId);
+
+        console.log('[VTK:MPR] add tools reference for viewportId='+viewportId);
       }
     },
-    enableLevelTool: () => {
-      function updateVOI(apis, windowWidth, windowCenter) {
-        apis.forEach((api) => {
-          api.updateVOI(windowWidth, windowCenter);
-        });
+
+    deactivateMprTools: ({ toolGroupId, removeAllBindings = true }) => {
+      // Deactivate the provided tool mode for the specified toolGroupId
+
+      const mprTools = C3dToolGroupManager.getToolGroup(toolGroupId);
+      if (mprTools && removeAllBindings) {
+
+        mprTools.setToolPassive(C3dStackScrollTool.toolName);
+        mprTools.setToolPassive(C3dPanTool.toolName);
+        mprTools.setToolPassive(C3dWindowLevelTool.toolName);
+        mprTools.setToolPassive(C3dZoomTool.toolName);
       }
+    },
 
-      const throttledUpdateVOIs = throttle(updateVOI, 16, { trailing: true }); // ~ 60 fps
+    activateMprTools: ({ toolGroupId, toolMode, displaySetInstanceUID }) => {
+      // Activate the provided tool mode for the specified toolGroupId
 
-      const callbacks = {
-        setOnLevelsChanged: ({ windowCenter, windowWidth }) => {
-          apis.forEach((api) => {
-            const renderWindow = api.genericRenderWindow.getRenderWindow();
+      actions.deactivateMprTools({ toolGroupId, });
+      const mprTools = C3dToolGroupManager.getToolGroup(toolGroupId);
+      if (mprTools) {
+        if (!toolMode || (toolMode == 'default')) {
 
-            renderWindow.render();
+          // Set cross-hair tool active
+          mprTools.setToolActive(C3dCrosshairsTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
+            ]
           });
 
-          throttledUpdateVOIs(apis, windowWidth, windowCenter);
-        },
-      };
+          mprTools.setToolActive(C3dZoomTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Secondary }, // Right click
+            ]
+          });
 
-      apis.forEach((api, apiIndex) => {
-        const istyle = vtkInteractorStyleMPRWindowLevel.newInstance();
+          mprTools.setToolActive(C3dPanTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Auxiliary }, // Middle mouse button
+            ]
+          });
 
-        api.setInteractorStyle({
-          istyle,
-          callbacks,
-          configuration: { apis, apiIndex, uid: api.uid },
+          // Bind stack scroll to mouse scroll
+          mprTools.setToolActive(C3dStackScrollTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Wheel }, // Change slice position on stack scroll
+            ]
+          });
+
+        } else if (toolMode == 'level') {
+
+          // Set level tools active
+          mprTools.setToolActive(C3dWindowLevelTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
+            ]
+          });
+
+          mprTools.setToolActive(C3dZoomTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Secondary }, // Right click
+            ]
+          });
+
+          mprTools.setToolActive(C3dPanTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Auxiliary }, // Middle mouse button
+            ]
+          });
+
+          // Bind stack scroll to mouse scroll
+          mprTools.setToolActive(C3dStackScrollTool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Wheel }, // Change slice position on stack scroll
+            ]
+          });
+        }
+
+        // Trigger API event to allow for viewports to store the active tool mode
+        if (displaySetInstanceUID) {
+          DisplaySetApi.Instance.displaySetService.triggerApiEvent(vtkEnums.MPR.EVENTS.VTK_MPR_ACTIVATE_TOOL, {
+            displaySetInstanceUID: displaySetInstanceUID, toolGroupId, tool: toolMode, 
+          });
+        }
+      }
+    },
+
+    initMprImageSync: ({ voiSyncId, component }) => {
+      // Initialize MPR image sync tools for the provided component. The VTK MPR view spans multiple
+      // cells in the layout manager but utilizes a single VOI group instance. To prevent race conditions
+      // during initalization, this central management method should be used for init of sync groups.
+
+      let mprVoi = C3dSynchronizerManager.getSynchronizer(voiSyncId);
+      const { viewportId, viewport } = component._checkViewportActive();
+
+      if (!mprVoi && viewportId) {
+
+        // Initialize synchronizer and attach to the viewport
+        mprVoi = c3dCreateVOISynchronizer(voiSyncId);
+        component.imgSync = mprVoi;
+        mprVoi.add({ renderingEngineId: component.props.renderId, viewportId });
+
+        console.log('[VTK:MPR] initialize VOI sync viewportId='+viewportId);
+      } else if (mprVoi && !component.imgSync && viewportId) {
+
+        // Synchronizer already initialized, but not referenced by component. Activate and add reference.
+        component.imgSync = mprVoi;
+        mprVoi.add({ renderingEngineId: component.props.renderId, viewportId });
+
+        console.log('[VTK:MPR] add VOI sync reference for viewportId='+viewportId);
+      }
+    },
+
+    resetMprView: () => {
+      // Reset the camera and window/level for all viewports in the MPR rendering engine
+
+      const renderEngine = c3dGetRenderingEngine(vtkEnums.MPR.VTK_MPRSLICE_RENDER_ID);
+      if (renderEngine) {
+        renderEngine.getViewports().forEach(viewport => {
+          viewport.resetCamera();
+          viewport.resetProperties();
         });
+        renderEngine.render();
+      }
+    },
+
+    enableCrosshairsTool: ({ toolGroupId = vtkEnums.MPR.VTK_MPRSLICE_TOOLGROUP_ID, viewports }) => {
+      // Enable MPR cross-hairs tool
+
+      const displaySet = viewports.viewportSpecificData[viewports.activeViewportIndex];
+      actions.activateMprTools({
+        toolGroupId, toolMode: vtkEnums.MPR.TOOLS.VTK_MPRSLICE_TOOL_DEFAULT, 
+        displaySetInstanceUID: displaySet.displaySetInstanceUID,
       });
     },
-    setSlabThickness: ({ slabThickness }) => {
-      apis.forEach((api) => {
-        api.setSlabThickness(slabThickness);
+
+    enableMprLevelTool: ({ toolGroupId = vtkEnums.MPR.VTK_MPRSLICE_TOOLGROUP_ID, viewports }) => {
+      // Enable MPR level tool
+
+      const displaySet = viewports.viewportSpecificData[viewports.activeViewportIndex];
+      actions.activateMprTools({
+        toolGroupId, toolMode: vtkEnums.MPR.TOOLS.VTK_MPRSLICE_TOOL_LEVEL,
+        displaySetInstanceUID: displaySet.displaySetInstanceUID,
       });
     },
-    changeSlabThickness: ({ change }) => {
-      apis.forEach((api) => {
-        const slabThickness = Math.max(api.getSlabThickness() + change, 0.1);
 
-        api.setSlabThickness(slabThickness);
-      });
-    },
-    setBlendModeToComposite: () => {
-      apis.forEach((api) => {
-        const renderWindow = api.genericRenderWindow.getRenderWindow();
-        const istyle = renderWindow.getInteractor().getInteractorStyle();
-
-        const slabThickness = api.getSlabThickness();
-
-        const mapper = api.volumes[0].getMapper();
-        if (mapper.setBlendModeToComposite) {
-          mapper.setBlendModeToComposite();
-        }
-
-        if (istyle.setSlabThickness) {
-          istyle.setSlabThickness(slabThickness);
-        }
-        renderWindow.render();
-      });
-    },
-    setBlendModeToMaximumIntensity: () => {
-      apis.forEach((api) => {
-        const renderWindow = api.genericRenderWindow.getRenderWindow();
-        const mapper = api.volumes[0].getMapper();
-        if (mapper.setBlendModeToMaximumIntensity) {
-          mapper.setBlendModeToMaximumIntensity();
-        }
-        renderWindow.render();
-      });
-    },
-    setBlendMode: ({ blendMode }) => {
-      apis.forEach((api) => {
-        const renderWindow = api.genericRenderWindow.getRenderWindow();
-
-        api.volumes[0].getMapper().setBlendMode(blendMode);
-
-        renderWindow.render();
-      });
-    },
     mpr2d: async ({ viewports }) => {
-      // Activate 2D MPR view. MPR view creates a 3 panel layout with axial, sagittal, and coronal
-      // layouts of the same volume.
+      // Activate 2D MPR view. Sets up a 3-panel layout with axial, sagittal, and coronal slices.
+      // Orientation for each panel is derived from the viewport index in OHIFVTKViewport.
 
-      // Retrieve currently active display set.
       const displaySet = viewports.viewportSpecificData[viewports.activeViewportIndex];
 
-      // Get current VOI if cornerstone viewport.
-      const cornerstoneVOI = getVOIFromCornerstoneViewport();
-      defaultVOI = cornerstoneVOI;
-
-      const viewportProps = [
-        {
-          // Axial
-          orientation: {
-            sliceNormal: [0, 0, 1],
-            viewUp: [0, -1, 0],
-          },
-        },
-        {
-          // Sagittal
-          orientation: {
-            sliceNormal: [1, 0, 0],
-            viewUp: [0, 0, 1],
-          },
-        },
-        {
-          // Coronal
-          orientation: {
-            sliceNormal: [0, 1, 0],
-            viewUp: [0, 0, 1],
-          },
-        },
-      ];
-
       try {
-        apis = await setMPRLayout(displaySet, viewportProps, 1, 3);
+        await setMPRLayout(displaySet, [{}, {}, {}], 1, 3);
       } catch (error) {
         throw new Error(error);
       }
+    },
 
-      if (cornerstoneVOI) {
-        setVOI(cornerstoneVOI);
+    // -------------------------------------------------------------------------
+    // Segmentation commands
+    // -------------------------------------------------------------------------
+
+    editSegmentationLabel: ({ segmentationId }) => {
+      // Edit the label of the provided segmentation
+
+      const { UIDialogService, segmentationService } = servicesManager.services;
+      const _seg = segmentationService.getSegmentation(segmentationId);
+      if (!_seg) {
+        return;
       }
+      const { label: label0 } = _seg;
 
-      // Add widgets and set default interactorStyle of each viewport.
-      apis.forEach((api, apiIndex) => {
-        api.addSVGWidget(vtkSVGRotatableCrosshairsWidget.newInstance(), 'rotatableCrosshairsWidget');
-
-        const uid = api.uid;
-        const istyle = vtkInteractorStyleRotatableMPRCrosshairs.newInstance();
-
-        api.setInteractorStyle({
-          istyle,
-          configuration: { apis, apiIndex, uid },
-        });
-
-        api.svgWidgets.rotatableCrosshairsWidget.setApiIndex(apiIndex);
-        api.svgWidgets.rotatableCrosshairsWidget.setApis(apis);
+      cextUtils.callInputDialog({
+        uiDialogService: UIDialogService,
+        title: 'Edit Segmentation Label',
+        placeholder: 'Enter new label',
+        defaultValue: label0,
+        centralize: true,
+        isDraggable: false,
+        showOverlay: true,
+      }).then(label => {
+        segmentationService.addOrUpdateSegmentation({ segmentationId, label });
       });
+    },
 
-      const firstApi = apis[0];
+    addSegment: ({ segmentationId, config }) => {
+      // Add a segment to the provided segmentation
 
-      // Initialise crosshairs
-      apis[0].svgWidgets.rotatableCrosshairsWidget.resetCrosshairs(apis, 0);
+      const { segmentationService } = servicesManager.services;
+      segmentationService.addSegment(segmentationId, config);
+    },
 
-      // Check if we have full WebGL 2 support
-      const renderWindow = apis[0].genericRenderWindow.getRenderWindow();
-      const [openGLRenderWindow] = renderWindow.getViews();
+    editSegmentLabel: ({ segmentationId, segmentIndex }) => {
+      // Edit the label of the provided segment
 
-      if (!openGLRenderWindow.getWebgl2()) {
-        // Throw a warning if we don't have WebGL 2 support,
-        // And the volume is too big to fit in a 2D texture
-
-        const openGLContext = openGLRenderWindow.getContext();
-        const maxTextureSizeInBytes = openGLContext.getParameter(openGLContext.MAX_TEXTURE_SIZE);
-
-        const maxBufferLengthFloat32 = (maxTextureSizeInBytes * maxTextureSizeInBytes) / 4;
-
-        const dimensions = firstApi.volumes[0].getMapper().getInputData().getDimensions();
-
-        const volumeLength = dimensions[0] * dimensions[1] * dimensions[2];
-
-        if (volumeLength > maxBufferLengthFloat32) {
-          const message =
-            'This volume is too large to fit in WebGL 1 textures and will display incorrectly. Please use a different browser to view this data';
-          LoggerService.error({ message });
-
-          const studyId = extractStudyIdFromURL();
-          const errorTitle = 'Browser does not support WebGL 2';
-
-          if (studyId) {
-            // Will be called only on Viewer study page
-            useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-          }
-
-          UINotificationService.show({
-            title: errorTitle,
-            message,
-            type: 'error',
-            autoClose: false,
-          });
-        }
+      const { UIDialogService, segmentationService } = servicesManager.services;
+      const _seg = c3dSegmentations.state.getSegmentation(segmentationId);
+      if (!_seg) {
+        console.warn('[VTK:editSegmentLabel] Unable to retrieve segmentation for segmentationId='+segmentationId);
+        return;
       }
+      if (!_seg.segments[segmentIndex]) {
+        console.warn('[VTK:editSegmentLabel] Unable to retrieve segment for segmentationId='+segmentationId+' segmentIndex='+segmentIndex);
+        return;
+      }
+
+      const label0 = _seg.segments[segmentIndex].label || '';
+
+      cextUtils.callInputDialog({
+        uiDialogService: UIDialogService,
+        title: 'Edit Segment Label',
+        placeholder: 'Enter new label',
+        defaultValue: label0,
+        centralize: true,
+        isDraggable: false,
+        showOverlay: true,
+      }).then(label => {
+        segmentationService.setSegmentLabel(segmentationId, segmentIndex, label);
+      });
+    },
+
+    editSegmentColor: ({ segmentationId, segmentIndex, viewportId }) => {
+      // Edit the color of the specified segment. Launches the Sonador Color Picker Dialog.
+
+      const { segmentationService, UIDialogService } = servicesManager.services;
+      const color0 = segmentationService.getSegmentColor(viewportId, segmentationId, segmentIndex);
+      const rgbaColor0 = { r: color0[0], g: color0[1], b: color0[2], a: color0[3] / 255.0 };
+
+      cextUtils.callColorPickerDialog({
+        uiDialogService: UIDialogService,
+        title: 'Select Segment Color',
+        value: rgbaColor0,
+        centralize: true,
+        isDraggable: false,
+        showOverlay: true,
+      }).then(rgbaColor => {
+        const color = [rgbaColor.r, rgbaColor.g, rgbaColor.b, rgbaColor.a * 255.0];
+        segmentationService.setSegmentColor(viewportId, segmentationId, segmentIndex, color);
+      });
+    },
+
+    deleteSegment: ({ segmentationId, segmentIndex }) => {
+      // Delete a segment from a segmentation
+
+      const { segmentationService } = servicesManager.services;
+      segmentationService.removeSegment(segmentationId, segmentIndex);
+    },
+
+    toggleSegmentLock: ({ segmentationId, segmentIndex }) => {
+      // Toggle the lock state of a segment
+
+      const { segmentationService } = servicesManager.services;
+      segmentationService.toggleSegmentLocked(segmentationId, segmentIndex);
+    },
+
+    // -------------------------------------------------------------------------
+    // Volume rendering commands
+    // -------------------------------------------------------------------------
+
+    setViewportPreset: ({ viewportId, preset }) => {
+      const viewport = getCornerstone3dViewport(viewportId);
+      if (!viewport) {
+        return;
+      }
+      viewport.setProperties({ preset });
+      viewport.render();
+    },
+
+    setVolumeRenderingQuality: ({ viewportId, volumeQuality }) => {
+      const viewport = getCornerstone3dViewport(viewportId);
+      if (!viewport) {
+        return;
+      }
+      const { actor } = viewport.getActors()[0];
+      const mapper = actor.getMapper();
+      const image = mapper.getInputData();
+      const dims = image.getDimensions();
+      const spacing = image.getSpacing();
+
+      const spatialDiagonal = Math.sqrt(
+        Math.pow(dims[0] * spacing[0], 2) +
+        Math.pow(dims[1] * spacing[1], 2) +
+        Math.pow(dims[2] * spacing[2], 2)
+      );
+
+      let sampleDistance = spacing.reduce((a, b) => a + b) / 3.0;
+      sampleDistance /= volumeQuality > 1 ? 0.5 * Math.pow(volumeQuality, 2) : 1.0;
+
+      const samplesPerRay = spatialDiagonal / sampleDistance + 1;
+      mapper.setMaximumSamplesPerRay(samplesPerRay);
+      mapper.setSampleDistance(sampleDistance);
+      viewport.render();
+    },
+
+    shiftVolumeOpacityPoints: ({ viewportId, shift }) => {
+      const viewport = getCornerstone3dViewport(viewportId);
+      if (!viewport) {
+        return;
+      }
+      const { actor } = viewport.getActors()[0];
+      const ofun = actor.getProperty().getScalarOpacity(0);
+      const size = ofun.getSize();
+      const opacityPointValues = [];
+
+      for (let i = 0; i < size; i++) {
+        const point = [0, 0, 0, 0];
+        ofun.getNodeValue(i, point);
+        opacityPointValues.push(point);
+      }
+      opacityPointValues.forEach(point => { point[0] += shift; });
+
+      ofun.removeAllPoints();
+      opacityPointValues.forEach(point => { ofun.addPoint(...point); });
+      viewport.render();
+    },
+
+    setVolumeLighting: ({ viewportId, options }) => {
+      const viewport = getCornerstone3dViewport(viewportId);
+      if (!viewport) {
+        return;
+      }
+      const { actor } = viewport.getActors()[0];
+      const property = actor.getProperty();
+
+      if (options.shade !== undefined) { property.setShade(options.shade); }
+      if (options.ambient !== undefined) { property.setAmbient(options.ambient); }
+      if (options.diffuse !== undefined) { property.setDiffuse(options.diffuse); }
+      if (options.specular !== undefined) { property.setSpecular(options.specular); }
+      viewport.render();
     },
   };
 
-  window.vtkActions = actions;
-
   const definitions = {
-    requestNewSegmentation: {
-      commandFn: actions.requestNewSegmentation,
-      storeContexts: ['viewports'],
-      options: {},
-    },
-    jumpToSlice: {
-      commandFn: actions.jumpToSlice,
-      storeContexts: ['viewports'],
-      options: {},
-    },
     setSegmentationConfiguration: {
       commandFn: actions.setSegmentationConfiguration,
       storeContexts: ['viewports'],
       options: {},
+      context: vtkEnums.VIEWPORT,
     },
     setSegmentConfiguration: {
       commandFn: actions.setSegmentConfiguration,
       storeContexts: ['viewports'],
       options: {},
-    },
-    axial: {
-      commandFn: actions.axial,
-      storeContexts: ['viewports'],
-      options: {},
-    },
-    coronal: {
-      commandFn: actions.coronal,
-      storeContexts: ['viewports'],
-      options: {},
-    },
-    sagittal: {
-      commandFn: actions.sagittal,
-      storeContexts: ['viewports'],
-      options: {},
-    },
-    enableRotateTool: {
-      commandFn: actions.enableRotateTool,
-      options: {},
+      context: vtkEnums.VIEWPORT,
     },
     enableCrosshairsTool: {
       commandFn: actions.enableCrosshairsTool,
+      storeContexts: ['viewports'],
       options: {},
     },
-    enableLevelTool: {
-      commandFn: actions.enableLevelTool,
+    enableMprLevelTool: {
+      commandFn: actions.enableMprLevelTool,
+      storeContexts: ['viewports'],
       options: {},
     },
-    resetMPRView: {
-      commandFn: actions.resetMPRView,
+    resetMprView: {
+      commandFn: actions.resetMprView,
       options: {},
     },
-    setBlendModeToComposite: {
-      commandFn: actions.setBlendModeToComposite,
-      options: { blendMode: BlendMode.COMPOSITE_BLEND },
-    },
-    setBlendModeToMaximumIntensity: {
-      commandFn: actions.setBlendModeToMaximumIntensity,
-      options: { blendMode: BlendMode.MAXIMUM_INTENSITY_BLEND },
-    },
-    setBlendModeToMinimumIntensity: {
-      commandFn: actions.setBlendMode,
-      options: { blendMode: BlendMode.MINIMUM_INTENSITY_BLEND },
-    },
-    setBlendModeToAverageIntensity: {
-      commandFn: actions.setBlendMode,
-      options: { blendMode: BlendMode.AVERAGE_INTENSITY_BLEND },
-    },
-    setSlabThickness: {
-      // TODO: How do we pass in a function argument?
-      commandFn: actions.setSlabThickness,
+    initMprTools: {
+      commandFn: actions.initMprTools,
       options: {},
+      context: vtkEnums.VIEWPORT,
     },
-    increaseSlabThickness: {
-      commandFn: actions.changeSlabThickness,
-      options: {
-        change: 3,
-      },
-    },
-    decreaseSlabThickness: {
-      commandFn: actions.changeSlabThickness,
-      options: {
-        change: -3,
-      },
+    initMprImageSync: {
+      commandFn: actions.initMprImageSync,
+      options: {},
+      context: vtkEnums.VIEWPORT,
     },
     mpr2d: {
       commandFn: actions.mpr2d,
@@ -568,16 +490,97 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       options: {},
       context: 'VIEWER',
     },
-    getVtkApiForViewportIndex: {
-      commandFn: actions.getVtkApis,
-      context: 'VIEWER',
+
+    // Segmentation commands
+    editSegmentationLabel: {
+      commandFn: actions.editSegmentationLabel,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    addSegment: {
+      commandFn: actions.addSegment,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    editSegmentLabel: {
+      commandFn: actions.editSegmentLabel,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    editSegmentColor: {
+      commandFn: actions.editSegmentColor,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    deleteSegment: {
+      commandFn: actions.deleteSegment,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    toggleSegmentLock: {
+      commandFn: actions.toggleSegmentLock,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setFillAlpha: {
+      commandFn: createSetStyleCommand('fillAlpha'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setOutlineWidth: {
+      commandFn: createSetStyleCommand('outlineWidth'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setRenderFill: {
+      commandFn: createSetStyleCommand('renderFill'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setRenderFillInactive: {
+      commandFn: createSetStyleCommand('renderFillInactive'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setRenderOutline: {
+      commandFn: createSetStyleCommand('renderOutline'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setRenderOutlineInactive: {
+      commandFn: createSetStyleCommand('renderOutlineInactive'),
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+
+    // Volume rendering commands
+    setViewportPreset: {
+      commandFn: actions.setViewportPreset,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setVolumeRenderingQuality: {
+      commandFn: actions.setVolumeRenderingQuality,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    shiftVolumeOpacityPoints: {
+      commandFn: actions.shiftVolumeOpacityPoints,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    setVolumeLighting: {
+      commandFn: actions.setVolumeLighting,
+      options: {},
+      context: vtkEnums.VIEWPORT,
     },
   };
 
   return {
     definitions,
-    defaultContext: 'ACTIVE_VIEWPORT::VTK',
+    defaultContext: vtkEnums.ACTIVE_VIEWPORT,
   };
 };
+
 
 export default commandsModule;

@@ -11,9 +11,20 @@ const rgb2hex = (r, g, b) => {
   return '#' + [val2hex(r), val2hex(g), val2hex(b)].join('');
 };
 
+const hex2rgb = (hex) => {
+  // Convert a hexadecimal encoded color string ('#rrggbb' or 'rrggbb') to an RGB triad
+  const _hex = String(hex).replace('#', '');
+  return [
+    parseInt(_hex.substring(0, 2), 16),
+    parseInt(_hex.substring(2, 4), 16),
+    parseInt(_hex.substring(4, 6), 16),
+  ];
+};
+
 const color = {
   val2hex,
   rgb2hex,
+  hex2rgb,
 };
 
 export default color;

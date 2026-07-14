@@ -5,6 +5,7 @@ import {
   createStudyComment,
   fetchSeriesComments,
   fetchStudyComments,
+  fetchStudyWorklists,
 } from '../../../../../api/ext';
 
 
@@ -71,6 +72,18 @@ export const useStudyComments = (server, studyId) => {
   return useQuery({
     queryKey: ['studyDicomExtComments', studyId],
     queryFn: () => fetchStudyComments(server, studyId),
+    enabled: !!studyId,
+  });
+};
+
+
+export const useStudyWorklists = (server, studyId) => {
+  // Query the worklist items assigned to a study. Powers the review-history timeline in the
+  // Study Details drawer. A null/undefined studyId disables the query (ACL-gated at the caller).
+
+  return useQuery({
+    queryKey: ['studyWorklists', studyId],
+    queryFn: () => fetchStudyWorklists(server, studyId),
     enabled: !!studyId,
   });
 };

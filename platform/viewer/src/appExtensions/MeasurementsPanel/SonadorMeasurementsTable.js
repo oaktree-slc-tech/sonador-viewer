@@ -7,7 +7,7 @@ import { measurements, utils } from '@ohif/core';
 const { MeasurementApi } = measurements;
 
 
-const SonadorMeasurementTable = ({servicesManager, ...props}) => {
+const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}) => {
   // Version of the Sonador Measurement table which responds to changes in service state.
   // Table renders are controlled by changing the table GUID (component key).
   
@@ -31,7 +31,7 @@ const SonadorMeasurementTable = ({servicesManager, ...props}) => {
         // Create a new version string to trigger re-render of measurement table (required to reload table item data).
         // setTimeout is used to prevent nested component update issues.
         if (notYetUpdatedAtSource) {
-          setTimeout(() => { setVersion(utils.guid()); }, props.renderTimeout);
+          setTimeout(() => { setVersion(utils.guid()); }, renderTimeout);
         }
       });
     
@@ -75,9 +75,6 @@ SonadorMeasurementTable.propType = {
 }
 
 
-SonadorMeasurementTable.defaultProps = {
-  renderTimeout: 50,
-}
 
 
 

@@ -76,6 +76,12 @@ const processThumbnail = (study, displaySet) => {
     altImageText = 'SEG';
   } else if (Modality === 'SR') {
     altImageText = 'SR';
+  } else if (Modality === 'M3D') {
+    // M3D display sets carry an images array of InstanceMetadata for metadata queries,
+    // but the instances are encapsulated 3D models — not Cornerstone-renderable images.
+    // Attempting cornerstone.loadAndCacheImage on a WADO STL URI will fail; show the
+    // modality text instead, consistent with SEG and SR.
+    altImageText = 'M3D';
   } else if (images && images.length) {
     const imageIndex = Math.floor(images.length / 2);
     imageId = images[imageIndex].getImageId();

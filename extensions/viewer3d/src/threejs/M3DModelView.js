@@ -7,6 +7,7 @@ import OHIF, { utils, redux } from '@ohif/core';
 
 const { TypedArrayProp } = OHIF.classes;
 
+import * as THREE from 'three';
 import {
   Clock,
   BoxBufferGeometry,
@@ -31,15 +32,18 @@ import {
   PMREMGenerator,
   Box3,
   Vector3,
+  ACESFilmicToneMapping,
+  SRGBColorSpace,
+  PCFSoftShadowMap,
 } from 'three';
 
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
-import { MIMETYPE_GLB, MIMETYPE_STL } from '../OHIFDicom3DSopClassHandler.js';
+
+import CameraControls from 'camera-controls';
+CameraControls.install({ THREE });
+
+import { MIMETYPE_GLB, MIMETYPE_STL } from '../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
 
 export default class M3DModelView extends Component {
   // OHIF model view class (wraps a Three.js scene). Models are loaded from the modelFileUrl
@@ -56,6 +60,7 @@ export default class M3DModelView extends Component {
     onCreated: PropTypes.func,
     onDestroyed: PropTypes.func,
     cameraOptions: PropTypes.object.isRequired,
+    dollyToCursor : PropTypes.bool.isRequired,
     cameraStart: PropTypes.array.isRequired,
     renderOptions: PropTypes.object.isRequired,
     defaultGeometryColor: PropTypes.node.isRequired,
@@ -83,8 +88,9 @@ export default class M3DModelView extends Component {
       offset: 0,
       farEdgeBuffer: 3,
     },
+    dollyToCursor: true,
     cameraStart: [0, 0, 10],
-    renderOptions: { antialias: true },
+    renderOptions: { antialias: true, alpha: true, },
     defaultGeometryColor: 0x049ef4,
     coordinateTransform: {},
     env: { sigma: 0.0 },
@@ -95,65 +101,23 @@ export default class M3DModelView extends Component {
       dampingFactor: 0.025,
     },
     lightOptions: {
-      // ambient: { color: 0x000000, intensity: 1, },
-      hemisphere: { sky: 0x000000, ground: 'darkslategrey', intensity: 1.5 },
+      ambient: { color: 0x000000, intensity: 0.35, },
+      hemisphere: { sky: 0xbfc7d1, ground: 0x202020, intensity: 0.35 },
       directional: [
         // Directional ights to be added to the scene. The unitPos vector will
         // be multipled by the spatial dimensions of the model for scaling.
-        { color: 0x000000, intensity: 2, unitPos: [10, 10, 10] },
+        { color: 0xffffff, intensity: 2.6, unitPos: [1.8, 2.2, 2.2] },
+        { color: 0xaabbd6, intensity: 0.7, unitPos: [-2.0, 1.0, 1.0] },
+        { color: 0xffffff, intensity: 1.1, unitPos: [-1.2, 2.0, -2.0] },
       ],
       lights: [
         // Point lights to be added to the scene. The unitPos vector will be multipled
         // by the spatial dimensions of the model for scaling.
-        // { color: 0xffffff, unitPos: [0, 2, 0], intensity: 0.5 },
       ],
     },
     cine: {},
     deviceRenderDefault: 60,
   };
-
-  initGlbLoader() {
-    // Initialize GLB model loader
-    // @returns model loader instance
-    const { getStaticUrl } = this.props;
-
-    // Initialize GLTF loader
-    const loader = new GLTFLoader();
-
-    // Add Draco loader if static URL specified
-    if (getStaticUrl && _.isFunction(getStaticUrl) && getStaticUrl()) {
-      // Initialize DRACO loader and retrieve decoder from OHIF static URL.
-      // The DRACO loader encoders/decoders must be staged from a static server.
-      // If a static URL is not provided, the loader will be initialized without DRACO
-      // which may prevent some GLB assets from loading.
-      const dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath(getStaticUrl() + '/threejs/lib/draco/gltf/');
-
-      // Add support for DRACO to the GLB loader.
-      loader.setDRACOLoader(dracoLoader);
-    }
-
-    return loader;
-  }
-
-  initStlLoader() {
-    // Initialize SLT model loader
-    // @returns model loader instance
-    return new STLLoader();
-  }
-
-  initLoader() {
-    // Initialize loader instance for the viewport
-    const { modelType } = this.props;
-
-    if (modelType == MIMETYPE_GLB) {
-      return this.initGlbLoader();
-    } else if (modelType == MIMETYPE_STL) {
-      return this.initStlLoader();
-    }
-
-    throw new Error('Unsupported 3D model type');
-  }
 
   initRenderer() {
     // Initialize renderer
@@ -162,6 +126,15 @@ export default class M3DModelView extends Component {
 
     const renderer = new WebGLRenderer(roptions);
     renderer.outputEncoding;
+    renderer.outputColorSpace = SRGBColorSpace;
+    renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+
+    renderer.physicallyCorrectLights = true;
+    renderer.setClearColor(0x000000, 1);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = PCFSoftShadowMap;
+
     return renderer;
   }
 
@@ -186,102 +159,40 @@ export default class M3DModelView extends Component {
       cameraOptions: defaultCameraOptions,
       cameraStart: defaultCameraStart,
     } = this.props;
-    _.defaults(
-      options,
-      _.pick(
-        defaultCameraOptions,
-        'fov',
-        'near',
-        'far',
-        'offset',
-        'farEdgeBuffer'
-      )
-    );
+    _.defaults(options, _.pick(defaultCameraOptions, 'fov', 'near', 'far', 'offset', 'farEdgeBuffer'));
 
     // Camera aspect ratio
-    const aspect =
-      this.container.current.clientWidth / this.container.current.clientHeight;
+    const aspect = this.container.current.clientWidth / this.container.current.clientHeight;
 
     // Placeholder variables for calculating the camera settings based on
-    let fov, near, far, cstart;
-
-    // Create a box to (attempt) to calculate the model start position.
-    // Refer to https://wejn.org/2020/12/cracking-the-threejs-object-fitting-nut/ and
-    // https://discourse.threejs.org/t/find-the-size-of-a-loaded-gltf-model/38515/2 and
-    // https://stackoverflow.com/questions/14614252/how-to-fit-camera-to-object
-    // for background on sizing a Three.js scene, calculating a bounding volume,
-    // and determining camera parameters.
-    if (model) {
-      // Create a scene model and calculate size of scene
-      const box = new Box3().setFromObject(model);
-      const size = box.getSize(new Vector3());
-
-      // Figure out how to fit the box in the view:
-      // Refer to https://wejn.org/2020/12/cracking-the-threejs-object-fitting-nut/.
-      //
-      // 1. figure out horizontal FOV (on non-1.0 aspects)
-      // 2. figure out distance from the object in X and Y planes
-      // 3. select the max distance (to fit both sides in)
-      //
-      // The reason is as follows:
-      //
-      // Imagine a bounding box (BB) is centered at (0,0,0).
-      // Camera has vertical FOV (camera.fov) and horizontal FOV
-      // (camera.fov scaled by aspect, see fovh below)
-      //
-      // Therefore if you want to put the entire object into the field of view,
-      // you have to compute the distance as: z/2 (half of Z size of the BB
-      // protruding towards us) plus for both X and Y size of BB you have to
-      // figure out the distance created by the appropriate FOV.
-      //
-      // The FOV is always a triangle:
-      //
-      //  (size/2)
-      // +--------+
-      // |       /
-      // |      /
-      // |     /
-      // | F° /
-      // |   /
-      // |  /
-      // | /
-      // |/
-      //
-      // F° is half of respective FOV, so to compute the distance (the length
-      // of the straight line) one has to: `size/2 / Math.tan(F)`.
-      //
-      // FTR, from https://threejs.org/docs/#api/en/cameras/PerspectiveCamera
-      // the camera.fov is the vertical FOV.
-
-      fov = options.fov * (Math.PI / 180);
-      const fovh = 2 * Math.atan(Math.tan(fov / 2) * aspect);
-      let dx = size.z / 2 + Math.abs(size.x / 2 / Math.tan(fovh / 2));
-      let dy = size.y / 2 + Math.abs(size.y / 2 / Math.tan(fov / 2));
-      let cameraZ = Math.max(dx, dy);
-
-      // Offset the camera to avoid filling the whole canvas
-      if (_.isNumber(options.offset) && options.offset != 0) {
-        cameraZ *= options.offset;
-      }
-
-      // Camera start position
-      cstart = [defaultCameraStart[0], defaultCameraStart[1], cameraZ];
-
-      // Set the far plane of the camera so that it encompasses the whole object
-      const minZ = box.min.z;
-      let cameraFarEdge = minZ < 0 ? -minZ + cameraZ : cameraZ - minZ;
-      far = cameraFarEdge * options.farEdgeBuffer;
+    const camera = new PerspectiveCamera(options.fov, aspect, options.near, options.far);
+    if (!model) {
+      camera.position.set(...cameraStart);
+      return camera;
     }
 
-    // Create camera instance and set start position. Use calculated positions (if available)
-    // with fallbacks to default values.
-    const camera = new PerspectiveCamera(
-      options.fov,
-      aspect,
-      near || options.near,
-      far || options.far
-    );
-    camera.position.set(...(cstart || defaultCameraStart));
+    const fit = this.getModelFit(model);
+    const { size, center, radius } = fit;
+
+    const fov = camera.fov * (Math.PI / 180);
+    const fitHeightDistance = size.y / (2 * Math.tan(fov / 2));
+    const fitWidthDistance =
+      size.x / (2 * Math.tan(Math.atan(Math.tan(fov / 2) * aspect)));
+
+    let distance = Math.max(fitHeightDistance, fitWidthDistance);
+    distance += size.z * 0.75;
+
+    if (_.isNumber(options.offset) && options.offset > 0) {
+      distance *= options.offset;
+    } else {
+      distance *= 1.2;
+    }
+
+    camera.position.set(center.x, center.y, center.z + distance);
+    camera.near = Math.max(0.01, radius / 100);
+    camera.far = Math.max(100, distance + radius * options.farEdgeBuffer * 4);
+    camera.updateProjectionMatrix();
+    camera.lookAt(center);
 
     return camera;
   }
@@ -303,7 +214,7 @@ export default class M3DModelView extends Component {
     if (lightOptions.hemisphere) {
       const hemisphereLight = new HemisphereLight(
         lightOptions.hemisphere.sky,
-        lightOptions.hemisphere.grounnd,
+        lightOptions.hemisphere.ground,
         lightOptions.hemisphere.intensity
       );
       scene.add(hemisphereLight);
@@ -315,6 +226,7 @@ export default class M3DModelView extends Component {
       const size = box.getSize(new Vector3());
 
       if (lightOptions.directional && lightOptions.directional.length) {
+        
         // Add directional lights to scene
         _.each(lightOptions.directional, function (dl) {
           const dlight = new DirectionalLight(dl.color, dl.intensity);
@@ -328,6 +240,7 @@ export default class M3DModelView extends Component {
       }
 
       if (lightOptions.lights && lightOptions.lights.length) {
+        
         // Add points lights to the scene
         _.each(lightOptions.lights, function (l) {
           const light = new PointLight(l.color, l.intensity, 0);
@@ -353,7 +266,7 @@ export default class M3DModelView extends Component {
     const { env } = this.props;
 
     const scene = new Scene();
-    if (generator) {
+    if (generator && this.props.modelType === MIMETYPE_GLB) {
       scene.environment = generator.fromScene(
         new RoomEnvironment(),
         env.sigma || 0
@@ -364,18 +277,50 @@ export default class M3DModelView extends Component {
     return scene;
   }
 
-  initControls(renderer, camera) {
+  getModelFit(model) {
+    // Retrieve the mdoel bounding box, size, center, maximum dimensions and 
+    // interaction radius.
+
+    if (!model) {
+      return null;
+    }
+
+    const box = new Box3().setFromObject(model);
+    const size = box.getSize(new Vector3());
+    const center = box.getCenter(new Vector3());
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const radius = size.length() * 0.5;
+
+    return {
+      box,
+      size,
+      center,
+      maxDim,
+      radius,
+    };
+  }
+
+  initControls(renderer, camera, model) {
     // Initialize interactive controls for the scene
     const {
       interactionControlOptions: coptions,
       onInteractionChange,
       onInteractionStart,
       onInteractionEnd,
+      dollyToCursor,
     } = this.props;
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    if (coptions.target) {
-      controls.target.set(...coptions.target);
+    // Initialize controls
+    const controls = new CameraControls(camera, renderer.domElement);
+    controls.dollyToCursor = dollyToCursor
+
+    // Set controls orbit preferentially from the model center
+    if (model) {
+      const fit = this.getModelFit(model);
+      controls.fitToBox(fit.box, false);
+    } else if (coptions.target) {
+      controls.setTarget(...coptions.target);
     }
 
     // Add interaction event handlers
@@ -394,6 +339,8 @@ export default class M3DModelView extends Component {
       controls,
       _.pick(coptions, 'enablePan', 'enableDamping', 'dampingFactor')
     );
+
+    controls.update()
     return controls;
   }
 
@@ -403,117 +350,55 @@ export default class M3DModelView extends Component {
     return mixer;
   }
 
-  async fetchModelData(model_urls, options) {
-    // Fetch model data from the provided URL
-    // @returns array of model instances
-    const { defaultGeometryColor } = this.props;
+  loadModelData() {
+    // Assemble the scene from the per-viewport instances hydrated from the M3D geometry cache.
+    // Each model carries an already-hydrated Three.js instance (see hydrateM3DInstance):
+    //   GLB -> { scene, animations }   STL -> Mesh (shared cached geometry, per-instance material)
+    const { modelType, models, coordinateTransform } = this.props;
 
-    options = options || {};
-    _.defaults(options, {
-      defaultColor: defaultGeometryColor,
-      colors: [],
-    });
+    // For GLB scenes, ensure that only a single model is defined.
+    if (modelType == MIMETYPE_GLB && models && models.length > 1) {
+      throw new Error(
+        'Unable to create scene, only a single GLB file is supported per series by the viewer'
+      );
+    }
 
-    // Retrieve model data
-    var _component = this;
-    const sceneComponents = await Promise.all(
-      _.map(model_urls, function (murl) {
-        return _component.loader.loadAsync(murl);
-      })
-    );
-
-    // Unpack model data to a scene
     let sceneData;
-    _.each(sceneComponents, function (s, idx) {
-      if (!sceneData && s.scene) {
-        // GLB file containing a complete scene
-        sceneData = s;
-      } else {
-        // STL files
+    _.each(models, function (m) {
+      const inst = m.instance;
+      if (!inst) {
+        return;
+      }
 
-        // Create scene data structure
+      if (inst.scene) {
+        // GLB: a hydrated { scene, animations }
+        sceneData = inst;
+      } else {
+        // STL: a hydrated Mesh
         if (!sceneData) {
           sceneData = {};
         }
         if (!sceneData.geometries) {
           sceneData.geometries = [];
         }
-
-        // Create mesh instances for loaded STL data
-        if (s.type == 'BufferGeometry') {
-          // Set color of the model
-          let mcolor;
-          if (options.colors[idx]) {
-            mcolor = new Color(options.colors[idx]).getHex();
-          } else {
-            mcolor = options.defaultColor;
-          }
-
-          const mtx = new MeshPhongMaterial({
-            color: mcolor,
-          });
-          const msh = new Mesh(s, mtx);
-          sceneData.geometries.push(msh);
-        }
+        sceneData.geometries.push(inst);
       }
     });
 
-    return sceneData;
-  }
+    this.sceneData = sceneData;
+    this.model = sceneData ? sceneData.scene : undefined;
 
-  async loadModelData() {
-    // Load model data from file
-    const _component = this;
-    const { modelType, models, coordinateTransform } = this.props;
-
-    // Retrieve models and add to scene
-    const model_urls = _.map(models, function (m) {
-      // Ensure that the model instance type matches the scene type
-      if (modelType != m.modelType) {
-        throw new Error(
-          'Unable to create scene, model type does not match scene type.'
-        );
-      }
-
-      return m.modelFileUrl;
-    });
-
-    // For GLB scenes, ensure that only a single model is defined.
-    if (modelType == MIMETYPE_GLB && model_urls.length > 1) {
-      throw new Error(
-        'Unable to create scene, only a single GLB file is supported per series by the viewer'
-      );
-    }
-
-    if (model_urls.length) {
-      this.sceneData = await this.fetchModelData(model_urls, {
-        colors: _.map(models, (m) => m.modelColor),
-      });
-      this.model = this.sceneData ? this.sceneData.scene : undefined;
-    }
-
-    // Add full model to the scene
+    // Add full model (GLB scene) to the scene
     if (this.model) {
-      // Add model to the scene
       this.scene.add(this.model);
     }
 
-    // Add geometries to the scene
-    if (
-      this.sceneData &&
-      this.sceneData.geometries &&
-      this.sceneData.geometries.length
-    ) {
+    // Add STL geometries to the scene
+    if (this.sceneData && this.sceneData.geometries && this.sceneData.geometries.length) {
+
       //  Create a group for the geometries and add all meshes to the group
       const mgroup = new Group();
-      _.each(this.sceneData.geometries, function (g) {
-        // Initialize wireframe
-        // var g = new EdgesGeometry(m.geometry);
-        // var mtx = new LineBasicMaterial({ color: 0x049ef4, });
-        // var wf = new LineSegments(g, mtx);
-
-        mgroup.add(g);
-      });
+      _.each(this.sceneData.geometries, function (g) { mgroup.add(g); });
 
       // Apply coordinate transformations
       if (coordinateTransform && coordinateTransform.rotation) {
@@ -527,7 +412,7 @@ export default class M3DModelView extends Component {
         this.sceneData.scene = mgroup;
       }
 
-      // If no moddel specified as part of an existing scene, make the group the model.
+      // If no model specified as part of an existing scene, make the group the model.
       if (!this.model) {
         this.model = mgroup;
       }
@@ -535,6 +420,51 @@ export default class M3DModelView extends Component {
       // Add the group to the scene
       this.scene.add(mgroup);
     }
+  }
+
+  getModelInstance(geometryId) {
+    // Resolve the per-viewport Three.js instance (STL: Mesh) for an M3D geometry-cache id
+    const model = _.find(this.props.models, (m) => m.geometryId == geometryId);
+    return model ? model.instance : undefined;
+  }
+
+  setModelVisibility(geometryId, visible) {
+    // Toggle the display of a single model within the scene
+    const instance = this.getModelInstance(geometryId);
+    if (instance) {
+      instance.visible = !!visible;
+    }
+  }
+
+  setModelWireframe(geometryId, wireframe) {
+    // Toggle wireframe rendering for a single model. STL instances own their material
+    // (hydrateM3DInstance), so the mutation stays local to this viewport.
+    const instance = this.getModelInstance(geometryId);
+    if (instance && instance.material) {
+      instance.material.wireframe = !!wireframe;
+    }
+  }
+
+  setModelColor(geometryId, color) {
+    // Set the material colour of a single model (accepts hex strings or numeric colours)
+    const instance = this.getModelInstance(geometryId);
+    if (instance && instance.material && instance.material.color) {
+      instance.material.color.set(color);
+    }
+  }
+
+  getModelPresentation(geometryId) {
+    // Retrieve the current presentation state for a single model
+    const instance = this.getModelInstance(geometryId);
+    if (!instance) {
+      return undefined;
+    }
+    return {
+      visible: instance.visible,
+      wireframe: instance.material ? !!instance.material.wireframe : false,
+      color: instance.material && instance.material.color
+        ? '#' + instance.material.color.getHexString() : undefined,
+    };
   }
 
   resize() {
@@ -629,13 +559,18 @@ export default class M3DModelView extends Component {
       // Animate the model
       window.requestAnimationFrame(this.animate.bind(this));
 
+      // getDelta must be called every frame unconditionally so the clock stays
+      // in sync. CameraControls.update() requires a delta time (in seconds) for
+      // its damping/physics simulation — omitting it causes NaN state corruption,
+      // which manifests as jitter and a black screen on zoom.
+      const delta = this.clock.getDelta();
+
       if (cinePlaying) {
-        const mixerUpdateDelta = this.clock.getDelta();
-        this.mixer.update(mixerUpdateDelta);
+        this.mixer.update(delta);
       }
 
       // Update navigation and re-render
-      this.controls.update();
+      this.controls.update(delta);
       this.renderScene();
     }
   }
@@ -643,9 +578,6 @@ export default class M3DModelView extends Component {
   async componentDidMount() {
     // Initialize Three.js container and components
     const { modelType } = this.props;
-
-    // Initialize model loader
-    this.loader = this.initLoader();
 
     // Create clock and renderer, add canvas element to the component, set initial size
     this.clock = this.initClock();
@@ -670,7 +602,7 @@ export default class M3DModelView extends Component {
 
     // Create scene and controls
     this.camera = this.initCamera(this.model);
-    this.controls = this.initControls(this.renderer, this.camera);
+    this.controls = this.initControls(this.renderer, this.camera, this.model);
 
     // Add lights to scene
     this.lightScene(this.model, this.scene);
@@ -693,6 +625,11 @@ export default class M3DModelView extends Component {
         startAnimationPlayback: this.startAnimationPlayback.bind(this),
         stopAnimationPlayback: this.stopAnimationPlayback.bind(this),
         setAnimationFrameRate: this.setAnimationFrameRate.bind(this),
+        getModelInstance: this.getModelInstance.bind(this),
+        setModelVisibility: this.setModelVisibility.bind(this),
+        setModelWireframe: this.setModelWireframe.bind(this),
+        setModelColor: this.setModelColor.bind(this),
+        getModelPresentation: this.getModelPresentation.bind(this),
         _component: _component,
       };
 

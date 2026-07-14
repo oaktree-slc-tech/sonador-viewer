@@ -150,9 +150,5 @@ StructureSetItem.propTypes = {
   color: PropTypes.array.isRequired,
 };
 
-StructureSetItem.defaultProps = {
-  itemClass: '',
-  onClick: () => {},
-};
 
 export default StructureSetItem;

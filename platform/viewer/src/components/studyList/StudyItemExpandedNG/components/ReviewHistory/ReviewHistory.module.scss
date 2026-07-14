@@ -1,0 +1,111 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: #FFFFFF;
+
+  // Bounded like the sibling Metadata panel: as a flex item in the drawer's contentData row,
+  // an unconstrained width (flex min-width: auto) refuses to shrink and pushes the Comments
+  // panel out past the drawer's right edge on tablet widths
+  width: 100%;
+  min-width: 200px;
+  max-width: 340px;
+}
+
+.loaderWrapper {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.placeholder {
+  color: #BEBEBF;
+  padding: 12px 0;
+}
+
+.worklistItem {
+  border: 1px solid #2A2A2E;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.procedureBlock {
+  margin-bottom: 12px;
+
+  .procedureTitle {
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .procedureRow {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+
+    .procedureLabel {
+      color: #BEBEBF;
+      min-width: 140px;
+    }
+
+    .procedureValue {
+      color: #FFFFFF;
+    }
+  }
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid #2E46E9;
+}
+
+.timelineEntry {
+  position: relative;
+  padding: 0 0 14px 16px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #2E46E9;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.timelineHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+
+  .transition {
+    font-weight: 600;
+  }
+
+  .timestamp {
+    color: #BEBEBF;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+}
+
+.actor {
+  color: #BEBEBF;
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.note {
+  margin-top: 6px;
+  padding: 8px;
+  background: #000;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}

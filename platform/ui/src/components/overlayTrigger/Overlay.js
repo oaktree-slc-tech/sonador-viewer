@@ -5,7 +5,7 @@ import PropTypes from 'prop-types';
 
 import Fade from './Fade';
 
-function Overlay({ animation, children, ...props }) {
+function Overlay({ animation = Fade, rootClose = false, show = false, placement = 'right', children, ...props }) {
   const transition = animation === true ? Fade : animation || null;
   let child;
 
@@ -18,7 +18,7 @@ function Overlay({ animation, children, ...props }) {
   }
 
   return (
-    <BaseOverlay {...props} transition={transition}>
+    <BaseOverlay {...props} show={show} rootClose={rootClose} placement={placement} transition={transition}>
       {child}
     </BaseOverlay>
   );
@@ -79,12 +79,6 @@ Overlay.propTypes = {
    */
   placement: PropTypes.oneOf(['top', 'right', 'bottom', 'left']),
   children: PropTypes.node,
-};
-Overlay.defaultProps = {
-  animation: Fade,
-  rootClose: false,
-  show: false,
-  placement: 'right',
 };
 
 export default Overlay;

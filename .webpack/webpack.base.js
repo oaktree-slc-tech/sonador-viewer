@@ -71,6 +71,18 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
         generator: {
           filename: 'static/wasm/[name][hash][ext]',
         },
+      }, {
+        test: /\.(png|jpg|jpeg|gif|svg)$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/images/[name][hash][ext]',
+        },
+      }, {
+        test: /\.(woff|woff2|ttf|eot)$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/fonts/[name][hash][ext]',
+        },
       }],
     },
     resolve: {
@@ -91,6 +103,7 @@ module.exports = (env, argv, { SRC_DIR = 'src', DIST_DIR = 'dist' }) => {
         path.resolve(__dirname, '../../../node_modules'),
         path.resolve(__dirname, '../platform/viewer/node_modules'),
         path.resolve(__dirname, '../platform/ui/node_modules'),
+        path.resolve(__dirname, '../platform/ui-next/node_modules'),
         // TODO check if i18n works, add i18n node_modules if not
         SRC_DIR,
       ],

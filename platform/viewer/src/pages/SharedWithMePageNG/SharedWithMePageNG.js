@@ -81,7 +81,7 @@ export default function SharedWithMePageNG() {
   };
 
   return (
-    <Layout noHorizontalPadding>
+    <Layout noHorizontalPadding fixedHeight>
       {(serverCount > 0) && (
         <StudyListNG
           title="Shared"

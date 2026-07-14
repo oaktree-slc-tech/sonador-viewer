@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { toast } from 'react-hot-toast';
 
 // OHIF Server Components
@@ -41,7 +41,6 @@ import 'regenerator-runtime/runtime';
 import viewerPackage from '../package.json';
 
 import App from './App.js';
-import store from './store';
 
 const initOHIFViewer = function () {
   // Initialize OHIF viewer
@@ -83,37 +82,37 @@ const initOHIFViewer = function () {
 
   // Initialize and render application
   const app = React.createElement(App, appProps, null);
-  ReactDOM.render(app, document.getElementById('root'), function () {
-    // Retrieve Sonador PACS server list
-    if (window.sonador && window.sonador.host) {
-      var sonador_pacsurl = window.sonador.host + window.sonador.api.pacs;
+  createRoot(document.getElementById('root')).render(app);
 
-      fetch(sonador_pacsurl, {
-        credentials: 'include',
+  // Retrieve Sonador PACS server list
+  if (window.sonador && window.sonador.host) {
+    var sonador_pacsurl = window.sonador.host + window.sonador.api.pacs;
+
+    fetch(sonador_pacsurl, {
+      credentials: 'include',
+    })
+      .then( async (response) => {
+        if (!response.ok) {
+          const errorText = await response.text();
+          toast.error('Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.');
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        return response.json();
       })
-        .then( async (response) => {
-          if (!response.ok) {
-            const errorText = await response.text();
-            toast.error('Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.');
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-          }
-          return response.json();
-        })
-        .then(function (servers) {
-          if (!Array.isArray(servers)) servers = [servers];
+      .then(function (servers) {
+        if (!Array.isArray(servers)) servers = [servers];
 
-          // Set dicomWeb server list and fetch studies
-          window.config.servers.dicomWeb = servers;
-          utils.addServers(window.config.servers, store);
-        })
-        .catch(function (err) {
-          console.error(
-            'Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.',
-            err
-          );
-        });
-    }
-  });
+        // Set dicomWeb server list and fetch studies
+        window.config.servers.dicomWeb = servers;
+        utils.addServers(window.config.servers, window.store);
+      })
+      .catch(function (err) {
+        console.error(
+          'Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.',
+          err
+        );
+      });
+  }
 };
 
 // Check for Sonador config URL, if present, fetch the configuration

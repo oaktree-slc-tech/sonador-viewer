@@ -30,6 +30,7 @@ import {
   SelectTree,
   SimpleDialog,
   SimpleViewerDialog,
+  SimpleDialogShell,
   EditDescriptionDialog,
   SaveDicomSeriesDialog,
   StudyBrowser,
@@ -113,6 +114,10 @@ const workflow = {
 
 
 export {
+
+  // Dialogs
+  SimpleViewerDialog,
+  SimpleDialogShell,
   
   // Elements
   ICONS,

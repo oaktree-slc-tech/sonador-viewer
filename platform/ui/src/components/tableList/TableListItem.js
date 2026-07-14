@@ -26,7 +26,7 @@ export class TableListItem extends Component {
     return (
       <div className={`tableListItem ${this.props.itemClass}`} onClick={this.onItemClick}>
         <div className={`itemIndex ${this.props.itemMetaClass}`}>
-          {this.props.itemIndex}
+          <div className="tableitem-index">{this.props.itemIndex}</div>
           {this.props.itemMeta}
           <span className="warning-icon">
             <Icon name="exclamation-triangle" />

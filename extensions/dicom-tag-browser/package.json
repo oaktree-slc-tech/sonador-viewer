@@ -28,8 +28,9 @@
   },
   "peerDependencies": {
     "@ohif/core": "^2.6.0",
+    "@ohif/extension-cornerstone": "^2.0.0",
     "dcmjs": "0.38.3",
-    "react": "^16.8.6"
+    "react": "^18.3.0"
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",

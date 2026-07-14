@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Navigate,useNavigate } from 'react-router-dom';
 
-import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Svg/svgs/close.svg';
-import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
+// The primary toolbar's own close glyph: full-bleed square viewBox, currentColor stroke
+import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 import { ReactComponent as LeftArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/leftArrow.svg';
 import { ReactComponent as RightArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/rightArrow.svg';
 
@@ -55,15 +55,9 @@ export default function WorkListViewerPageNG() {
             }}
             className={styles.exit}
           >
-            <CloseIcon fill="#FFFFFF" />
+            <CloseIcon />
             <span>Exit</span>
           </button>
-          <div>
-            <button className={styles.filters}>
-              <FiltersIcon fill="#D3D3D3" />
-              <span>Filters</span>
-            </button>
-          </div>
           <div className={styles.studyItemData}>
             <div className={styles.studyDataItem}>
               <span>Patient Name</span>
@@ -73,6 +67,22 @@ export default function WorkListViewerPageNG() {
               <span>MRN</span>
               <span>{selectedStudy.original?.mrn?.value ?? "N/A"}</span>
             </div>
+            {selectedStudy.original?.ReasonForReview?.value && (
+              <div className={styles.studyDataItem}>
+                <span>Reason for Review</span>
+                <span className={styles.longValue} title={selectedStudy.original.ReasonForReview.value}>
+                  {selectedStudy.original.ReasonForReview.value}
+                </span>
+              </div>
+            )}
+            {selectedStudy.original?.RequestedProcedure?.value && (
+              <div className={styles.studyDataItem}>
+                <span>Requested Procedure</span>
+                <span className={styles.longValue} title={selectedStudy.original.RequestedProcedure.value}>
+                  {selectedStudy.original.RequestedProcedure.value}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className={styles.rightHeader}>

@@ -13,7 +13,7 @@ import vtkVolumeColorPresets, {
 
 import './vtkVolumeColorPresetSelector.css';
 
-export default function VtkVolumeColorPresetSelector({ button, toolbarClickCallback, defaultColorPreset }) {
+export default function VtkVolumeColorPresetSelector({ button, toolbarClickCallback, defaultColorPreset = VTK_VOLUME_CPROFILE_CT_BONE }) {
   // Control which can be used to change the color preset options of a VTK volume
 
   // Retrieve modality for the currently active display set
@@ -86,7 +86,4 @@ export default function VtkVolumeColorPresetSelector({ button, toolbarClickCallb
 VtkVolumeColorPresetSelector.propTypes = {
   toolbarClickCallback: PropTypes.func.isRequired,
   defaultColorPreset: PropTypes.string.isRequired,
-};
-VtkVolumeColorPresetSelector.defaultProps = {
-  defaultColorPreset: VTK_VOLUME_CPROFILE_CT_BONE,
 };

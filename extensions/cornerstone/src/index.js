@@ -10,17 +10,35 @@ import { createDicomLocalApi } from './DicomLocalDataSource';
 import { getEnabledElement, setEnabledElement } from './state';
 import SyncGroupService from './services/SyncGroupService';
 import CornerstoneViewportService from './services/ViewportService/CornerstoneViewportService';
+import SegmentationService from './services/SegmentationService';
+
+import {
+  mapSegmentationToDisplay, useViewportSegmentations, 
+} from './hooks/useViewportSegmentations';
+
+import SonadorSegmentationHeader from './components/SonadorSegmentationHeader';
+import DicomTagBrowser from './components/DicomTagBrowser/DicomTagBrowser';
 
 import toolbarModule from './toolbarModule';
 import commandsModule from './commandsModule';
 
 import init from './init';
+import utils from './utils';
+import Enums from './enums';
 
 const { DisplaySetService, CustomizationService } = OHIF;
 const cornerstoneState = {
   setEnabledElement,
   getEnabledElement,
 };
+const hooks = {
+  useViewportSegmentations,
+  hookUtils: { mapSegmentationToDisplay, }
+}
+const components = {
+  SonadorSegmentationHeader,
+  DicomTagBrowser,
+}
 
 
 export default {
@@ -45,6 +63,7 @@ export default {
     // MeasurementService and DicomMetadataService.
     servicesManager.registerService(CornerstoneViewportService.REGISTRATION)
     servicesManager.registerService(SyncGroupService.REGISTRATION);
+    servicesManager.registerService(SegmentationService.REGISTRATION);
 
     init({ servicesManager, commandsManager, configuration });
   },
@@ -82,4 +101,4 @@ export default {
 };
 
 
-export { CornerstoneViewportDownloadForm, cornerstoneState, createDicomLocalApi };
+export { CornerstoneViewportDownloadForm, cornerstoneState, createDicomLocalApi, utils, hooks, components, Enums };

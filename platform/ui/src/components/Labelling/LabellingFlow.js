@@ -24,19 +24,19 @@ const LabellingFlow = ({
   //    by clicking on an "Accept" button.
 
   measurementData,
-  editLocation,
-  locationAttr,
-  locationLabelAttr,
-  editDescription,
-  skipAddLabelButton,
+  editLocation = false,
+  locationAttr = 'location',
+  locationLabelAttr = 'locationLabel',
+  editDescription = false,
+  skipAddLabelButton = false,
   updateLabelling,
   labellingDoneCallback,
-  editDescriptionOnDialog,
-  labelData,
-  labelWorkflowTitle,
-  relabelButtonTitle,
-  fadeOutTimeout,
-  searchPlaceholder,
+  editDescriptionOnDialog = false,
+  labelData = OHIFLabellingData,
+  labelWorkflowTitle = 'Assign Tag',
+  relabelButtonTitle = 'Retag',
+  fadeOutTimeout = 1000,
+  searchPlaceholder = 'Search tags',
 }) => {
   const [fadeOutTimer, setFadeOutTimer] = useState();
   const [showComponent, setShowComponent] = useState(true);
@@ -265,19 +265,6 @@ LabellingFlow.propTypes = {
 };
 
 
-LabellingFlow.defaultProps = {
-  skipAddLabelButton: false,
-  editLocation: false,
-  locationAttr: 'location',
-  locationLabelAttr: 'locationLabel',
-  editDescription: false,
-  editDescriptionOnDialog: false,
-  labelData: OHIFLabellingData,
-  labelWorkflowTitle: 'Assign Tag',
-  relabelButtonTitle: 'Retag',
-  fadeOutTimeout: 1000,
-  searchPlaceholder: 'Search tags',
-};
 
 
 export default LabellingFlow;

@@ -17,6 +17,7 @@ import * as RoutesUtil from './routes/routesUtil';
 import './OHIFStandaloneViewer.css';
 import './variables.css';
 import './theme-tide.css';
+import '@ohif/ui-next/src/tailwind-integration.css';
 
 const {
   actions: { setActiveServer },

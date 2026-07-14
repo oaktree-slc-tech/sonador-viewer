@@ -6,14 +6,15 @@ import redux from './redux';
 
 import { logVtkError } from './utils/errors.js';
 
-import LoadingIndicator from './ohifComponents/LoadingIndicator.js';
+import LoadingIndicator from './components/LoadingIndicator.js';
 
 // VTK volume tools
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import vtkVolumeColorPresetSelector from './toolbarComponents/vtkVolumeColorPresetSelector.js';
+import DisplaySetAttributeActiveToolbarButton from './toolbarComponents/DisplaySetAttributeActiveToolbarButton';
+import createViewportToggleFeatureCommand from './utils/createViewportToggleFeatureCommand.js';
 import applyVtkColorPreset from './utils/volume/applyVtkColorPreset.js';
 import applyVtkVolumeRenderOptions from './utils/volume/applyVtkVolumeRenderOptions.js';
-import setVtkVolumeInteractorStyle from './utils/volume/setVtkVolumeInteractorStyle.js';
 import vtkInteractorStyleVolumeBase from './utils/volume/vtkInteractorStyleVolumeBase.js';
 import vtkVolumeColorPresets, {
   getDefaultVolumePresetForModality,
@@ -41,8 +42,13 @@ import {
   getVolumeSegmentations,
   inspectVtkLabelmapImage,
   purgeLocalVolume,
+  purgeVolumeCache,
   vtkVolume2vtkImage,
   vtkImage2CornerstoneImageOptions,
+  forceClearSegment,
+  getCornerstone3dViewport,
+  removeVolumeActors,
+  terminateWorkerComputeJobs,
 } from './utils/cornerstone3d.js';
 
 // Tools for working with VTK data
@@ -63,7 +69,6 @@ const vtkUtils = {
   vtkInteractorStyleVolumeBase,
   applyVtkVolumeRenderOptions,
   applyVtkColorPreset,
-  setVtkVolumeInteractorStyle,
 
   // Logging and error display
   logVtkError,
@@ -72,13 +77,34 @@ const vtkUtils = {
 // Commands module and toolbar module
 import commandsModule from './commandsModule.js';
 import toolbarModule from './toolbarModule.js';
-import withCommandsManager from './withCommandsManager.js';
+import withCommandsManager from './connectedComponents/withCommandsManager.js';
 
 
 // Tools for Working with Cornerstone3D
 import Cornerstone3DBaseView from './components/Cornerstone3DBaseView.js';
 import Cornerstone3DLabelmapBaseView from './components/Cornerstone3DLabelmapBaseView.js';
 import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView.js';
+
+// Volume Rendering controls
+import { VolumeRenderingMenuButton } from './components/VolumeRendering/VolumeRenderingMenuButton';
+import { VolumeRenderingOptions } from './components/VolumeRendering/VolumeRenderingOptions';
+import { VolumeRenderingPresets } from './components/VolumeRendering/VolumeRenderingPresets';
+import { VolumeRenderingPresetsContent } from './components/VolumeRendering/VolumeRenderingPresetsContent';
+import { VolumeRenderingQuality } from './components/VolumeRendering/VolumeRenderingQuality';
+import { VolumeShift } from './components/VolumeRendering/VolumeShift';
+import { VolumeLighting } from './components/VolumeRendering/VolumeLighting';
+import { VolumeShade } from './components/VolumeRendering/VolumeShade';
+
+import ViewportGridOverlayTool from './components/tools/ViewportGridOverlayTool';
+import SonadorZoomTool from './components/tools/SonadorZoomTool';
+
+import Enums from './enums';
+
+
+const cornerstone3dViewportTools = {
+  ViewportGridOverlayTool, SonadorZoomTool, getCornerstone3dViewport, removeVolumeActors
+}
+
 
 const cornerstone3dUtils = {
 
@@ -89,20 +115,31 @@ const cornerstone3dUtils = {
   cacheVtkImage,
   cacheVtkLabelmapImage,
   purgeLocalVolume,
+  purgeVolumeCache,
   vtkImage2CornerstoneImageOptions,
   getVolumeAnnotations,
   getVolumeSegmentations,
   inspectVtkLabelmapImage,
   vtkVolume2vtkImage,
+  forceClearSegment,
+  getCornerstone3dViewport,
+  removeVolumeActors,
+  terminateWorkerComputeJobs,
+
+  viewportTools: cornerstone3dViewportTools,
+}
+
+
+// Toolbar Components
+const toolbarComponents = {
+  DisplaySetAttributeActiveToolbarButton,
 }
 
 
 
 // OHIF VTK Extension
 const vtkExtension = {
-  /**
-   * Only required property. Should be a unique value across all extensions.
-   */
+ 
   id: 'vtk',
   version: vtkVersionPackage.version,
 
@@ -130,9 +167,11 @@ const vtkExtension = {
 
 
 export default vtkExtension;
-export { vtkExtension, redux, vtkUtils, cornerstone3dUtils,
-  OHIFVtkBaseViewport, Cornerstone3DBaseView, Cornerstone3DLabelmapBaseView, Cornerstone3DInspectionView, 
-  LoadingIndicator, vtkVolumeColorPresetSelector };
-
-// loadLocales();
+export {
+  Enums, vtkExtension, redux, vtkUtils, cornerstone3dUtils, cornerstone3dViewportTools, toolbarComponents,
+  OHIFVtkBaseViewport, Cornerstone3DBaseView, Cornerstone3DLabelmapBaseView, Cornerstone3DInspectionView,
+  LoadingIndicator, vtkVolumeColorPresetSelector, DisplaySetAttributeActiveToolbarButton, createViewportToggleFeatureCommand,
+  VolumeRenderingMenuButton, VolumeRenderingOptions, VolumeRenderingPresets, VolumeRenderingPresetsContent,
+  VolumeRenderingQuality, VolumeShift, VolumeLighting, VolumeShade,
+};
 

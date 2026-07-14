@@ -13,7 +13,7 @@ import TabletMobileHeader from './components/TabletMobileHeader/TabletMobileHead
 import styles from './Layout.module.scss';
 
 
-export default function Layout({ children, type, noHorizontalPadding = false }) {
+export default function Layout({ children, type, noHorizontalPadding = false, fixedHeight = false }) {
   const { setDevice, isDesktop } = useDeviceStore();
 
   const handleResize = () => {
@@ -31,7 +31,7 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
   }, []);
 
   return (
-    <>
+    <div className={classNames({ [styles.fixedHeightShell]: fixedHeight })}>
       {isDesktop && (
         <WhiteLabelingContext.Consumer>
           {(whiteLabeling) => (
@@ -42,7 +42,7 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
          </WhiteLabelingContext.Consumer>
       )}
       {!isDesktop && <TabletMobileHeader />}
-      <div className={styles.contentContainer} >
+      <div className={classNames(styles.contentContainer, { [styles.fixedHeight]: fixedHeight })} >
         <div className={styles.wrapper}>
           <div
             className={classNames(styles.content, {
@@ -54,7 +54,7 @@ export default function Layout({ children, type, noHorizontalPadding = false }) 
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -63,4 +63,5 @@ Layout.propTypes = {
   children: PropTypes.node.isRequired,
   type: PropTypes.oneOf(['default', 'settings']),
   noHorizontalPadding: PropTypes.bool,
+  fixedHeight: PropTypes.bool,
 };

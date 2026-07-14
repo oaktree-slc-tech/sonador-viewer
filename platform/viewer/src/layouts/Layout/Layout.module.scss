@@ -20,12 +20,12 @@
     .content {
       background-color: #1e1f23;
       border-radius: 40px 0 0 40px;
-      padding: 50px 0 100px;
+      padding: 20px 0 100px;
       color: #fff;
       min-height: calc(100dvh - 30px);
 
       @include lg {
-        padding: 35px 0 100px;
+        padding: 25px 0 100px;
         border-radius: 10px 10px 0 0;
       }
 
@@ -55,6 +55,42 @@
       }
     }
   }
+
+  // Fixed-viewport mode (opt-in per page): the page itself never scrolls; the content area
+  // becomes a flex column so a designated region (e.g. the study results table) can act as
+  // the single scroller. Fills the height the .fixedHeightShell leaves after the tablet
+  // header (the desktop sidebar is position: fixed, so it takes no shell height).
+  &.fixedHeight {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+
+    .wrapper {
+      height: 100%;
+      box-sizing: border-box;
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+        padding-bottom: 0;
+      }
+    }
+  }
+}
+
+// Viewport-locked page shell for fixedHeight mode: a flex column so normal-flow chrome
+// (the tablet/mobile header) keeps its natural height and the content container flexes
+// to exactly the remainder on every device width.
+.fixedHeightShell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .logoWrapper {

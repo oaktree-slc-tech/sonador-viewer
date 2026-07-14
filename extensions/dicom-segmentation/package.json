@@ -29,13 +29,13 @@
   },
   "peerDependencies": {
     "@ohif/core": "^0.50.0",
-    "@ohif/extension-seg-editor": "^0.1.0",
+    "@ohif/extension-seg-editor": "^0.2.0",
     "cornerstone-core": "^2.6.1",
     "cornerstone-tools": "^6.0.10",
     "dcmjs": "0.29.3",
     "prop-types": "^15.6.2",
-    "react": "^16.8.6",
-    "react-dom": "^16.8.6"
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
   },
   "dependencies": {
     "@babel/runtime": "^7.5.5",

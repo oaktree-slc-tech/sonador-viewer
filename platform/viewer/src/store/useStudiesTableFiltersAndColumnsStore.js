@@ -24,6 +24,20 @@ export const useStudiesTableFiltersAndColumnsStore = create(
     {
       name: 'studies-filters-and-columns',
       storage: createJSONStorage(() => localStorage),
+      version: 1,
+      migrate: (persistedState, version) => {
+        // v0 -> v1: worklist tables gained the ReasonForReview column (orthanc-sonador#54).
+        // Persisted column selections predate it, so splice it in directly after Status.
+        if (version < 1 && Array.isArray(persistedState?.workListStudiesSelectedColumns)) {
+          const columns = [...persistedState.workListStudiesSelectedColumns];
+          if (!columns.includes('ReasonForReview')) {
+            const statusIndex = columns.indexOf('Status');
+            columns.splice(statusIndex >= 0 ? statusIndex + 1 : columns.length, 0, 'ReasonForReview');
+            persistedState.workListStudiesSelectedColumns = columns;
+          }
+        }
+        return persistedState;
+      },
     }
   )
 );

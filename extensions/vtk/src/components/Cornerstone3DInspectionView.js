@@ -42,6 +42,7 @@ import {
 
 const { selection: c3dAnnotationSelection } = c3dAnnotations;
 
+import OHIF from '@ohif/core';
 import { OHIFModal } from '@ohif/ui';
 import { Icon, ToolbarButton } from '@ohif/ui';
 
@@ -52,13 +53,14 @@ import {
   inspectVtkLabelmapImage,
 } from '../utils/cornerstone3d.js';
 
-import Cornerstone3DBaseView from './Cornerstone3DBaseView.js';
+import vtkEnums from '../enums';
 import Cornerstone3DLabelmapBaseView from './Cornerstone3DLabelmapBaseView.js';
 import styles from './Cornerstone3DInspectionView.css';
 
 import ViewportGridOverlayTool from './tools/ViewportGridOverlayTool.js';
 
 const { ViewportType, Events } = c3dEnums;
+const { DisplaySetApi } = OHIF.display;
 
 
 class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
@@ -94,6 +96,25 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     ..._.omit(Cornerstone3DLabelmapBaseView.defaultProps, 'renderId'),
     renderId: 'sonadorCornerstone3dInspectionViewport',
     toolGroupId: 'sonadorCornerstone3dInspectionViewport',
+    removeAllSegRepresentations: false,
+  }
+
+  _getImageVolumeId(options) {
+    // Utilize a prefixed volumeId to prevent rendering issues with underlying view
+    options = options || {};
+    _.defaults(options, { prefix: 'inspection:' });
+
+    const volumeId = super._getImageVolumeId();
+    return options.prefix+volumeId;
+  }
+
+  _getSegImageVolumeId(options) {
+    // Retrieve the segmentation volumeId to be used by the view
+    options = options || {};
+    _.defaults(options, { prefix: 'inspection:' });
+    
+    const segVolumeId = super._getSegImageVolumeId();
+    return options.prefix+segVolumeId;
   }
 
   async loadSegImageVolume() {
@@ -124,6 +145,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
     // Add anatomical orientation and scale overlay indicators as part of the inspection "grid".
     // The grid tools are enabled/disabled as a single unit.
+    c3dAddTool(C3dReferenceLinesTool);
     c3dAddTool(C3dOrientationMarkerTool);
     c3dAddTool(C3dScaleOverlayTool);
     c3dAddTool(ViewportGridOverlayTool);
@@ -406,11 +428,13 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const { gridActive } = component.state;
     const { toolGroupId } = component.props;
 
+    const _active = !gridActive;
+
     const imgTools = C3dToolGroupManager.getToolGroup(toolGroupId);
     if (imgTools) {
 
       // Toggle state of the grid
-      if (imgTools && gridActive) {
+      if (imgTools && !_active) {
         imgTools.setToolDisabled(C3dOrientationMarkerTool.toolName);
         imgTools.setToolDisabled(C3dScaleOverlayTool.toolName)
         imgTools.setToolDisabled(ViewportGridOverlayTool.toolName);
@@ -423,7 +447,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
       // Toggle state of the grid
       component.setState({
-        gridActive: !gridActive,
+        gridActive: _active,
       });
     }
   }
@@ -441,14 +465,15 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       const _view3d = component.renderEngine.getViewport(_v3d_id);
 
       if (_view3d) {
+        const { segMeta } = component._segMeta();
 
         // Toggle segmentation layers off        
-        if (component.labelmapDetails && component.labelmapDetails.uniqueLabels) {
-          _.each(component.labelmapDetails.uniqueLabels, (i) => {
+        if (segMeta && segMeta.segments) {
+          _.each(_.values(segMeta.segments), (s) => {
             
             // Toggle state of the segmentations via index
             c3dSegmentations.config.visibility.setSegmentIndexVisibility(
-              _v3d_id, { segmentationId: paintFilterLabelMapDetails.labelmapInstanceUID }, i, !segDisplayActive);
+              _v3d_id, _.pick(segMeta, 'segmentationId'), s.segmentIndex, !segDisplayActive);
           });
         }
         
@@ -488,18 +513,24 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     await super.componentDidMount();
   }
 
-  async componentDidUpdate() {
-    // Mnage lifecylce of the view
+  async componentDidUpdate(prevProps, prevState) {
+    // Manage lifecycle of the view
 
     const component = this;
-    super.componentDidUpdate();
+    await super.componentDidUpdate(prevProps, prevState);
+
+    const { isLoaded } = component.props;
+    const { imgRenderInit, segInit, segRenderInit, segRepUpdatePaused } = component.state;
+
+    console.log(`[Cornerstone3DInspectionView:componentDidUpdate] segInit=${segInit} segRenderInit=${segRenderInit}`);
   }
 
   componentWillUnmount() {
     // Deactivate tool bindings
     
     const component = this;
-    const { toolGroupId } = component.props;
+    const { toolGroupId, eventTimeout } = component.props;
+    const { displaySet } = component.props.viewportData;
 
     if (component.imgTools) {
 
@@ -512,7 +543,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
       // Remove keyboard event handlers
       component.cornerstone3dViewProps.element.removeEventListener(
-        c3dToolsEnums.Events.KEY_DOWN, container.boundKeyboardEvent);
+        c3dToolsEnums.Events.KEY_DOWN, component.boundKeyboardEvent);
     }
 
     super.componentWillUnmount();
@@ -526,8 +557,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       angleToolActive, cobbAngleToolActive, gridActive, segDisplayActive } = component.state;
 
     return (
-      <div className="root"><div className="modalContent" >
-        <div className="modal-toolbar">
+      <div className="inspectionViewRoot"><div className="inspectionViewModalContent" >
+        <div className="inspectionViewModalToolbar">
           <ToolbarButton label="Stack Scroll" icon="bars" 
             isActive={stackScrollActive} onClick={component.activateStackScroll.bind(component)}
           />

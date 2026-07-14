@@ -7,14 +7,10 @@
  */
 const fontsToJavaScript = {
   test: /\.(ttf|eot|woff|woff2)$/i,
-  use: [
-    {
-      loader: 'file-loader',
-      options: {
-        name: '[name].[ext]',
-      },
-    },
-  ],
+  type: 'asset/resource',
+  generator: {
+    filename: 'static/fonts/[name][hash][ext]',
+  },
 };
 
 module.exports = fontsToJavaScript;

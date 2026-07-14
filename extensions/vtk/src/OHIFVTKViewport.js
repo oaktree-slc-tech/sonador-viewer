@@ -5,24 +5,30 @@ import cornerstoneTools from 'cornerstone-tools';
 
 import {
   Enums as C3dEnums,
+  cache as c3dCache,
+  getRenderingEngine as c3dGetRenderingEngine,
 } from "@cornerstonejs/core";
+
+import { cacheVtkImage } from './utils/cornerstone3d.js';
 
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
+import OHIF from '@ohif/core';
 import { eventTypes as uiEvents, Icon } from '@ohif/ui';
 
 import { eventTypes as segmentationEventTypes } from '@ohif/extension-dicom-segmentation';
 
-import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView.js';
-import LoadingIndicator from './ohifComponents/LoadingIndicator.js';
+import vtkEnums from './enums';
+import Cornerstone3DSliceView from './components/Cornerstone3DSliceView';
+import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView';
+import LoadingIndicator from './components/LoadingIndicator.js';
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
-import ConnectedVTKViewport from './ConnectedVTKViewport';
+import ConnectedVTKViewport from './connectedComponents/ConnectedVTKViewport';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
-
-const volumeCache = {};
+const { DisplaySetApi } = OHIF.display;
 
 
 class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
@@ -31,6 +37,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
 
   static defaultProps = {
     onScroll: () => {},
+    eventTimeout: 50,
   };
 
   static id = 'OHIFVTKViewport';
@@ -41,12 +48,24 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
   };
 
   getVolume(displaySetInstanceUID) {
-    // Retrieve volume for the provided display set instance UID
-    return volumeCache[displaySetInstanceUID];
+    // Retrieve volume for the provided display set instance UID from C3D cache
+    const vol = c3dCache.getVolume(displaySetInstanceUID);
+    return vol?._vtkActor || null;
   }
 
   cacheVolume(displaySetInstanceUID, volumeActor) {
-    volumeCache[displaySetInstanceUID] = volumeActor;
+    // Store volume actor in C3D cache for lifecycle management
+    let vol = c3dCache.getVolume(displaySetInstanceUID);
+    if (!vol) {
+      try {
+        vol = cacheVtkImage(displaySetInstanceUID, {}, volumeActor.getMapper().getInputData());
+      } catch (e) {
+        console.warn('[OHIFVTKViewport:cacheVolume] Failed to register volume in C3D cache:', e);
+      }
+    }
+    if (vol) {
+      vol._vtkActor = volumeActor;
+    }
   }
 
   applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
@@ -68,6 +87,9 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
   }
 
   setStateFromProps() {
+    const component = this;
+
+    const { eventTimeout } = this.props;
     const { studies, displaySet } = this.props.viewportData;
     const { StudyInstanceUID, displaySetInstanceUID, sopClassUIDs, SOPInstanceUID, frameIndex } = displaySet;
 
@@ -93,27 +115,42 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       const { imageDataObject, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
         studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
 
-      this.imageDataObject = imageDataObject;
+      component.imageDataObject = imageDataObject;
 
-      const volumeActor = this.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
+      const volumeActor = component.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
 
-      this.setState(
+      component.setState(
         {
           percentComplete: 0,
           dataDetails,
         },
         () => {
-          this.loadProgressively(imageDataObject);
+          component.loadProgressively(imageDataObject);
 
           setTimeout(() => {
-            this.setState({
+
+            const { displaySet } = component.props.viewportData;
+            const { displaySetInstanceUID } = displaySet;
+            const { labelmapInstanceUID, labelmapMetadata } = labelmapDetails;
+
+            // Pull displaySet dataset from service to ensure that it is up to date.
+            const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+            if (_ds) {
+
+              // Mark the viewport as stable to prevent unintended reload
+              _ds.stableViewport = true;
+              _ds.segmentationId = labelmapInstanceUID;              
+              DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+            }
+
+            component.setState({
               volumes: [volumeActor],
               paintFilterLabelMapImageData: labelmapDataObject,
               paintFilterLabelMapDetails: labelmapDetails,
               paintFilterBackgroundImageData: imageDataObject.vtkImageData,
               labelmapColorLUT,
             });
-          }, 200);
+          }, eventTimeout);
         }
       );
     } catch (error) {
@@ -172,11 +209,14 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
     this.setStateFromProps();
   }
 
-  componentDidUpdate(prevProps) {
+  componentDidUpdate(prevProps, prevState) {
     // Update component after change
+    const component = this;
 
+    const { eventTimeout } = this.props;
     const { displaySet } = this.props.viewportData;
     const prevDisplaySet = prevProps.viewportData.displaySet;
+    const { isInpsectionViewOpen } = component.state;
 
     if (
       displaySet.displaySetInstanceUID !== prevDisplaySet.displaySetInstanceUID ||
@@ -185,14 +225,63 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
     ) {
       this.setStateFromProps();
     }
+
+    if (prevState.isInpsectionViewOpen && !isInpsectionViewOpen) {
+
+      setTimeout(() => {
+        DisplaySetApi.Instance.displaySetService.triggerApiEvent(vtkEnums.MPR.EVENTS.VTK_MPR_REFRESH_VIEWPORT, {
+          displaySetInstanceUID: displaySet.displaySetInstanceUID,
+        });
+      }, eventTimeout);
+      
+      console.log('[OHIFVTKViewport:component-updated] isnpection view closed, refresh', displaySet.displaySetInstanceUID);
+    }
   }
 
   componentWillUnmount() {
     // Remove event handlers and reactive logic for viewport
+    const component = this;
+    const { eventTimeout } = component.props;
 
     // Unsubscribe from VTK tab events
     document.removeEventListener(segmentationEventTypes.SegmentationPanelTabUpdatedEvent, this.boundResizeViewport);
     document.removeEventListener(uiEvents.sidebar.toggle, this.boundResizeViewport);
+
+    setTimeout(() => {
+      const { displaySet } = component.props.viewportData;
+      const { displaySetInstanceUID } = displaySet;
+
+      if (displaySetInstanceUID) {        
+
+        // Pull displaySet data from service to ensure that it is up to date. The displaySet data
+        // on the props hash may have been mutated and will not have an accurate state of the volume viewer.
+        const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+        if (_ds && _ds.stableViewport) {
+
+          // Clear segmentationId from displaySet
+          _ds.segmentationId = undefined;
+          _ds.stableViewport = false;
+
+          DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+        }
+      }
+    }, eventTimeout);
+  }
+
+  _getOrientation() {
+    // Retrieve the orientation of the current viewport
+    const component = this;
+    
+    let _o;
+    if (component.props.viewportIndex == 1) {
+      _o = C3dEnums.OrientationAxis.SAGITTAL;
+    } else if (component.props.viewportIndex == 2) {
+      _o = C3dEnums.OrientationAxis.CORONAL
+    } else {
+      _o = C3dEnums.OrientationAxis.AXIAL;
+    }
+
+    return _o;
   }
 
   render() {
@@ -213,21 +302,8 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       const { displaySet } = component.props.viewportData;
       const { SeriesDescription, SeriesInstanceUID, displaySetInstanceUID } = displaySet;
 
-      const _api = component.props.commandsManager.runCommand('getVtkApiForViewportIndex', {
-        index: component.props.viewportIndex,
-      });
-
-      let _o;
-      if (component.props.viewportIndex == 1) {
-        _o = C3dEnums.OrientationAxis.SAGITTAL;
-      } else if (component.props.viewportIndex == 2) {
-        _o = C3dEnums.OrientationAxis.CORONAL
-      } else {
-        _o = C3dEnums.OrientationAxis.AXIAL;
-      }
-
-      component.setState((prevState) => ({        
-        isInpsectionViewOpen: !prevState.isEnlargedViewOpen,
+      component.setState((prevState) => ({
+        isInpsectionViewOpen: !prevState.isInpsectionViewOpen,
       }));
 
       // Display detail view in modal
@@ -236,8 +312,8 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
           <Cornerstone3DInspectionView
             viewportData={viewportData} isLoaded={isLoaded} volumes={component.state.volumes}
             onClose={() => component.setState({ isInpsectionViewOpen: false })}
-            servicesManager={servicesManager} orientation={_o}
-            paintFilterBackgroundImageData={paintFilterBackgroundImageData} 
+            servicesManager={servicesManager} orientation={component._getOrientation()}
+            paintFilterBackgroundImageData={paintFilterBackgroundImageData}
             paintFilterLabelMapImageData={paintFilterLabelMapImageData}
             paintFilterLabelMapDetails={paintFilterLabelMapDetails}
             labelmapRenderingOptions={{
@@ -250,7 +326,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
               onNewSegmentationRequested: () => {
                 component.setStateFromProps();
               },
-            }}
+            }}            
           />
         );
       }
@@ -260,6 +336,16 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
         title: SeriesDescription ? SeriesDescription : 'Details for Series '+(SeriesInstanceUID || displaySetInstanceUID),
         fullscreen: true,
         noScroll: true,
+        onClose: () => {
+
+          // Trigger the per-slice-view refresh event as an additional backup.
+          DisplaySetApi.Instance.displaySetService.triggerApiEvent(vtkEnums.MPR.EVENTS.VTK_MPR_REFRESH_VIEWPORT, {
+            displaySetInstanceUID: displaySet.displaySetInstanceUID,
+          });
+
+          // Indicate that inspection view is closed
+          component.setState({ isInpsectionViewOpen: false });
+        },
       });
     };
 
@@ -283,11 +369,15 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
         <div style={style}>
           {!component.state.isLoaded && <LoadingIndicator percentComplete={component.state.percentComplete} />}
           {component.state.volumes && (
-            <ConnectedVTKViewport
-              volumes={component.state.volumes}
+            <ConnectedVTKViewport 
+              servicesManager={component.props.servicesManager} commandsManager={component.props.commandsManager}
+              isLoaded={component.state.isLoaded}
+              viewportData={component.props.viewportData} volumes={component.state.volumes}
               paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
               paintFilterBackgroundImageData={component.state.paintFilterBackgroundImageData}
-              viewportIndex={component.props.viewportIndex}
+              paintFilterLabelMapDetails={component.state.paintFilterLabelMapDetails}
+              viewportIndex={component.props.viewportIndex} 
+              orientation={component._getOrientation()}
               dataDetails={component.state.dataDetails}
               labelmapRenderingOptions={{
                 colorLUT: component.state.labelmapColorLUT,

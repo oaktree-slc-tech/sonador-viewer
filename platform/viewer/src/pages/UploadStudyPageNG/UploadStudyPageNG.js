@@ -30,7 +30,7 @@ export default function UploadStudyPageNG() {
     <>
 
       {(serverCount > 0) && canUpload && (
-        <Layout>
+        <Layout fixedHeight>
           <UploadFiles onUpload={refreshUploadTable} />
           <RecentUploadTable key={forceRerender} />
         </Layout>

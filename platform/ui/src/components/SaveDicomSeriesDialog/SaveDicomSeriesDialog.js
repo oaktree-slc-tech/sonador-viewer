@@ -11,15 +11,15 @@ import './SaveDicomSeriesDialog.css';
 
 
 const SaveDicomSeriesDialog = ({
-    seriesNumber: propSeriesNumber, 
-    seriesDescription: propSeriesDescription,
-    onCancel, 
-    onUpdate, 
-    headerTitle, 
-    seriesNumberPlacholder, 
-    descriptionPlaceholder,
-    btnTextConfirm,
-    btnTextCancel,
+    seriesNumber: propSeriesNumber = 42,
+    seriesDescription: propSeriesDescription = '',
+    onCancel,
+    onUpdate,
+    headerTitle = 'Save Series',
+    seriesNumberPlacholder = 'Series Number',
+    descriptionPlaceholder = 'Research Derived Series',
+    btnTextConfirm = 'Confirm',
+    btnTextCancel = 'Cancel',
   }) => {
   // Provides a basic dialog which allows for setting 
 
@@ -122,12 +122,5 @@ SaveDicomSeriesDialog.propTypes = {
 }
 
 
-SaveDicomSeriesDialog.defaultProps = _.extend({}, _.pick(SimpleDialog.defaultProps, 'btnTextConfirm', 'btTextCancel'), {
-  headerTitle: 'Save Series',
-  seriesNumber: 42,
-  seriesDescription: '',
-  descriptionPlaceholder: 'Research Derived Series',
-  seriesNumberPlacholder: 'Series Number',
-});
 
 export default SaveDicomSeriesDialog;

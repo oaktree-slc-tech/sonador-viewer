@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
+import { ScrollArea } from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
 
-import { ScrollableArea } from '../../ScrollableArea/ScrollableArea';
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableList } from '../tableList';
 import { Tooltip } from '../tooltip';
@@ -26,7 +26,7 @@ const MeasurementTable = ({
   measurementCollection,
   servicesManager,
   viewports,
-  overallWarnings,  
+  overallWarnings = { warningList: [] },
   timepoints,
   onItemClick,
   onRelabelClick,
@@ -35,7 +35,7 @@ const MeasurementTable = ({
   selectedMeasurementId,
   saveFunction,
   onSaveComplete,
-  eventTimeout,
+  eventTimeout = 50,
 }) => {
   // Unpack references to services  
   const { displaySetService } = servicesManager.services;
@@ -252,9 +252,9 @@ const MeasurementTable = ({
         )}
         {getTimepointsHeader()}
       </div>
-      <ScrollableArea>
+      <ScrollArea>
         <div>{getMeasurementsGroups()}</div>
-      </ScrollableArea>
+      </ScrollArea>
       <div className="measurementTableFooter">
         {_.get(server, 'perms.upload', false) && saveFunction && savePending && (
           <button onClick={handleSave} className="saveBtn" data-cy="save-measurements-btn">
@@ -285,12 +285,6 @@ MeasurementTable.propTypes = {
 };
 
 
-MeasurementTable.defaultProps = {
-  overallWarnings: {
-    warningList: [],
-  },
-  eventTimeout: 50,
-};
 
 
 export default MeasurementTable;

@@ -12,7 +12,7 @@ const SnackbarContext = createContext(null);
 
 export const useSnackbarContext = () => useContext(SnackbarContext);
 
-const SnackbarProvider = ({ children, service }) => {
+const SnackbarProvider = ({ children, service = null }) => {
   const DEFAULT_OPTIONS = {
     title: '',
     message: '',
@@ -125,9 +125,6 @@ const SnackbarProvider = ({ children, service }) => {
   );
 };
 
-SnackbarProvider.defaultProps = {
-  service: null,
-};
 
 SnackbarProvider.propTypes = {
   children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node, PropTypes.func]).isRequired,

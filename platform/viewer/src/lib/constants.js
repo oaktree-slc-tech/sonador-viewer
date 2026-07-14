@@ -11,6 +11,7 @@ export const WORK_LIST_DEFAULT_COLUMNS_IDS = [
   'GroupName',
   'PatientName',
   'Status',
+  'ReasonForReview',
   'mrn',
   'AccessionNumber',
   'StudyDate',

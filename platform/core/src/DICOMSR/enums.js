@@ -6,7 +6,7 @@
 // Refer to https://code.oak-tree.tech/oak-tree/medical-imaging/sonador-client/-/blob/master/apisettings/base.py?ref_type=heads
 // for the Python implementation.
 
-// Sonador schem versions (newer versions, unless explicitly noted, extended older revisions):
+// Sonador scheme versions (newer versions, unless explicitly noted, extend older revisions):
 // * 0.1 (2022): basic encoding structures including "Sonador-SEG" and "Sonador-SR" structures
 // * 0.2 (2023-0828): spatial SR constructs (2D/3D point concepts) used for creating SR documents 
 //   that can be used for machine learning applications.

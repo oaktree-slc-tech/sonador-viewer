@@ -4,7 +4,7 @@ import { Range } from '@ohif/ui';
 
 import './BrushRadius.css';
 
-const BrushRadius = ({ value, onChange, min, max, step }) => (
+const BrushRadius = ({ value, onChange = () => { }, min = 1, max = 50, step = 1 }) => (
   <div className="dcmseg-brush-radius">
     <label htmlFor="dcmseg-brush-radius">Brush Radius</label>
     <Range
@@ -26,11 +26,5 @@ BrushRadius.propTypes = {
   step: PropTypes.number,
 };
 
-BrushRadius.defaultProps = {
-  onChange: () => { },
-  min: 1,
-  max: 50,
-  step: 1,
-};
 
 export default BrushRadius;

@@ -27,6 +27,7 @@ import clipboard from './icons/clipboard.svg';
 import cog from './icons/cog.svg';
 import createComment from './icons/create-comment.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
+import crop from './icons/crop.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
 import cube3dSolid from './icons/cube-3d-solid.svg';
@@ -114,6 +115,7 @@ const ICONS = {
   sphere,
   'sort-down': sortDown,
   info,
+  crop,
   cube,
   'cube-3d-solid': cube3dSolid,
   viewer3d01,

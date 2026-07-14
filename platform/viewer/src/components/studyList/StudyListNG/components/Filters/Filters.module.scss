@@ -35,9 +35,16 @@
     display: flex;
     align-items: center;
     background-color: #000;
-    padding: 20px 30px;
+
+    // Left padding places the magnifier icon on the padding rail alongside the filter icon
+    // and bulk-actions text (15px toolbar padding + 25px = 40px desktop, +15px = 30px lg)
+    padding: 20px 30px 20px 25px;
     border-radius: 10px;
     flex-grow: 1;
+
+    @include lg {
+      padding-left: 15px;
+    }
 
     @include xs {
       padding: 10px 15px;
@@ -121,7 +128,10 @@
 .filters {
   display: flex;
   gap: 10px;
-  margin: 25px 0;
+
+  // Symmetric breathing room: the gap to the divider below matches the gap to the search
+  // controls above (the divider keeps its own 10px before the bulk-actions row)
+  margin: 20px 0;
   overflow-x: auto;
   scrollbar-width: none;
   overflow-y: hidden;
@@ -168,13 +178,13 @@
   left: 0;
 }
 
-.studyListHeader, .topToolbar {
-  padding-left: 75px;
-  padding-right: 75px;
+.studyListHeader {
+  padding-left: 40px;
+  padding-right: 40px;
 
   @include lg {
-    padding-left: 50px;
-    padding-right: 50px;
+    padding-left: 30px;
+    padding-right: 30px;
   }
 
   @include xs {
@@ -183,16 +193,29 @@
   }
 }
 
+// The search bar/refresh row sits closer to the panel edges than the padding rail: its
+// horizontal padding mirrors the 15px column-gap separating the search card, server picker,
+// and refresh button, so the row's outer margins match its internal element spacing.
+.topToolbar {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+// Indent spacer for the filter row. Alignment target: the filters ICON inside the first
+// button (not the button's border box) must land on the section's padding rail
+// (40px desktop / 30px lg / 20px xs) to line up with the Bulk Actions text and the results
+// header gear. Icon offset inside the button = 1px border + 10px padding, and the row adds a
+// 10px flex gap after the spacer, so: width = rail - 10 (gap) - 11 (button inset).
 .emptyFilterBlock {
   flex-shrink: 0;
-  width: 65px;
+  width: 19px;
 
   @include lg {
-    width: 40px;
+    width: 9px;
   }
 
   @include xs {
-    width: 10px;
+    width: 0;
   }
 }
 

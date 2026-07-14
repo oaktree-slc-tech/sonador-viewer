@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseGetDisplaySet } from '@ohif/ui';
 
+
 const _isM3DModality = (viewportSpecificData = {}, activeViewportIndex) => {
   // Determine if the active viewport is a 3D file. TODO: The file check in this method uses
   // the modality (M3D) to determine if it is a 3D file. A more rigorous check
@@ -22,6 +23,7 @@ const _isM3DModality = (viewportSpecificData = {}, activeViewportIndex) => {
   return false;
 };
 
+
 const _isM3DAnimated = (viewportSpecificData = {}, activeViewportIndex) => {
   // Determine if the active viewport supports M3D animations
   try {
@@ -35,6 +37,7 @@ const _isM3DAnimated = (viewportSpecificData = {}, activeViewportIndex) => {
 
   return false;
 };
+
 
 function M3DToolbarButton({ toolbarClickCallback, button, isActive, className }) {
   const { id, label, icon } = button;
@@ -58,6 +61,7 @@ function M3DToolbarButton({ toolbarClickCallback, button, isActive, className })
     </>
   );
 }
+
 
 M3DToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,
@@ -92,6 +96,7 @@ function M3DAnimationControlToolbarButton({ toolbarClickCallback, button, isActi
   );
 }
 
+
 M3DAnimationControlToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,
   toolbarClickCallback: PropTypes.func.isRequired,
@@ -100,6 +105,7 @@ M3DAnimationControlToolbarButton.propTypes = {
   isActive: PropTypes.bool,
   className: PropTypes.string,
 };
+
 
 export default M3DToolbarButton;
 export { M3DToolbarButton, M3DAnimationControlToolbarButton };

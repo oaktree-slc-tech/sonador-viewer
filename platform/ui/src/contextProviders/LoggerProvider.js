@@ -6,7 +6,7 @@ const { Provider } = LoggerContext;
 
 export const useLogger = () => useContext(LoggerContext);
 
-const LoggerProvider = ({ children, service }) => {
+const LoggerProvider = ({ children, service = null }) => {
   const [state, setState] = useState({
     errors: [],
     infos: [],
@@ -80,9 +80,6 @@ export const withLogger = (Component) => {
   };
 };
 
-LoggerProvider.defaultProps = {
-  service: null,
-};
 
 LoggerProvider.propTypes = {
   children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,

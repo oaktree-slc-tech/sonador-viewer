@@ -1,8 +1,9 @@
-import { utils, log } from '@ohif/core';
+import OHIF, { utils, log } from '@ohif/core';
 import cornerstoneTools from 'cornerstone-tools';
 import refreshViewports from './refreshViewports';
 
 const { studyMetadataManager } = utils;
+const { DisplaySetApi } = OHIF.display;
 
 /**
  *
@@ -48,13 +49,29 @@ export default async function setActiveLabelmap(
   }
 
   if (!displaySet.isLoaded && !displaySet.loadError) {
+    // Evict stale labelmaps3D slots from any previous load of this same SEG series
+    // before calling load(). Without this, _getNextLabelmapIndex appends a new slot
+    // rather than reusing the old one, so both the old and new data are composited
+    // on every render (ghost segmentation after study reload).
+    if (brushStackState?.labelmaps3D?.length > 0) {
+      brushStackState.labelmaps3D.forEach((lm3D, idx) => {
+        if (lm3D?.metadata?.segmentationSeriesInstanceUID === displaySet.SeriesInstanceUID) {
+          brushStackState.labelmaps3D[idx] = null;
+        }
+      });
+    }
+
     try {
       await displaySet.load(referencedDisplaySet, studies);
     } catch (error) {
+
+      // Update displaySet data and trigger service
       displaySet.isLoaded = false;
       displaySet.loadError = true;
-      displaySet.segLoadErrorMessagge = error.message;
+      displaySet.segLoadErrorMessage = error.message;
       onDisplaySetLoadFailure(error);
+
+      DisplaySetApi.Instance.displaySetService.addDisplaySets([displaySet]);
 
       /*
        * TODO: Improve the way we notify parts of the app

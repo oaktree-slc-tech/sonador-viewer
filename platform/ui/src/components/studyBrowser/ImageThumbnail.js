@@ -15,8 +15,7 @@ import './ImageThumbnail.styl';
 // - Set as external dependency?
 // - Pass in the entire load and render function as a prop?
 //import cornerstone from 'cornerstone-core';
-function ImageThumbnail(props) {
-  const { active, width, height, imageSrc, imageId, stackPercentComplete, error: propsError, showProgressBar } = props;
+function ImageThumbnail({ active = false, width = 217, height = 123, imageSrc, imageId, stackPercentComplete = 0, error: propsError = false, showProgressBar = true }) {
 
   const [isLoading, setLoading] = useState(false);
   const [image, setImage] = useState({});
@@ -119,13 +118,5 @@ ImageThumbnail.propTypes = {
 };
 
 
-ImageThumbnail.defaultProps = {
-  active: false,
-  error: false,
-  stackPercentComplete: 0,
-  width: 217,
-  height: 123,
-  showProgressBar: true,
-};
 
 export default ImageThumbnail;

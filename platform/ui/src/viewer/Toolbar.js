@@ -102,7 +102,7 @@ function getDefaultButtonData() {
   return buttonData;
 }
 
-function Toolbar({ buttons, includeLayoutButton, includePlayClipButton }) {
+function Toolbar({ buttons = getDefaultButtonData(), includeLayoutButton = true, includePlayClipButton = true }) {
   const maybePlayClipButton = includePlayClipButton ? <PlayClipButton /> : null;
   const maybeLayoutButton = includeLayoutButton ? <LayoutButton /> : null;
 
@@ -136,10 +136,5 @@ Toolbar.propTypes = {
   includePlayClipButton: PropTypes.bool.isRequired,
 };
 
-Toolbar.defaultProps = {
-  buttons: getDefaultButtonData(),
-  includeLayoutButton: true,
-  includePlayClipButton: true,
-};
 
 export default Toolbar;

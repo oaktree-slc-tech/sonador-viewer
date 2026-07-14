@@ -16,6 +16,8 @@ import hangingProtocols from './hanging-protocols';
 import header from './header.js';
 import log from './log.js';
 
+import { SystemContextProvider, useSystem } from './contextProviders/SystemProvider';
+
 import { fileLoader } from './store';
 import IWebApiDataSource from './DataSources/IWebApiDataSource';
 
@@ -31,6 +33,7 @@ import {
   DicomMetadataStore,
   DisplaySetService,
   CustomizationService,
+  ViewportGridService,
   LoggerService, 
   MeasurementService, 
   UIDialogService, 
@@ -135,6 +138,7 @@ export {
   ExtensionManager,
   HotkeysManager,
   ServicesManager,
+  SystemContextProvider,
   
   // Modules
   utils,
@@ -172,9 +176,12 @@ export {
   MeasurementService,
   DisplaySetService,
   CustomizationService,
+  ViewportGridService,
   LoggerService,
   pubSubServiceInterface,
   str2ab,
+
+  useSystem,
 };
 
 

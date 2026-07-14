@@ -215,12 +215,10 @@ StudyList.propTypes = {
   displaySize: PropTypes.string,
 };
 
-StudyList.defaultProps = {};
 
-function TableRow(props) {
-  const {
+function TableRow({
     AccessionNumber,
-    isHighlighted,
+    isHighlighted = false,
     modalities,
     PatientID,
     PatientName,
@@ -229,7 +227,7 @@ function TableRow(props) {
     StudyInstanceUID,
     onClick: handleClick,
     displaySize,
-  } = props;
+  }) {
 
   const { t } = useTranslation('StudyList');
 
@@ -374,8 +372,5 @@ TableRow.propTypes = {
   displaySize: PropTypes.string,
 };
 
-TableRow.defaultProps = {
-  isHighlighted: false,
-};
 
 export { StudyList };
