@@ -5,6 +5,7 @@ module.exports = function(ctx) {
   return {
     map: ctx.env === 'development' ? ctx.map : false,
     plugins: {
+      '@tailwindcss/postcss': {},
       'postcss-import': {},
       'postcss-preset-env': {},
       cssnano: ctx.env === 'production' ? {} : false,

@@ -17,6 +17,7 @@ const customStyle = {
 
 Modal.setAppElement(document.getElementById('root'));
 
+
 const OHIFModal = ({ className, closeButton, shouldCloseOnEsc, isOpen, fullscreen, title, onClose, children }) => {
   const renderHeader = () => {
     return (
@@ -56,6 +57,7 @@ const OHIFModal = ({ className, closeButton, shouldCloseOnEsc, isOpen, fullscree
   );
 };
 
+
 OHIFModal.propTypes = {
   className: PropTypes.string,
   closeButton: PropTypes.bool,
@@ -65,5 +67,6 @@ OHIFModal.propTypes = {
   onClose: PropTypes.func,
   children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,
 };
+
 
 export default OHIFModal;

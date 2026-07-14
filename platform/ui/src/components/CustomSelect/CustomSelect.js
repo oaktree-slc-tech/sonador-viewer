@@ -66,14 +66,14 @@ export default function CustomSelect({ value = {}, options = [] }) {
 CustomSelect.propTypes = {
   options: PropTypes.arrayOf(
     PropTypes.shape({
-      value: PropTypes.string.isRequired,
+      value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       title: PropTypes.string.isRequired,
       onClick: PropTypes.func.isRequired,
       description: PropTypes.string,
     })
   ).isRequired,
   value: PropTypes.shape({
-    value: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     title: PropTypes.string.isRequired,
     description: PropTypes.string,
   }),

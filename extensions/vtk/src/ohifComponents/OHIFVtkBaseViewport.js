@@ -1,9 +1,14 @@
+import _ from 'lodash';
+
 import { Component } from 'react';
+
 import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
 import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
 import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
 import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
+
 import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
+
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 import PropTypes from 'prop-types';
@@ -12,8 +17,10 @@ import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
+const { DicomMetadataStore: DcmMetaStore } = OHIF;
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
+const { DisplaySetApi } = OHIF.display;
 const { StackManager } = OHIF.utils;
 
 
@@ -118,34 +125,57 @@ class OHIFVtkBaseViewport extends Component {
     return stack;
   }
 
+  getBrushStackState  = (stack) => {
+    // Retrieve the image stack for the viewport
+    const { state } = segmentationModule;
+    
+    // Retrieve stack, firstImageId
+    const firstImageId = stack?.imageIds?.length ? stack.imageIds[0] : undefined;
+    const brushStackState = state.series[firstImageId];
+
+    return { brushStackState, firstImageId }
+  }
+
   getViewportData = (studies, StudyInstanceUID, displaySetInstanceUID, SOPClassUID, SOPInstanceUID, frameIndex) => {
     // Load image and segmentation data from OHIF image service
+    
+    const component = this;
 
-    const { UINotificationService } = this.props.servicesManager.services;
+    const { displaySetService } = DisplaySetApi.Instance;
+    const { UINotificationService,  } = this.props.servicesManager.services;
+    const { state } = segmentationModule;
 
     // Retrieve cornerstone image stack
     const stack = OHIFVtkBaseViewport.getCornerstoneStack(
-      studies,
-      StudyInstanceUID,
-      displaySetInstanceUID,
-      SOPClassUID,
-      SOPInstanceUID,
-      frameIndex
-    );
+      studies, StudyInstanceUID, displaySetInstanceUID, SOPClassUID, SOPInstanceUID, frameIndex);
+    const { firstImageId, brushStackState } = component.getBrushStackState(stack);
 
     const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
     let labelmapDataObject;
     let labelmapColorLUT;
     let labelmapInstanceUID;
-
-    const firstImageId = stack.imageIds[0];
-    const { state } = segmentationModule;
-    const brushStackState = state.series[firstImageId];
-
+    let labelmapMetadata;
+    
     // Retrieve segmentations
     if (brushStackState) {
       const { activeLabelmapIndex } = brushStackState;
-      const labelmap3D = brushStackState.labelmaps3D[activeLabelmapIndex];
+      const labelmap3D = brushStackState.labelmaps3D[activeLabelmapIndex] || {};
+
+      // Unpack labelmap metata
+      const { metadata: activeLabelmapMetata } = labelmap3D;
+      if (activeLabelmapMetata) {
+
+        // Retrieve series and segmentation series identifiers
+        labelmapMetadata = _.pick(activeLabelmapMetata, 'seriesInstanceUid', 'segmentationSeriesInstanceUID');
+        labelmapMetadata.data = _.filter(activeLabelmapMetata.data, (s) => s && s.SegmentLabel);
+
+        // Add additional properties from the series metadata        
+        const _labelmapDcmMeta = DcmMetaStore.getSeries(StudyInstanceUID, labelmapMetadata.segmentationSeriesInstanceUID);
+        if (_labelmapDcmMeta?.instances?.length) {
+          const _dcm0 = _labelmapDcmMeta.instances[0];
+          _.extend(labelmapMetadata, _.pick(_dcm0, 'SeriesDescription', 'SeriesDate', 'SeriesTime', 'SeriesNumber', 'Modality', ));
+        }
+      }
 
       if (brushStackState.labelmaps3D.length > 1 && this.props.viewportIndex === 0) {
         
@@ -187,6 +217,7 @@ class OHIFVtkBaseViewport extends Component {
         // Cache the labelmap volume.
         labelmapCache[vtkLabelmapID] = labelmapDataObject;
       }
+      
       labelmapColorLUT = state.colorLutTables[labelmap3D.colorLUTIndex];
     }
 
@@ -194,7 +225,7 @@ class OHIFVtkBaseViewport extends Component {
       imageDataObject,
       labelmapDataObject,
       labelmapColorLUT,
-      labelmapDetails: { labelmapInstanceUID, }
+      labelmapDetails: { labelmapInstanceUID, metadata: labelmapMetadata },
     };
   };
 

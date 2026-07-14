@@ -18,6 +18,7 @@ const EVENTS = {
 
   // Viewer lifecycle events
   VIEWER_RENDER: 'api-event::render',
+  UI: 'api-event::ui',
 }
 
 const Enums = {

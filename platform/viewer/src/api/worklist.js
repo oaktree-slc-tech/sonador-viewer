@@ -41,7 +41,7 @@ export const getWorklistMembership = ({ server, groupId, term }) => {
 };
 
 
-export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userId, State }) => {
+export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userId, State, Procedure }) => {
   // Create a worklist request
 
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', StudyInstanceUID, 'worklists'), {
@@ -54,6 +54,7 @@ export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userI
       Group: groupId,
       User: userId,
       State,
+      ...(Procedure ? { Procedure } : {}),
     }),
   })
     .then(async (res) => {
@@ -67,12 +68,13 @@ export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userI
 };
 
 
-export const updateWorklist = ({ server, StudyInstanceUID, worklistId, State, Comment }) => {
+export const updateWorklist = ({ server, StudyInstanceUID, worklistId, State, Comment, Procedure }) => {
   // Update the provided worklist item
 
   const payload = {
     State,
     ...(Comment ? { Comment: { Text: Comment } } : {}),
+    ...(Procedure ? { Procedure } : {}),
   };
   return fetch(
     urlUtil.urlJoin(server.wadoRoot, 'studies', StudyInstanceUID, 'worklists', worklistId),

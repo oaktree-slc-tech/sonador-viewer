@@ -19,6 +19,12 @@ import { metadataArr } from './logic';
 import styles from './StudyListNG.module.scss';
 
 
+// Human-readable header labels for column ids whose humanized (start-cased) form is wrong.
+const COLUMN_LABEL_OVERRIDES = {
+  mrn: 'MRN',
+};
+
+
 function StudyListNG({ studies = [], 
   server, 
   sorting, 
@@ -101,10 +107,12 @@ function StudyListNG({ studies = [],
       },
       ...selectedColumns.map((id) => {
         return {
-          header: ({ header }) => {
-            const currentIndex = header.index - 1;
+          header: () => {
+            // Use the human-readable label carried on the row data (the same labels the
+            // filter boxes and expanded study view use); fall back to a humanized id.
+            const labeled = studies.find((study) => study?.[id]?.label);
 
-            return studies[currentIndex]?.[id]?.label ?? id;
+            return labeled?.[id]?.label ?? COLUMN_LABEL_OVERRIDES[id] ?? _.startCase(id);
           },
           id,
           accessorKey: id,
@@ -125,6 +133,30 @@ function StudyListNG({ studies = [],
   const { setMetadataSettings } = useMetadataSettingsStore();
 
   const [columnOrder, setColumnOrder] = useLocalStorage('columnOrder', columns.map(col => col.id));
+
+  useEffect(() => {
+
+    // Merge columns missing from the persisted order (e.g. ReasonForReview, added after the
+    // order was first stored) into position behind their preceding column, preserving any
+    // user-defined ordering. Without this, react-table appends unknown columns at the end.
+    const ids = columns.map((col) => col.id);
+    const missing = ids.filter((id) => !columnOrder.includes(id));
+    if (!missing.length) {
+      return;
+    }
+
+    const merged = [...columnOrder];
+    missing.forEach((id) => {
+      const anchor = ids[ids.indexOf(id) - 1];
+      const anchorIndex = merged.indexOf(anchor);
+      if (anchorIndex >= 0) {
+        merged.splice(anchorIndex + 1, 0, id);
+      } else {
+        merged.push(id);
+      }
+    });
+    setColumnOrder(merged);
+  }, [columns, columnOrder, setColumnOrder]);
 
   const { getHeaderGroups, getRowModel, getSelectedRowModel } = useReactTable({
     data: studies,

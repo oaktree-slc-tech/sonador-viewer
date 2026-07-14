@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { eventTypes as uiEvents } from '@ohif/ui';
+import { cornerstone3dUtils } from '@ohif/extension-vtk';
 
 import { servicesManager } from '../App';
 
@@ -243,6 +244,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
 
     const displaysets_apisync = DisplaySetApi.Instance.displaySetService.subscribe(
       DisplaySetApi.Instance.displaySetService.EVENTS.DISPLAY_SET_DATASYNC, ({ apiEvent, ...apiData }) => {
+        console.log('ViewerMain:evt:dataset-apisync', apiEvent, apiData);
         
         // When a study is reloaded, reset the layout of the viewer to a single viewport
         // and clear the active viewport to prevent the display of errors while the study is reloading.
@@ -299,6 +301,13 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
     const displaysets_dataupdate = DisplaySetApi.Instance.displaySetService.subscribe(
       DisplaySetApi.Instance.displaySetService.EVENTS.DISPLAY_SET_CHANGED, ({ displaySetInstanceUID, displaySet }) => {
 
+        // Prevent re-load of the displaySet if it is marked as "stable". Stable viewports are managed
+        // by specialized components and the main viewer loop should prevent state changes which 
+        // may prompt viewport reloads.
+        if (displaySet.stableViewport) {
+          return;
+        }
+
         // When service state updates, copy the attributes to the component state so that viewer attributes
         // are updated and components 
         setDisplaySets((prevState) => {
@@ -346,6 +355,7 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
   useEffect(() => {
     return () => {
       dispatch(clearEntireViewportSpecificData());
+      cornerstone3dUtils.purgeVolumeCache();
     };
   }, []);
 

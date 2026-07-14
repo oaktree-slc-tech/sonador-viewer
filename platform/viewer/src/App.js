@@ -25,6 +25,9 @@ import {
   UIDialogService,
   UIModalService,
   UINotificationService,
+  ViewportGridService,
+
+  SystemContextProvider,
   
   utils,
 } from '@ohif/core';
@@ -42,6 +45,7 @@ import WhiteLabelingContext from './context/WhiteLabelingContext';
 
 /** State Management: Redux, Services, and UI Stores */
 import { initDataServiceIntegration } from './init/initDataIntegrations.js';
+import { initViewportGridService } from './init/initViewportGridService.js';
 import { getActiveContexts } from './store/layout/selectors';
 
 /** Extensions */
@@ -53,10 +57,26 @@ import { setConfiguration } from './config';
 
 /** Viewer */
 import OHIFStandaloneViewer from './OHIFStandaloneViewer';
-import store from './store';
+import { createViewerStore } from './store';
 
 /** Utils */
 import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils';
+
+
+// Initialize servicesManager and Redux store
+const servicesManager = new ServicesManager();
+
+// Initialize secondary services. Secondary services are those which are initialized
+// as part of the application init and must be passed by reference from the service
+// manager (rather than providing a module instance that can be imported directly).
+// The services here are integrated into the Redux store via Middleware to help
+// with Sonador Viewer <-> OHIF v3 compatibility.
+servicesManager.registerService(DisplaySetService.REGISTRATION)
+servicesManager.registerService(CustomizationService.REGISTRATION);
+servicesManager.registerService(ViewportGridService.REGISTRATION);
+
+const store = createViewerStore({ servicesManager });
+initViewportGridService({ viewportGridService: servicesManager.services.viewportGridService, store });
 
 
 /** ~~~~~~~~~~~~~ Application Setup */
@@ -67,7 +87,6 @@ const commandsManagerConfig = {
 
 /** Managers */
 const commandsManager = new CommandsManager(commandsManagerConfig);
-const servicesManager = new ServicesManager();
 const hotkeysManager = new HotkeysManager(commandsManager, servicesManager);
 let extensionManager;
 /** ~~~~~~~~~~~~~ End Application Setup */
@@ -156,12 +175,6 @@ class App extends Component {
       UIDialogService,
       MeasurementService,
     ]);
-    
-    // Initialize secondary services. Secondary services are those which are initialized
-    // as part of the application init and must be passed by reference from the service
-    // manager (rather than providing a module instance that can be imported directly).
-    servicesManager.registerService(DisplaySetService.REGISTRATION)
-    servicesManager.registerService(CustomizationService.REGISTRATION);
 
     // TODO: The DisplaySetService and CustomizationService are required to support MeasurementService.
     // and limited features of OHIF v3 within the Sonador Viewer. Their utilization should be expanded 
@@ -198,6 +211,9 @@ class App extends Component {
                 <OidcProvider store={store} userManager={this._userManager}>
                   <UserManagerContext.Provider value={this._userManager}>
                     <Router basename={routerBasename}>
+                      <SystemContextProvider
+                        commandsManager={commandsManager} extensionsManager={extensionManager}
+                        hotkeysManager={hotkeysManager} servicesManager={servicesManager}>
                       <WhiteLabelingContext.Provider value={whiteLabeling}>
                         <LoggerProvider service={LoggerService}>
                           <SnackbarProvider service={UINotificationService}>
@@ -211,6 +227,7 @@ class App extends Component {
                           </SnackbarProvider>
                         </LoggerProvider>
                       </WhiteLabelingContext.Provider>
+                      </SystemContextProvider>
                     </Router>
                   </UserManagerContext.Provider>
                 </OidcProvider>
@@ -228,6 +245,9 @@ class App extends Component {
           <AppProvider config={this._appConfig}>
             <I18nextProvider i18n={i18n}>
               <Router basename={routerBasename}>
+                <SystemContextProvider
+                  commandsManager={commandsManager} extensionsManager={extensionManager}
+                        hotkeysManager={hotkeysManager} servicesManager={servicesManager}>
                 <WhiteLabelingContext.Provider value={whiteLabeling}>
                   <LoggerProvider service={LoggerService}>
                     <SnackbarProvider service={UINotificationService}>
@@ -241,6 +261,7 @@ class App extends Component {
                     </SnackbarProvider>
                   </LoggerProvider>
                 </WhiteLabelingContext.Provider>
+                </SystemContextProvider>
               </Router>
             </I18nextProvider>
           </AppProvider>

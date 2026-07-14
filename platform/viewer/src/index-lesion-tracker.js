@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 
 import OHIFDicomPDFExtension from '@ohif/extension-dicom-pdf';
 /**
@@ -44,4 +44,4 @@ const appProps = {
 const app = React.createElement(App, appProps, null);
 
 /** Render */
-ReactDOM.render(app, document.getElementById('root'));
+createRoot(document.getElementById('root')).render(app);

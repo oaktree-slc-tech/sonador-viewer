@@ -200,6 +200,8 @@ export const mapStudiesToThumbnails = (studies, activeDisplaySetInstanceUID) => 
         altImageText = 'SEG';
       } else if (displaySet.Modality && displaySet.Modality === 'SR') {
         altImageText = 'SR';
+      } else if (displaySet.Modality && displaySet.Modality === 'M3D') {
+        altImageText = 'M3D';
       } else if (displaySet.images && displaySet.images.length) {
         const imageIndex = Math.floor(displaySet.images.length / 2);
         imageId = displaySet.images[imageIndex].getImageId();

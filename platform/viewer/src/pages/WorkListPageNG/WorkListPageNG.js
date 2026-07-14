@@ -117,7 +117,7 @@ export default function WorkListPageNG() {
   const canWorkInWorklist = activeServer?.perms?.worklist;
 
   return (
-    <Layout noHorizontalPadding>
+    <Layout noHorizontalPadding fixedHeight>
 
       {(serverCount > 0) && canWorkInWorklist && (
 

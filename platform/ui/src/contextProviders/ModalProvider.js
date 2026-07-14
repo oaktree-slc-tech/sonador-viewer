@@ -20,7 +20,7 @@ export const useModal = () => useContext(ModalContext);
  * @property {string} [customClassName=null] The custom class to style the modal.
  */
 
-const ModalProvider = ({ children, modal: Modal, service }) => {
+const ModalProvider = ({ children, modal: Modal, service = null }) => {
   const DEFAULT_OPTIONS = {
     content: null,
     contentProps: null,
@@ -119,9 +119,6 @@ export const withModal = (Component) => {
   };
 };
 
-ModalProvider.defaultProps = {
-  service: null,
-};
 
 ModalProvider.propTypes = {
   children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node]).isRequired,

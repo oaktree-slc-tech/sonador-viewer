@@ -26,6 +26,8 @@ import { fetchStudyAclPermissions } from '../../../api/ext';
 
 import Comments from './components/Comments/Comments';
 import { useAllSeriesComments, useStudyComments } from './components/Comments/logic';
+// NOTE: the ReviewHistory drawer panel (components/ReviewHistory) is intentionally not
+// rendered yet — the timeline layout is pending a design round (orthanc-sonador#54)
 import ImageThumbnailNG from './components/ImageThumbnailNG/ImageThumbnailNG';
 import Metadata from './components/Metadata/Metadata';
 import TabletMobileTabs from './components/TabletMobileTabs/TabletMobileTabs';
@@ -298,7 +300,8 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
             )}
           </div>
         ) : (
-          <TabletMobileTabs study={study} series={selectedThumbnail} />
+          <TabletMobileTabs study={study} series={selectedThumbnail} studyId={selectedStudy}
+            commentsEdit={aclCommentEdit} />
         )}
       </div>
     </div>

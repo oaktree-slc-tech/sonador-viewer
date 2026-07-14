@@ -1,3 +1,7 @@
 .settings {
   transform: scale(0.65);
+
+  // Inline SVGs sit on the text baseline, leaving descender slack below the glyph that makes
+  // the gear ride high next to the flex-centered select-all checkbox
+  display: block;
 }

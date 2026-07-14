@@ -13,7 +13,7 @@ function SelectTree({
   searchEnabled = true,
   selectTreeFirstTitle = 'First Level itens',
   selectTreeSecondTitle,
-  searchPlaceholder,
+  searchPlaceholder = 'Search labels',
   items,
   onSelected,
 }) {
@@ -152,8 +152,5 @@ SelectTree.propTypes = {
 };
 
 
-SelectTree.defaultProps = {
-  searchPlaceholder: 'Search labels',
-}
 
 export default SelectTree;

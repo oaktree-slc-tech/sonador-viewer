@@ -33,7 +33,7 @@ import { servicesManager, commandsManager } from '../App';
 import Viewer from './Viewer';
 
 const { DicomMetadataStore, measurements, io } = OHIF;
-const { displaySetService, customizationService } = servicesManager.services;
+const { displaySetService, customizationService, segmentationService } = servicesManager.services;
 
 
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
@@ -568,6 +568,9 @@ function ViewerRetrieveStudyData({
     const measurementApi = measurements.MeasurementApi.Instance;
     const { measurementService } = measurementApi;
 
+    // Initialize OHIF v3 supporting services
+    segmentationService.onModeEnter();
+
     const displayset_added = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SET_ADDED, ({ displaySetInstanceUID, displaySet }) => {
         
@@ -657,6 +660,7 @@ function ViewerRetrieveStudyData({
       displaySetService.onModeExit();
       measurementService.onModeExit();
       customizationService.onModeExit();
+      segmentationService.onModeExit();
 
       console.log('[viewer:fetch-data] component unmounted');
     }

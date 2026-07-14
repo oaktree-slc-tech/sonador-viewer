@@ -22,7 +22,7 @@ import { TableList, TableListItem } from './tableList';
 import { ToolbarSection } from './toolbarSection';
 import { Tooltip } from './tooltip';
 
-import SimpleViewerDialog  from './SimpleViewerDialog/SimpleDialog.js';
+import SimpleViewerDialog, { SimpleDialogShell }  from './SimpleViewerDialog/SimpleDialog.js';
 import EditDescriptionDialog  from './EditDescriptionDialog/EditDescriptionDialog.js';
 import SaveDicomSeriesDialog from './SaveDicomSeriesDialog/SaveDicomSeriesDialog';
 
@@ -49,6 +49,7 @@ export {
   // Dialog components
   SimpleDialog,
   SimpleViewerDialog,
+  SimpleDialogShell,
   EditDescriptionDialog,
   SaveDicomSeriesDialog,
   InputDialog,

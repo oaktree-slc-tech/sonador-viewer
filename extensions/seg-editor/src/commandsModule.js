@@ -1,10 +1,11 @@
-// import { init as coreInit } from '@cornerstonejs/core';
-// import { init as dicomImageLoaderInit } from '@cornerstonejs/dicom-image-loader';
+import { createViewportToggleFeatureCommand } from '@ohif/extension-vtk';
+
+import { Enums as SegEditEnums } from './enums';
 
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
 
+
 const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
-  const { UINotificationService, LoggerService } = servicesManager.services;
 
   // Reference cache for segmentation editor API instances
   let apis = {};
@@ -33,7 +34,6 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
     },
   };
 
-  window.segEditorActions = actions;
 
   const definitions = {
     closeSegEditor: {
@@ -46,12 +46,29 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
       options: {},
       context: 'VIEWER',
     },
+
+    // 3D-viewport rendering toggles: flip the editor-scoped displaySet attributes and republish
+    // (same pattern as toggleVolumeRendering / toggleSegmentationSurface in the volume viewer).
+    // The attributes are initialized during editor load (OHIFSegmentationEditorViewport) and are
+    // deliberately distinct from the volume viewer's imageVolumeRenderingEnabled /
+    // segmentationSurfaceEnabled, which carry panel-visibility semantics elsewhere.
+    toggleSegEditorVolumeRendering: {
+      commandFn: createViewportToggleFeatureCommand('segEditorVolumeRenderingEnabled'),
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    toggleSegEditorSurfaceRendering: {
+      commandFn: createViewportToggleFeatureCommand('segEditorSurfaceRenderingEnabled'),
+      storeContexts: ['viewports'],
+      options: {},
+    },
   };
 
   return {
     definitions,
-    defaultContext: 'ACTIVE_VIEWPORT::SONADOR3DSEG',
+    defaultContext: SegEditEnums.ACTIVE_VIEWPORT,
   };
 };
+
 
 export default commandsModule;

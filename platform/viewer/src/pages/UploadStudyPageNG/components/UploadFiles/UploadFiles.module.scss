@@ -35,11 +35,17 @@
 .uploadContainer {
   display: flex;
   gap: 25px;
-  height: 462px;
+
+  // Kept compact so the recent-uploads table below gets the bulk of the vertical space
+  // (the page is viewport-locked; the table scrolls internally)
+  height: 346px;
   margin-bottom: 20px;
 
   @include md {
     flex-direction: column-reverse;
+
+    // Stacked drop zone + progress list need the taller original height
+    height: 462px;
   }
 
   .upload {

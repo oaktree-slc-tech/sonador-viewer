@@ -82,12 +82,12 @@ export default function StudiesTable({
   }, [isFetching, studies.length, error]);
 
   return (
-    <div
-      className={classNames({
-        [styles.horizontalPadding]: isFilters,
-      })}
-    >
-      <div className={styles.tableToolbar}>
+    <div className={styles.tableSection}>
+      <div
+        className={classNames(styles.tableToolbar, {
+          [styles.horizontalPadding]: isFilters,
+        })}
+      >
         {isDesktop && <StudiesTableActions  selectedRows={selectedRows} isWorkList={isWorkList} />}
         <div className={styles.tablePagination}>
           <div className={styles.rowsPerPage__wrapper} ref={perPageRef}>

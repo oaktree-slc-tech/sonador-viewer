@@ -133,7 +133,6 @@ TableSearchFilter.propTypes = {
   sortDirection: PropTypes.oneOf([null, 'asc', 'desc']),
 };
 
-TableSearchFilter.defaultProps = {};
 
 export { TableSearchFilter };
 export default TableSearchFilter;

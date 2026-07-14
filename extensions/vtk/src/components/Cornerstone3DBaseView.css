@@ -1,0 +1,14 @@
+.viewportWrapper {
+  width: 100%;
+  height: 93%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.viewportElement {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}

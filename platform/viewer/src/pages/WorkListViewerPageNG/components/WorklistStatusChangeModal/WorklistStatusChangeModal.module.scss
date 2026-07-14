@@ -1,0 +1,56 @@
+.modal {
+  width: 700px;
+  min-width: 750px;
+  color: #FFFFFF;
+
+  .label {
+    display: block;
+    margin-top: 12px;
+    font-size: 0.9rem;
+  }
+
+  .textarea {
+    width: 100%;
+    background: #000;
+    margin: 8px 0 16px;
+    border-radius: 8px;
+    color: #FFFFFF;
+    padding: 8px;
+  }
+
+  .input {
+    width: 100%;
+    background: #000;
+    margin: 8px 0 16px;
+    border-radius: 8px;
+    color: #FFFFFF;
+    padding: 8px;
+  }
+
+  .buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+
+    button {
+      color: white;
+      border-radius: 8px;
+      padding: 11px 16px;
+      cursor: pointer;
+    }
+
+    .cancel {
+      background: transparent;
+      border: 1px solid white;
+    }
+
+    .save {
+      background: #2E46E9;
+      border: none;
+
+      &:disabled {
+        pointer-events: none;
+      }
+    }
+  }
+}

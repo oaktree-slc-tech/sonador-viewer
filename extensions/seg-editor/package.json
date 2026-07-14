@@ -1,6 +1,6 @@
 {
   "name": "@ohif/extension-seg3d-editor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Segmentation editor for Sonador/OHIF",
   "author": "Sonador",
   "license": "MIT",
@@ -28,21 +28,22 @@
     "start": "yarn run dev"
   },
   "peerDependencies": {
-    "@kitware/vtk.js": "^32.12.1",
+    "@kitware/vtk.js": "34.15.1",
     "@ohif/core": "^0.50.0",
-    "@ohif/extension-vtk": "^0.50.0",
+    "@ohif/extension-vtk": "^2.0.0",
     "@ohif/ui": "^0.50.0",
+    "@ohif/ui-next": "~0.1.0-a1",
     "prop-types": "^15.6.2",
-    "react": "^16.8.6",
-    "react-dom": "^16.8.6"
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
   },
   "dependencies": {
-    "@cornerstonejs/core": "~3.32.5",
-    "@cornerstonejs/dicom-image-loader": "~3.32.5",
-    "@cornerstonejs/nifti-volume-loader": "~3.32.5",
-    "@cornerstonejs/polymorphic-segmentation": "~3.32.5",
-    "@cornerstonejs/tools": "~3.32.5",
+    "@cornerstonejs/core": "~4.22.13",
+    "@cornerstonejs/dicom-image-loader": "~4.22.13",
+    "@cornerstonejs/nifti-volume-loader": "~4.22.13",
+    "@cornerstonejs/polymorphic-segmentation": "~4.22.13",
     "@icr/polyseg-wasm": "^0.4.0",
+    "@cornerstonejs/tools": "~4.22.13",
     "flexlayout-react": "^0.7.15"
   }
 }

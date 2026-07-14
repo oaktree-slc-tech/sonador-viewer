@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 import './Range.css';
 
-function Range({ value, min, max, step, onChange, id, showPercentage, showValue, valueRenderer }) {
+function Range({ value, min, max, step, onChange, id, showPercentage = false, showValue = false, valueRenderer }) {
   const [state, setState] = useState({ value: value || 0 });
 
   const handleChange = (event) => {
@@ -41,9 +41,5 @@ Range.propTypes = {
   showValue: PropTypes.bool,
 };
 
-Range.defaultProps = {
-  showPercentage: false,
-  showValue: false,
-};
 
 export { Range };

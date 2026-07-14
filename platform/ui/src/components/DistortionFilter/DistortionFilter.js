@@ -21,17 +21,18 @@ const DistortionFilterFlow = ({
   //   the loaded study DICOM tag values against those entered under the Distortion Filter
   //   test values for the group.
 
-  server,  
+  server,
   groups,
   StudyInstanceUID,
   UINotificationService,
   distortionFilterDoneCallback,
-  groupSelectTitle,
-  groupSearchPlaceholder,
-  fadeOutTimeout,
-  msgTemplate,
-  userNotificationTitleTemplate,
-  userNotificationMsgTemplate,
+  groupSelectTitle = 'Select Group Device List for Distortion Check',
+  groupSearchPlaceholder = 'Search groups',
+  fadeOutTimeout = 2000,
+  msgTemplate = _.template('<%= group %>/<%= device %> ("<%= deviceModel %>"): <%= msg %>'),
+  userNotificationTitleTemplate = _.template('Distortion Filter results for "<%= group %>"'),
+  userNotificationMsgTemplate = _.template(
+    'Results for Study="<%= studyId %>": checked <%= seriesCount %> series. <%= findingsCount %> findings.'),
   ...props
 }) => {
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
@@ -161,15 +162,6 @@ DistortionFilterFlow.propTypes = {
 }
 
 
-DistortionFilterFlow.defaultProps = {
-  groupSelectTitle: 'Select Group Device List for Distortion Check',
-  groupSearchPlaceholder: 'Search groups',
-  fadeOutTimeout: 2000,
-  msgTemplate: _.template('<%= group %>/<%= device %> ("<%= deviceModel %>"): <%= msg %>'),
-  userNotificationTitleTemplate: _.template('Distortion Filter results for "<%= group %>"'),
-  userNotificationMsgTemplate: _.template(
-    'Results for Study="<%= studyId %>": checked <%= seriesCount %> series. <%= findingsCount %> findings.'),
-}
 
 
 export default DistortionFilterFlow;

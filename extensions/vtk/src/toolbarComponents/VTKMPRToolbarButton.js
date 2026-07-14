@@ -6,7 +6,7 @@ import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseDisplaySetReconstructable } from '@ohif/ui';
 
 
-function VTKMPRToolbarButton({ toolbarClickCallback, button, isActive }) {
+export default function VTKMPRToolbarButton({ toolbarClickCallback, button, isActive }) {
   // Toolbar button which hides itself if a volume cannot be 3D reconstructed
 
   const { id, label, icon } = button;

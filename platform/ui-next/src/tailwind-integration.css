@@ -1,0 +1,283 @@
+/*
+ * Tailwind CSS integration for @ohif/ui-next components.
+ *
+ * Import this file once in the viewer entry point. It generates:
+ *   - CSS custom property definitions (colors, radii, etc.) used by @ohif/ui-next's
+ *     Tailwind color system via the @theme block in tailwind.css.
+ *   - Tailwind utility classes for all @ohif/ui-next source files and any
+ *     extension that uses @ohif/ui-next components (seg-editor, viewer3d-volume, vtk).
+ *
+ * Preflight (the CSS reset) is intentionally omitted so that importing
+ * these styles does not disrupt the existing viewer stylesheet.
+ */
+
+@import "../assets/fonts.css";
+@import "../assets/styles.css";
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+/*
+ * Explicit source paths.
+ *
+ * Auto-detection is unreliable when this file is resolved through yarn workspace
+ * symlinks (node_modules/@ohif/ui-next → platform/ui-next). All directories
+ * containing @ohif/ui-next component source and any extension using ui-next
+ * components must be listed here so that Tailwind scans and generates the
+ * correct utility classes.
+ */
+@source "./components";
+@source "./hooks";
+@source "./lib";
+@source "../../../extensions/cornerstone/src";
+@source "../../../extensions/seg-editor/src";
+@source "../../../extensions/viewer3d-volume/src";
+@source "../../../extensions/vtk/src";
+
+/*
+ * OHIF theme token mappings.
+ *
+ * Maps the OHIF/shadcn CSS custom properties (--primary, --background, etc.)
+ * to Tailwind's colour namespace so that utilities like bg-primary,
+ * text-foreground, border-input, etc. resolve to the OHIF palette rather
+ * than Tailwind v4's built-in defaults.
+ *
+ * The actual HSL values for these variables are set by the CSS Module
+ * (SonadorSegmentationEditorPanel.module.scss) scoped to the panel wrapper,
+ * or globally via :root when theming is expanded viewer-wide.
+ */
+/*
+ * @theme inline — required for correct opacity-modifier output.
+ *
+ * Plain `@theme {}` generates CSS custom properties (--color-primary, etc.)
+ * and uses them inside color-mix() for opacity modifiers:
+ *
+ *   .bg-primary\/30 { background-color: color-mix(in oklab, var(--color-primary) 30%, transparent); }
+ *
+ * color-mix() with a nested hsl(var(--channel-variable)) argument is
+ * unreliable: browsers cannot always compute the intermediate colour when
+ * the inner function itself references a CSS variable for its channel values.
+ * The result is no background at all — making Slider tracks and Switch tracks
+ * completely invisible.
+ *
+ * `@theme inline` inlines the value directly into each utility so the
+ * emitted CSS uses the standard CSS4 / alpha-channel syntax instead:
+ *
+ *   .bg-primary\/30 { background-color: hsl(var(--primary) / 0.3); }
+ *
+ * Bare colour names (--color-primary, not --color-primary-DEFAULT) are also
+ * required: Tailwind v4 only applies the HSL-alpha optimisation to top-level
+ * colour keys, not to the v3-compatibility -DEFAULT sub-keys.
+ */
+@theme inline {
+  --highlight: 196.15 73.98% 48.24%;
+
+  /* Semantic colour tokens */
+  --color-highlight: hsl(var(--highlight));
+  --color-neutral: hsl(var(--neutral));
+  --color-neutral-light: hsl(var(--neutral-light));
+  --color-neutral-dark: hsl(var(--neutral-dark));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  /* OHIF palette tokens (legacy utilities) */
+  --color-bkg-low: #050615;
+  --color-bkg-med: #090C29;
+  --color-bkg-full: #041C4A;
+  --color-actions-primary: #348CFD;
+  --color-actions-highlight: #5ACCE6;
+  --color-actions-hover: rgba(52, 140, 253, 0.2);
+  --color-info-primary: #FFFFFF;
+  --color-info-secondary: #7BB2CE;
+  --color-aqua-pale: #7bb2ce;
+  --color-customgreen-100: #05D97C;
+  --color-customgreen-200: #0FD97C;
+  --color-customblue-10: #0A163F;
+  --color-customblue-20: #0B1F54;
+  --color-customblue-30: #09286e;
+  --color-customblue-40: #0E307F;
+  --color-customblue-50: #0F3A94;
+  --color-customblue-80: #1454D4;
+  --color-customblue-100: #c4fdff;
+  --color-customblue-200: #38daff;
+  --color-customblue-300: #1D204D;
+  --color-customblue-400: #90A0C1;
+  --color-customgray-100: #262943;
+
+  /* Border radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Typography */
+  --font-family-inter: Inter, sans-serif;
+  --font-size-xxs: 0.625rem;
+  --font-size-xs: 0.6875rem;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 0.8125rem;
+  --font-size-lg: 0.875rem;
+  --font-size-xl: 1rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
+  --font-size-6xl: 4rem;
+
+  /* Accordion animations — used by PanelSection via AccordionContent */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+/* Animation utilities — required by DropdownMenu, Tooltip, Select, and other
+   Radix-based components that use animate-in/out, fade-in-0, zoom-in-95, etc. */
+@plugin "tailwindcss-animate";
+
+/*
+ * Radix UI portals (DropdownMenu, Tooltip, Select, Dialog, etc.) render at
+ * document.body — outside any .theme wrapper — so they never inherit the CSS
+ * custom properties scoped to .theme in the SCSS module. Declaring the same
+ * token values on :root makes them available to portalled content.
+ *
+ * This is safe because:
+ *   - CSS custom properties produce no visual output on their own.
+ *   - The main OHIF viewer uses different naming conventions and will not
+ *     conflict with these shadcn-style variable names.
+ *   - The .theme class in the SCSS module still takes precedence inside the
+ *     panel (more specific selector), so panel-scoped overrides still work.
+ *
+ * Targeted box-sizing reset: Tailwind's preflight is intentionally omitted
+ * (to avoid disrupting the viewer), so browser default content-box sizing
+ * causes Tailwind's w-* utilities to be wider than intended when combined
+ * with px-* padding and border utilities. Rather than resetting all elements
+ * (which breaks legacy OHIF components in the same panel tree), reset only
+ * <input> — the only element type in @ohif/ui-next where this matters.
+ *
+ * Label line-height: the Label cva uses leading-none (line-height: 1) which
+ * is appropriate for display text but looks cramped at text-xs inside the
+ * config drawer. A value of 1.25 aligns the label baseline with adjacent
+ * controls without changing glyph size.
+ */
+@layer base {
+  input {
+    box-sizing: border-box;
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    appearance: none;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+    min-width: 3rem;
+  }
+
+  label {
+    line-height: 1.25;
+  }
+}
+
+/*
+ * Radix Select stacking above the legacy react-modal.
+ *
+ * The legacy OHIF UIModalService (react-modal, used by e.g. the DICOM Tag
+ * Browser) renders its overlay at z-index 1071 as a direct child of <body>.
+ * Radix Select portals its content to <body> too, so a dropdown opened from
+ * inside such a modal would stack BEHIND it.
+ *
+ * Setting z-index on the popper WRAPPER does not work: @radix-ui/react-popper
+ * copies the *content's* computed z-index onto the wrapper as an INLINE style
+ * (useLayoutEffect → getComputedStyle(content).zIndex), and an inline style
+ * beats any stylesheet rule on the wrapper. So we must raise the content node
+ * itself — the [role='listbox'] element inside the wrapper, which Radix then
+ * propagates to the wrapper. role='listbox' scopes this to Select only (menus
+ * use role='menu', tooltips/popovers have no such role), so other poppers are
+ * unaffected.
+ *
+ * Kept here in the Sonador integration layer rather than in the ported
+ * component (maintained verbatim against OHIF-v3) because the high modal
+ * z-index is a Sonador-specific integration detail.
+ */
+[data-radix-popper-content-wrapper] [role='listbox'] {
+  z-index: 1080;
+}
+
+/*
+ * Restore the stable scrollbar gutter for elements that opt into both
+ * `ohif-scrollbar` and the `overflow-y-scroll` utility.
+ *
+ * `.ohif-scrollbar` (from the unlayered assets/styles.css import) declares
+ * `overflow-y: auto`. Because Tailwind v4 emits its utilities inside
+ * `@layer utilities`, and unlayered declarations outrank ANY layered ones, that
+ * `auto` overrides the element's `overflow-y-scroll` utility — even though the
+ * utility has equal specificity. Under OHIF-v3's Tailwind v3 (flat cascade) the
+ * utility wins instead, so the element keeps a permanently-reserved scrollbar
+ * gutter.
+ *
+ * Without that reserved gutter the DICOM Tag Browser's column header row no
+ * longer matches the width of the virtualized list below it (whose scrollbar
+ * occupies a gutter), so the header labels appear to shift when the list's
+ * scrollbar toggles. Re-asserting `overflow-y: scroll` here (specificity 0,2,0
+ * beats `.ohif-scrollbar`'s 0,1,0, both unlayered) reproduces the v3 behavior.
+ * This combination is used only by that header, so the blast radius is nil.
+ */
+.ohif-scrollbar.overflow-y-scroll {
+  overflow-y: scroll;
+}
+
+@layer base {
+  :root {
+    --highlight: 191 74% 63%;
+    --neutral: 213 22% 59%;
+    --neutral-light: 214 69% 81%;
+    --neutral-dark: 214 16% 21%;
+
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 210 10% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 210 10% 12%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 200 37.5% 68.63%;
+    --secondary-foreground: 200 20% 80%;
+    --secondary: 210 15% 28%;
+    --secondary-foreground: 200 50% 84%;
+    --muted: 210 10% 3.5%;
+    --muted-foreground: 200 46% 65%;
+    --accent: 210 12% 17%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 197 50% 50%;
+    --input: 197 50% 50%;
+    --ring: 197 74% 52%;
+    --radius: 0.5rem;
+  }
+}
+

@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import { redux } from '@ohif/core';
 import { ToolbarButton, viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from '@ohif/ui';
 
+
 const isCTVolumeReconstructable = (viewportSpecificData = {}, activeViewportIndex) => {
   // Determine if the series instance supports 3D volume reconstruction
 
@@ -25,7 +26,12 @@ const isCTVolumeReconstructable = (viewportSpecificData = {}, activeViewportInde
   return false;
 };
 
+
 function Viewer3DCTToolbarButton({ toolbarClickCallback, button, isActive }) {
+  // Toolbar button which is displayed if a series can be loaded to the 3D viewer. To be loaded, the series
+  // must be 3D reconstructabble. (Note: the button is only visible when there is a single row and column in the 
+  // viewport grid manager.)
+
   const { id, label, icon } = button;
 
   // Determine which viewport is active
@@ -51,6 +57,7 @@ function Viewer3DCTToolbarButton({ toolbarClickCallback, button, isActive }) {
     </>
   );
 }
+
 
 Viewer3DCTToolbarButton.propTypes = {
   parentContext: PropTypes.object.isRequired,

@@ -1,5 +1,21 @@
+@import '@ohif/sonador-viewer/src/styles/breakpoints';
+
 .container {
   display: flex;
   align-items: center;
-  column-gap: 20px;
+
+  // Align header controls with the body row's first cell (which leads with a 10px-wide
+  // expander + 8px gap before the dots button): 16px shifts the 28px gear box so its center
+  // matches the dots-glyph center, and the 6px gap then puts the select-all checkbox exactly
+  // over the row checkboxes (gear box right edge 84 + 6 = dots box right edge 82 + 8 = 90,
+  // measured from the cell's content edge... both cells share the same padding rail).
+  padding-left: 16px;
+  column-gap: 6px;
+
+  // The alignment targets (dots button, row checkboxes) are desktop-only; on tablet/mobile
+  // the rows lead with the bare expander, so the gear stays flush with the cell edge
+  @include lg {
+    padding-left: 0;
+    column-gap: 20px;
+  }
 }

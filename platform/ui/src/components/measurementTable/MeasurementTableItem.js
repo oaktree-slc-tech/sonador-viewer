@@ -27,8 +27,8 @@ ColoredCircle.propTypes = {
 
 
 const MeasurementTableItem = ({
-  // Render measurement data and actions 
-  
+  // Render measurement data and actions
+
   onDelete,
   itemIndex,
   measurementData,
@@ -36,10 +36,10 @@ const MeasurementTableItem = ({
   onItemClick,
   onEditDescription,
   itemClass,
-  tagBtnLabel,
-  descriptionBtnLabel,
-  deleteBtnLabel,
-  isSelected,
+  tagBtnLabel = 'Tag',
+  descriptionBtnLabel = 'Description',
+  deleteBtnLabel = 'Delete',
+  isSelected = false,
   isActive,
 }) => {
   const { t } = useTranslation('MeasurementTable');
@@ -242,11 +242,5 @@ MeasurementTableItem.propTypes = {
 };
 
 
-MeasurementTableItem.defaultProps = {
-  tagBtnLabel: 'Tag',
-  descriptionBtnLabel: 'Description',
-  deleteBtnLabel: 'Delete',
-  isSelected: false,
-}
 
 export { MeasurementTableItem };

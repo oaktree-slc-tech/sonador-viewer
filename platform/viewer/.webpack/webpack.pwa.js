@@ -95,8 +95,12 @@ module.exports = (env, argv) => {
         ],
       }),
       new ExtractCssChunksPlugin({
-        filename: isProdBuild ? '[name].[hash].css' : '[name].css',
-        chunkFilename: isProdBuild ? '[id].[hash].css' : '[id].css',
+        // [contenthash], not [hash]: with [hash] the plugin's CSS chunk-loading runtime inlines
+        // the raw compilation hash as an unquoted token, which is invalid syntax whenever the
+        // hash starts with a digit (Terser: "Invalid syntax: <hash>") and mis-computes lazy CSS
+        // hrefs at runtime. [contenthash] emits a proper precomputed chunk->filename map.
+        filename: isProdBuild ? '[name].[contenthash].css' : '[name].css',
+        chunkFilename: isProdBuild ? '[id].[contenthash].css' : '[id].css',
         ignoreOrder: true,
       }),
       new HtmlWebpackPlugin({

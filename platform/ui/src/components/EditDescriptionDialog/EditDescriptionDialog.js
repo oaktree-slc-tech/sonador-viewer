@@ -6,7 +6,7 @@ import SimpleDialog from '../SimpleViewerDialog/SimpleDialog.js';
 import './EditDescriptionDialog.css';
 
 
-const EditDescriptionDialog = ({ description: propDescription, onCancel, onUpdate, headerTitle }) => {
+const EditDescriptionDialog = ({ description: propDescription, onCancel, onUpdate, headerTitle = 'Edit Description' }) => {
   // Provides a basic dialog with an edit control for modifying a "description"
 
   const [description, setDescription] = useState(propDescription || '');
@@ -48,9 +48,6 @@ EditDescriptionDialog.propTypes = {
 };
 
 
-EditDescriptionDialog.defaultProps = {
-  headerTitle: 'Edit Description',
-}
 
 
 export default EditDescriptionDialog;

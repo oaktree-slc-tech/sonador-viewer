@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 
 // Import OHIF DICOM ECG extension
 import OHIFDicomECGExtension from '@ohif/extension-dicom-ecg';
@@ -67,4 +67,4 @@ const appProps = {
 // const app = React.createElement(App, appProps, null);
 
 /** Render */
-ReactDOM.render(<App {...appProps} />, document.getElementById('root'));
+createRoot(document.getElementById('root')).render(<App {...appProps} />);

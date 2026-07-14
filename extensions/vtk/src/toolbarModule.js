@@ -1,7 +1,10 @@
 import { TOOLBAR_BUTTON_TYPES } from '@ohif/ui';
+import { Enums as CornerstoneEnums } from '@ohif/extension-cornerstone';
 
-import SlabThicknessToolbarComponent from './toolbarComponents/SlabThicknessToolbarComponent';
 import { VTKMPRToolbarButton } from './toolbarComponents/VTKMPRToolbarButton';
+
+import { Enums as vtkEnums } from './enums';
+
 
 const definitions = [
   {
@@ -19,7 +22,7 @@ const definitions = [
     icon: 'level',
     //
     type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-    commandName: 'enableLevelTool',
+    commandName: 'enableMprLevelTool',
     commandOptions: {},
   },
   {
@@ -28,99 +31,8 @@ const definitions = [
     icon: 'reset',
     //
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'resetMPRView',
+    commandName: 'resetMprView',
     commandOptions: {},
-  },
-  {
-    id: 'Rotate',
-    label: 'Rotate',
-    icon: '3d-rotate',
-    //
-    type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-    commandName: 'enableRotateTool',
-    commandOptions: {},
-  },  
-  /*
-  {
-    id: 'setBlendModeToComposite',
-    label: 'Disable MIP',
-    icon: 'times',
-    //
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'setBlendModeToComposite',
-    commandOptions: {},
-  },
-  {
-    id: 'setBlendModeToMaximumIntensity',
-    label: 'Enable MIP',
-    icon: 'soft-tissue',
-    //
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'setBlendModeToMaximumIntensity',
-    commandOptions: {},
-  },
-
-  {
-    id: 'increaseSlabThickness',
-    label: 'Increase Slab Thickness',
-    icon: 'caret-up',
-    //
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'increaseSlabThickness',
-    commandOptions: {},
-  },
-  {
-    id: 'decreaseSlabThickness',
-    label: 'Decrease Slab Thickness',
-    icon: 'caret-down',
-    //
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'decreaseSlabThickness',
-    commandOptions: {},
-  },
-  */
-  {
-    id: 'changeSlabThickness',
-    label: 'Slab Thickness',
-    icon: 'soft-tissue',
-    CustomComponent: SlabThicknessToolbarComponent,
-    commandName: 'setSlabThickness',
-    actionButton: {
-      id: 'setSlabThickness',
-      label: 'slider',
-      type: TOOLBAR_BUTTON_TYPES.COMMAND,
-      commandName: 'setSlabThickness',
-      commandOptions: {},
-    },
-    deactivateButton: {
-      id: 'setBlendModeToComposite',
-      type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-      commandName: 'setBlendModeToComposite',
-      commandOptions: {},
-    },
-    operationButtons: [
-      {
-        id: 'setBlendModeToMaximumIntensity',
-        label: 'MIP',
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setBlendModeToMaximumIntensity',
-        commandOptions: {},
-      },
-      {
-        id: 'setBlendModeToMinimumIntensity',
-        label: 'MinIP',
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setBlendModeToMinimumIntensity',
-        commandOptions: {},
-      },
-      {
-        id: 'setBlendModeToAverageIntensity',
-        label: 'AvgIP',
-        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
-        commandName: 'setBlendModeToAverageIntensity',
-        commandOptions: {},
-      },
-    ],
   },
   {
     id: '2DMPR',
@@ -129,12 +41,13 @@ const definitions = [
     CustomComponent: VTKMPRToolbarButton,
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
     commandName: 'mpr2d',
-    context: 'ACTIVE_VIEWPORT::CORNERSTONE',
+    context: CornerstoneEnums.ACTIVE_VIEWPORT,
     uiOptions: { layoutButtonVisible: false },
   },
 ];
 
+
 export default {
   definitions,
-  defaultContext: 'ACTIVE_VIEWPORT::VTK',
+  defaultContext: vtkEnums.ACTIVE_VIEWPORT,
 };

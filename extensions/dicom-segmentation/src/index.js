@@ -4,6 +4,9 @@ import OHIF from '@ohif/core';
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
+import { Enums as vtkEnums } from '@ohif/extension-vtk';
+import { isSTLDisplaySet } from '@ohif/extension-viewerm3d';
+
 import dicomSegmentationPackage from '../package.json';
 
 import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.js';
@@ -77,7 +80,7 @@ const segmentationExtension = {
         commandsManager.runCommand('setSegmentConfiguration', {
           segmentNumber,
           visible,
-        });
+        }, vtkEnums.VIEWPORT);
       };
 
       const onConfigurationChangeHandler = (configuration) => {
@@ -86,7 +89,7 @@ const segmentationExtension = {
           outlineThickness: configuration.outlineWidth,
           renderOutline: configuration.renderOutline,
           visible: configuration.renderFill,
-        });
+        }, vtkEnums.VIEWPORT);
       };
 
       const onSelectedSegmentationChangeHandler = () => {
@@ -182,6 +185,24 @@ const segmentationExtension = {
                     return false;
                   }
                 }
+              }
+            }
+
+            // M3D/STL series host the M3D sidebar in this panel, so they enable it without a
+            // DICOM-SEG being present. GLB scenes have no sidebar content and do not enable it —
+            // the STL/GLB distinction lives with the viewerm3d SOP class handler
+            // (isSTLDisplaySet), which resolves it from the display set metadata.
+            for (let i = 0; i < studies.length; i++) {
+              const study = studies[i];
+
+              if (!study || !study.series || !study.series.some((series) => series.Modality === 'M3D')) {
+                continue;
+              }
+
+              const studyMetadata = studyMetadataManager.get(study.StudyInstanceUID);
+              const displaySets = studyMetadata ? studyMetadata.getDisplaySets() : [];
+              if (displaySets.some(isSTLDisplaySet)) {
+                return false;
               }
             }
 

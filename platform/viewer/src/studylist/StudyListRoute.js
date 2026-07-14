@@ -33,7 +33,7 @@ function getStudyUrlParams() {
   return new URLSearchParams(location.search);
 }
 
-function StudyListRoute({ server, user, studyListFunctionsEnabled, filters }) {
+function StudyListRoute({ server, user, studyListFunctionsEnabled = true, filters }) {
   // Sonador/OHIF Study List
 
   const navigate = useNavigate();
@@ -366,9 +366,6 @@ StudyListRoute.propTypes = {
   studyListFunctionsEnabled: PropTypes.bool,
 };
 
-StudyListRoute.defaultProps = {
-  studyListFunctionsEnabled: true,
-};
 
 /**
  * Not ideal, but we use displaySize to determine how the filters should be used

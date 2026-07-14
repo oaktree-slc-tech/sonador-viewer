@@ -1,0 +1,120 @@
+/**
+ * Scoped OHIF/shadcn theme tokens for Sonador's segmentation panels.
+ *
+ * Import this module and apply `.theme` to a panel's root element to activate
+ * the full @ohif/ui-next colour system within that subtree without touching
+ * the rest of the viewer.  CSS custom properties are inherited, so every
+ * descendant receives the correct token values.
+ *
+ * Shared across seg-editor, dicom-segmentation, and any future panel that
+ * renders SegmentationTable inside the Sonador viewer shell.
+ *
+ * To extend theming viewer-wide later, move these declarations to :root in
+ * tailwind-integration.css and remove the wrapper div.
+ */
+
+.theme {
+  color-scheme: dark;
+
+  /* Base surface and typography — overrides the viewer's global Roboto/system font
+     and ensures the panel has the correct dark background rather than inheriting
+     the viewer's transparent/white body. */
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  line-height: 1.5;
+
+  button {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-secondary-color);
+  }
+
+  h3 button {
+    height: 63px;
+    color: var(--text-secondary-color);
+    margin-bottom: -10px;
+
+    span {
+      line-height: 63px;
+      font-weight: 300;
+      font-size: 22px;
+      padding: 0px 10px 0px 3px;
+    }
+  }
+
+  .panelWrapper { margin: -24px -20px -21px -19px; }
+
+  :global(.seg-action) {
+    --spacing: 0.35rem;
+    height: auto; padding: 0 !important;
+
+    button { height: auto; padding: 0 !important; }
+  }
+
+  :global(.seg-label) {
+    color: var(--text-primary-color);
+    font-size: 16px !important;
+    font-weight: 300;
+  }
+
+
+  :global(.seg-tooltip-content) {
+    background-color: var(--ui-gray-darker);
+    border-color: var(--ui-border-color);
+    padding: 0.5rem 0.75rem;
+  }
+
+  :global(.bg-popover) {
+    background-color: var(--ui-gray-darker);
+    border-color: var(--ui-border-color);
+  }
+
+  :global(.seg-dropdown-content) {
+    color: hsl(var(--popover-foreground));
+    background-color: var(--ui-gray-darker);
+    border-color: var(--ui-border-color);
+  }
+
+  :global(.panelSelect) {
+    padding: 0.5rem 0.35rem 0.5rem 0.25rem;
+  }
+
+  .panelActions {
+    --spacing: 0.315rem;
+    margin-left: 2px;
+    margin-bottom: 0.25rem;
+
+    button {
+      padding: 0; height: auto;
+      background-color: transparent;
+
+      svg path { stroke-width: 1.33px; }
+    }
+  }
+
+  :global(.seg-table-config) {
+    padding: 0.65rem 0.5rem 0.5rem 1rem;
+  }
+
+  .panelExpandedContainer {
+    margin-left: -7.5px;
+  }
+
+  .panelHeader {
+    margin-bottom: 0.35rem;
+    background-color: var(--ui-gray-dark);
+
+    :global(.seg-header-container) {
+      padding: 0.5rem 0 0.5rem 0;
+    }
+  }
+
+  .panelSegments {
+    --spacing: 0.3rem;
+
+    button { padding: 0; }
+  }
+}

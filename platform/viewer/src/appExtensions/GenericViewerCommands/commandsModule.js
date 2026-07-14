@@ -1,6 +1,5 @@
 import { redux, utils } from '@ohif/core';
 
-import store from './../../store';
 
 const commandsModule = ({ commandsManager }) => {
   const { setViewportActive, setActiveViewportSpecificData } = redux.actions;
@@ -14,7 +13,7 @@ const commandsModule = ({ commandsManager }) => {
       newIndex = newIndex > maxIndex ? 0 : newIndex;
       newIndex = newIndex < 0 ? maxIndex : newIndex;
 
-      store.dispatch(setViewportActive(newIndex));
+      window.store.dispatch(setViewportActive(newIndex));
     },
     setWindowLevelPreset: ({ viewports, preset }) => {
       const state = store.getState();
@@ -52,7 +51,7 @@ const commandsModule = ({ commandsManager }) => {
         return;
       }
 
-      store.dispatch(setActiveViewportSpecificData(newDisplaySetData));
+      window.store.dispatch(setActiveViewportSpecificData(newDisplaySetData));
     },
   };
 

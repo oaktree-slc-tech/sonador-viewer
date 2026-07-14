@@ -7,7 +7,7 @@ import { commandsManager } from '../App';
 
 const toolTypes = ['Angle', 'Bidirectional', 'Length', 'FreehandMouse', 'EllipticalRoi', 'CircleRoi', 'RectangleRoi'];
 
-const ToolContextMenu = ({ onSetLabel, onSetDescription, isTouchEvent, eventData, onClose, onDelete }) => {
+const ToolContextMenu = ({ onSetLabel, onSetDescription, isTouchEvent = false, eventData, onClose, onDelete }) => {
   const defaultDropdownItems = [
     {
       label: 'Delete measurement',
@@ -87,8 +87,5 @@ ToolContextMenu.propTypes = {
   onDelete: PropTypes.func,
 };
 
-ToolContextMenu.defaultProps = {
-  isTouchEvent: false,
-};
 
 export default ToolContextMenu;

@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react';
 import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
@@ -11,14 +11,14 @@ const DialogContext = createContext(null);
 
 export const useDialog = () => useContext(DialogContext);
 
-const DialogProvider = ({ children, service }) => {
+const DialogProvider = ({ children, service = null }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dialogs, setDialogs] = useState([]);
   const [lastDialogId, setLastDialogId] = useState(null);
   const [lastDialogPosition, setLastDialogPosition] = useState(null);
   const [centerPositions, setCenterPositions] = useState([]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setCenterPositions(
       dialogs.map((dialog) => ({
         id: dialog.id,
@@ -239,9 +239,6 @@ export const withDialog = (Component) => {
   };
 };
 
-DialogProvider.defaultProps = {
-  service: null,
-};
 
 DialogProvider.propTypes = {
   children: PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.node), PropTypes.node, PropTypes.func]).isRequired,

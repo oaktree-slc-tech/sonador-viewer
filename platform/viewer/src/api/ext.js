@@ -117,8 +117,19 @@ export const fetchDownloadSeries = async (server, seriesId) => {
 
 export const fetchStudyAclPermissions = (server, studyId) => {
   // Retrieve ACL permissions for the provided study ID
-  
+
   return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'resource-acl'), {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  }).then((res) => res.json());
+}
+
+
+export const fetchStudyWorklists = (server, studyId) => {
+  // Retrieve the worklist items assigned to the provided study. Each item carries its
+  // reviewer-facing Meta (RequestedProcedure, PerformedProcedure and the per-transition
+  // ReviewHistory), which drives the Study Details review timeline.
+
+  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'worklists'), {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   }).then((res) => res.json());
 }

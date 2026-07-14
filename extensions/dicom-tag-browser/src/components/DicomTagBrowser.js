@@ -45,11 +45,22 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
     });
 
     let metadata;
+
+    // isImageStack: the standard Cornerstone image path — ImageSet instances with image-renderable
+    // slices, each addressable by InstanceNumber.
+    //
+    // hasInstanceImages: non-ImageSet display sets (e.g. M3D) that carry an images array of
+    // InstanceMetadata objects with a getData() interface. These get the same instance scrubber
+    // so that multi-instance series (e.g. multi-mesh STL collections) can be browsed by instance.
     const isImageStack = activeDisplaySet instanceof ImageSet && activeDisplaySet.isSOPClassUIDSupported === true;
+    const hasInstanceImages = !isImageStack &&
+      Array.isArray(activeDisplaySet.images) &&
+      activeDisplaySet.images.length > 0 &&
+      typeof activeDisplaySet.images[0].getData === 'function';
 
     let instanceList;
 
-    if (isImageStack) {
+    if (isImageStack || hasInstanceImages) {
       const { images } = activeDisplaySet;
       const image = images[activeInstance - 1];
 
@@ -60,7 +71,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
 
         return {
           value: index,
-          title: `Instance Number: ${InstanceNumber}`,
+          title: `Instance Number: ${InstanceNumber || index + 1}`,
           description: '',
           onClick: () => {
             setActiveInstance(index);
@@ -77,7 +88,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
     setMeta(metadata);
     setInstanceList(instanceList);
     setDisplaySetList(newDisplaySetList);
-    setIsImageStack(isImageStack);
+    setIsImageStack(isImageStack || hasInstanceImages);
   }, [activeDisplaySetInstanceUID, activeInstance, displaySets]);
 
   const selectedDisplaySetValue = displaySetList.find((ds) => ds.value === activeDisplaySetInstanceUID);

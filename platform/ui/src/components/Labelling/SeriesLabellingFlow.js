@@ -28,10 +28,10 @@ const SeriesTagLabellingFlow = ({
 
   groups,
   server,
-  groupSelectTitle,
-  groupSearchPlaceholder,
+  groupSelectTitle = 'Select Group',
+  groupSearchPlaceholder = 'Search groups',
   updateLabelling,
-  fadeOutTimeout,
+  fadeOutTimeout = 2000,
   labellingDoneCallback,
   ...props
 }) => {
@@ -167,12 +167,6 @@ SeriesTagLabellingFlow.propTypes = {
 }
 
 
-SeriesTagLabellingFlow.defaultProps = {
-  ...LabellingFlow.defaultProps,
-  groupSelectTitle: 'Select Group',
-  groupSearchPlaceholder: 'Search groups',
-  fadeOutTimeout: 2000,
-}
 
 
 export default SeriesTagLabellingFlow;

@@ -1,0 +1,11 @@
+.sonadorSimpleInputDialog {
+	position: relative;
+	z-index: 300;
+	min-width: 350px;
+	transition: all 300ms linear;
+}
+
+
+.sonadorSimpleInputDialog .footer > div {
+	width: 100%;
+}

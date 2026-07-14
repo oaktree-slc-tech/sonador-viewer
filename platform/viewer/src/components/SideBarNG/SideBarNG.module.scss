@@ -4,7 +4,10 @@
 
 .ngSidebar {
   color: #fff;
-  padding: 50px 30px;
+
+  // 30px top aligns the logo container with the top of the gray content panel
+  // (Layout's .wrapper padding-top)
+  padding: 30px 30px 50px;
   display: flex;
   flex-direction: column;
   height: 100%;

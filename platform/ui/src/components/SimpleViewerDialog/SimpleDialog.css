@@ -129,9 +129,14 @@
 
 .simpleDialog .footer .btn-confirm {
   color: #fff;
-  background-color: #337ab7;
+  background-color: #337ab7 !important;
+}
+
+.simpleDialog .footer .btn-default {
+  background-color: var(--sonador-ui-default) !important;
 }
 
 .simpleDialog .footer .btn-primary {
-  color: #fff;
+  color: #fff !important;
+  background-color: var(--sonador-ui-primary) !important;
 }

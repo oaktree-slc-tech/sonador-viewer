@@ -75,10 +75,5 @@ PanelSection.propTypes = {
   onVisibilityChange: PropTypes.func,
 };
 
-PanelSection.defaultProps = {
-  visible: false,
-  expanded: false,
-  onVisibilityChange: () => {},
-};
 
 export default PanelSection;

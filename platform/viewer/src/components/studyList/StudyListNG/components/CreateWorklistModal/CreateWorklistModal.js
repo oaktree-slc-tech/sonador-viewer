@@ -64,11 +64,27 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
     setShowMembershipSearchResponse(false);
   };
 
+  // requested procedure
+  const [reasonForReview, setReasonForReview] = useState('');
+  const [requestedProcedureDescription, setRequestedProcedureDescription] = useState('');
+
+  const buildProcedure = () => {
+    // Assemble the optional RequestedProcedure facet from the reason/description inputs.
+    // Empty inputs are omitted; if neither is provided no Procedure block is sent.
+
+    const requested = {
+      ...(reasonForReview.trim() ? { ReasonForTheRequestedProcedure: reasonForReview.trim() } : {}),
+      ...(requestedProcedureDescription.trim()
+        ? { RequestedProcedureDescription: requestedProcedureDescription.trim() } : {}),
+    };
+    return Object.keys(requested).length ? { RequestedProcedure: requested } : undefined;
+  };
+
   // create worklist
   const { mutate: createWorklistRequestMutate, isLoading: isLoadingCreateWorklistRequest } = useMutation({
     mutationFn: () => createWorklistRequest({
       server: activeServer, groupId: selectedGroup.id, userId: selectedMembership.id,
-      State: 'Scheduled', StudyInstanceUID: studyInstanceUIDs,
+      State: 'Scheduled', StudyInstanceUID: studyInstanceUIDs, Procedure: buildProcedure(),
     }),
     onSuccess: () => {
       setIsOpen(false);      
@@ -164,6 +180,34 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
               ))}
             </ul>
           )}
+        </div>
+      }
+
+      {selectedMembership &&
+        <div className={styles.inputGroup}>
+          <label htmlFor="reason-for-review">Reason for Review</label>
+          <textarea
+            id="reason-for-review"
+            value={reasonForReview}
+            onChange={(e) => setReasonForReview(e.target.value)}
+            placeholder="Why is this study being reviewed?"
+            className={styles.input}
+            rows={3}
+          />
+        </div>
+      }
+
+      {selectedMembership &&
+        <div className={styles.inputGroup}>
+          <label htmlFor="requested-procedure-description">Requested Procedure (optional)</label>
+          <input
+            id="requested-procedure-description"
+            type="text"
+            value={requestedProcedureDescription}
+            onChange={(e) => setRequestedProcedureDescription(e.target.value)}
+            placeholder="Describe the requested procedure"
+            className={styles.input}
+          />
         </div>
       }
 

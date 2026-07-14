@@ -16,8 +16,8 @@ const SimpleDialog = ({
   headerTitle,
   onClose,
   onConfirm,
-  btnTextConfirm,
-  btnTextCancel,
+  btnTextConfirm = 'Confirm',
+  btnTextCancel = 'Cancel',
 }) => {
   const handleClose = (event) => {
     event.preventDefault();
@@ -69,10 +69,6 @@ SimpleDialog.propTypes = {
 };
 
 
-SimpleDialog.defaultProps = {
-  btnTextConfirm: 'Confirm',
-  btnTextCancel: 'Cancel',
-}
 
 
 const InputDialog = ({ onSubmit, defaultValue, title, label, onClose }) => {

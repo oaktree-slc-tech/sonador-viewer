@@ -2,16 +2,27 @@ import React, { useEffect } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
+import OHIF from '@ohif/core';
 import { eventTypes as uiEvents } from '@ohif/ui';
 
 import './SidePanel.css';
+
+const { DisplaySetApi } = OHIF.display;
+
 
 const SidePanel = ({ from, isOpen, children, width, transitionDelay = 300 }) => {
   const fromSideClass = from === 'right' ? 'from-right' : 'from-left';
 
   useEffect(() => {
+    
     // Trigger custom event after panel change to allow for viewports to resize
     setTimeout(() => {
+
+      // Trigger displaySetService data sync event
+      DisplaySetApi.Instance.displaySetService.triggerApiEvent(
+        OHIF.display.Enums.EVENTS.UI, { component: 'sidebar', uiEvent: uiEvents.sidebar.toggle, isOpen });
+
+      // Trigger browser custom event
       const e = new CustomEvent(uiEvents.sidebar.toggle, { isOpen });
       document.dispatchEvent(e);
     }, transitionDelay);

@@ -1,7 +1,6 @@
 import _ from 'lodash';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { unstable_batchedUpdates } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
