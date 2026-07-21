@@ -222,6 +222,11 @@
         background-color: #27292d;
       }
 
+      // Locally-cached / available-offline studies render in a heavier weight (#125, FR-6).
+      &.cached td {
+        font-weight: 600;
+      }
+
       &.expanded td {
         background-color: #000;
 

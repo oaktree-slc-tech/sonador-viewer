@@ -21,6 +21,7 @@ import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
 
 import { SeriesTagToolbarButton } from './toolbarComponents/SeriesTagToolbarButton.js';
 import { DistortionFilterToolbarButton } from './toolbarComponents/DistortionFilterToolbarButton.js';
+import { LocalCacheToolbarButton } from './toolbarComponents/LocalCacheToolbarButton.js';
 
 /* TODO: Export enums through a extension manager. */
 const enums = {
@@ -234,9 +235,20 @@ const definitions = [
         },
       },
       {
+        // Local/offline study cache toggle (ohif-viewers#125, FR-9). CustomComponent branches
+        // label/icon/command on live cache state; distinct id/command from the 'Download'
+        // (screenshot) and study-list 'download' (zip) features (AR-6).
+        id: 'LocalCache',
+        label: 'Save Offline Copy',
+        icon: 'offline-cache',
+        CustomComponent: LocalCacheToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'goOffline',
+      },
+      {
         id: 'ReloadStudy',
         label: 'Reload Study',
-        icon: 'reset',        
+        icon: 'reset',
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'reloadStudy',
       },

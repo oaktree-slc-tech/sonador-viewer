@@ -26,6 +26,8 @@ import {
   UIModalService,
   UINotificationService,
   ViewportGridService,
+  LocalCacheService,
+  DownloadManagerService,
 
   SystemContextProvider,
   
@@ -174,6 +176,10 @@ class App extends Component {
       UIModalService,
       UIDialogService,
       MeasurementService,
+      // Local/offline DICOM study cache services (ohif-viewers#125). Registered here alongside the
+      // other primary services; both are also directly importable module singletons from @ohif/core.
+      LocalCacheService,
+      DownloadManagerService,
     ]);
 
     // TODO: The DisplaySetService and CustomizationService are required to support MeasurementService.

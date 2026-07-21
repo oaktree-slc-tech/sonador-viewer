@@ -38,6 +38,8 @@ class ExpandableToolMenu extends React.Component {
     ]),
     onGroupMenuClick: PropTypes.func,
     activeCommand: PropTypes.string,
+    /** Toolbar click handler, called as (button, evt); lets CustomComponents override the dispatched command */
+    toolbarClickCallback: PropTypes.func,
   };
 
   static defaultProps = {
@@ -78,13 +80,20 @@ class ExpandableToolMenu extends React.Component {
       if (_.isFunction(button.CustomComponent)) {
         const CustomComponent = button.CustomComponent;
 
-        const _handleClick = () => {
+        // button.onClick is pre-bound to the static button definition, so it discards any
+        // command override the CustomComponent passes (e.g. LocalCacheToolbarButton switching
+        // between goOffline/removeOffline). Forward the component's button when possible.
+        const _handleClick = (overriddenButton, evt) => {
+          if (_.isFunction(this.props.toolbarClickCallback)) {
+            return this.props.toolbarClickCallback(overriddenButton || button, evt);
+          }
+
           return button.onClick();
-          console.log('Button clicked: ', button);
         }
 
         return (
           <CustomComponent
+            key={button.id || index}
             parentContext={_parent}
             toolbarClickCallback={_handleClick}
             button={button}

@@ -9,9 +9,12 @@ import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as CaretIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
 import { ReactComponent as ChevronDown } from '@ohif/ui/src/elements/Svg/svgs/chevron-down.svg';
 
+import { LocalCacheService } from '@ohif/core';
+
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import StudyItemExpandedNG from '../../../StudyItemExpandedNG/StudyItemExpandedNG';
 import StudiesTableActions from '../StudiesTableActions/StudiesTableActions';
+import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
 
 import styles from './StudiesTable.module.scss';
 
@@ -38,6 +41,9 @@ export default function StudiesTable({
   const { t } = useTranslation(['StudyList']);
 
   const { isDesktop } = useDeviceStore();
+
+  // Re-render on local-cache changes so cached rows pick up the heavier font weight (FR-6).
+  useLocalCacheVersion();
 
   const [isOpenedRowsPerPage, setIsOpenedRowsPerPage] = useState(false);
   const [draggingColumnId, setDraggingColumnId] = useState(null);
@@ -84,9 +90,7 @@ export default function StudiesTable({
   return (
     <div className={styles.tableSection}>
       <div
-        className={classNames(styles.tableToolbar, {
-          [styles.horizontalPadding]: isFilters,
-        })}
+        className={classNames(styles.tableToolbar, styles.horizontalPadding)}
       >
         {isDesktop && <StudiesTableActions  selectedRows={selectedRows} isWorkList={isWorkList} />}
         <div className={styles.tablePagination}>
@@ -208,6 +212,8 @@ export default function StudiesTable({
                         [styles.expanded]: isExpanded,
                         [styles.odd]: index % 2 === 0,
                         [styles.withRightBorder]: !isExpanded,
+                        // Heavier font weight for locally-cached studies (FR-6).
+                        [styles.cached]: LocalCacheService?.isStudyCachedSync(studyId),
                       })}
                     >
                       {row.getVisibleCells().map((cell) => {

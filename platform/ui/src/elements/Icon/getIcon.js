@@ -27,6 +27,7 @@ import clipboard from './icons/clipboard.svg';
 import cog from './icons/cog.svg';
 import createComment from './icons/create-comment.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
+import offlineCache from './icons/offline-cache.svg';
 import crop from './icons/crop.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
@@ -139,6 +140,7 @@ const ICONS = {
   times,
   'create-comment': createComment,
   'create-screen-capture': createScreenCapture,
+  'offline-cache': offlineCache,
   edit,
   'fast-backward': fastBackward,
   'fast-forward': fastForward,

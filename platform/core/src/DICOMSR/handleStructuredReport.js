@@ -10,6 +10,8 @@ import display from '../display';
 
 import DICOMWeb from '../DICOMWeb';
 import errorHandler from '../errorHandler';
+import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
+import { isUsablePart10 } from '../utils/dicomPart10';
 import getXHRRetryRequestHook from '../utils/xhrRetryRequestHook';
 
 import getAllDisplaySets from './Cornerstone3d/utils/getAllDisplaySets';
@@ -94,7 +96,33 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
       };
     }
 
-    part10SRArrayBuffer = await dicomWeb.retrieveInstance(_args);
+    // Offline cache first (ohif-viewers#125): SR instances are cached like any other instance,
+    // so measurement retrieval must not hit the network for offline-saved studies.
+    if (LocalCacheService?.isInstanceCachedSync(_args.sopInstanceUID)) {
+      const cachedBytes = await LocalCacheService.getInstanceBytes(_args.sopInstanceUID);
+      if (cachedBytes && isUsablePart10(cachedBytes)) {
+        part10SRArrayBuffer = cachedBytes;
+      }
+    }
+
+    if (!part10SRArrayBuffer) {
+      part10SRArrayBuffer = await dicomWeb.retrieveInstance(_args);
+
+      // Write-back: if the study is saved offline, cache the fetched SR so the next retrieval is
+      // local (same opportunistic pattern as dicomLoaderService._fetchAndRecache).
+      if (
+        part10SRArrayBuffer && isUsablePart10(part10SRArrayBuffer) &&
+        LocalCacheService?.isStudyCachedSync(_args.studyInstanceUID)
+      ) {
+        LocalCacheService.putInstance({
+          StudyInstanceUID: _args.studyInstanceUID,
+          SeriesInstanceUID: _args.seriesInstanceUID,
+          SOPInstanceUID: _args.sopInstanceUID,
+          bytes: part10SRArrayBuffer,
+          metadata: { SOPInstanceUID: _args.sopInstanceUID, Modality: 'SR' },
+        }).catch(() => {});
+      }
+    }
   }
 
   // Parse the array buffer and add to the raw DICOM-SR data as a naturalizedInstance

@@ -6,7 +6,9 @@ import { api } from 'dicomweb-client';
 
 import DICOMWeb from '../DICOMWeb';
 import errorHandler from '../errorHandler';
+import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
 
+import { isUsablePart10 } from './dicomPart10';
 import getXHRRetryRequestHook from './xhrRetryRequestHook';
 
 const getImageId = (imageObj) => {
@@ -107,6 +109,82 @@ class DicomLoaderService {
     }
   }
 
+  getOfflineCacheData(dataset) {
+    // Prefer the persistent offline cache (ohif-viewers#125). Specialty display sets — PDF, M3D
+    // (STL/GLB), SEG, RT, SR, ECG — fetch their raw Part10 bytes through this service rather than
+    // the Cornerstone image loaders, so the cache has to be consulted here as well: without this
+    // stage those types always hit the network even when the study is stored offline.
+    const imageInstance = getImageInstance(dataset);
+    const SOPInstanceUID =
+      (dataset && dataset.SOPInstanceUID) ||
+      (imageInstance && typeof imageInstance.getSOPInstanceUID === 'function' && imageInstance.getSOPInstanceUID()) ||
+      (imageInstance && imageInstance.SOPInstanceUID);
+
+    if (!SOPInstanceUID) {
+      return;
+    }
+
+    if (LocalCacheService?.isInstanceCachedSync(SOPInstanceUID)) {
+      return LocalCacheService.getInstanceBytes(SOPInstanceUID).then((bytes) => {
+        if (bytes && bytes.byteLength && isUsablePart10(bytes)) {
+          return bytes;
+        }
+
+        // Record gone (evicted) or not a usable Part10 stream (e.g. cached as-stored with a
+        // sparse file-meta header before download-time validation existed): purge the bad record,
+        // then fetch from the network and RE-CACHE the normalized bytes so the instance is local
+        // again on the next load (FR-10).
+        if (bytes && bytes.byteLength) {
+          console.warn(
+            `[dicomLoaderService] Cached bytes for ${SOPInstanceUID} are not a usable Part10 stream; ` +
+            'purging the record and refetching from network.'
+          );
+          const { StudyInstanceUID, SeriesInstanceUID } = dataset || {};
+          if (StudyInstanceUID && SeriesInstanceUID) {
+            LocalCacheService.removeInstance(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID)
+              .catch(() => {});
+          }
+        }
+        return this._fetchAndRecache(dataset, SOPInstanceUID);
+      });
+    }
+
+    // Instance not cached but the rest of the study is — typically a record purged by an earlier
+    // self-heal. Fetch remotely and repopulate the cache so subsequent loads are local again
+    // (otherwise these instances would stay network-only until the user re-saves the study).
+    const { StudyInstanceUID, SeriesInstanceUID } = dataset || {};
+    if (StudyInstanceUID && SeriesInstanceUID && LocalCacheService?.isStudyCachedSync(StudyInstanceUID)) {
+      return this._fetchAndRecache(dataset, SOPInstanceUID);
+    }
+  }
+
+  _fetchAndRecache(dataset, SOPInstanceUID) {
+    // Network fetch with an opportunistic write-back into the offline cache (validated Part10
+    // only, and only for studies the user has saved offline).
+    const network = this.getDataByImageType(dataset) || this.getDataByDatasetType(dataset);
+    if (!network || typeof network.then !== 'function') {
+      return network;
+    }
+
+    return network.then((bytes) => {
+      const { StudyInstanceUID, SeriesInstanceUID, Modality, SeriesDescription } = dataset || {};
+      if (
+        bytes && bytes.byteLength && isUsablePart10(bytes) &&
+        StudyInstanceUID && SeriesInstanceUID &&
+        LocalCacheService?.isStudyCachedSync(StudyInstanceUID)
+      ) {
+        LocalCacheService.putInstance({
+          StudyInstanceUID,
+          SeriesInstanceUID,
+          SOPInstanceUID,
+          bytes,
+          metadata: { SOPInstanceUID, Modality, SeriesDescription },
+        }).catch(() => {});
+      }
+      return bytes;
+    });
+  }
+
   getDataByImageType(dataset) {
     const imageInstance = getImageInstance(dataset);
 
@@ -116,6 +194,10 @@ class DicomLoaderService {
       const loaderType = getImageLoaderType(imageId);
 
       switch (loaderType) {
+        case 'sonadorlocal':
+          // Local-cache imageIds are not fetchable URLs; the cache stage handles these instances,
+          // so let the iterator fall through to the dataset-based retriever instead.
+          return;
         case 'dicomfile':
           getDicomDataMethod = cornerstoneRetriever.bind(this, imageId);
           break;
@@ -158,6 +240,9 @@ class DicomLoaderService {
 
   *getLoaderIterator(dataset, studies) {
     yield this.getLocalData(dataset, studies);
+    // Offline cache is consulted BEFORE any network retriever (ohif-viewers#125, FR-2); the
+    // in-session upload path above stays first since those bytes never had a remote source.
+    yield this.getOfflineCacheData(dataset);
     yield this.getDataByImageType(dataset);
     yield this.getDataByDatasetType(dataset);
   }

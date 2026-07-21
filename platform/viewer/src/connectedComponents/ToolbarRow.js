@@ -258,6 +258,7 @@ function getButtonComponents(toolbarButtons, activeButtons) {
               buttons={childButtons}
               activeCommand={activeCommand}
               reduxStore={ctx?.store}
+              toolbarClickCallback={handleToolbarButtonClick.bind(this)}
             />
           )}
         </ReactReduxContext.Consumer>

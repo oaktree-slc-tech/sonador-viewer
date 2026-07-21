@@ -17,6 +17,75 @@
   }
 }
 
+// Right-side group of the title row: keeps "Investigational Use Only" and the Download Manager
+// launcher together on the right (ohif-viewers#125, FR-5). Gap matches the study-list toolbar rows.
+.headerRight {
+  display: flex;
+  align-items: center;
+  column-gap: 15px;
+}
+
+// Download Manager launcher / offline-cache indicator, sized to fit within the title row.
+.downloadManager {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #fff;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    color: #2e46e9;
+  }
+
+  .downloadBadge {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 7px;
+    background-color: #2e46e9;
+    color: #fff;
+    font-size: 9px;
+    line-height: 14px;
+    text-align: center;
+  }
+}
+
+// Launcher hover card: swap the ui-next aqua border-input token for the Offline Storage
+// dialog's gray (unlayered rule outranks the layered utility).
+.dmTooltipContent {
+  border-color: #3a3d44;
+}
+
+.dmTooltipTitle {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.dmTooltipBody {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 220px;
+}
+
+.dmTooltipCount {
+  margin-top: 4px;
+  color: #2e46e9;
+}
+
 .title {
   font-size: 24px;
   margin: 0;
@@ -107,21 +176,20 @@
       width: 293px;
     }
 
+    // Icon-only control; the action is described by the ui-next tooltip / aria-label.
     .refresh {
       background-color: #2e46e9;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       border-radius: 10px;
-      row-gap: 2px;
       border: none;
       outline: none;
       color: #fff;
-      font-size: 8px;
       width: 53px;
       cursor: pointer;
     }
+
   }
 }
 

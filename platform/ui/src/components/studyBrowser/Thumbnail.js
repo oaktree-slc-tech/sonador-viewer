@@ -4,6 +4,7 @@ import throttle from 'lodash.throttle';
 
 import React, { useEffect, useState } from 'react';
 import { useDrag } from 'react-dnd';
+import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import PropTypes from 'prop-types';
@@ -19,9 +20,73 @@ import ImageThumbnail from './ImageThumbnail';
 import './Thumbnail.styl';
 
 const StudyLoadingListener = classes.StudyLoadingListener;
+const { LocalCacheService } = OHIF;
+const formatBytes = OHIF.utils.formatBytes;
 
 
-function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets, hasClientWarnings }) {
+function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
+  // Offline-availability indicator for a series thumbnail (ohif-viewers#125, FR-8). Shows an
+  // offline-cache icon when the series is locally cached; the hover popup (OverlayTrigger + Tooltip,
+  // reusing the getWarningInfo pattern per AR-9) reports cached-instance count + storage size and a
+  // delete-local-copy control at the bottom.
+  const { t } = useTranslation('Common');
+  const compute = () =>
+    LocalCacheService
+      ? {
+          cached: LocalCacheService.isSeriesCachedSync(SeriesInstanceUID),
+          summary: LocalCacheService.getSeriesSummary(StudyInstanceUID, SeriesInstanceUID),
+        }
+      : { cached: false, summary: null };
+
+  const [state, setState] = useState(compute);
+
+  useEffect(() => {
+    if (!LocalCacheService) {
+      return undefined;
+    }
+    setState(compute());
+    const refresh = () => setState(compute());
+    const sub = LocalCacheService.subscribe(LocalCacheService.EVENTS.STUDY_CACHE_UPDATED, refresh);
+    return () => sub.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [StudyInstanceUID, SeriesInstanceUID]);
+
+  if (!state.cached || !SeriesInstanceUID) {
+    return null;
+  }
+
+  const { summary } = state;
+  const instanceCount = summary?.instanceCount ?? 0;
+  const totalBytes = summary?.totalBytes ?? 0;
+
+  return (
+    <OverlayTrigger
+      key={`cache-${SeriesInstanceUID}`}
+      placement="left"
+      trigger={['hover', 'focus']}
+      overlay={
+        <Tooltip placement="left" className="in tooltip-cache" id={`tooltip-cache-${SeriesInstanceUID}`}>
+          <div className="warningTitle">{t('Available offline')}</div>
+          <div className="warningContent">
+            <div>
+              {instanceCount} {instanceCount === 1 ? t('instance cached') : t('instances cached')}
+            </div>
+            <div>{formatBytes(totalBytes)}</div>
+          </div>
+        </Tooltip>
+      }
+    >
+      <div className="cache-indicator">
+        <span className="cache-icon">
+          <Icon name="offline-cache" />
+        </span>
+      </div>
+    </OverlayTrigger>
+  );
+}
+
+
+function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets, hasClientWarnings, StudyInstanceUID, SeriesInstanceUID }) {
   // Footer which summarizes the attributes of an imaging series including description, series number, 
   // warnings, and other information to be summarized for the user.
 
@@ -140,6 +205,7 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
         {numImageFrames !== undefined && getInfo(numImageFrames, '', 'image-frames')}
         {getDerivedInfo(derivedDisplaySetsActive)}
         {getWarningInfo(SeriesNumber, inconsistencyWarnings, clientWarnings)}
+        <SeriesCacheBadge StudyInstanceUID={StudyInstanceUID} SeriesInstanceUID={SeriesInstanceUID} />
       </div>
     );
   };
@@ -263,7 +329,7 @@ function Thumbnail({
           <h1>{altImageText}</h1>
         </div>
       )}
-      {ThumbnailFooter({ ...props, hasClientWarnings: clientWarnings })}
+      {ThumbnailFooter({ ...props, StudyInstanceUID, hasClientWarnings: clientWarnings })}
     </div>
   );
 }

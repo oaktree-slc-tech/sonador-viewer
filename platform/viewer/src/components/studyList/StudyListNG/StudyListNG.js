@@ -24,6 +24,10 @@ const COLUMN_LABEL_OVERRIDES = {
   mrn: 'MRN',
 };
 
+// "Reason for Review" routinely carries long free text; anything past this cap is elided in
+// the row (full text remains available via the cell tooltip and the expanded study drawer).
+const REASON_FOR_REVIEW_MAX_CHARS = 160;
+
 
 function StudyListNG({ studies = [], 
   server, 
@@ -123,7 +127,24 @@ function StudyListNG({ studies = [],
               return '';
             }
 
-            return type === 'date' ? moment(value, 'YYYYMMDD').format('MMM DD, YYYY') : value;
+            if (type === 'date') {
+              return moment(value, 'YYYYMMDD').format('MMM DD, YYYY');
+            }
+
+            if (id === 'ReasonForReview' && typeof value === 'string') {
+              const truncated =
+                value.length > REASON_FOR_REVIEW_MAX_CHARS
+                  ? `${value.slice(0, REASON_FOR_REVIEW_MAX_CHARS).trimEnd()}…`
+                  : value;
+
+              return (
+                <span className={styles.reasonForReviewCell} title={value}>
+                  {truncated}
+                </span>
+              );
+            }
+
+            return value;
           },
         };
       }),

@@ -186,8 +186,8 @@ export default function SecurityAccessIdsTabNG() {
 
   const addNewBtn = (
     <button className={styles.addNewBtn} onClick={() => setIsOpenModal(true)}>
-      <span>{t('Add New')}</span>
       <AddCircleIcon />
+      <span>{t('Add New')}</span>
     </button>
   );
 

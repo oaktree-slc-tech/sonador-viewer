@@ -16,6 +16,7 @@ import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
 import initCornerstoneTools from './initCornerstoneTools.js';
 import { connectToolsToMeasurementService } from './initMeasurementService.js';
 import { initDataServiceIntegration } from './initDataIntegrations.js';
+import { registerSonadorLocalImageLoader } from './loaders/sonadorLocalImageLoader.js';
 
 
 export default function init({ servicesManager, commandsManager, configuration }) {
@@ -81,6 +82,12 @@ export default function init({ servicesManager, commandsManager, configuration }
 
   OHIF.utils.cornerstone3dUtils.initCornerstone3d();
   initCornerstoneTools({ ...defaultCsToolsConfig, ...stackPrefetch });
+
+  // Register the local/offline cache image loader (ohif-viewers#125, AR-3). registerImageLoader only
+  // writes to Cornerstone3D's scheme->loader map, so this can run immediately after init kicks off
+  // (initCornerstone3d already called @cornerstonejs/dicom-image-loader's init(), §2.4/AR-3) and
+  // before initDataServiceIntegration wires up the volume loaders / metadata providers.
+  registerSonadorLocalImageLoader();
 
   const toolsGroupedByType = {
     touch: [csTools.PanMultiTouchTool, csTools.ZoomTouchPinchTool],

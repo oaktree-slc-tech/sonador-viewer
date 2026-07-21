@@ -15,7 +15,7 @@ import cornerstoneToolEnums from './tools/constants/toolNames.js';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
-const { sonador, log, measurements, display } = OHIF;
+const { sonador, log, measurements, display, LocalCacheService, DownloadManagerService } = OHIF;
 const { studyMetadataManager, cornerstoneUtils } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
 
@@ -568,6 +568,73 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       setCornerstoneLayout();
     },
 
+    goOffline: ({ viewports, servers }) => {
+      // Queue the open study for offline caching (ohif-viewers#125, FR-9). Distinct command from the
+      // 'download' (zip export) and 'Download' (screenshot) features (AR-6).
+      const { UINotificationService } = servicesManager.services;
+      const activeServer = sonador.getActiveServer(servers.servers);
+      // ACTIVE viewport, not viewport 0 — the More-menu button's label/state derives from the
+      // active viewport (LocalCacheToolbarButton), so the command must act on the same study.
+      const vsd = viewports.viewportSpecificData?.[viewports.activeViewportIndex] || {};
+      const { StudyInstanceUID } = vsd;
+
+      if (!StudyInstanceUID || !activeServer) {
+        log.warn('[cornerstone:commands:goOffline] missing StudyInstanceUID or active server.');
+        return;
+      }
+
+      DownloadManagerService.enqueueStudy({
+        server: activeServer,
+        StudyInstanceUID,
+        descriptor: {
+          PatientName: vsd.PatientName,
+          PatientID: vsd.PatientID,
+          StudyDescription: vsd.StudyDescription,
+          AccessionNumber: vsd.AccessionNumber,
+          ServiceEpisodeID: vsd.ServiceEpisodeID,
+        },
+      });
+
+      UINotificationService?.show({
+        title: 'Saving study for offline use',
+        message: 'The study is being downloaded to this device. Track progress in the Download Manager.',
+        type: 'info',
+        autoClose: true,
+      });
+    },
+
+    removeOffline: async ({ viewports }) => {
+      // Remove the open study's locally cached copy. Any in-flight download is cancelled first so the
+      // job and the stored data are torn down together (AC-4).
+      const { UINotificationService } = servicesManager.services;
+      const { StudyInstanceUID } =
+        viewports.viewportSpecificData?.[viewports.activeViewportIndex] || {};
+
+      if (!StudyInstanceUID) {
+        log.warn('[cornerstone:commands:removeOffline] missing StudyInstanceUID.');
+        return;
+      }
+
+      DownloadManagerService.cancelStudy(StudyInstanceUID);
+      await LocalCacheService.removeStudy(StudyInstanceUID);
+
+      UINotificationService?.show({
+        title: 'Offline copy removed',
+        message: 'The locally cached copy of this study has been deleted.',
+        type: 'info',
+        autoClose: true,
+      });
+    },
+
+    cancelStudyDownload: ({ viewports }) => {
+      // Cancel an in-flight offline download for the open study (leaves already-cached data, AC-3).
+      const { StudyInstanceUID } =
+        viewports.viewportSpecificData?.[viewports.activeViewportIndex] || {};
+      if (StudyInstanceUID) {
+        DownloadManagerService.cancelStudy(StudyInstanceUID);
+      }
+    },
+
     setWindowLevel: ({ viewports, window, level }) => {
       const enabledElement = getEnabledElement(viewports.activeViewportIndex);
 
@@ -745,6 +812,21 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     setWindowLevel: {
       commandFn: actions.setWindowLevel,
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    goOffline: {
+      commandFn: actions.goOffline,
+      storeContexts: ['viewports', 'servers'],
+      options: {},
+    },
+    removeOffline: {
+      commandFn: actions.removeOffline,
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    cancelStudyDownload: {
+      commandFn: actions.cancelStudyDownload,
       storeContexts: ['viewports'],
       options: {},
     },

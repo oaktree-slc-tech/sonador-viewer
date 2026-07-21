@@ -20,6 +20,7 @@ import { SystemContextProvider, useSystem } from './contextProviders/SystemProvi
 
 import { fileLoader } from './store';
 import IWebApiDataSource from './DataSources/IWebApiDataSource';
+import sonadorLocalImageReader from './loaders/sonadorLocalImageReader';
 
 import measurements from './measurements';
 
@@ -34,11 +35,17 @@ import {
   DisplaySetService,
   CustomizationService,
   ViewportGridService,
-  LoggerService, 
-  MeasurementService, 
-  UIDialogService, 
-  UIModalService, 
+  LoggerService,
+  MeasurementService,
+  UIDialogService,
+  UIModalService,
   UINotificationService,
+  LocalCacheService,
+  LocalCacheServiceEvents,
+  DownloadManagerService,
+  DownloadManagerServiceEvents,
+  JOB_STATES,
+  rehydrateStudyFromCache,
   pubSubServiceInterface,
 } from './services';
 import string from './string.js';
@@ -73,6 +80,7 @@ const sonador = {
 const io = {
   fileLoader,
   IWebApiDataSource,
+  sonadorLocalImageReader,
 }
 
 
@@ -115,7 +123,8 @@ const OHIF = {
   sonador,
   io,
   IWebApiDataSource,
-  
+  sonadorLocalImageReader,
+
   // Services
   PubSubService,
   DicomMetadataStore,
@@ -126,6 +135,9 @@ const OHIF = {
   DisplaySetService,
   CustomizationService,
   LoggerService,
+  LocalCacheService,
+  DownloadManagerService,
+  rehydrateStudyFromCache,
   pubSubServiceInterface,
 };
 
@@ -166,7 +178,8 @@ export {
   sonador,
   io,
   IWebApiDataSource,
-  
+  sonadorLocalImageReader,
+
   // Services
   PubSubService,
   DicomMetadataStore,
@@ -178,6 +191,12 @@ export {
   CustomizationService,
   ViewportGridService,
   LoggerService,
+  LocalCacheService,
+  LocalCacheServiceEvents,
+  DownloadManagerService,
+  DownloadManagerServiceEvents,
+  JOB_STATES,
+  rehydrateStudyFromCache,
   pubSubServiceInterface,
   str2ab,
 

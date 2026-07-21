@@ -23,11 +23,17 @@ import { ReactComponent as RefreshIcon } from '@ohif/ui/src/elements/Svg/svgs/re
 import { ReactComponent as RefreshOneArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/refreshOneArrow.svg';
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 
+import { Icon } from '@ohif/ui';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@ohif/ui-next';
+import { DownloadManagerService, JOB_STATES } from '@ohif/core';
+
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_FILTERS, FILTER_TYPES } from '../../../../../lib/constants';
 import { getDateEntryFromRange } from '../../../../../lib/utils/getDateEntryFromRange';
 import { useWorklistContext } from '../../../../../pages/WorkListPageNG/worklist.context';
 import StudyListFilterNG from '../../../StudyListFilterNG/StudyListFilterNG';
+import DownloadManagerModal from '../DownloadManagerModal/DownloadManagerModal';
+import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
 
 import styles from './Filters.module.scss';
 
@@ -55,6 +61,15 @@ export default function Filters({
 
   const [isOpenFiltersSelect, setIsOpenFiltersSelect] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
+  const [isDownloadManagerOpen, setIsDownloadManagerOpen] = useState(false);
+
+  // Reactive count of in-flight downloads for the Download Manager indicator (ohif-viewers#125,
+  // FR-5). Rendered on the shared StudyListNG surface, so it appears on Studies/All, Worklist, and
+  // Shared alike (AR-8).
+  useLocalCacheVersion();
+  const activeDownloadCount = DownloadManagerService
+    ? DownloadManagerService.listActiveJobs().filter(j => j.state === JOB_STATES.QUEUED || j.state === JOB_STATES.DOWNLOADING).length
+    : 0;
 
   const { data: filtersData = {} } = useTags({ server: activeServer });
 
@@ -99,7 +114,36 @@ export default function Filters({
     <>
       <div className={styles.studyListHeader}>
         <p className={styles.title}>{title}</p>
-        <p className={styles.useOnly}>{t('INVESTIGATIONAL USE ONLY')}</p>
+        <div className={styles.headerRight}>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className={styles.downloadManager}
+                  onClick={() => setIsDownloadManagerOpen(true)}
+                  aria-label={t('Manage Offline Storage')}
+                >
+                  <Icon name="offline-cache" />
+                  {activeDownloadCount > 0 && <span className={styles.downloadBadge}>{activeDownloadCount}</span>}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className={styles.dmTooltipContent}>
+                <div className={styles.dmTooltipTitle}>{t('Offline Storage')}</div>
+                <div className={styles.dmTooltipBody}>
+                  {t('Save studies for offline viewing. Monitor active transfers. Manage local storage.')}
+                  {activeDownloadCount > 0 && (
+                    <div className={styles.dmTooltipCount}>
+                      {activeDownloadCount}{' '}
+                      {activeDownloadCount === 1 ? t('active download') : t('active downloads')}
+                    </div>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <p className={styles.useOnly}>{t('INVESTIGATIONAL USE ONLY')}</p>
+        </div>
       </div>
       <div className={styles.topToolbar}>
         <div className={styles.searchContainer}>
@@ -136,12 +180,30 @@ export default function Filters({
               <ImageServerPickerNG />
             </div>
           )}
-          <button className={styles.refresh} onClick={onRefresh}>
-            {isMobile ? <RefreshOneArrowIcon /> : <RefreshIcon />}
-            Refresh
-          </button>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className={styles.refresh}
+                  onClick={onRefresh}
+                  aria-label={t('Refresh study list')}
+                >
+                  {isMobile ? <RefreshOneArrowIcon /> : <RefreshIcon />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className={styles.dmTooltipContent}>
+                <div className={styles.dmTooltipBody}>
+                  {t('Refresh the study list to retrieve the latest results from the server.')}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
+      {isDownloadManagerOpen && (
+        <DownloadManagerModal isOpen={isDownloadManagerOpen} onClose={() => setIsDownloadManagerOpen(false)} />
+      )}
       <div className={styles.filters}>
         <div className={styles.emptyFilterBlock} />
         <SelectDropdownNG
