@@ -5,6 +5,12 @@
     background: transparent;
     border: none;
     cursor: pointer;
+
+    // Reset the browser's default button padding so the inner pill sits flush with the
+    // wrapper, matching the DICOM filter pills (there the pill IS the button) and keeping
+    // the filter row's 10px flex gap uniform across both control families.
+    padding: 0;
+    display: block;
   }
 }
 
@@ -118,7 +124,7 @@
   column-gap: 10px;
   font-size: 16px;
   color: #60646d;
-  line-height: 18px;
+  line-height: 19px;
   background-color: transparent;
   cursor: pointer;
   flex-wrap: nowrap;

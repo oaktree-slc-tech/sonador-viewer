@@ -5,6 +5,7 @@ import dicomParser from 'dicom-parser';
 import OHIF from '@ohif/core';
 
 import version from './version.js';
+import { registerLegacySonadorLocalImageLoader } from './lib/sonadorLocalImageLoaderV2.js';
 
 export function setConfiguration(appConfig) {
   let homepage;
@@ -26,6 +27,12 @@ export function setConfiguration(appConfig) {
 
   cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
   cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+
+  // Register the local/offline cache image loader with legacy cornerstone-core (ohif-viewers#125,
+  // AR-3) before cornerstoneWADOImageLoader self-registers its wadouri/wadors handlers via
+  // .configure() below. The `sonadorlocal:` scheme is distinct, so there is no ordering conflict —
+  // it just needs to exist before any component tries to load a `sonadorlocal:` imageId.
+  registerLegacySonadorLocalImageLoader();
 
   OHIF.user.getAccessToken = () => {
     // TODO: Get the Redux store from somewhere else

@@ -1,12 +1,14 @@
 import React, { useContext, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
-import OHIF, { display, redux, DicomMetadataStore } from '@ohif/core';
+import OHIF, { display, redux, DicomMetadataStore, LocalCacheService, DownloadManagerService } from '@ohif/core';
 
 import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
+import { ReactComponent as OfflineCacheIcon } from '@ohif/ui/src/elements/Icon/icons/offline-cache.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as UpdateStatusIcon } from '@ohif/ui/src/elements/Svg/svgs/reload-circle.svg';
 import { ReactComponent as ViewAndProcessIcon } from '@ohif/ui/src/elements/Svg/svgs/search-circle.svg';
@@ -26,6 +28,7 @@ import styles from './StudiesTableActions.module.scss';
 export default function StudiesTableActions({  selectedRows, isWorkList }) {
   // Sonador study list viewer actions
 
+  const { t } = useTranslation('StudyList');
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
   const { appConfig } = useContext(AppContext);
   const navigate = useNavigate();
@@ -34,6 +37,12 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
 
   const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
   const { setWorkListSelectedStudies } = useWorkListStore();
+
+  const clearSelection = () => {
+    // Commit-clears-selection: resetting the checkmarks signals the bulk action has been
+    // committed (selectedRows are react-table Row instances).
+    selectedRows.forEach(row => row.toggleSelected?.(false));
+  };
 
   const handleViewAllSelectedStudies = () => {
     selectedRows.forEach(({ id }) => {
@@ -44,12 +53,43 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
 
       window.open(link, '_blank');
     });
+
+    clearSelection();
   };
 
   const handleClickShare = () => {
     if (selectedRows.length === 1) {
       setIsOpenedShareModal(true);
     }
+  };
+
+  const handleSaveOfflineSelectedStudies = () => {
+    // Queue every selected study for offline caching (ohif-viewers#125). Already-cached studies are
+    // skipped, and DownloadManagerService de-dupes any study with a job already in flight (AC-4),
+    // so re-running the bulk action is harmless.
+    selectedRows.forEach(({ id }) => {
+      const StudyInstanceUID = _getStudyInstanceUID({ row: { id }, worklist: pathname.includes('worklist') });
+
+      if (!StudyInstanceUID || LocalCacheService?.isStudyCachedSync(StudyInstanceUID)) {
+        return;
+      }
+
+      const studyMeta = DicomMetadataStore.getStudyMetadata(StudyInstanceUID) || {};
+      DownloadManagerService.enqueueStudy({
+        server: activeServer,
+        StudyInstanceUID,
+        descriptor: {
+          PatientName: studyMeta.PatientName,
+          PatientID: studyMeta.PatientID,
+          StudyDescription: studyMeta.StudyDescription,
+          AccessionNumber: studyMeta.AccessionNumber,
+          ServiceEpisodeID: studyMeta.ServiceEpisodeID,
+        },
+      });
+    });
+
+    // Clear the checkmarks once the batch is queued.
+    clearSelection();
   };
 
   // Permissions
@@ -77,6 +117,7 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
             disabled={!selectedRows.length}
             onClick={() => {
               setWorkListSelectedStudies(selectedRows);
+              clearSelection(); // safe: the store above holds its own reference to the rows
               navigate(`/worklist/viewer/`);
             }}
           >
@@ -109,18 +150,43 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
             )}
           </div>
         )}
+        {/* Bulk offline caching (ohif-viewers#125): queues every selected study into the Download
+            Manager. Gated on the same view permission as the per-row action (AR-7); distinct from
+            the zip-export 'Download' button above (AR-6). */}
+        {activeServer?.perms?.view && (
+          <button
+            className={styles.action}
+            disabled={!selectedRows.length}
+            onClick={handleSaveOfflineSelectedStudies}
+          >
+            <OfflineCacheIcon width={15} height={15} />
+            {t('Save Offline Copy')}
+          </button>
+        )}
       </div>
       {isOpenedShareModal && (
         <StudiesTableShareModal
           isOpenedShareModal={isOpenedShareModal}
-          setIsOpenedShareModal={setIsOpenedShareModal}
+          setIsOpenedShareModal={(open) => {
+            // Clear on close, not on open — the modal reads selectedRows[0] while it is up.
+            setIsOpenedShareModal(open);
+            if (!open) {
+              clearSelection();
+            }
+          }}
           selectedStudy={selectedRows[0]}
         />
       )}
       {isWorkList && openUpdateWorklistModal &&
         <UpdateWorklistModal
           isOpen={openUpdateWorklistModal} selectedWorklists={selectedRows}
-          setIsOpen={setOpenUpdateWorklistModal} />}
+          setIsOpen={(open) => {
+            // Clear on close, not on open — the modal consumes selectedWorklists while it is up.
+            setOpenUpdateWorklistModal(open);
+            if (!open) {
+              clearSelection();
+            }
+          }} />}
     </>
   );
 }

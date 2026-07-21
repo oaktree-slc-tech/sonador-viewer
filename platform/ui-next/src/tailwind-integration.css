@@ -265,7 +265,10 @@
     --popover: 210 10% 12%;
     --popover-foreground: 0 0% 98%;
     --primary: 200 37.5% 68.63%;
-    --secondary-foreground: 200 20% 80%;
+    /* Required by TooltipContent (text-primary-foreground): without it the tooltip's color
+       resolves to an invalid hsl() and inherits near-black — unreadable on bg-muted. Value
+       matches the dark theme in tailwind.css. */
+    --primary-foreground: 0 0% 98%;
     --secondary: 210 15% 28%;
     --secondary-foreground: 200 50% 84%;
     --muted: 210 10% 3.5%;

@@ -358,8 +358,8 @@ export default function SeriesTagsTabNG() {
         <h2 className={styles.tabTitle}>Series Tags</h2>
         {selectedGroup && aclTagModify && (
           <button className={styles.addNewBtn} onClick={addTag}>
-            <span>Add Row</span>
             <AddCircleIcon />
+            <span>Add Row</span>
           </button>
         )}
       </div>

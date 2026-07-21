@@ -71,13 +71,39 @@
     }
   }
 
+  // Secondary-links group: one CONTINUOUS vertical rule at x=0, flush with the left edge of the
+  // primary link's icon (the border lives on the wrapper so it spans the gaps between links).
+  .subMenu {
+    border-left: 2px solid #60646d;
+
+    // With the first sub-link's 10px top padding this yields a 30px visual gap below the
+    // Studies link, matching the primary menu items' 30px rhythm.
+    margin-top: 20px;
+  }
+
   .menuSubItem {
-    padding: 0 20px;
+    // 2px wrapper border + 18px padding keeps the text indent at 20px from the icon edge.
+    // Vertical spacing lives INSIDE each link (padding, not margin) so the links share a
+    // regular rhythm along the rule and the active overlay below spans the full padded row
+    // instead of just the text line. 10px per edge keeps the same 20px visual gap between
+    // links that the old margins produced.
+    position: relative;
+    padding: 10px 20px 10px 18px;
     color: #60646d;
     display: flex;
     width: 100%;
     justify-content: space-between;
-    margin-top: 20px;
+
+    // Active link: a thicker white segment overlaid on the rule, spanning just this link.
+    &.active::before {
+      content: '';
+      position: absolute;
+      left: -2px;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #ffffff;
+    }
 
     .count {
       background-color: #1e1f23;

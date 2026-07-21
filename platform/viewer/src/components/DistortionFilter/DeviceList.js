@@ -375,8 +375,8 @@ export default function DeviceList() {
         <h2 className={styles.tabTitle}>Distortion Filter Device List</h2>
         {selectedGroup && aclDeviceListModify && (
           <button className={styles.addNewBtn} onClick={addListItem}>
-            <span>Add Row</span>
             <AddCircleIcon />
+            <span>Add Row</span>
           </button>
         )}
       </div>

@@ -6,6 +6,20 @@
   justify-content: space-between;
   margin-bottom: 25px;
 
+  // Study-list padding rail (Layout is noHorizontalPadding, matching Studies/Worklist/Shared).
+  padding-left: 40px;
+  padding-right: 40px;
+
+  @include lg {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
+  @include xs {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
   .headerLabel {
     margin: 0;
     font-size: 24px;
@@ -35,6 +49,20 @@
 .uploadContainer {
   display: flex;
   gap: 25px;
+
+  // Same padding rail as the header (see above).
+  padding-left: 40px;
+  padding-right: 40px;
+
+  @include lg {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
+  @include xs {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
 
   // Kept compact so the recent-uploads table below gets the bulk of the vertical space
   // (the page is viewport-locked; the table scrolls internally)

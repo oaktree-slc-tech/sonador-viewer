@@ -147,6 +147,9 @@ class OHIFDicomM3DViewport extends Component {
       fetchRawData,
       color,
       getStaticUrl: this.props.getStaticUrl,
+      // Hints for raw-document payloads (InlineBinary shortcut) that carry no DICOM headers.
+      sopInstanceUID,
+      mimeType: this.props.viewportData?.displaySet?.m3dModelType,
     }).then((payload) => {
       const instance = hydrateM3DInstance(payload);
       const model = {

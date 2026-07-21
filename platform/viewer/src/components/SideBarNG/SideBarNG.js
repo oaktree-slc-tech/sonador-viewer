@@ -100,37 +100,36 @@ export default function SideBarNG({ children = OHIFLogo() }) {
               </NavLink>
             )}
             
-            {isStudiesSubMenuOpen && canQueryStudies && (
-              <>
-                <NavLink
-                  to={studyListPathname}
-                  end
-                  className={({ isActive }) =>
-                    classNames(styles.menuSubItem, {
-                      [styles.active]: isActive,
-                    })
-                  }
-                  onClick={enableScrolling}
-                >
-                  <span>All</span>
-                </NavLink>
-              </>
-            )}
-
-            {isStudiesSubMenuOpen && canWorkInWorklist && (
-              <>
-                <NavLink
-                  to="/worklist"
-                  className={({ isActive }) =>
-                    classNames(styles.menuSubItem, {
-                      [styles.active]: isActive,
-                    })
-                  }
-                  onClick={enableScrolling}
-                >
-                  <span>Worklist</span>                  
-                </NavLink>
-              </>
+            {isStudiesSubMenuOpen && (canQueryStudies || canWorkInWorklist) && (
+              <div className={styles.subMenu}>
+                {canQueryStudies && (
+                  <NavLink
+                    to={studyListPathname}
+                    end
+                    className={({ isActive }) =>
+                      classNames(styles.menuSubItem, {
+                        [styles.active]: isActive,
+                      })
+                    }
+                    onClick={enableScrolling}
+                  >
+                    <span>All</span>
+                  </NavLink>
+                )}
+                {canWorkInWorklist && (
+                  <NavLink
+                    to="/worklist"
+                    className={({ isActive }) =>
+                      classNames(styles.menuSubItem, {
+                        [styles.active]: isActive,
+                      })
+                    }
+                    onClick={enableScrolling}
+                  >
+                    <span>Worklist</span>
+                  </NavLink>
+                )}
+              </div>
             )}
 
             <NavLink

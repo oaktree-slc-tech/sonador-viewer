@@ -4,3 +4,18 @@
   // Keep the filter-bar -> results gap tight (browser default hr margins are ~16px)
   margin: 0 0 10px;
 }
+
+// "Reason for Review" holds long free text while every other column carries short values.
+// The min-width claims a wider column than the short columns get from the auto table layout,
+// the max-width stops a verbose reason from squeezing its neighbors, and the line clamp caps
+// row height (the JS-side character cap bounds the text further; full text is in the tooltip).
+.reasonForReviewCell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-width: 240px;
+  max-width: 400px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

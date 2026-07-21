@@ -127,14 +127,34 @@ async function parseDocument(docBytes, { mimeType, getStaticUrl }) {
   return { type: M3D_GEOMETRY_TYPE.STL, parsed: geometry };
 }
 
+function hasDicmPrefix(u8) {
+  // Part10 magic: 128-byte preamble followed by 'DICM'.
+  return u8.length > 132 && u8[128] === 0x44 && u8[129] === 0x49 && u8[130] === 0x43 && u8[131] === 0x4d;
+}
+
 async function buildPayload(geometryId, rawBuffer, options) {
   const { color, getStaticUrl } = options;
 
   const byteArray = rawBuffer instanceof Uint8Array ? rawBuffer : new Uint8Array(rawBuffer);
-  const dataSet = dicomParser.parseDicom(byteArray);
-  const mimeType = dataSet.string('x00420012');
-  const sopInstanceUID = dataSet.string('x00080018');
-  const docBytes = extractEncapsulatedDocument(dataSet);
+
+  let mimeType;
+  let sopInstanceUID;
+  let docBytes;
+
+  if (hasDicmPrefix(byteArray)) {
+    // Full Part10 stream (WADO retrieve or the offline cache): parse and extract the document.
+    const dataSet = dicomParser.parseDicom(byteArray);
+    mimeType = dataSet.string('x00420012');
+    sopInstanceUID = dataSet.string('x00080018');
+    docBytes = extractEncapsulatedDocument(dataSet);
+  } else {
+    // Raw encapsulated document — the viewport's InlineBinary shortcut delivers the GLB/STL
+    // payload itself, NOT a Part10 stream, so parseDicom must not run ("DICM prefix not found").
+    // Identity/MIME come from the caller's hints instead of the (absent) DICOM headers.
+    mimeType = options.mimeType;
+    sopInstanceUID = options.sopInstanceUID;
+    docBytes = byteArray;
+  }
 
   const { type, parsed } = await parseDocument(docBytes, { mimeType, getStaticUrl });
 

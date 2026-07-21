@@ -1,0 +1,401 @@
+// NOTE: do NOT set `position` here — this class merges onto ModalNG's .content, whose
+// `position: fixed; top/left 50% + translate(-50%,-50%)` does the dialog centering. Overriding it
+// (e.g. with `relative`) drops the dialog into document flow. The fixed box is already a
+// positioned ancestor, so the confirmOverlay's `absolute; inset: 0` anchors to it as-is.
+.modal {
+  width: 700px;
+  max-width: 90vw;
+}
+
+.tabs {
+  display: flex;
+  column-gap: 20px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #3a3d44;
+}
+
+// Tab titles match the study-list primary link typography (Settings tabName / sidebar major
+// links: 20px, weight 500); the active underline uses the UI's Primary Blue (dialog primary
+// buttons, e.g. Share modal Save / Filters Refresh).
+.tab,
+.tabActive {
+  background: transparent;
+  border: none;
+  color: #60646d;
+  padding: 6px 2px 10px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+
+.tabActive {
+  color: #fff;
+  border-bottom-color: #2e46e9;
+}
+
+// Search box + per-tab bulk control ("Clear storage" / "Cancel all transfers") share one row;
+// wraps if the confirm prompt needs the space.
+.searchRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  // Clear separation between the search controls and the transfer/study list below.
+  margin-bottom: 24px;
+}
+
+// Matches the study-list Filter search control: black rounded container, transparent input,
+// gray placeholder / white entered text, magnifier icon (here at the right of the control).
+.searchBox {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  column-gap: 15px;
+  background: #000;
+  border-radius: 10px;
+  padding: 12px 15px;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 16px;
+
+  &::placeholder {
+    color: #60646d;
+  }
+}
+
+.list {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px;
+
+  // Flush scrollbar: ModalNG's content box pads 20px on every side, which would inset the
+  // scrollbar into the dialog. Pull the list out to the dialog's right edge, then restore the
+  // cards' right rail with internal padding (12px + ~8px scrollbar ≈ the original 20px gutter).
+  margin-right: -20px;
+  padding-right: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 12px;
+  background: #1e1f23;
+  border-radius: 8px;
+  // 15px horizontal padding aligns the summary text with the search box's magnifier icon,
+  // mirroring the global search panel's alignment.
+  padding: 12px 15px;
+
+  // Hairline divider centered in the 8px gap between adjacent cards, so entries read as
+  // distinct without boxing each card in a full border.
+  & + & {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: 8px;
+      right: 8px;
+      height: 1px;
+      background: #3a3d44;
+    }
+  }
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// De-emphasized inline identifier on the title line (e.g. the Patient ID next to the name).
+// Wider gap replaces the former parentheses as the visual separator from the Patient Name.
+.rowTitleSecondary {
+  color: #9a9da4;
+  font-weight: 400;
+  font-size: 13px;
+  margin-left: 12px;
+}
+
+// Quoted study description on its own line, between the title and the detail line.
+.rowDescription {
+  color: #d3d3d3;
+  font-size: 13px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSub {
+  color: #9a9da4;
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progressTrack {
+  height: 5px;
+  background: #34373d;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.progressFill {
+  height: 100%;
+  background: #2e46e9; // Primary Blue — study-list accent, not the viewer aqua
+  transition: width 0.2s ease;
+}
+
+.actionButton {
+  background: transparent;
+  border: none;
+  color: #b0b3ba;
+  cursor: pointer;
+  padding: 6px;
+  display: inline-flex;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    color: #e0574a;
+  }
+}
+
+.empty {
+  color: #9a9da4;
+  text-align: center;
+  padding: 24px 0;
+  // Matches the search control's 16px type so the empty state doesn't read undersized.
+  font-size: 16px;
+}
+
+// Hover-details card (#125): ui-next HoverCardContent portals to document.body, so it must
+// out-stack the ModalNG content (z-index 200) — Radix copies the CONTENT's z-index onto the
+// popper wrapper, so it is set here, on the content class. Width overrides the default w-64.
+// Colors override the component's viewer-aqua theme tokens (border-input / text-muted-foreground)
+// with the study-list gray/black scheme; these unlayered rules outrank the layered utilities.
+.detailsCard {
+  z-index: 1080;
+  width: auto;
+  min-width: 360px;
+  max-width: 520px;
+  background: #1e1f23;
+  border-color: #3a3d44;
+  color: #d3d3d3;
+}
+
+.detailsTitle {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.detailsDescription {
+  color: #d3d3d3;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.detailsAttr {
+  color: #9a9da4;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.detailsTable {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th {
+    text-align: left;
+    color: #9a9da4;
+    font-weight: 600;
+    padding: 4px 10px 4px 0;
+    border-bottom: 1px solid #3a3d44;
+    white-space: nowrap;
+  }
+
+  td {
+    color: #d3d3d3;
+    padding: 4px 10px 4px 0;
+    border-bottom: 1px solid #2a2d34;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+// Bulk controls rendered inline with the search box (#125): "Clear storage" (Locally Stored) and
+// "Cancel all transfers" (Active Transfers).
+.clearAllButton {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 12px;
+  background: transparent;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  color: #b0b3ba;
+  font-size: 16px;
+  padding: 11px 15px; // 12px search padding minus the 1px border: equal overall height
+  white-space: nowrap;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover:not(:disabled) {
+    color: #e0574a;
+    border-color: #e0574a;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+// Offline Studies refresh: the study-list Refresh colors (blue/white) adapted to the dialog's
+// control row — same 12px vertical rhythm as the search box and Clear Storage button, with the
+// icon scaled down from its 25x23 intrinsic size and locked so it cannot outgrow the button.
+.refreshButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #2e46e9;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  padding: 12px 15px;
+  cursor: pointer;
+
+  svg {
+    flex: none;
+    display: block;
+    width: 19px;
+    height: 19px;
+  }
+}
+
+// ui-next tooltip: TooltipContent portals to document.body, so it must out-stack the ModalNG
+// content (z-index 200) — Radix copies the CONTENT's z-index onto the popper wrapper, same
+// pattern as .detailsCard above. Border swaps the aqua border-input token for the dialog's gray.
+.tooltipContent {
+  z-index: 1080;
+  border-color: #3a3d44;
+}
+
+.tooltipBody {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 220px;
+}
+
+// Blocking confirmation overlay for Clear Storage: dims and captures the whole dialog.
+// Anchors to ModalNG's position:fixed content box (the nearest positioned ancestor — see the
+// .modal note above; we must NOT position .modal ourselves).
+.confirmOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirmCard {
+  background: #1e1f23;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  padding: 25px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  row-gap: 20px;
+}
+
+.confirmPrompt {
+  margin: 0;
+  color: #fff;
+  font-size: 16px;
+}
+
+.confirmActions {
+  display: flex;
+  column-gap: 15px;
+}
+
+.clearAllConfirm {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 12px;
+  background: #e0574a;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 16px;
+  padding: 12px 15px;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.clearAllCancel {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 12px;
+  background: transparent;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  color: #b0b3ba;
+  font-size: 16px;
+  padding: 11px 15px;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}

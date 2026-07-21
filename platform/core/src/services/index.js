@@ -8,6 +8,15 @@ import UIDialogService from './UIDialogService';
 import UIModalService from './UIModalService';
 import UINotificationService from './UINotificationService';
 
+import {
+  LocalCacheService,
+  LocalCacheServiceEvents,
+  DownloadManagerService,
+  DownloadManagerServiceEvents,
+  JOB_STATES,
+  rehydrateStudyFromCache,
+} from './LocalCacheService';
+
 import ServicesManager from './ServicesManager.js';
 import pubSubServiceInterface, { PubSubService } from './_shared/pubSubServiceInterface';
 
@@ -23,6 +32,12 @@ export {
   ServicesManager,
   MeasurementService,
   LoggerService,
+  LocalCacheService,
+  LocalCacheServiceEvents,
+  DownloadManagerService,
+  DownloadManagerServiceEvents,
+  JOB_STATES,
+  rehydrateStudyFromCache,
   pubSubServiceInterface,
   PubSubService,
 };

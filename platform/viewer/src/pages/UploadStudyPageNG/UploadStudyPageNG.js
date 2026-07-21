@@ -30,7 +30,9 @@ export default function UploadStudyPageNG() {
     <>
 
       {(serverCount > 0) && canUpload && (
-        <Layout fixedHeight>
+        // noHorizontalPadding matches Studies/Worklist/Shared: page components own the 40/30/20px
+        // padding rails, and the results table's scrollbar reaches the right edge of the panel.
+        <Layout noHorizontalPadding fixedHeight>
           <UploadFiles onUpload={refreshUploadTable} />
           <RecentUploadTable key={forceRerender} />
         </Layout>

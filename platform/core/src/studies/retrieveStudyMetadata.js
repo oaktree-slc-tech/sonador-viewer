@@ -1,6 +1,10 @@
 // Retrieve study metadata.
 
 import _ from 'lodash';
+
+import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
+
+import buildStudyFromCachedMetadata from './services/wado/buildStudyFromCachedMetadata.js';
 import RetrieveMetadata from './services/wado/retrieveMetadata.js';
 
 
@@ -49,6 +53,28 @@ export function retrieveStudyMetadata(server, StudyInstanceUID, filters, separat
 
   if (filters && filters.seriesInstanceUID && separateSeriesInstanceUIDFilters) {
     promise = __separateSeriesRequestToAggregatePromiseateSeriesRequestToAggregatePromise(server, StudyInstanceUID, filters);
+  } else if (!options.force_fetch && !(filters && filters.seriesInstanceUID) && LocalCacheService?.ready) {
+    // Network-free open for offline-cached studies (ohif-viewers#125): when the Download Manager
+    // stored the study's raw metadata payload, replay it locally instead of running the QIDO +
+    // per-series WADO-RS round-trips. Skipped for explicit reloads (force_fetch) and for
+    // series-filtered opens (the cached payload is the full study).
+    //
+    // IMPORTANT: the decision is made AFTER LocalCacheService.ready() so it never races the async
+    // IndexedDB hydration on a fresh page load — and, just as important, everything built from
+    // this study (memoized instance imageIds, thumbnails, stacks) is constructed with the cache
+    // membership fully populated, keeping every downstream request local for cached studies.
+    promise = LocalCacheService.ready().then(() => {
+      if (LocalCacheService.hasStudyMetadataPayloadSync(StudyInstanceUID)) {
+        return buildStudyFromCachedMetadata(server, StudyInstanceUID).catch((error) => {
+          console.warn(
+            `${moduleName}: cached-metadata open failed for ${StudyInstanceUID}; falling back to network.`,
+            error
+          );
+          return RetrieveMetadata(server, StudyInstanceUID, filters);
+        });
+      }
+      return RetrieveMetadata(server, StudyInstanceUID, filters);
+    });
   } else {
 
     promise = RetrieveMetadata(server, StudyInstanceUID, filters);

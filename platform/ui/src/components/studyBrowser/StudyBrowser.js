@@ -49,7 +49,7 @@ function StudyBrowser({
                     StudyInstanceUID={StudyInstanceUID} // used by drop
 
                     // Series metadata
-                    SerieInstanceUID={SeriesInstanceUID}
+                    SeriesInstanceUID={SeriesInstanceUID}
                     SeriesDescription={SeriesDescription}
                     SeriesNumber={SeriesNumber}
                     

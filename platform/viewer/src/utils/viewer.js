@@ -191,7 +191,7 @@ export const mapStudiesToThumbnails = (studies, activeDisplaySetInstanceUID) => 
   return studies.map((study) => {
     const { StudyInstanceUID } = study;
     const thumbnails = study.displaySets.map((displaySet) => {
-      const { displaySetInstanceUID, SeriesDescription, numImageFrames, SeriesNumber } = displaySet;
+      const { displaySetInstanceUID, SeriesDescription, numImageFrames, SeriesNumber, SeriesInstanceUID } = displaySet;
 
       let imageId;
       let altImageText;
@@ -223,6 +223,7 @@ export const mapStudiesToThumbnails = (studies, activeDisplaySetInstanceUID) => 
         SeriesDescription,
         numImageFrames,
         SeriesNumber,
+        SeriesInstanceUID,
         hasWarnings,
         hasDerivedDisplaySets,
       };

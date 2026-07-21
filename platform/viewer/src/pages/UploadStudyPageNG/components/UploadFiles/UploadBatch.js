@@ -96,8 +96,9 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
             {t('Details')}
           </button>
           <button type="button" className={styles.cancelBtn} onClick={handleClose}>
-            <span className={styles.cancelText}>{!complete && batchState === 'pending' ? t('Cancel') : t('Close') }</span>
+            {/* Icon leads the label per Apple HIG for Cancel/Close actions */}
             <CloseIcon className={styles.closeIcon} />
+            <span className={styles.cancelText}>{!complete && batchState === 'pending' ? t('Cancel') : t('Close') }</span>
           </button>
         </div>
       </section>
