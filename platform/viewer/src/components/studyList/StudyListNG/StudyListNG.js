@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getCoreRowModel, getExpandedRowModel, useReactTable } from '@tanstack/react-table';
 import moment from 'moment';
 import PropTypes from 'prop-types';
-import { useLocalStorage } from 'usehooks-ts'
 
 import { redux, sonador } from '@ohif/core';
 import { updateServer } from '../../../hooks/useServer';
@@ -54,6 +53,8 @@ function StudyListNG({ studies = [],
   selectedFilters,
   setSelectedColumns,
   setSelectedFilters,
+  columnOrder: columnOrderProp,
+  setColumnOrder,
 }) {
 
   useEffect(() => {
@@ -153,7 +154,18 @@ function StudyListNG({ studies = [],
 
   const { setMetadataSettings } = useMetadataSettingsStore();
 
-  const [columnOrder, setColumnOrder] = useLocalStorage('columnOrder', columns.map(col => col.id));
+  // Column order is per interface (sonador#42 FR-16): each page passes its interface's
+  // persisted order and setter from useStudiesTableFiltersAndColumnsStore, replacing the
+  // localStorage key every interface previously shared. Fall back to the natural order when
+  // the stored value is missing.
+  const columnOrder = Array.isArray(columnOrderProp) && columnOrderProp.length
+    ? columnOrderProp
+    : columns.map((col) => col.id);
+
+  // The zustand setters take plain arrays; react-table may hand its onColumnOrderChange an
+  // updater function, so normalize before storing.
+  const handleColumnOrderChange = (updater) =>
+    setColumnOrder(typeof updater === 'function' ? updater(columnOrder) : updater);
 
   useEffect(() => {
 
@@ -184,12 +196,13 @@ function StudyListNG({ studies = [],
     columns,
     state: { expanded, columnOrder,},
     onExpandedChange: setExpanded,
-    onColumnOrderChange: setColumnOrder,
+    onColumnOrderChange: handleColumnOrderChange,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => true,
     getRowId: (row) => isWorkList ? row.id : row.StudyInstanceUID?.value,
   });
+
 
   const { rows: selectedRows } = getSelectedRowModel();
   const headers = getHeaderGroups();
@@ -270,6 +283,8 @@ StudyListNG.propTypes = {
   setSelectedColumns: PropTypes.func,
   selectedFilters: PropTypes.arrayOf(PropTypes.string),
   setSelectedFilters: PropTypes.func,
+  columnOrder: PropTypes.arrayOf(PropTypes.string),
+  setColumnOrder: PropTypes.func,
 };
 
 StudyListNG.displayName = 'StudyListNG';

@@ -20,7 +20,8 @@ export default function RecentUploadTable() {
   const [forceRerender, setForceRerender] = useState(Math.random());
 
   const debouncedSearch = useDebounce(search, 500);
-  const { uploadStudiesSelectedColumns, setUploadStudiesSelectedColumns } = useStudiesTableFiltersAndColumnsStore();
+  const { uploadStudiesSelectedColumns, setUploadStudiesSelectedColumns, uploadColumnOrder, setUploadColumnOrder } =
+    useStudiesTableFiltersAndColumnsStore();
 
   const {
     debouncedSort,
@@ -81,6 +82,8 @@ export default function RecentUploadTable() {
       error={error}
       selectedColumns={uploadStudiesSelectedColumns}
       setSelectedColumns={setUploadStudiesSelectedColumns}
+      columnOrder={uploadColumnOrder}
+      setColumnOrder={setUploadColumnOrder}
     />
   );
 }
