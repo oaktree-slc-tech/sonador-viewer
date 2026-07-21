@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import classNames from 'classnames';
@@ -76,25 +76,37 @@ export default function SecurityAPITokensTabNG() {
 
   const snackbar = useSnackbarContext();
 
-  const tableData = tokens.filter((item) => {
-    const lowerCasedSearch = searchValue.toLowerCase();
+  // NOTE: `data` and `columns` MUST be referentially stable across renders.
+  // Passing a freshly-built array on every render sends @tanstack/react-table into an
+  // infinite re-render loop under React 18's concurrent renderer (createRoot) the moment
+  // any state update (e.g. opening the "Add New" modal) occurs. It tolerated unstable
+  // references under React 16's legacy renderer, which is why this only broke after the
+  // React upgrade.
+  const tableData = useMemo(
+    () =>
+      tokens.filter((item) => {
+        const lowerCasedSearch = searchValue.toLowerCase();
 
-    return (
-      item.description?.toLowerCase().includes(lowerCasedSearch) ||
-      item.token?.toLowerCase().includes(lowerCasedSearch) ||
-      (item.ctime
-        ? moment(item.ctime)?.format('MMM DD, YYYY, hh:mm a')?.toLowerCase().includes(lowerCasedSearch)
-        : false)
-    );
-  });
+        return (
+          item.description?.toLowerCase().includes(lowerCasedSearch) ||
+          item.token?.toLowerCase().includes(lowerCasedSearch) ||
+          (item.ctime
+            ? moment(item.ctime)?.format('MMM DD, YYYY, hh:mm a')?.toLowerCase().includes(lowerCasedSearch)
+            : false)
+        );
+      }),
+    [tokens, searchValue]
+  );
 
-  const handleDeleteToken = (token) => {
+  const handleDeleteToken = useCallback((token) => {
     deleteToken(token);
-  };
+  }, [deleteToken]);
+
+  const columns = useMemo(() => getColumns(isMobile, handleDeleteToken), [isMobile, handleDeleteToken]);
 
   const { getHeaderGroups, getRowModel } = useReactTable({
     data: tableData,
-    columns: getColumns(isMobile, handleDeleteToken),
+    columns,
     getCoreRowModel: getCoreRowModel(),
   });
 

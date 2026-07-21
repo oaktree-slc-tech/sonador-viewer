@@ -6,9 +6,12 @@ import PropTypes from 'prop-types';
 import { HotkeyField, TabFooter, useSnackbarContext } from '@ohif/ui';
 
 import { hotkeysManager } from '../../App';
+import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
+import { useUpdateUserPreferenceSection } from '../../queries/preferences';
 
 import { MODIFIER_KEYS } from './hotkeysConfig';
 import { hotkeysValidators } from './hotkeysValidators';
+import { showSaveOutcome } from './saveOutcomeNotification';
 
 import './HotkeysPreferences.styl';
 /**
@@ -93,19 +96,24 @@ function HotkeysPreferences({ onClose }) {
     setState(initialState(defaultHotKeyDefinitions));
   };
 
+  const { mutate: saveHotkeysSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.HOTKEYS);
+
   const onSave = () => {
     const { hotkeys } = state;
 
+    // Local cache first (AR-5): the manager and localStorage stay the offline fallback.
     hotkeysManager.setHotkeys(hotkeys);
 
     localStorage.setItem('hotkey-definitions', JSON.stringify(hotkeys));
 
-    onClose();
+    // Cloud sync through the write queue (FR-7): success notification only on a 2xx,
+    // "saved locally" when the write was queued, error on a validation failure.
+    saveHotkeysSection(
+      { version: PREFERENCES_VERSION, values: hotkeys },
+      showSaveOutcome(snackbar, t('SaveMessage'), 'hotkey preferences')
+    );
 
-    snackbar.show({
-      message: t('SaveMessage'),
-      type: 'success',
-    });
+    onClose();
   };
 
   const onHotkeyChanged = (commandName, hotkeyDefinition, keys) => {

@@ -38,8 +38,10 @@ export default function WorkListPageNG() {
   const {
     workListStudiesSelectedColumns,
     workListStudiesSelectedFilters,
+    workListColumnOrder,
     setWorkListStudiesSelectedColumns,
     setWorkListStudiesSelectedFilters,
+    setWorkListColumnOrder,
   } = useStudiesTableFiltersAndColumnsStore();
 
   const debouncedSearch = useDebounce(search, 500);
@@ -157,6 +159,8 @@ export default function WorkListPageNG() {
             selectedColumns={workListStudiesSelectedColumns}
             setSelectedColumns={setWorkListStudiesSelectedColumns}
             setSelectedFilters={setWorkListStudiesSelectedFilters}
+            columnOrder={workListColumnOrder}
+            setColumnOrder={setWorkListColumnOrder}
           />
         </WorklistContextProvider>
       )}

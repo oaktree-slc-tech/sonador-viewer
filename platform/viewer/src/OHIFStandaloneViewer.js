@@ -11,6 +11,7 @@ import Loader from '@ohif/ui/src/components/Loader/Loader';
 
 // Contexts
 import AppContext from './context/AppContext';
+import { initUserPreferences } from './init/initUserPreferences';
 import NotFound from './pages/NotFound/NotFound';
 import * as RoutesUtil from './routes/routesUtil';
 
@@ -86,6 +87,8 @@ const OHIFStandaloneViewer = ({ userManager }) => {
   const routes = RoutesUtil.getRoutes(appConfig);
 
   return (
+    <>
+    <UserPreferencesInit user={user} />
     <Routes>
       <Route exact path="/silent-refresh.html" element={<RefreshRoute />} />
       <Route exact path="/logout-redirect.html" element={<RefreshRoute />} />
@@ -103,8 +106,26 @@ const OHIFStandaloneViewer = ({ userManager }) => {
       ))}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   );
 };
+
+function UserPreferencesInit({ user }) {
+  // Startup hydration of user preferences (sonador#42 §5.5). Rendered only in the
+  // authenticated tree; the effect additionally waits for a live (non-expired) OIDC user so
+  // getAuthToken() returns a token before the first request fires. When no userManager is
+  // configured there is no Sonador auth to hydrate with, and initUserPreferences degrades to
+  // a logged no-op (FR-9).
+  const authenticated = !!(user && !user.expired);
+
+  useEffect(() => {
+    if (authenticated) {
+      void initUserPreferences();
+    }
+  }, [authenticated]);
+
+  return null;
+}
 
 OHIFStandaloneViewer.propTypes = {
   userManager: PropTypes.object,

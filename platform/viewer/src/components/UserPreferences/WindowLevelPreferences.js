@@ -6,6 +6,11 @@ import PropTypes from 'prop-types';
 import { redux } from '@ohif/core';
 import { TabFooter, useSnackbarContext } from '@ohif/ui';
 
+import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
+import { useUpdateUserPreferenceSection } from '../../queries/preferences';
+
+import { showSaveOutcome } from './saveOutcomeNotification';
+
 import './WindowLevelPreferences.styl';
 
 const { actions } = redux;
@@ -27,15 +32,20 @@ function WindowLevelPreferences({ onClose }) {
   const { t } = useTranslation('UserPreferencesModal');
   const onResetPreferences = () => {};
   const hasErrors = false;
+
+  const { mutate: saveWindowLevelSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.WINDOW_LEVEL);
+
   const onSave = () => {
+    // Redux dispatch unchanged (AR-5): the store subscription keeps the localStorage cache.
     dispatch(actions.setUserPreferences({ windowLevelData: state.values }));
 
-    onClose();
+    // Cloud sync through the write queue (FR-7).
+    saveWindowLevelSection(
+      { version: PREFERENCES_VERSION, values: state.values },
+      showSaveOutcome(snackbar, t('SaveMessage'), 'window-level presets')
+    );
 
-    snackbar.show({
-      message: t('SaveMessage'),
-      type: 'success',
-    });
+    onClose();
   };
 
   const snackbar = useSnackbarContext();

@@ -5,6 +5,11 @@ import PropTypes from 'prop-types';
 import i18n from '@ohif/i18n';
 import { LanguageSwitcher, TabFooter, useSnackbarContext } from '@ohif/ui';
 
+import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
+import { useUpdateUserPreferenceSection } from '../../queries/preferences';
+
+import { showSaveOutcome } from './saveOutcomeNotification';
+
 import './GeneralPreferences.styl';
 
 /**
@@ -26,15 +31,19 @@ function GeneralPreferences({ onClose }) {
     setLanguage(i18n.defaultLanguage);
   };
 
+  const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
+
   const onSave = () => {
+    // Local application first (AR-5): i18n keeps its own detection cache as the fallback.
     i18n.changeLanguage(language);
 
-    onClose();
+    // Cloud sync through the write queue (FR-7).
+    saveGeneralSection(
+      { version: PREFERENCES_VERSION, values: { language } },
+      showSaveOutcome(snackbar, t('SaveMessage'), 'general preferences')
+    );
 
-    snackbar.show({
-      message: t('SaveMessage'),
-      type: 'success',
-    });
+    onClose();
   };
 
   const hasErrors = false;

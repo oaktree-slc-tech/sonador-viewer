@@ -11,7 +11,8 @@ import { ReactComponent as SaveIcon } from '@ohif/ui/src/elements/Svg/svgs/save.
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
 import SelectNG from '../../components/SelectNG/SelectNG';
-import { useUpdateUserPreferences } from '../../queries/preferences';
+import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
+import { useUpdateUserPreferenceSection } from '../../queries/preferences';
 import { useViewerMetadataSettingsStore } from '../../store/useViewerMetadataSettingsStore';
 
 import styles from './ViewerMetadataSettings.module.scss';
@@ -82,15 +83,33 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
       setIsOpen(false);
     }
 
-    const settings = getAllUserSettings();
-    updateUserPreferencesMutate(settings, {
-      onSuccess: () => {
-        toast.success('Viewer metadata settings saved successfully');
+    // Submit the FILTERED local state (not the store-destructured previous-render values)
+    // to the `viewer-meta` section through the write queue (sonador#42 §5.6 item 14, FR-7).
+    saveViewerMetadataSection(
+      {
+        version: PREFERENCES_VERSION,
+        values: {
+          topLeftCorner: filteredTopLeftCornerState,
+          topRightCorner: filteredTopRightCornerState,
+          bottomLeftCorner: filteredBottomLeftCornerState,
+          bottomRightCorner: filteredBottomRightCornerState,
+        },
       },
-      onError: (error) => {
-        toast.error(`Failed to save viewer metadata settings: ${error.message}`, { duration: 5000 });
-      },
-    });
+      {
+        onSuccess: ({ outcome }) => {
+          if (outcome === 'saved') {
+            toast.success('Viewer metadata settings saved successfully');
+          } else if (outcome === 'queued') {
+            toast('Viewer metadata settings saved locally — they will sync when reconnected.');
+          } else {
+            toast.error('Failed to save viewer metadata settings to the server; the change was kept locally.');
+          }
+        },
+        onError: (error) => {
+          toast.error(`Failed to save viewer metadata settings: ${error.message}`, { duration: 5000 });
+        },
+      }
+    );
   };
 
   const handleCancel = () => {
@@ -107,14 +126,9 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
       setIsOpen(false);
     }
   };
-  const { mutate: updateUserPreferencesMutate } = useUpdateUserPreferences();
-
-  const getAllUserSettings = () => {
-    const viewerSettings = {
-      topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner,
-    };
-    return { viewerSettings };
-  };
+  const { mutate: saveViewerMetadataSection } = useUpdateUserPreferenceSection(
+    PREFERENCE_SECTIONS.VIEWER_METADATA
+  );
 
   // Save / Cancel state
   const [changesPending, setChangesPending] = useState(null);

@@ -38,8 +38,10 @@ export default function StudyListPageNG() {
   const {
     allStudiesSelectedColumns,
     allStudiesSelectedFilters,
+    allStudiesColumnOrder,
     setAllStudiesSelectedColumns,
     setAllStudiesSelectedFilters,
+    setAllStudiesColumnOrder,
   } = useStudiesTableFiltersAndColumnsStore();
 
   const debouncedSearch = useDebounce(search, 500);
@@ -138,6 +140,8 @@ export default function StudyListPageNG() {
           selectedFilters={allStudiesSelectedFilters}
           setSelectedFilters={setAllStudiesSelectedFilters}
           setSelectedColumns={setAllStudiesSelectedColumns}
+          columnOrder={allStudiesColumnOrder}
+          setColumnOrder={setAllStudiesColumnOrder}
         />
       )}
 
