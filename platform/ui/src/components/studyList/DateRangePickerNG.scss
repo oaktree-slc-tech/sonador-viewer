@@ -135,6 +135,16 @@
     border-radius: 10px;
   }
 
+  /* react-dates renders the Start/End Date range calendar into a portal on <body>
+     (appendToBody) and its base stylesheet gives .DateRangePicker_picker a z-index of 1. That
+     loses to the study results table's sticky header (z-index 2, corner cell 3 in
+     StudiesTable.module.scss), so the tag-name header floats over the open calendar. We tag
+     <body> with .dateRangePickerNG while the range picker is focused, so this descendant rule
+     reaches the portaled popup and lifts it clear of the header (matches DatePickerNG.scss). */
+  .DateRangePicker_picker {
+    z-index: 1000;
+  }
+
   .DayPicker,
   .DayPicker_transitionContainer {
     width: 356px !important;
