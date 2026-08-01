@@ -1,0 +1,14 @@
+/* The page itself is framed by the shared Layout, exactly as the welcome/empty state message is,
+   so only the sign-in action below the message needs styling here. Its inset matches the message
+   body (EmptyStateIndicator .messageContainer) so the two share a left edge. */
+.actions {
+  margin-left: 2rem;
+  margin-right: 2rem;
+
+  a {
+    font-size: 22px;
+    font-weight: 300;
+    line-height: 2rem;
+    color: var(--default-color);
+  }
+}

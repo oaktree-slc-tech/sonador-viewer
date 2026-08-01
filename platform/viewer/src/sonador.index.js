@@ -148,8 +148,12 @@ if (window && window.sonador && window.sonador.host) {
           });
         },
         emptyStateMessageFn: function(React) {
-          return window.config?.branding?.empty_state 
+          return window.config?.branding?.empty_state
             || 'Your user account is not associated with any imaging servers. Please contact your system administrator';
+        },
+        signedOutMessageFn: function(React) {
+          return window.config?.branding?.farewell
+            || '# Signed Out\n\nYou have been logged out of Sonador successfully.';
         }
       };
 

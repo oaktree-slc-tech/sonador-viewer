@@ -1,60 +1,25 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSelector } from 'react-redux';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
-import { AboutContent, Dropdown, withModal } from '@ohif/ui';
 import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/issues.svg';
 import { ReactComponent as ListIcon } from '@ohif/ui/src/elements/Svg/svgs/list.svg';
 
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import { useViewerSidePanels } from '../../store/useViewerSidePanels';
 import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
-import { UserPreferences } from '../UserPreferences';
+import UserMenu from '../UserMenu/UserMenu';
 
 import './Header.css';
 import issuesBtnStyles from './IssuesButton.module.scss';
 
-function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, linkText, children = OHIFLogo() }) {
+function Header({ useLargeLogo = false, linkPath, linkText, children = OHIFLogo() }) {
   const { t } = useTranslation(['Header', 'AboutModal']);
   const location = useLocation();
   const { token, studyInstanceUIDs } = useParams();
-
-  const user = useSelector((state) => state.oidc && state.oidc.user);
-
-  const options = [
-    {
-      title: t('About'),
-      icon: { name: 'info' },
-      onClick: () =>
-        show({
-          content: AboutContent,
-          title: t('OHIF Viewer - About'),
-        }),
-    },
-    {
-      title: t('Preferences'),
-      icon: {
-        name: 'user',
-      },
-      onClick: () =>
-        show({
-          content: UserPreferences,
-          title: t('User Preferences'),
-        }),
-    },
-  ];
-
-  if (user && userManager) {
-    options.push({
-      title: t('Logout'),
-      icon: { name: 'power-off' },
-      onClick: () => userManager.signoutRedirect(),
-    });
-  }
 
   return (
     <>
@@ -82,13 +47,17 @@ function Header({ userManager, modal: { show }, useLargeLogo = false, linkPath, 
         <div className="header-menu">
           <div className="useAndOptions">
             <span className="research-use">{t('INVESTIGATIONAL USE ONLY')}</span>
-            <Dropdown title={t('Options')} list={options} align="right" />
+
+            {/* Replaces the old text "Options" dropdown: one account menu across the viewer and
+                the study list, so Logout is reachable from both (ohif-viewers#31). */}
+            <UserMenu align="end" className="user-menu-toggle" />
           </div>
         </div>
       </div>
     </>
   );
 }
+
 
 function IssuesButton() {
   const { studyInstanceUIDs } = useParams();
@@ -129,8 +98,8 @@ Header.propTypes = {
   linkPath: PropTypes.string,
   useLargeLogo: PropTypes.bool,
   children: PropTypes.node,
-  userManager: PropTypes.object,
-  modal: PropTypes.object,
 };
 
-export default withModal(Header);
+// The account menu owns its own modal and user manager wiring, so the header no longer needs
+// either injected. Callers may still pass `userManager`; it is ignored.
+export default Header;

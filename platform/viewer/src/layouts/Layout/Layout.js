@@ -13,7 +13,13 @@ import TabletMobileHeader from './components/TabletMobileHeader/TabletMobileHead
 import styles from './Layout.module.scss';
 
 
-export default function Layout({ children, type, noHorizontalPadding = false, fixedHeight = false }) {
+export default function Layout({
+  children,
+  type,
+  noHorizontalPadding = false,
+  fixedHeight = false,
+  showSettings = true,
+}) {
   const { setDevice, isDesktop } = useDeviceStore();
 
   const handleResize = () => {
@@ -35,7 +41,7 @@ export default function Layout({ children, type, noHorizontalPadding = false, fi
       {isDesktop && (
         <WhiteLabelingContext.Consumer>
           {(whiteLabeling) => (
-            <SideBarNG>
+            <SideBarNG showSettings={showSettings}>
               {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
             </SideBarNG>
           )}
@@ -64,4 +70,7 @@ Layout.propTypes = {
   type: PropTypes.oneOf(['default', 'settings']),
   noHorizontalPadding: PropTypes.bool,
   fixedHeight: PropTypes.bool,
+
+  /** Set false on surfaces with no session behind them, such as the sign-out confirmation. */
+  showSettings: PropTypes.bool,
 };
