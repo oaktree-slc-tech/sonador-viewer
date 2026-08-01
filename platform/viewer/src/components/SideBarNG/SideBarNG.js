@@ -18,7 +18,7 @@ import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 import styles from './SideBarNG.module.scss';
 
 
-export default function SideBarNG({ children = OHIFLogo() }) {
+export default function SideBarNG({ children = OHIFLogo(), showSettings = true }) {
   // Sonador Viewer Sidebar
 
   const location = useLocation();
@@ -154,16 +154,20 @@ export default function SideBarNG({ children = OHIFLogo() }) {
           </div>
         )}
 
-        <div className={styles.bottom}>
-          <NavLink
-            to="/settings"
-            onClick={handleClickNotStudiesLink}
-            className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
-          >
-            <SettingsIcon fill={isSettingsPage ? '#ffffff' : '#60646D'} />
-            <span className={styles.name}>Settings</span>
-          </NavLink>
-        </div>
+        {/* Suppressed on surfaces with no session behind them, such as the sign-out
+            confirmation, where Settings is not somewhere the user can go. */}
+        {showSettings && (
+          <div className={styles.bottom}>
+            <NavLink
+              to="/settings"
+              onClick={handleClickNotStudiesLink}
+              className={({ isActive }) => classNames(styles.menuItem, { [styles.active]: isActive })}
+            >
+              <SettingsIcon fill={isSettingsPage ? '#ffffff' : '#60646D'} />
+              <span className={styles.name}>Settings</span>
+            </NavLink>
+          </div>
+        )}
       </nav>
     </aside>
   );

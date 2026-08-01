@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import qs from 'query-string';
-import { SignoutCallbackComponent } from 'redux-oidc';
 
 import { redux } from '@ohif/core';
 import { ViewerbaseDragDropContext } from '@ohif/ui';
@@ -13,6 +12,8 @@ import Loader from '@ohif/ui/src/components/Loader/Loader';
 import AppContext from './context/AppContext';
 import { initUserPreferences } from './init/initUserPreferences';
 import NotFound from './pages/NotFound/NotFound';
+import SignedOut from './pages/SignedOut/SignedOut';
+import { isSigningOut } from './components/UserMenu/UserMenu';
 import * as RoutesUtil from './routes/routesUtil';
 
 import './OHIFStandaloneViewer.css';
@@ -25,6 +26,12 @@ const {
 } = redux;
 
 const CallbackPage = lazy(() => import(/* webpackChunkName: "CallbackPage" */ './pages/CallbackPage'));
+
+// Sonador's OpenID `post_logout_redirect_uri`, plus the extension-less form older builds use
+const SIGNED_OUT_PATHS = ['/logout-redirect.html', '/logout-redirect'];
+
+// Routes that are steps in an auth flow, never a post-login destination
+const AUTH_TRANSITION_PATHS = ['/callback', ...SIGNED_OUT_PATHS];
 
 const OHIFStandaloneViewer = ({ userManager }) => {
   const dispatch = useDispatch();
@@ -47,29 +54,26 @@ const OHIFStandaloneViewer = ({ userManager }) => {
   if (userNotLoggedIn) {
     const { pathname, search } = location;
 
-    if (pathname !== '/callback') {
+    // Paths that are part of an auth transition rather than a destination. Remembering them as
+    // the post-login target would bounce the user back into the flow they just finished.
+    if (!AUTH_TRANSITION_PATHS.includes(pathname)) {
       sessionStorage.setItem('ohif-redirect-to', JSON.stringify({ pathname, search }));
     }
 
     return (
       <Routes>
         <Route exact path="/silent-refresh.html" element={<RefreshRoute />} />
-        <Route
-          exact
-          path="/logout-redirect"
-          element={
-            <SignoutCallbackComponent
-              userManager={userManager}
-              successCallback={() => {}}
-              errorCallback={(error) => {
-                console.warn(error);
-                console.warn('Signout failed');
-              }}
-            >
-              <div />
-            </SignoutCallbackComponent>
-          }
-        />
+
+        {/*
+          Sign-out confirmation (ohif-viewers#31). Both spellings are routed: ".html" is what
+          Sonador configures as `post_logout_redirect_uri`, the bare path is kept for viewer
+          builds and deployments still configured the old way. Without an explicit match here the
+          request falls through to the catch-all below and silently signs the user back in.
+        */}
+        {SIGNED_OUT_PATHS.map((path) => (
+          <Route exact key={path} path={path} element={<SignedOut />} />
+        ))}
+
         <Route
           path="/callback"
           element={
@@ -91,7 +95,16 @@ const OHIFStandaloneViewer = ({ userManager }) => {
     <UserPreferencesInit user={user} />
     <Routes>
       <Route exact path="/silent-refresh.html" element={<RefreshRoute />} />
-      <Route exact path="/logout-redirect.html" element={<RefreshRoute />} />
+
+      {/*
+        Reachable when the sign-out page is opened while a session is still live (a stale tab, or
+        the URL entered directly). Show the confirmation rather than reloading: the old
+        RefreshRoute here reloaded into the Sonador catch-all, which re-authenticated.
+      */}
+      {SIGNED_OUT_PATHS.map((path) => (
+        <Route exact key={path} path={path} element={<SignedOut />} />
+      ))}
+
       {routes.map(({ path, Component }) => (
         <Route
           exact
@@ -178,7 +191,16 @@ function LoginRoute({ appConfig, userManager }) {
 }
 
 function SignInSilentOrRedirectRoute({ userManager }) {
+  // A sign-out in progress unmounts the authenticated tree the instant signoutRedirect() clears
+  // the stored user -- before its own navigation has been issued. Starting a sign-in here would
+  // win that race and cancel the logout outright, which is exactly the loop in ohif-viewers#31.
+  const signingOut = isSigningOut();
+
   useEffect(() => {
+    if (signingOut) {
+      return;
+    }
+
     void userManager.getUser().then((user) => {
       if (user) {
         void userManager.signinSilent();
@@ -186,7 +208,9 @@ function SignInSilentOrRedirectRoute({ userManager }) {
         void userManager.signinRedirect();
       }
     });
-  }, []);
+  }, [signingOut]);
 
-  return null;
+  // Hold the sign-out confirmation until the logout navigation lands, so the interim frame is not
+  // an empty page.
+  return signingOut ? <SignedOut interim /> : null;
 }

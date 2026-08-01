@@ -27,6 +27,7 @@ import { Icon } from '@ohif/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@ohif/ui-next';
 import { DownloadManagerService, JOB_STATES } from '@ohif/core';
 
+import UserMenu from '../../../../UserMenu/UserMenu';
 import useTags from '../../../../../hooks/useTags';
 import { DEFAULT_FILTERS, FILTER_TYPES } from '../../../../../lib/constants';
 import { getDateEntryFromRange } from '../../../../../lib/utils/getDateEntryFromRange';
@@ -142,6 +143,12 @@ export default function Filters({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Account menu (ohif-viewers#31). The study list previously had no way to sign out at
+              all -- Logout lived only in the viewer header. Shares its options with that header
+              via UserMenu so the two cannot drift apart again. */}
+          <UserMenu align="end" className={styles.userMenu} />
+
           <p className={styles.useOnly}>{t('INVESTIGATIONAL USE ONLY')}</p>
         </div>
       </div>

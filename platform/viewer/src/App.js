@@ -285,14 +285,20 @@ class App extends Component {
       const { routerBasename } = this._appConfig;
       const baseUri = `${protocol}//${host}${routerBasename}`;
 
+      // The sign-out page is a root level route in every deployment: Sonador serves it outside the
+      // viewer's basename, and a standalone build serves it from its own origin. Resolving it
+      // against `baseUri` produced "/viewer/<id>/logout-redirect.html" for a server scoped viewer,
+      // which is not a route anything serves (ohif-viewers#31).
+      const originUri = `${protocol}//${host}`;
+
       const redirect_uri = firstOpenIdClient.redirect_uri || '/callback';
       const silent_redirect_uri = firstOpenIdClient.silent_redirect_uri || '/silent-refresh.html';
-      const post_logout_redirect_uri = firstOpenIdClient.post_logout_redirect_uri || '/';
+      const post_logout_redirect_uri = firstOpenIdClient.post_logout_redirect_uri || '/logout-redirect.html';
 
       const openIdConnectConfiguration = Object.assign({}, firstOpenIdClient, {
         redirect_uri: _makeAbsoluteIfNecessary(redirect_uri, baseUri),
         silent_redirect_uri: _makeAbsoluteIfNecessary(silent_redirect_uri, baseUri),
-        post_logout_redirect_uri: _makeAbsoluteIfNecessary(post_logout_redirect_uri, baseUri),
+        post_logout_redirect_uri: _makeAbsoluteIfNecessary(post_logout_redirect_uri, originUri),
       });
 
       this._userManager = getUserManagerForOpenIdConnectClient(store, openIdConnectConfiguration);

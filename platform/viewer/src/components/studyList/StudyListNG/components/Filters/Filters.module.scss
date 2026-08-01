@@ -25,6 +25,30 @@
   column-gap: 15px;
 }
 
+// Account menu trigger (ohif-viewers#31). Sits immediately right of the offline storage toggle
+// and deliberately mirrors it exactly, so the two read as one group of title-row controls.
+.userMenu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #fff;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover {
+    color: #2e46e9;
+  }
+}
+
 // Download Manager launcher / offline-cache indicator, sized to fit within the title row.
 .downloadManager {
   position: relative;
