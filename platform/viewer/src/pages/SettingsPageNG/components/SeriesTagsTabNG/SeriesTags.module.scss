@@ -36,7 +36,17 @@
 
 
 .tagList {
-  overflow: auto;
+  // Plain block: scrolling belongs to .tableScroll below, not to the section wrapper, so the
+  // footer and the delete-confirmation modal are never trapped inside a scrollport.
+  min-width: 0;
+}
+
+.tableScroll {
+  // The single scroller for the tag table — wide tag lists scroll horizontally inside this box
+  // rather than stretching the settings panel. Mirrors the device-list table; see
+  // DevicesList.module.scss for the full rationale.
+  max-width: 100%;
+  overflow-x: auto;
 
   :where(table) { width: 100% }
 }

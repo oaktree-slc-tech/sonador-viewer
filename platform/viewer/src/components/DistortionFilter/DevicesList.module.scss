@@ -59,9 +59,27 @@
 }
 
 .devicesList {
-  overflow: auto;
+  // Plain block: scrolling belongs to .tableScroll below, not to the section wrapper, so the
+  // footer and the delete-confirmation modal are never trapped inside a scrollport.
+  min-width: 0;
+}
 
-  :where(table) { width: 100% }
+.tableScroll {
+  // The single scroller for the device table. Wide device lists scroll horizontally *inside*
+  // this box instead of stretching the settings panel, which is what previously pushed content
+  // out of the gray content box and gave the window a horizontal scrollbar.
+  //
+  // This only stays bounded because the settings pane is min-width: 0 (see SettingsPageNG);
+  // without that the flex item grows to the table's intrinsic width and there is nothing to
+  // scroll against.
+  max-width: 100%;
+  overflow-x: auto;
+
+  :where(table) {
+    // Fill the container when the columns fit; the cells' own min-widths make the table wider
+    // than this and trigger the scrollbar when they do not.
+    width: 100%;
+  }
 }
 
 .listHeader {
