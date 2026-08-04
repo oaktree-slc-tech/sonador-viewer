@@ -198,68 +198,8 @@
   font-size: 16px;
 }
 
-// Hover-details card (#125): ui-next HoverCardContent portals to document.body, so it must
-// out-stack the ModalNG content (z-index 200) — Radix copies the CONTENT's z-index onto the
-// popper wrapper, so it is set here, on the content class. Width overrides the default w-64.
-// Colors override the component's viewer-aqua theme tokens (border-input / text-muted-foreground)
-// with the study-list gray/black scheme; these unlayered rules outrank the layered utilities.
-.detailsCard {
-  z-index: 1080;
-  width: auto;
-  min-width: 360px;
-  max-width: 520px;
-  background: #1e1f23;
-  border-color: #3a3d44;
-  color: #d3d3d3;
-}
-
-.detailsTitle {
-  color: #fff;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.detailsDescription {
-  color: #d3d3d3;
-  font-size: 13px;
-  margin-top: 2px;
-}
-
-.detailsAttr {
-  color: #9a9da4;
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.detailsTable {
-  width: 100%;
-  margin-top: 10px;
-  border-collapse: collapse;
-  font-size: 12px;
-
-  th {
-    text-align: left;
-    color: #9a9da4;
-    font-weight: 600;
-    padding: 4px 10px 4px 0;
-    border-bottom: 1px solid #3a3d44;
-    white-space: nowrap;
-  }
-
-  td {
-    color: #d3d3d3;
-    padding: 4px 10px 4px 0;
-    border-bottom: 1px solid #2a2d34;
-    white-space: nowrap;
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-}
+// The hover-details card itself lives in StudyOfflineDetailsCard (shared with the study-results
+// table's offline indicator), along with its styles.
 
 // Bulk controls rendered inline with the search box (#125): "Clear storage" (Locally Stored) and
 // "Cancel all transfers" (Active Transfers).
@@ -316,7 +256,8 @@
 
 // ui-next tooltip: TooltipContent portals to document.body, so it must out-stack the ModalNG
 // content (z-index 200) — Radix copies the CONTENT's z-index onto the popper wrapper, same
-// pattern as .detailsCard above. Border swaps the aqua border-input token for the dialog's gray.
+// pattern as StudyOfflineDetailsCard's .detailsCard. Border swaps the aqua border-input token for
+// the dialog's gray.
 .tooltipContent {
   z-index: 1080;
   border-color: #3a3d44;

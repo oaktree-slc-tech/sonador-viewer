@@ -14,9 +14,14 @@ import { LocalCacheService } from '@ohif/core';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import StudyItemExpandedNG from '../../../StudyItemExpandedNG/StudyItemExpandedNG';
 import StudiesTableActions from '../StudiesTableActions/StudiesTableActions';
+import { OFFLINE_INDICATOR_COLUMN_ID } from '../OfflineIndicatorCell/OfflineIndicatorCell';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
 
 import styles from './StudiesTable.module.scss';
+
+// Columns that carry row controls/state rather than a DICOM attribute: their headers render as-is,
+// without the sort affordance and label treatment the tag columns get.
+const RAW_HEADER_COLUMN_IDS = ['selector-settings-expander', OFFLINE_INDICATOR_COLUMN_ID];
 
 export default function StudiesTable({
   rows,
@@ -148,16 +153,21 @@ export default function StudiesTable({
               {headerGroup.headers.map((header) => {
                 if (header.isPlaceholder) return <th key={header.id} />;
 
+                // The offline indicator stays pinned beside the row controls, so it is neither
+                // draggable nor a drop target for the reorderable tag columns.
+                const isOfflineIndicator = header.id === OFFLINE_INDICATOR_COLUMN_ID;
+
                 return (
                   <th
                     style={{borderTop: 'none', borderBottom: 'none'}}
                     key={header.id}
-                    draggable
+                    className={classNames({ [styles.offlineIndicatorCell]: isOfflineIndicator })}
+                    draggable={!isOfflineIndicator}
                     onDragStart={(e) => handleDragStart(e, header.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, header.id)}
+                    onDragOver={isOfflineIndicator ? undefined : handleDragOver}
+                    onDrop={isOfflineIndicator ? undefined : (e) => handleDrop(e, header.id)}
                   >
-                    {header.id !== 'selector-settings-expander' ? (
+                    {!RAW_HEADER_COLUMN_IDS.includes(header.id) ? (
                       <div
                         tabIndex={0}
                         role='button'
@@ -217,7 +227,17 @@ export default function StudiesTable({
                       })}
                     >
                       {row.getVisibleCells().map((cell) => {
-                        return <td key={cell.id} style={{borderTop: 'none', borderBottom:'none'}}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>;
+                        return (
+                          <td
+                            key={cell.id}
+                            style={{borderTop: 'none', borderBottom:'none'}}
+                            className={classNames({
+                              [styles.offlineIndicatorCell]: cell.column.id === OFFLINE_INDICATOR_COLUMN_ID,
+                            })}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        );
                       })}
                     </tr>
                     {isExpanded && (

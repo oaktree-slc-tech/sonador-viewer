@@ -1,5 +1,22 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 
+// Offline-availability column (ohif-viewers#125, FR-8): a state badge, not a tag value, so it is
+// squeezed to its content instead of taking a share of the table's width. `width: 1px` on an
+// auto-layout table resolves to the minimum content width. Cells are empty for studies that are not
+// cached, so with nothing to show the column costs only its padding.
+//
+// The badge's right margin is supplied entirely by the NEXT cell's 25px left padding (see .row td
+// below), so this cell carries no right padding of its own. Its left margin is set a touch tighter
+// than that, which reads as balanced against the heavier rule closing the row-controls cell.
+$offline-indicator-gutter: 20px;
+
+@mixin offlineIndicatorColumn {
+  width: 1px;
+  padding-left: $offline-indicator-gutter;
+  padding-right: 0;
+  white-space: nowrap;
+}
+
 .tableToolbar {
   display: flex;
   align-items: center;
@@ -183,6 +200,10 @@
           padding-right: 20px;
         }
       }
+
+      &.offlineIndicatorCell {
+        @include offlineIndicatorColumn;
+      }
     }
 
     .row {
@@ -215,6 +236,10 @@
           @include lg {
             padding-right: 20px;
           }
+        }
+
+        &.offlineIndicatorCell {
+          @include offlineIndicatorColumn;
         }
       }
 

@@ -1,0 +1,20 @@
+// Offline-availability badge (ohif-viewers#125). Smaller than the row's other controls: the column
+// it lives in is squeezed to its content (see StudiesTable.module.scss .offlineIndicatorCell), so
+// every pixel here widens the table and pushes tag values right. 16px matches the Study View's
+// series-level cache indicator.
+//
+// Colour is the study list's own #91b9cd (the Investigational Use notice in Filters.module.scss),
+// NOT the viewer's marine cache-indicator aqua — nothing else on this page wears that, so the badge
+// read as an import from another surface.
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #91b9cd;
+
+  svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+}

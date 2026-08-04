@@ -15,7 +15,6 @@ import { useDebounce, Icon } from '@ohif/ui';
 import {
   HoverCard,
   HoverCardTrigger,
-  HoverCardContent,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
@@ -25,6 +24,7 @@ import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 import { ReactComponent as RefreshIcon } from '@ohif/ui/src/elements/Svg/svgs/refresh.svg';
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 
+import StudyOfflineDetailsCard from '../StudyOfflineDetailsCard/StudyOfflineDetailsCard';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
 
 import styles from './DownloadManagerModal.module.scss';
@@ -122,62 +122,6 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
   );
   const storedStudies = LocalCacheService ? LocalCacheService.searchCachedStudies(debouncedSearch) : [];
 
-  const renderStudyDetailsCard = item => {
-    // Hover-details card (Radix HoverCard from @ohif/ui-next): full study attributes plus a
-    // per-series breakdown read live from the local cache index.
-    const seriesSummaries = LocalCacheService
-      ? LocalCacheService.getStudySeriesSummaries(item.StudyInstanceUID)
-      : [];
-
-    return (
-      <HoverCardContent side="top" align="start" className={styles.detailsCard}>
-        {(item.PatientName || item.PatientID) && (
-          <div className={styles.detailsTitle}>
-            {item.PatientName}
-            {item.PatientID && <span className={styles.rowTitleSecondary}>{item.PatientID}</span>}
-          </div>
-        )}
-        {item.StudyDescription && <div className={styles.detailsDescription}>"{item.StudyDescription}"</div>}
-        {item.AccessionNumber && (
-          <div className={styles.detailsAttr}>
-            {t('AccessionNumber')} {item.AccessionNumber}
-          </div>
-        )}
-        {item.ServiceEpisodeID && (
-          <div className={styles.detailsAttr}>
-            {t('Service Episode')} {item.ServiceEpisodeID}
-          </div>
-        )}
-        {seriesSummaries.length > 0 ? (
-          <table className={styles.detailsTable}>
-            <thead>
-              <tr>
-                <th>{t('Series #')}</th>
-                <th>{t('StudyDescription')}</th>
-                <th>{t('Modality')}</th>
-                <th>{t('Instances')}</th>
-                <th>{t('Size')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {seriesSummaries.map(series => (
-                <tr key={series.SeriesInstanceUID}>
-                  <td>{series.SeriesNumber ?? ''}</td>
-                  <td>{series.SeriesDescription || ''}</td>
-                  <td>{series.Modality || ''}</td>
-                  <td>{series.instanceCount}</td>
-                  <td>{formatBytes(series.totalBytes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className={styles.detailsAttr}>{t('No series cached yet')}</div>
-        )}
-      </HoverCardContent>
-    );
-  };
-
   const renderActiveTab = () => {
     if (!activeJobs.length) {
       return <p className={styles.empty}>{t('No active transfers')}</p>;
@@ -203,7 +147,7 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
                 </div>
               </div>
             </HoverCardTrigger>
-            {renderStudyDetailsCard(job)}
+            <StudyOfflineDetailsCard item={job} />
           </HoverCard>
           <button
             type="button"
@@ -313,7 +257,7 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
               </div>
             </div>
           </HoverCardTrigger>
-          {renderStudyDetailsCard(summary)}
+          <StudyOfflineDetailsCard item={summary} />
         </HoverCard>
         <button
           type="button"

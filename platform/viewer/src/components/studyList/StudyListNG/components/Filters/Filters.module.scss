@@ -1,5 +1,13 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 
+// Box size of the title-row icon controls: an 18px glyph plus the 2px padding each button carries.
+// The Investigational Use notice matches it so the three share a centerline.
+$header-control-size: 22px;
+
+// Air between the Investigational Use notice and the icon controls' separating rule. Deliberately
+// much wider than the 15px gap between the icons themselves, so the notice reads as its own thing.
+$header-notice-gap: 30px;
+
 .studyListHeader {
   display: flex;
   justify-content: space-between;
@@ -7,22 +15,47 @@
   margin-bottom: 20px;
 }
 
+// Matches the Study Viewer header's notice (.header-menu .research-use in Header.css) so the two
+// surfaces read identically; already small enough that the lg step-down is unnecessary.
+//
+// Its own flex box with the icon controls' height: a bare text box is only as tall as its line, so
+// centering it against the taller icon buttons left the caps riding above their centerline. Giving
+// the label the same box height and centering the line inside it puts the two on one centerline.
 .useOnly {
-  text-align: right;
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  min-height: $header-control-size;
+  line-height: 1;
+  // Flex box, so the former text-align would be inert on the anonymous text item.
+  justify-content: flex-end;
+  font-size: 13px;
+  font-weight: 700;
+  color: #91b9cd;
   margin: 0;
-
-  @include lg {
-    font-size: 12px;
-  }
 }
 
-// Right-side group of the title row: keeps "Investigational Use Only" and the Download Manager
-// launcher together on the right (ohif-viewers#125, FR-5). Gap matches the study-list toolbar rows.
+// Right-side group of the title row: the Investigational Use notice, then the Download Manager
+// launcher and account menu (ohif-viewers#125, FR-5), in the same order as the Study Viewer header.
+//
+// The trailing button carries 2px of its own padding, which would inset its glyph from the row's
+// padding rail; pulling the group out by that much lands the account icon's right edge on the rail
+// itself, mirroring where the page title's first glyph starts on the left.
 .headerRight {
   display: flex;
   align-items: center;
+  column-gap: $header-notice-gap;
+  margin-right: -2px;
+}
+
+// The icon controls, fenced off from the notice by a rule so the statutory label does not read as
+// a caption for them. The rule takes the controls' height (22px) rather than the row's, and sits
+// with equal air on both sides ($header-notice-gap before it, its own padding after).
+.headerControls {
+  display: flex;
+  align-items: center;
   column-gap: 15px;
+  padding-left: $header-notice-gap;
+  border-left: 1px solid #3c4247;
 }
 
 // Account menu trigger (ohif-viewers#31). Sits immediately right of the offline storage toggle
@@ -270,6 +303,9 @@
   left: 0;
 }
 
+// Symmetric about the section's padding rail: the account icon's right edge is inset as far as the
+// page title's left edge. (.headerRight's -2px pulls the trailing button's own padding off the rail
+// so the two are measured glyph-to-glyph.)
 .studyListHeader {
   padding-left: 40px;
   padding-right: 40px;
