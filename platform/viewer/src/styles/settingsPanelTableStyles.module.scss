@@ -66,4 +66,25 @@ table {
   th, td {
     padding: 15px 5px;
   }
+
+  // Row action column (edit / cancel / delete). Pinned to the right edge of the table's
+  // horizontal scrollport so the controls stay reachable without panning back and forth.
+  //
+  // Requires an ancestor scroll container (see .tableScroll in DevicesList.module.scss) and an
+  // opaque background matching the settings panel so data cells pass underneath rather than
+  // showing through. Applied by class rather than :last-child because the column is only
+  // rendered when the user holds the modify permission.
+  th.stickyActions,
+  td.stickyActions {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: #1e1f23;
+
+    // Keep the column at min-content so it steals as little width as possible from the data
+    // columns; the inset shadow is the divider, the outer one signals content scrolling under.
+    width: 1%;
+    white-space: nowrap;
+    box-shadow: inset 1px 0 0 #60646d, -6px 0 6px -6px rgba(0, 0, 0, 0.6);
+  }
 }

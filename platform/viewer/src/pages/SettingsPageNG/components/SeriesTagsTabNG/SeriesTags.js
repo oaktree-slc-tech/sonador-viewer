@@ -389,6 +389,7 @@ export default function SeriesTagsTabNG() {
     {selectedGroup && aclTag && (
       <>
       <div className={styles.tagList}>
+        <div className={styles.tableScroll}>
         <table>
           <thead>
           <tr>
@@ -396,7 +397,7 @@ export default function SeriesTagsTabNG() {
               {headers.map(({ id, label }) => {
                 return <th key={id}>{label}</th>;
             })}
-            <th className={styles.listHeaderLastItem} />
+            {aclTagModify && <th className={settingsPanelTableStyles.stickyActions} />}
           </tr>
           </thead>
           <tbody>
@@ -412,7 +413,7 @@ export default function SeriesTagsTabNG() {
             />            
           ))}
           {(tags?.length == 0) && (
-            <tr><td colSpan="5">
+            <tr><td colSpan={headers.length + 1 + (aclTagModify ? 1 : 0)}>
               <p className={globalTableStyles.noMatchingResults}>
                 {t('No series tags defined for ')+selectedGroup.name+'.'}
               </p>
@@ -420,6 +421,7 @@ export default function SeriesTagsTabNG() {
           )}
           </tbody>
         </table>
+        </div>
 
         {changesPending && (
           <div className={styles.footer}>
@@ -527,7 +529,7 @@ function TagRow({
         )}
       </td>
 
-      {aclModify && <td>
+      {aclModify && <td className={settingsPanelTableStyles.stickyActions}>
         <div className={settingsPanelTableStyles.rowActions}>
           {ID && !isEditMode && (
             <button onClick={() => onEdit(index)}>

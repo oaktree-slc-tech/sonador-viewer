@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import OHIF, { redux } from '@ohif/core';
@@ -366,6 +367,9 @@ export default function DeviceList() {
     setDevicesList(deviceListResponse);
   };
 
+  // Row-number column + data columns + the action column (only rendered with modify permission)
+  const columnCount = headers.length + 1 + (aclDeviceListModify ? 1 : 0);
+
   
   return (
     <>
@@ -406,40 +410,45 @@ export default function DeviceList() {
     {selectedGroup && aclDeviceList && (
         <>        
         <div className={styles.devicesList}>
-          <table>
-            <thead>
-            <tr>
-              <th className={settingsPanelTableStyles.listHeaderFirstItem} />
-              {headers.map(({ id, label }) => {
-                return <th key={id}>{label}</th>;
-              })}
-              <th className={settingsPanelTableStyles.listHeaderLastItem} />
-            </tr>
-            </thead>
-            <tbody>
-            {devicesList?.map((device, index) => (
-              <DeviceRow
-                key={device.ID || index}
-                device={device}
-                index={index}
-                onChange={handleChange}
-                onEdit={handleEdit}
-                onCancelEdit={handleCancelRowEdit}
-                onRemove={removeListItem}
-                aclModify={aclDeviceListModify}         
-              />
-            ))}
-            {(devicesList?.length == 0) && (
-              <tr><td colSpan="8">
-                <p className={globalTableStyles.noMatchingResults}>
-                  {t('No devices defined for distortion filter.')}
-                </p>
-              </td></tr>
-            )}
-            </tbody>
-          </table>
-          
-          
+          <div className={styles.tableScroll}>
+            <table>
+              <thead>
+              <tr>
+                <th className={settingsPanelTableStyles.listHeaderFirstItem} />
+                {headers.map(({ id, label }) => {
+                  return <th key={id}>{label}</th>;
+                })}
+                {aclDeviceListModify && (
+                  <th className={classNames(settingsPanelTableStyles.listHeaderLastItem,
+                    settingsPanelTableStyles.stickyActions)} />
+                )}
+              </tr>
+              </thead>
+              <tbody>
+              {devicesList?.map((device, index) => (
+                <DeviceRow
+                  key={device.ID || index}
+                  device={device}
+                  index={index}
+                  onChange={handleChange}
+                  onEdit={handleEdit}
+                  onCancelEdit={handleCancelRowEdit}
+                  onRemove={removeListItem}
+                  aclModify={aclDeviceListModify}
+                />
+              ))}
+              {(devicesList?.length == 0) && (
+                <tr><td colSpan={columnCount}>
+                  <p className={globalTableStyles.noMatchingResults}>
+                    {t('No devices defined for distortion filter.')}
+                  </p>
+                </td></tr>
+              )}
+              </tbody>
+            </table>
+          </div>
+
+
           {changesPending && (
             <div className={styles.footer}>
               <button className={styles.cancel} onClick={handleCancel}>
@@ -572,7 +581,7 @@ function DeviceRow({
         )}
       </td>
 
-      {aclModify && <td>
+      {aclModify && <td className={settingsPanelTableStyles.stickyActions}>
         <div className={settingsPanelTableStyles.rowActions}>
           {ID && !isEditMode && (
             <button onClick={() => onEdit(index)}>

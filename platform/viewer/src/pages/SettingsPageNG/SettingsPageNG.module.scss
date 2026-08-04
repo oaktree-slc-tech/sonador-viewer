@@ -44,6 +44,7 @@
   .left {
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 
     .tabs {
       display: flex;
@@ -113,8 +114,15 @@
     }
   }
 
-  .right {    
+  .right {
     flex-grow: 1;
+
+    // IMPORTANT: flex items default to min-width: auto, so a tab whose content has a wide
+    // intrinsic minimum (the distortion-filter device table, series tags, ...) would push this
+    // pane wider than the settings panel, spilling past the gray content box and putting a
+    // horizontal scrollbar on the window. min-width: 0 lets the pane shrink to the panel width
+    // so tab content can own its own scrolling instead.
+    min-width: 0;
   }
 }
 
