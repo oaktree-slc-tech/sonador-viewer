@@ -1,6 +1,6 @@
 // Persistent, browser-side local/offline cache for downloaded DICOM studies (ohif-viewers#125).
 //
-// Backing store: IndexedDB (via idb-keyval, precedent: store/useViewerStudyErrors.js). Two logical
+// Backing store: IndexedDB (via idb-keyval). Two logical
 // stores are used because idb-keyval models each `createStore` as its own single-object-store DB:
 //   - instances : keyed by SOPInstanceUID -> { uids, bytes (Part10 ArrayBuffer), metadata, byteSize }
 //   - index     : a single serialisable summary document (no ArrayBuffers) enabling fast, SYNCHRONOUS

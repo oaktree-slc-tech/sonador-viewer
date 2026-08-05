@@ -11,7 +11,6 @@ import {
 
 import { cacheVtkImage } from './utils/cornerstone3d.js';
 
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import OHIF from '@ohif/core';
@@ -25,6 +24,7 @@ import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionVie
 import LoadingIndicator from './components/LoadingIndicator.js';
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import ConnectedVTKViewport from './connectedComponents/ConnectedVTKViewport';
+import { uiNotificationService } from '@ohif/core';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
@@ -159,24 +159,19 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       console.error(errorTitle, error);
 
       // Retrieve UI notification, logging, and UIModalService
-      const { UINotificationService, LoggerService, UIModalService } = this.props.servicesManager.services;
+      const { UIModalService } = this.props.servicesManager.services;
 
       if (this.props.viewportIndex === 0) {
         const message = error.message.includes('buffer') ? 'Dataset is too big to display in MPR' : error.message;
-        LoggerService.error({ error, message });
-
-        const studyId = extractStudyIdFromURL();
-
-        if (studyId) {
-          // Will be called only on Viewer study page
-          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-        }
-
-        UINotificationService.show({
+        // One call: console, unified Issues list, and a sticky toast with a way out
+        // (ohif-viewers#84).
+        uiNotificationService.show({
           title: errorTitle,
           message,
           type: 'error',
           autoClose: false,
+          studyInstanceUID: extractStudyIdFromURL(),
+          error,
           action: {
             label: 'Exit 2D MPR',
             onClick: ({ close }) => {
@@ -287,7 +282,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
   render() {
     const component = this;
     const { configuration: segmentationConfiguration } = segmentationModule;
-    const { UINotificationService, LoggerService, UIModalService } = this.props.servicesManager.services;
+    const { UIModalService } = this.props.servicesManager.services;
     
     let childrenWithProps = null;
 

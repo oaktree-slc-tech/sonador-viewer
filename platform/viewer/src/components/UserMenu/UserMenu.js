@@ -154,7 +154,7 @@ function UserMenu({ modal: { show }, align = 'end', className }) {
         )}
 
         <DropdownMenuItem
-          onSelect={() => show({ content: AboutContent, title: t('OHIF Viewer - About') })}
+          onSelect={() => show({ content: AboutContent, title: t('Sonador Viewer / About') })}
         >
           <Icons.Info className="h-5 w-5" />
           <span className="pl-2">{t('About')}</span>

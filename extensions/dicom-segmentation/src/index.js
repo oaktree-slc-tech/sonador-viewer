@@ -1,7 +1,6 @@
 import React from 'react';
 
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import { Enums as vtkEnums } from '@ohif/extension-vtk';
@@ -42,7 +41,7 @@ const segmentationExtension = {
     return toolbarModule;
   },
   getPanelModule({ commandsManager, api, servicesManager }) {
-    const { UINotificationService, LoggerService } = servicesManager.services;
+    const { LoggerService } = servicesManager.services;
 
     const ExtendedSegmentationPanel = (props) => {
       const { activeContexts } = api.hooks.useAppContext();
@@ -53,21 +52,12 @@ const segmentationExtension = {
               If you really think it is coplanar,\
               please adjust the tolerance in the segmentation panel settings (at your own peril!)'
             : error.message;
-        LoggerService.error({ error, message });
-
-        const studyId = extractStudyIdFromURL();
-        const errorTitle = 'DICOM Segmentation Loader';
-
-        if (studyId) {
-          // Will be called only on Viewer study page
-          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-        }
-
-        UINotificationService.show({
-          title: errorTitle,
+        LoggerService.error({
+          error,
+          title: 'DICOM Segmentation Loader',
           message,
-          type: 'error',
-          autoClose: false,
+          notify: true,
+          studyInstanceUID: extractStudyIdFromURL(),
         });
       };
 

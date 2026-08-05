@@ -32,6 +32,14 @@ export default class ServicesManager {
       this.services[service.name] = service.create({
         configuration,
       });
+
+      // OHIF v3 registers services under a camelCase key (`uiNotificationService`) while the
+      // Sonador Viewer's existing call sites use the v2 PascalCase key (`UINotificationService`).
+      // Aliasing both to the same instance lets ported v3 code and existing viewer code share a
+      // service without a repo-wide rename. See OHIF v3 ServicesManager.registerService.
+      if (service.altName) {
+        this.services[service.altName] = this.services[service.name];
+      }
     } else {
       log.warn(`Service create factory function not defined. Exiting early.`);
       return;

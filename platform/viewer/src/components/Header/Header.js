@@ -4,11 +4,11 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { ReactComponent as IssuesIcon } from '@ohif/ui/src/elements/Svg/svgs/issues.svg';
 import { ReactComponent as ListIcon } from '@ohif/ui/src/elements/Svg/svgs/list.svg';
 
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
+import { useNotificationLog } from '../../hooks/useNotificationLog';
 import { useViewerSidePanels } from '../../store/useViewerSidePanels';
 import OHIFLogo from '../OHIFLogo/OHIFLogo.js';
 import UserMenu from '../UserMenu/UserMenu';
@@ -63,11 +63,12 @@ function IssuesButton() {
   const { studyInstanceUIDs } = useParams();
 
   const { isIssuesContentRightSidePanel, setIsIssuesContentRightSidePanel, onChangeSidePanel } = useViewerSidePanels();
-  const errors = useViewerStudyErrors((state) => {
-    return state.errors[studyInstanceUIDs];
-  });
+  const { entries } = useNotificationLog({ studyInstanceUID: studyInstanceUIDs });
 
-  if (!errors) return null;
+  // The button appears only once the study has something to report.
+  if (!entries.length) {
+    return null;
+  }
 
   return (
     <button

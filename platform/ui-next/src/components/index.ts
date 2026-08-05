@@ -30,6 +30,7 @@ import {
 } from './Dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
 import { HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal } from './HoverCard';
+import { Toaster, toast } from './Sonner';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
 
@@ -64,4 +65,5 @@ export {
   SegmentationTable,
   InputDialog, PresetDialog,
   FooterAction,
+  Toaster, toast,
 }

@@ -26,6 +26,7 @@
  * correct utility classes.
  */
 @source "./components";
+@source "./contextProviders";
 @source "./hooks";
 @source "./lib";
 @source "../../../extensions/cornerstone/src";
@@ -281,6 +282,93 @@
     --input: 197 50% 50%;
     --ring: 197 74% 52%;
     --radius: 0.5rem;
+
+    /*
+     * Notification status colours, carried over from OHIF v3's tailwind.css so that this file and
+     * v3's base layer define the same token set.
+     *
+     * NOTE ON WHAT THESE DO AND DO NOT AFFECT: sonner declares all twelve of these itself, on the
+     * toaster element, under `[data-sonner-toaster][data-theme='dark']`. A declaration on the
+     * element always beats one inherited from `:root`, so these values do NOT re-colour
+     * `richColors` toasts in either application -- v3's toasts use sonner's built-in dark palette,
+     * and so do Sonador's. They are here for non-sonner surfaces that want the same status
+     * palette (for example a custom notification component registered through
+     * `setServiceImplementation({ customComponent })`), and to keep the two theme layers aligned.
+     */
+    --success-bg: hsl(143, 85%, 96%);
+    --success-border: hsl(145, 92%, 91%);
+    --success-text: hsl(140, 100%, 27%);
+
+    --info-bg: hsl(208, 100%, 97%);
+    --info-border: hsl(221, 91%, 91%);
+    --info-text: hsl(210, 92%, 45%);
+
+    --warning-bg: hsl(49, 100%, 97%);
+    --warning-border: hsl(49, 91%, 91%);
+    --warning-text: hsl(31, 92%, 45%);
+
+    --error-bg: hsl(359, 100%, 97%);
+    --error-border: hsl(359, 100%, 94%);
+    --error-text: hsl(360, 100%, 45%);
   }
+}
+
+/*
+ * Baseline for the notification portal.
+ *
+ * sonner's entire internal reset -- padding, margin, list-style, box-sizing -- lives inside
+ * `:where(...)`, which has zero specificity. OHIF v3 gets away with that because its stylesheet
+ * includes Tailwind's preflight, which normalises the document first. This file deliberately omits
+ * preflight (see the header) so that importing it does not disturb the existing viewer stylesheet,
+ * which leaves sonner's rules as the weakest in the cascade and at the mercy of the legacy
+ * `design/styles/common/global.styl` rules.
+ *
+ * Toasts render through a portal on document.body, outside every viewer container, so this is
+ * scoped to the toaster subtree and cannot affect anything else. It re-asserts only what preflight
+ * would have provided; every property sonner sets on its own elements uses a higher specificity
+ * than the selectors below, so sonner still wins wherever it has an opinion.
+ */
+[data-sonner-toaster],
+[data-sonner-toaster] *,
+[data-sonner-toaster] *::before,
+[data-sonner-toaster] *::after {
+  box-sizing: border-box;
+}
+
+/*
+ * The toaster element IS the <ol>, so the list reset applies to it directly.
+ *
+ * IMPORTANT: do not extend this to the <li> toasts. sonner sets the toast's own padding, border,
+ * radius and background in `:where([data-sonner-toast][data-styled="true"])`, which has zero
+ * specificity -- any selector matching the <li> outranks it and silently flattens every toast to
+ * a bare coloured block with no padding. Tailwind's preflight resets `ol, ul, menu` and never
+ * touches `li`, for the same reason.
+ */
+[data-sonner-toaster] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Preflight blockifies replaced elements (`img, svg, video, canvas ... { display: block }`). The
+ * status icons handed to sonner are 24px SVGs; without this they are `display: inline` and sit on
+ * the text baseline. sonner's icon slot is a flex container, which blockifies its direct children,
+ * but nested SVG content and the action button's contents are not covered by that.
+ */
+[data-sonner-toaster] svg {
+  display: block;
+  vertical-align: middle;
+}
+
+/*
+ * Preflight's button normalisation. Every property sonner sets on `[data-button]` uses a
+ * three-selector specificity, so sonner still wins wherever it has an opinion; this only supplies
+ * the UA defaults preflight would have cleared.
+ */
+[data-sonner-toaster] button {
+  background-image: none;
+  text-transform: none;
+  -webkit-appearance: button;
 }
 

@@ -36,6 +36,12 @@ import formatPN from './formatPN';
 import formatDate from './formatDate';
 import formatTime from './formatTime';
 import formatBytes from './formatBytes';
+import {
+  describeStudy,
+  describeSeries,
+  describeStudyFilename,
+  describeSeriesFilename,
+} from './describeStudy';
 import getImageId from './getImageId';
 
 
@@ -108,6 +114,10 @@ const utils = {
   formatDate,
   formatTime,
   formatBytes,
+  describeStudy,
+  describeSeries,
+  describeStudyFilename,
+  describeSeriesFilename,
   
   cornerstone3dUtils,
   cornerstoneUtils,
@@ -146,8 +156,13 @@ export {
   
   formatPN,
   formatDate,
-  formatTime,  
-  
+  formatTime,
+  formatBytes,
+  describeStudy,
+  describeSeries,
+  describeStudyFilename,
+  describeSeriesFilename,
+
   cornerstone3dUtils,
   cornerstoneUtils,
 };

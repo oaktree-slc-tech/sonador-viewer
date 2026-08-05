@@ -1,4 +1,5 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
+@import '@ohif/sonador-viewer/src/styles/variables';
 
 // Box size of the title-row icon controls: an 18px glyph plus the 2px padding each button carries.
 // The Investigational Use notice matches it so the three share a centerline.
@@ -30,7 +31,7 @@ $header-notice-gap: 30px;
   justify-content: flex-end;
   font-size: 13px;
   font-weight: 700;
-  color: #91b9cd;
+  color: $header-notice-blue;
   margin: 0;
 }
 
@@ -78,7 +79,7 @@ $header-notice-gap: 30px;
   }
 
   &:hover {
-    color: #2e46e9;
+    color: $header-notice-blue;
   }
 }
 
@@ -101,7 +102,7 @@ $header-notice-gap: 30px;
   }
 
   &:hover {
-    color: #2e46e9;
+    color: $header-notice-blue;
   }
 
   .downloadBadge {

@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { toast } from 'react-hot-toast';
 
 // OHIF Server Components
 import { utils } from '@ohif/core';
@@ -41,6 +40,7 @@ import 'regenerator-runtime/runtime';
 import viewerPackage from '../package.json';
 
 import App from './App.js';
+import { uiNotificationService } from '@ohif/core';
 
 const initOHIFViewer = function () {
   // Initialize OHIF viewer
@@ -94,7 +94,12 @@ const initOHIFViewer = function () {
       .then( async (response) => {
         if (!response.ok) {
           const errorText = await response.text();
-          toast.error('Unable to initialize OHIF, unable to retrieve PACS server list from Sonador due to an error.');
+          uiNotificationService.show({
+            title: 'Unable to initialize the viewer',
+            message: 'The PACS server list could not be retrieved from Sonador.',
+            type: 'error',
+            autoClose: false,
+          });
           throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         return response.json();

@@ -7,11 +7,9 @@ jest.mock('./preferenceWriteQueue', () => ({
   notifyPreferenceWriteQueued: jest.fn(),
 }));
 
-jest.mock('react-hot-toast', () => {
-  const toast = jest.fn();
-  toast.error = jest.fn();
-  return { toast };
-});
+jest.mock('@ohif/core/src/services/UINotificationService', () => ({
+  uiNotificationService: { show: jest.fn(), hide: jest.fn() },
+}));
 
 // Node test environment: shim localStorage before the store module loads (zustand persist
 // touches storage at create()); hence require() below instead of import.

@@ -7,7 +7,7 @@ import moment from 'moment';
 import PropTypes from 'prop-types';
 
 import OHIF, { DICOMSR, MODULE_TYPES } from '@ohif/core';
-import { useDialog, useSnackbarContext } from '@ohif/ui';
+import { useDialog } from '@ohif/ui';
 
 import { extensionManager, servicesManager, commandsManager } from '../App';
 import Header from '../components/Header/Header';
@@ -82,7 +82,6 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
   }, []);
  
   const dialog = useDialog();
-  const snackbar = useSnackbarContext();
 
   const isWorkList = searchParams.get(WORK_LIST_VIEWER_PARAM) === 'true';
 

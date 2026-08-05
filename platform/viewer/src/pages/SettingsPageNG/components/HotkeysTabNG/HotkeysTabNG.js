@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
-import { useSnackbarContext } from '@ohif/ui';
 
 import { hotkeysManager } from '../../../../App';
 import { useUserPreferences } from '../../../../queries/preferences';
@@ -14,6 +13,7 @@ import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 import { getInitialState, splitHotkeys, validateCommandKey } from './logic';
 
 import styles from './HotkeysTabNG.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 export default function HotkeysTabNG() {
   const { t } = useTranslation('UserPreferencesModal');
@@ -21,7 +21,6 @@ export default function HotkeysTabNG() {
 
   const [state, setState] = useState(getInitialState(hotkeyDefinitions));
 
-  const snackbar = useSnackbarContext();
   const { isDesktop } = useDeviceStore();
 
   // TODO use prefences fetched from api
@@ -45,7 +44,7 @@ export default function HotkeysTabNG() {
 
     localStorage.setItem('hotkey-definitions', JSON.stringify(hotkeys));
 
-    snackbar.show({
+    uiNotificationService.show({
       message: t('SaveMessage'),
       type: 'success',
     });

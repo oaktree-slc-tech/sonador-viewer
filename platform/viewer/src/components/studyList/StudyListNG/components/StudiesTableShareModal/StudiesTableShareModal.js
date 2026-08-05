@@ -1,7 +1,6 @@
 import _ from 'lodash';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
@@ -29,6 +28,7 @@ import { ReactComponent as TrashIcon } from './trash.svg';
 import { ReactComponent as UserIcon } from './user.svg';
 
 import styles from './StudiesTableShareModal.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 const permissions = [
   { label: 'View', id: 'View' },
@@ -314,9 +314,9 @@ export default function StudiesTableShareModal({ setIsOpenedShareModal, isOpened
     const hasErrors = results.some((res) => res.status === 'rejected');
 
     if (hasErrors) {
-      toast.error('Some access changes failed to save.');
+      uiNotificationService.show({ title: 'Some access changes failed to save.', type: 'error' });
     } else {
-      toast.success('Access control changes saved successfully!');
+      uiNotificationService.show({ title: 'Access control changes saved successfully!', type: 'success' });
     }
   };
 

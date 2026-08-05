@@ -1,6 +1,11 @@
 import _ from 'lodash';
-import { useViewerStudyErrors } from "@ohif/core/src/store/useViewerStudyErrors";
+import { uiNotificationService, NotificationLogSources } from '@ohif/core';
 
+// This helper originally existed because reporting one VTK failure meant writing to three
+// unrelated places by hand: the console, the OHIF logger, and the per-study error store, plus a
+// notification. Those are now one pathway (ohif-viewers#84) -- the notification and logger
+// services both record into the NotificationLogService -- so this is a thin adapter that keeps
+// the existing call sites and their flags working.
 
 export function logVtkError(servicesManager, errorTitle, options) {
 	// 	Log error and provide methods for routing user actions.
@@ -12,15 +17,14 @@ export function logVtkError(servicesManager, errorTitle, options) {
 	//	@option err (JavaScript error): JavaScript error instance to log
 	//	@option message (str, default=undefined): user message to be displayed in
 	//		log and notifications.
-	//	@option studyError (bool): toggles whether the error should be added
-	//		to the study list
-	//	@option studyId (str, default=undefined): studyId to be used for writing
-	//		error details to study error list.
-	//	@option loggerService (bool): toggles whether the error should be registere
+	//	@option studyError (bool): toggles whether the error should be scoped to the
+	//		study, which is what makes it appear in that study's Issues list
+	//	@option studyId (str, default=undefined): study the error belongs to
+	//	@option loggerService (bool): toggles whether the error should be registered
 	//		with the OHIF logging service
 	//	@option userNotification (bool): toggles whether a user notification should
 	//		be triggered.
-	//	@option userNotificationOptions (object): options passed to the user 
+	//	@option userNotificationOptions (object): options passed to the user
 	//		notification service.
 
 	// Default options
@@ -31,47 +35,45 @@ export function logVtkError(servicesManager, errorTitle, options) {
 		userNotification: false,
 	});
 
-	// Retrieve UI notification and logging service
-    const { UINotificationService, LoggerService } = servicesManager.services;
+	const { LoggerService } = servicesManager.services;
+
+	// The user message, falling back to the title.
+	const message = options.message || errorTitle;
+
+	// Scoping the entry to a study is what files it under that study in the Issues panel.
+	const studyInstanceUID = options.studyError ? options.studyId : undefined;
 
 	// Write error to the console for debugging
 	console.error(errorTitle, options.message || '', options.err || '');
 
-	if (options.loggerService) {
-		
-		// Write error to OHIF logger service	
-		LoggerService.error({ 
-			
-			// err provides system details of the issue, message is the human readable version
-			// for system details err is used if provided with message and errorTitle used as fallbacks.
-			// For message, the user message is provided (if defined) with errorTitle used as a fallback.
-			err: options.err || options.message || errorTitle, 
-			message: options.message || errorTitle
-		});
-	}
-
-	if (options.studyError && options.studyId) {
-
-		// Add error to study errors list
-		useViewerStudyErrors.getState().addError(_.extend(
-			_.pick(options, 'studyId', 'message'), { title: errorTitle }));
-	}
-
-	// Display user notification
 	if (options.userNotification) {
+		// A notification records its own log entry, so this single call covers both surfaces.
+		// Presentation extras supplied by the caller -- the action button, autoClose -- ride along.
+		uiNotificationService.show(
+			_.defaults(
+				{
+					title: errorTitle,
+					message,
+					studyInstanceUID,
+					error: options.err,
+					source: NotificationLogSources.VIEWPORT,
+					log: true,
+				},
+				options.userNotificationOptions || {},
+				{ type: 'error', autoClose: false }
+			)
+		);
 
-		// Options are passed the user notification service via userNotificationOptions
-		// with an override of title and message, which are taken from the title and message
-		// properties of the global options.
-		const userNotificationOptions = _.extend(options.userNotificationOptions || {}, {
+		return;
+	}
+
+	if (options.loggerService || options.studyError) {
+		// No toast: recorded in the Issues list and the console only.
+		LoggerService.error({
+			error: options.err,
 			title: errorTitle,
-			message: options.message
-		})
-		_.defaults(userNotificationOptions, {
-			type: 'error',
-			autoClose: false,
+			message,
+			studyInstanceUID,
 		});
-
-		UINotificationService.show(userNotificationOptions);
 	}
 }

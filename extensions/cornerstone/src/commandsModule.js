@@ -15,7 +15,15 @@ import cornerstoneToolEnums from './tools/constants/toolNames.js';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
-const { sonador, log, measurements, display, LocalCacheService, DownloadManagerService } = OHIF;
+const {
+  sonador,
+  log,
+  measurements,
+  display,
+  LocalCacheService,
+  DownloadManagerService,
+  notifyStudiesQueued,
+} = OHIF;
 const { studyMetadataManager, cornerstoneUtils } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
 
@@ -571,7 +579,6 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     goOffline: ({ viewports, servers }) => {
       // Queue the open study for offline caching (ohif-viewers#125, FR-9). Distinct command from the
       // 'download' (zip export) and 'Download' (screenshot) features (AR-6).
-      const { UINotificationService } = servicesManager.services;
       const activeServer = sonador.getActiveServer(servers.servers);
       // ACTIVE viewport, not viewport 0 — the More-menu button's label/state derives from the
       // active viewport (LocalCacheToolbarButton), so the command must act on the same study.
@@ -583,7 +590,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         return;
       }
 
-      DownloadManagerService.enqueueStudy({
+      const job = DownloadManagerService.enqueueStudy({
         server: activeServer,
         StudyInstanceUID,
         descriptor: {
@@ -595,12 +602,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         },
       });
 
-      UINotificationService?.show({
-        title: 'Saving study for offline use',
-        message: 'The study is being downloaded to this device. Track progress in the Download Manager.',
-        type: 'info',
-        autoClose: true,
-      });
+      // One shared queue notice across the study list and the viewer, so the wording and the
+      // identifiers match wherever the study was queued from. Completion and failure are announced
+      // by the DownloadManagerService subscription (platform/core downloadNotifications).
+      notifyStudiesQueued({ queued: [job] });
     },
 
     removeOffline: async ({ viewports }) => {

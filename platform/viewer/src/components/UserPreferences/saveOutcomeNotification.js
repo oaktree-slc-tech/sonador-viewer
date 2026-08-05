@@ -5,28 +5,33 @@
 // -- the change is kept locally but will NOT sync, so the "will sync" promise must not be
 // shown.
 
-export const showSaveOutcome = (snackbar, successMessage, sectionLabel) => ({
+import { uiNotificationService } from '@ohif/core';
+
+export const showSaveOutcome = (successMessage, sectionLabel) => ({
   onSuccess: ({ outcome }) => {
     if (outcome === 'saved') {
-      snackbar.show({
-        message: successMessage,
+      uiNotificationService.show({
+        title: successMessage,
         type: 'success',
       });
     } else if (outcome === 'queued') {
-      snackbar.show({
-        message: `Saved locally — your ${sectionLabel} will sync when reconnected.`,
+      uiNotificationService.show({
+        title: 'Saved locally',
+        message: `Your ${sectionLabel} will sync when reconnected.`,
         type: 'warning',
       });
     } else {
-      snackbar.show({
-        message: `Failed to save ${sectionLabel} to the server; the change was kept locally.`,
+      uiNotificationService.show({
+        title: `Failed to save ${sectionLabel}`,
+        message: 'The change was kept locally but will not sync.',
         type: 'error',
       });
     }
   },
   onError: () => {
-    snackbar.show({
-      message: `Failed to save ${sectionLabel}: the server rejected the values.`,
+    uiNotificationService.show({
+      title: `Failed to save ${sectionLabel}`,
+      message: 'The server rejected the values.',
       type: 'error',
     });
   },

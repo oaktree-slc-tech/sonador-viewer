@@ -34,6 +34,7 @@ import { getDateEntryFromRange } from '../../../../../lib/utils/getDateEntryFrom
 import { useWorklistContext } from '../../../../../pages/WorkListPageNG/worklist.context';
 import StudyListFilterNG from '../../../StudyListFilterNG/StudyListFilterNG';
 import DownloadManagerModal from '../DownloadManagerModal/DownloadManagerModal';
+import DownloadsMenu from '../DownloadsMenu/DownloadsMenu';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
 
 import styles from './Filters.module.scss';
@@ -121,6 +122,12 @@ export default function Filters({
           <p className={styles.useOnly}>{t('INVESTIGATIONAL USE ONLY')}</p>
 
           <div className={styles.headerControls}>
+            {/* Downloads — zip archives exported to the user's computer (ohif-viewers#52, FR-4).
+                Sits immediately LEFT of Offline Storage below, which saves studies into this
+                browser instead. Two queues, two badges, no shared state (AR-1). Rendered on the
+                shared StudyListNG surface, so it appears on Studies/All, Worklist and Shared. */}
+            <DownloadsMenu />
+
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -9,6 +8,7 @@ import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 import { updateWorklist } from '../../../../api/worklist';
 
 import styles from './WorklistStatusChangeModal.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 
 export default function WorklistStatusChangeModal({
@@ -48,14 +48,14 @@ export default function WorklistStatusChangeModal({
     },
     onSuccess: () => {
       handleUpdateStore(status);
-      toast.success('Status of worklist was updated successfully!');
+      uiNotificationService.show({ title: 'Status of worklist was updated successfully!', type: 'success' });
       void queryClient.invalidateQueries({
         queryKey: ['worklist'],
       });
       setIsOpen(false);
     },
     onError: () => {
-      toast.error('Failed to update worklist status');
+      uiNotificationService.show({ title: 'Failed to update worklist status', type: 'error' });
     },
   });
 

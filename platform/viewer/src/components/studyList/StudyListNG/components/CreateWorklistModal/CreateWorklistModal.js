@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
@@ -15,6 +14,7 @@ import { useGroupMembership, useGroupSearch } from '../../../../../queries/workl
 
 import groupSearchStyles from '../../../../../styles/groupSearch.module.scss';
 import styles from './CreateWorklistModal.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 
 export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUIDs }) {
@@ -90,7 +90,7 @@ export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUI
       setIsOpen(false);      
     },
     onError: () => {
-      toast.error('Failed to create worklist request');
+      uiNotificationService.show({ title: 'Failed to create worklist request', type: 'error' });
     },
   });
 

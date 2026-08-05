@@ -14,10 +14,11 @@ import PropTypes from 'prop-types';
 import OHIF, {
   log, 
   metadata, 
+  notificationLogService,
   studies,
+  uiNotificationService,
   utils,
 } from '@ohif/core';
-import { useSnackbarContext } from '@ohif/ui';
 
 import { extensionManager } from '../App';
 
@@ -158,15 +159,12 @@ const _isQueryParamApplied = (study, filters = {}, isFilterStrategy) => {
 
   return applied;
 };
-const _showUserMessage = (queryParamApplied, message, dialog = {}) => {
+const _showUserMessage = (queryParamApplied, message) => {
   if (queryParamApplied) {
     return;
   }
 
-  const { show: showUserMessage = () => {} } = dialog;
-  showUserMessage({
-    message,
-  });
+  uiNotificationService.show({ title: message, type: 'info' });
 };
 
 
@@ -241,8 +239,6 @@ const _thinStudyData = (study) => {
 };
 
 
-
-
 function ViewerRetrieveStudyData({
   // Lifecycle component used within OHIF for retrieving and loading metadata within
   // the study browser interface.
@@ -264,7 +260,6 @@ function ViewerRetrieveStudyData({
   const studiesRef = useRef(studies);
 
   // Context and configuration
-  const snackbarContext = useSnackbarContext();
   const { appConfig = {} } = useContext(AppContext);
   const { filterQueryParam: isFilterStrategy = false, maxConcurrentMetadataRequests } = appConfig;
 
@@ -294,8 +289,7 @@ function ViewerRetrieveStudyData({
     // Show message in case not promoted neither filtered but should to
     _showUserMessage(
       isQueryParamApplied,
-      'Query parameters were not totally applied. It might be using original series list for given study.',
-      snackbarContext
+      'Query parameters were not totally applied. It might be using original series list for given study.'
     );
 
     setStudies([...studies, study]);
@@ -534,6 +528,13 @@ function ViewerRetrieveStudyData({
     if (hasStudyInstanceUIDsChanged) {
       studyMetadataManager.purge();
       purgeCancellablePromises();
+
+      // Reset the Issues list for the studies being opened. DICOM is immutable, so anything still
+      // wrong with a study is re-reported as it loads; carrying entries across navigations would
+      // instead show conditions from a previous load that may no longer hold (ohif-viewers#84).
+      studyInstanceUIDs.forEach((studyInstanceUID) =>
+        notificationLogService.clear({ studyInstanceUID })
+      );
     }
   }, [prevStudyInstanceUIDs, purgeCancellablePromises, studyInstanceUIDs]);
 

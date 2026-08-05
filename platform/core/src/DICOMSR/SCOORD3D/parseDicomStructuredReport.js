@@ -36,7 +36,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   options = options || {};
 
   // Retrieve references to services and API
-  const { LoggerService, UINotificationService, displaySetService } = external.servicesManager.services;
+  const { LoggerService, displaySetService } = external.servicesManager.services;
   const measurementApi = MeasurementApi.Instance;
   const measurementService = measurementApi.measurementService;
 

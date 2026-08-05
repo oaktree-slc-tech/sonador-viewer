@@ -60,12 +60,15 @@ interface DownloadJob {
   progress: { total: number; completed: number; failed: number };
   error?: string;
   createdAt: number;
-  // Search fields for the Download Manager "Active Transfers" tab (AC-9).
+  // Search fields for the Download Manager "Active Transfers" tab (AC-9), which double as the
+  // identifiers every user-facing message about this job is composed from (see describeStudy).
   PatientName?: string;
   PatientID?: string;
   StudyDescription?: string;
   AccessionNumber?: string;
   ServiceEpisodeID?: string;
+  StudyDate?: string;
+  modalities?: string;
 }
 
 class DownloadManagerServiceClass extends PubSubService {
@@ -197,6 +200,8 @@ class DownloadManagerServiceClass extends PubSubService {
       StudyDescription: descriptor.StudyDescription,
       AccessionNumber: descriptor.AccessionNumber,
       ServiceEpisodeID: descriptor.ServiceEpisodeID,
+      StudyDate: descriptor.StudyDate,
+      modalities: descriptor.modalities,
     };
 
     this._jobs.set(job.id, job);
@@ -328,6 +333,8 @@ class DownloadManagerServiceClass extends PubSubService {
       job.StudyDescription = job.StudyDescription || firstMeta.StudyDescription;
       job.AccessionNumber = job.AccessionNumber || firstMeta.AccessionNumber;
       job.ServiceEpisodeID = job.ServiceEpisodeID || firstMeta.ServiceEpisodeID;
+      job.StudyDate = job.StudyDate || firstMeta.StudyDate;
+      job.modalities = job.modalities || firstMeta.Modality;
     }
 
     job.progress = { total: instances.length, completed: 0, failed: 0 };

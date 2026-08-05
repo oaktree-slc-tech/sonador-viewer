@@ -44,9 +44,11 @@ const LoggerProvider = ({ children, service = null }) => {
    * @returns void
    */
   const info = useCallback(({ message = '', displayOnConsole = true }) => {
+    // `state.infos.push(...)` returned the new LENGTH, so `infos` was replaced by a number and
+    // every previously logged info was lost on the first call.
     setState((state) => ({
       ...state,
-      infos: state.infos.push({ message, displayOnConsole }),
+      infos: [...state.infos, { message, displayOnConsole }],
     }));
 
     if (displayOnConsole) {

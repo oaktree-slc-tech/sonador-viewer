@@ -1,7 +1,6 @@
 import { connect } from 'react-redux';
 
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 import { StudyBrowser } from '@ohif/ui';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
@@ -26,7 +25,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
 
       let displaySet = findDisplaySetByUID(ownProps.studyMetadata, displaySetInstanceUID);
 
-      const { LoggerService, UINotificationService, viewportGridService } = servicesManager.services;
+      const { LoggerService, viewportGridService } = servicesManager.services;
 
       const viewports = [];
 
@@ -67,16 +66,13 @@ const mapDispatchToProps = (dispatch, ownProps) => {
             const studyId = extractStudyIdFromURL();
             const errorTitle = 'DICOM Segmentation Loader';
 
-            if (studyId) {
-              useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-            }
-
-            LoggerService.error({ error, message });
-            UINotificationService.show({
+            // One call: console, unified Issues list, and a sticky toast (ohif-viewers#84).
+            LoggerService.error({
+              error,
               title: errorTitle,
               message,
-              type: 'error',
-              autoClose: false,
+              notify: true,
+              studyInstanceUID: studyId,
             });
           };
 
@@ -102,20 +98,12 @@ const mapDispatchToProps = (dispatch, ownProps) => {
         if (!displaySet) {
           const error = new Error(`Referenced series for ${Modality} dataset not present.`);
           const message = `Referenced series for ${Modality} dataset not present.`;
-          LoggerService.error({ error, message });
-
-          const studyId = extractStudyIdFromURL();
-          const errorTitle = 'Fail to load series';
-
-          if (studyId) {
-            useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-          }
-
-          UINotificationService.show({
-            autoClose: false,
-            title: errorTitle,
+          LoggerService.error({
+            error,
+            title: 'Fail to load series',
             message,
-            type: 'error',
+            notify: true,
+            studyInstanceUID: extractStudyIdFromURL(),
           });
         }
       }
@@ -123,40 +111,24 @@ const mapDispatchToProps = (dispatch, ownProps) => {
       if (!displaySet) {
         const error = new Error('Source data not present');
         const message = 'Source data not present';
-        LoggerService.error({ error, message });
-
-        const studyId = extractStudyIdFromURL();
-        const errorTitle = 'Fail to load series';
-
-        if (studyId) {
-          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-        }
-
-        UINotificationService.show({
-          autoClose: false,
-          title: errorTitle,
+        LoggerService.error({
+          error,
+          title: 'Fail to load series',
           message,
-          type: 'error',
+          notify: true,
+          studyInstanceUID: extractStudyIdFromURL(),
         });
       }
 
       if (displaySet.isSOPClassUIDSupported === false) {
         const error = new Error('Modality not supported');
         const message = 'Modality not supported';
-        LoggerService.error({ error, message });
-
-        const studyId = extractStudyIdFromURL();
-        const errorTitle = 'Fail to load series';
-
-        if (studyId) {
-          useViewerStudyErrors.getState().addError({ studyId, error: message, title: errorTitle });
-        }
-
-        UINotificationService.show({
-          autoClose: false,
-          title: errorTitle,
+        LoggerService.error({
+          error,
+          title: 'Fail to load series',
           message,
-          type: 'error',
+          notify: true,
+          studyInstanceUID: extractStudyIdFromURL(),
         });
       }
 

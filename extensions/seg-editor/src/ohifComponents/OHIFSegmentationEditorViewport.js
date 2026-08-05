@@ -15,7 +15,6 @@ import {
 import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 
 import OHIF from "@ohif/core";
-import { useViewerStudyErrors } from "@ohif/core/src/store/useViewerStudyErrors";
 import { extractStudyIdFromURL } from "@ohif/core/src/utils/extractStudyIdFromURL";
 import { eventTypes as uiEvents } from "@ohif/ui";
 

@@ -63,7 +63,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   });
 
   // Retrieve references to services and API
-  const { LoggerService, UINotificationService, displaySetService } = external.servicesManager.services;
+  const { LoggerService, displaySetService } = external.servicesManager.services;
   const measurementApi = MeasurementApi.Instance;
   const measurementService = measurementApi.measurementService;
 
@@ -79,14 +79,12 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
     const seriesDescription = dataset.SeriesDescription || '';
     
-    // Log error details and notify user of failure
-    LoggerService.error({ error: err, message: err.message });
-
-    UINotificationService.show({
+    // One call: console, unified Issues list, and a sticky toast (ohif-viewers#84).
+    LoggerService.error({
+      error: err,
       title: `Failed to parse ${seriesDescription} SR display set`,
       message: err.message,
-      type: 'error',
-      autoClose: false,
+      notify: true,
     });
   }
 

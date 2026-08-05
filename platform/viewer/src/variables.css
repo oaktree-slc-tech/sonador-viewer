@@ -8,7 +8,6 @@
   --right-sidepanel-menu-width: 323px;
   --study-list-padding: 8%;
   --study-list-padding-medium-screen: 10px;
-  --snackbar-size: 344px;
 
   /* Transitions */
   --transition-duration: 0.3s;
@@ -18,15 +17,6 @@
   /* Thicknesses */
   --viewport-border-thickness: 1px;
   --ui-border-thickness: 1px;
-
-  /** Colors **/
-  --snackbar-success: rgba(94, 164, 0, 0.9);
-  --snackbar-error: rgba(236, 61, 61, 0.9);
-  --snackbar-warning: rgba(235, 173, 23, 0.9);
-  --snackbar-info: rgba(54, 156, 199, 0.9);
-
-  /** z-Index **/
-  --snackbar-zIndex: 1075;
 
   /** DatePicker Colors **/
   --datePicker-input-background: #2c363f;

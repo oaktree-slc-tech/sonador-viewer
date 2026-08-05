@@ -46,10 +46,9 @@ import studyMetadataManager from './studyMetadataManager';
  * @param {Array} referencedDisplaySet.sopClassUids
  * @param {Study[]} studies Collection of studies
  * @param {object} logger
- * @param {object} snackbar
  * @returns void
  */
-async function loadAndCacheDerivedDisplaySets(referencedDisplaySet, studies, logger, snackbar) {
+async function loadAndCacheDerivedDisplaySets(referencedDisplaySet, studies, logger) {
   const { StudyInstanceUID, SeriesInstanceUID } = referencedDisplaySet;
   const promises = [];
   const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
@@ -119,12 +118,11 @@ async function loadAndCacheDerivedDisplaySets(referencedDisplaySet, studies, log
                     please adjust the tolerance in the segmentation panel settings (at your own peril!)'
                   : error.message;
 
-              logger.error({ error, message });
-              snackbar.show({
+              logger.error({
+                error,
                 title: 'DICOM Segmentation Loader',
                 message,
-                type: 'error',
-                autoClose: false,
+                notify: true,
               });
             };
 
@@ -161,13 +159,11 @@ async function loadAndCacheDerivedDisplaySets(referencedDisplaySet, studies, log
       } catch (error) {
         recentDisplaySet.isLoaded = false;
         recentDisplaySet.loadError = true;
-        logger.error({ error, message: error.message });
-        snackbar.show({
-          title: 'Error loading derived display set:',
-          message: error.message,
-          type: 'error',
+        logger.error({
           error,
-          autoClose: false,
+          title: 'Error loading derived display set',
+          message: error.message,
+          notify: true,
         });
       }
     })

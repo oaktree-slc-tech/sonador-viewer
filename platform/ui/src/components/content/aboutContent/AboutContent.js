@@ -65,15 +65,6 @@ const AboutContent = () => {
           className="btn btn-default"
           target="_blank"
           rel="noopener noreferrer"
-          href="https://groups.google.com/forum/#!forum/cornerstone-platform"
-        >
-          {t('Visit the forum')}
-        </a>
-        {` `}
-        <a
-          className="btn btn-default"
-          target="_blank"
-          rel="noopener noreferrer"
           href="https://code.oak-tree.tech/oak-tree/medical-imaging/ohif-viewers/-/issues/new"
         >
           {t('Report an issue')}
