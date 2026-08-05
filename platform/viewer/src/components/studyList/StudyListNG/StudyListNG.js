@@ -10,6 +10,9 @@ import { updateServer } from '../../../hooks/useServer';
 import { useMetadataSettingsStore } from '../../../store/useMetadataSettingsStore';
 
 import Filters from './components/Filters/Filters';
+import OfflineIndicatorCell, {
+  OFFLINE_INDICATOR_COLUMN_ID,
+} from './components/OfflineIndicatorCell/OfflineIndicatorCell';
 import SelectAndSettingsAndExpandCell from './components/SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell';
 import SelectSettingsHeader from './components/SelectSettingsHeader/SelectSettingsHeader';
 import StudiesTable from './components/StudiesTable/StudiesTable';
@@ -109,6 +112,15 @@ function StudyListNG({ studies = [],
           />
         ),
         cell: ({ row }) => <SelectAndSettingsAndExpandCell row={row}  />,
+      },
+      {
+        // Offline-availability badge (ohif-viewers#125, FR-8). Fixed immediately after the
+        // selector column so it reads as the first thing right of the rule dividing the row
+        // controls from the tag values, and left out of `selectedColumns` because it is a state
+        // indicator rather than a DICOM attribute the user can add or remove.
+        id: OFFLINE_INDICATOR_COLUMN_ID,
+        header: () => null,
+        cell: ({ row }) => <OfflineIndicatorCell row={row} />,
       },
       ...selectedColumns.map((id) => {
         return {

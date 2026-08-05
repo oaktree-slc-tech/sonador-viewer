@@ -29,7 +29,7 @@ import {
   Dialog, DialogPortal, DialogOverlay, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
 } from './Dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
-import { HoverCard, HoverCardTrigger, HoverCardContent } from './HoverCard';
+import { HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal } from './HoverCard';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
 
@@ -60,7 +60,7 @@ export {
   Switch,
   Slider,
   ScrollArea, ScrollBar,
-  HoverCard, HoverCardTrigger, HoverCardContent,
+  HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal,
   SegmentationTable,
   InputDialog, PresetDialog,
   FooterAction,

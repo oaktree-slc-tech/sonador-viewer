@@ -10,6 +10,17 @@ const HoverCard = HoverCardPrimitive.Root;
 const HoverCardTrigger = HoverCardPrimitive.Trigger;
 
 
+/**
+ * Renders the card into document.body instead of beside its trigger.
+ *
+ * HoverCardContent is deliberately left un-portaled by default (existing consumers position it
+ * within their own stacking context), but a trigger inside a styled table or a clipping scroll
+ * container needs this: in place, the card is a descendant of those elements, so descendant rules
+ * such as `.row td { ... }` reach the card's own cells and an `overflow: auto` ancestor clips it.
+ */
+const HoverCardPortal = HoverCardPrimitive.Portal;
+
+
 const HoverCardContent = React.forwardRef<
   React.ElementRef<typeof HoverCardPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof HoverCardPrimitive.Content>
@@ -28,4 +39,4 @@ const HoverCardContent = React.forwardRef<
 HoverCardContent.displayName = HoverCardPrimitive.Content.displayName;
 
 
-export { HoverCard, HoverCardTrigger, HoverCardContent };
+export { HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal };

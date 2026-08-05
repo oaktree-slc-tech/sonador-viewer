@@ -116,40 +116,44 @@ export default function Filters({
       <div className={styles.studyListHeader}>
         <p className={styles.title}>{title}</p>
         <div className={styles.headerRight}>
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className={styles.downloadManager}
-                  onClick={() => setIsDownloadManagerOpen(true)}
-                  aria-label={t('Manage Offline Storage')}
-                >
-                  <Icon name="offline-cache" />
-                  {activeDownloadCount > 0 && <span className={styles.downloadBadge}>{activeDownloadCount}</span>}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className={styles.dmTooltipContent}>
-                <div className={styles.dmTooltipTitle}>{t('Offline Storage')}</div>
-                <div className={styles.dmTooltipBody}>
-                  {t('Save studies for offline viewing. Monitor active transfers. Manage local storage.')}
-                  {activeDownloadCount > 0 && (
-                    <div className={styles.dmTooltipCount}>
-                      {activeDownloadCount}{' '}
-                      {activeDownloadCount === 1 ? t('active download') : t('active downloads')}
-                    </div>
-                  )}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {/* Account menu (ohif-viewers#31). The study list previously had no way to sign out at
-              all -- Logout lived only in the viewer header. Shares its options with that header
-              via UserMenu so the two cannot drift apart again. */}
-          <UserMenu align="end" className={styles.userMenu} />
-
+          {/* Control order mirrors the Study Viewer header (Header.js): the Investigational Use
+              notice first, then the icon controls to its right. */}
           <p className={styles.useOnly}>{t('INVESTIGATIONAL USE ONLY')}</p>
+
+          <div className={styles.headerControls}>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={styles.downloadManager}
+                    onClick={() => setIsDownloadManagerOpen(true)}
+                    aria-label={t('Manage Offline Storage')}
+                  >
+                    <Icon name="offline-cache" />
+                    {activeDownloadCount > 0 && <span className={styles.downloadBadge}>{activeDownloadCount}</span>}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className={styles.dmTooltipContent}>
+                  <div className={styles.dmTooltipTitle}>{t('Offline Storage')}</div>
+                  <div className={styles.dmTooltipBody}>
+                    {t('Save studies for offline viewing. Monitor active transfers. Manage local storage.')}
+                    {activeDownloadCount > 0 && (
+                      <div className={styles.dmTooltipCount}>
+                        {activeDownloadCount}{' '}
+                        {activeDownloadCount === 1 ? t('active download') : t('active downloads')}
+                      </div>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Account menu (ohif-viewers#31). The study list previously had no way to sign out at
+                all -- Logout lived only in the viewer header. Shares its options with that header
+                via UserMenu so the two cannot drift apart again. */}
+            <UserMenu align="end" className={styles.userMenu} />
+          </div>
         </div>
       </div>
       <div className={styles.topToolbar}>
