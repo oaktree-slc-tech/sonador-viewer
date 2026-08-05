@@ -1,0 +1,291 @@
+@import '@ohif/sonador-viewer/src/styles/variables';
+
+// Downloads control — archive export (ohif-viewers#52). Sibling of, and deliberately distinct
+// from, the Offline Storage launcher in Filters.module.scss.
+//
+// Geometry for the rows and the progress bar is lifted from DownloadManagerModal.module.scss so
+// the two surfaces read as one family; the state colours come from tokens already in use in the
+// study list (Primary Blue #2e46e9, error red #e0574a) and the upload page's completed-transfer
+// green (#2ee979), rather than new literals.
+
+// -- Trigger ------------------------------------------------------------------------------------
+// Matches .downloadManager in Filters.module.scss so the two toolbar controls are the same size,
+// colour and hover treatment. Kept as its own rule rather than shared: they are separate features
+// and a change to one must not silently move the other. The hover colour itself IS shared, via
+// $header-notice-blue, because the whole point is that the row's controls behave identically.
+
+.trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 2px;
+  cursor: pointer;
+  color: #fff;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    // cloud-download.svg hardcodes `fill="white"` on its root element, which its paths inherit, so
+    // the `color` above (and its hover) never reached the glyph and the icon stayed white while
+    // its neighbours changed. A CSS declaration outranks a presentation attribute, so binding fill
+    // to currentColor here hands the icon back to the colour rules.
+    fill: currentColor;
+  }
+
+  &:hover {
+    color: $header-notice-blue;
+  }
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background-color: #2e46e9;
+  color: #fff;
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+// -- Tooltip ------------------------------------------------------------------------------------
+// Swaps the ui-next aqua border-input token for the study list's gray (unlayered rule outranks the
+// layered utility), as the Offline Storage launcher does.
+
+.tooltipContent {
+  border-color: #3a3d44;
+}
+
+.tooltipTitle {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.tooltipBody {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 220px;
+}
+
+.tooltipCount {
+  margin-top: 4px;
+  color: #2e46e9;
+}
+
+// -- Panel --------------------------------------------------------------------------------------
+// Merges onto DropdownMenuContent, which ships tailwind padding/background/border utilities. These
+// rules are unlayered, so they win.
+
+.panel {
+  width: 420px;
+  max-width: 92vw;
+  padding: 0;
+  background: #27292d;
+  border-color: #3a3d44;
+  color: #fff;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid #3a3d44;
+}
+
+.panelTitle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.clearFinished {
+  background: transparent;
+  border: 1px solid #3a3d44;
+  border-radius: 8px;
+  color: #b0b3ba;
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    color: #fff;
+    border-color: #60646d;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px;
+  // Bounded so a long history scrolls inside the panel instead of running off the viewport.
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px 15px;
+}
+
+.empty {
+  color: #9a9da4;
+  text-align: center;
+  padding: 24px 0;
+  margin: 0;
+  font-size: 14px;
+}
+
+// -- Rows ---------------------------------------------------------------------------------------
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 12px;
+  background: #1e1f23;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowTitle {
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// De-emphasized inline identifier on the title line (the Patient ID beside the name).
+.rowTitleSecondary {
+  color: #9a9da4;
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 12px;
+}
+
+// Quoted study description on its own line — the quotes mark it as a single DICOM attribute.
+.rowDescription {
+  color: #d3d3d3;
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// Series identification, present only on a series export.
+.rowSeries {
+  color: #d3d3d3;
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowSub {
+  color: #9a9da4;
+  font-size: 11px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// -- Progress -----------------------------------------------------------------------------------
+
+.progressTrack {
+  height: 5px;
+  background: #34373d;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+// Waiting for a slot, or waiting for response headers: neutral, because nothing is moving yet.
+.neutral {
+  background: #60646d;
+}
+
+// Bytes in flight.
+.active {
+  background: #2e46e9; // Primary Blue — study-list accent, not the viewer aqua
+}
+
+// Finished: full and green.
+.done {
+  background: #2ee979;
+}
+
+// Cancelled or failed: frozen where it stopped, grayed out.
+.inert {
+  background: #545457;
+}
+
+// No total size to measure against — either the request has not been answered yet, or the response
+// exposed no readable Content-Length. A sliding sliver says "working" without claiming a position.
+.indeterminate {
+  width: 35%;
+  transition: none;
+  animation: archiveIndeterminate 1.3s ease-in-out infinite;
+}
+
+@keyframes archiveIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(285%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // Sliding bar replaced by a static half-width one: still legibly "in progress", no motion.
+  .indeterminate {
+    animation: none;
+    width: 50%;
+  }
+}
+
+.actionButton {
+  background: transparent;
+  border: none;
+  color: #b0b3ba;
+  cursor: pointer;
+  padding: 6px;
+  display: inline-flex;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    color: #e0574a;
+  }
+}

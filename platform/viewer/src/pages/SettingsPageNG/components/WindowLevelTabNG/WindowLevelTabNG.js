@@ -4,13 +4,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import classNames from 'classnames';
 
 import { redux } from '@ohif/core';
-import { useSnackbarContext } from '@ohif/ui';
 
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import TabFooterNG from '../TabFooterNG/TabFooterNG';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
 import styles from './WindowLevelTabNG.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 const { actions } = redux;
 
@@ -31,12 +31,11 @@ export default function WindowLevelTabNG() {
   });
 
   const { isDesktop } = useDeviceStore();
-  const snackbar = useSnackbarContext();
 
   const onSave = () => {
     dispatch(actions.setUserPreferences({ windowLevelData: state.values }));
 
-    snackbar.show({
+    uiNotificationService.show({
       message: t('SaveMessage'),
       type: 'success',
     });

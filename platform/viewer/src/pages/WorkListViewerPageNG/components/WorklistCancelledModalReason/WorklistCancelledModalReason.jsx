@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -9,6 +8,7 @@ import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 import { updateWorklist } from '../../../../api/worklist';
 
 import styles from './WorklistCancelledModalReason.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 
 export default function WorklistCancelledModalReason({ isOpen, setIsOpen,  selectedWorklists,handleUpdateStore }) {
@@ -32,7 +32,7 @@ export default function WorklistCancelledModalReason({ isOpen, setIsOpen,  selec
     },
     onSuccess: () => {
       handleUpdateStore('Cancelled')
-      toast.success('Status of worklists was updated successfully!');
+      uiNotificationService.show({ title: 'Status of worklists was updated successfully!', type: 'success' });
       void queryClient.invalidateQueries({
         queryKey: ['worklist'],
       });
@@ -40,7 +40,7 @@ export default function WorklistCancelledModalReason({ isOpen, setIsOpen,  selec
       setIsOpen(false);
     },
     onError: () => {
-      toast.error('Failed to update worklists status');
+      uiNotificationService.show({ title: 'Failed to update worklists status', type: 'error' });
     },
   });
 

@@ -56,15 +56,12 @@ import {
   LoggerProvider,
   ModalConsumer,
   ModalProvider,
-  SnackbarProvider,
   useDialog,
   useLogger,
   useModal,
-  useSnackbarContext,
   withDialog,
   withLogger,
   withModal,
-  withSnackbar,
 } from './contextProviders';
 // Elements
 import {
@@ -166,9 +163,6 @@ export {
   Tooltip,
   CustomSelect,
   AboutContent,
-  SnackbarProvider,
-  useSnackbarContext,
-  withSnackbar,
   ModalProvider,
   useModal,
   ModalConsumer,

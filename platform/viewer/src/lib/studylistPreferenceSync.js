@@ -9,7 +9,6 @@
 // one interface's sync can never clobber another's stored slice. Components stay unaware of
 // the cloud API; a hydration guard prevents echo POSTs while stores are being applied.
 
-import { toast } from 'react-hot-toast';
 
 import {
   PREFERENCES_VERSION,
@@ -22,6 +21,10 @@ import {
 import { useStudiesTableFiltersAndColumnsStore } from '../store/useStudiesTableFiltersAndColumnsStore';
 
 import { notifyPreferenceWriteQueued, submitPreferenceWrite } from './preferenceWriteQueue';
+// The notification service is imported by its module path rather than the `@ohif/core` barrel:
+// this file is deliberately React-free and node-testable (AR-7), and the barrel would pull the
+// entire viewer core -- Cornerstone, VTK, and friends -- into the test environment.
+import { uiNotificationService } from '@ohif/core/src/services/UINotificationService';
 
 let unsubscribe = null;
 let hydrating = false;
@@ -92,7 +95,11 @@ const submitInterface = (interfaceKey) => {
       // (FR-17/FR-21). Local state is retained.
       console.error(`User preferences: study-list sync for "${interfaceKey}" was rejected.`, error);
       try {
-        toast.error(`Failed to sync study-list preferences for "${interfaceKey}".`);
+        uiNotificationService.show({
+          title: 'Study-list preference sync failed',
+          message: `Could not sync preferences for "${interfaceKey}".`,
+          type: 'error',
+        });
       } catch (e) {
         // Best-effort notification only.
       }

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
@@ -19,6 +18,7 @@ import groupSearchStyles from '../../../../styles/groupSearch.module.scss';
 import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import settingsPanelTableStyles from '../../../../styles/settingsPanelTableStyles.module.scss';
 import styles from './SeriesTags.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 
 const headers = [
@@ -121,11 +121,11 @@ export default function SeriesTagsTabNG() {
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['tags']);
-      toast.success('Tag created successfully');
+      uiNotificationService.show({ title: 'Tag created successfully', type: 'success' });
       console.log(arguments);
     },
     onError: (error) => {
-      toast.error(`Failed to create tag: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to create tag', message: error.message, type: 'error' });
     },
   });
 
@@ -133,10 +133,10 @@ export default function SeriesTagsTabNG() {
     mutationFn: ({ group, tagId }) => removeSeriesTag({ server: activeServer, group, tagId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['tags']);
-      toast.success('Tag removed successfully');
+      uiNotificationService.show({ title: 'Tag removed successfully', type: 'success' });
     },
     onError: (error) => {
-      toast.error(`Failed to remove tag: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to remove tag', message: error.message, type: 'error' });
     },
   });
 
@@ -161,10 +161,10 @@ export default function SeriesTagsTabNG() {
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['tags']);
-      toast.success('Tag updated successfully');
+      uiNotificationService.show({ title: 'Tag updated successfully', type: 'success' });
     },
     onError: (error) => {
-      toast.error(`Failed to update tag: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to update tag', message: error.message, type: 'error' });
     },
   });
 

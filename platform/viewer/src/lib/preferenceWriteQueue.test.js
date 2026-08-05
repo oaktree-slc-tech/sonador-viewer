@@ -2,21 +2,18 @@
 //
 // Jest runs in a node environment (jest-environment-jsdom is not installed in this repo), so
 // the browser globals the queue touches -- localStorage, window (OIDC identity + `online`
-// listener) -- are shimmed below. The API layer and react-hot-toast are mocked: the queue's
+// listener) -- are shimmed below. The API layer and the notification service are mocked: the queue's
 // contract with them is "resolve on 2xx, reject with `status` on HTTP errors" (FR-8).
 
 jest.mock('../api/preferences', () => ({
   updateUserPreferenceSection: jest.fn(),
 }));
 
-jest.mock('react-hot-toast', () => {
-  const toast = jest.fn();
-  toast.error = jest.fn();
-  toast.success = jest.fn();
-  return { toast };
-});
+jest.mock('@ohif/core/src/services/UINotificationService', () => ({
+  uiNotificationService: { show: jest.fn(), hide: jest.fn() },
+}));
 
-import { toast } from 'react-hot-toast';
+import { uiNotificationService } from '@ohif/core/src/services/UINotificationService';
 
 import { updateUserPreferenceSection } from '../api/preferences';
 import { WRITE_QUEUE_STORAGE_KEY } from '../constants/preferences';
@@ -80,8 +77,7 @@ beforeEach(() => {
   global.localStorage.clear();
   setCurrentUser('user-a');
   updateUserPreferenceSection.mockReset();
-  toast.mockClear();
-  toast.error.mockClear();
+  uiNotificationService.show.mockClear();
   // Retryable failures log a warning per enqueue; keep the test output quiet.
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -233,7 +229,7 @@ describe('flushPreferenceWrites', () => {
 
     // Both entries are gone: the 400 was dropped (never retried), the other succeeded.
     expect(readStoredQueue()).toEqual([]);
-    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(uiNotificationService.show).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
     errorSpy.mockRestore();
   });
 
@@ -357,6 +353,6 @@ describe('startPreferenceWriteQueue', () => {
   it('shows the informational sync toast at most once per session (FR-17)', () => {
     notifyPreferenceWriteQueued();
     notifyPreferenceWriteQueued();
-    expect(toast).toHaveBeenCalledTimes(1);
+    expect(uiNotificationService.show).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 import { redux } from '@ohif/core';
-import { TabFooter, useSnackbarContext } from '@ohif/ui';
+import { TabFooter } from '@ohif/ui';
 
 import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
 import { useUpdateUserPreferenceSection } from '../../queries/preferences';
@@ -42,13 +42,12 @@ function WindowLevelPreferences({ onClose }) {
     // Cloud sync through the write queue (FR-7).
     saveWindowLevelSection(
       { version: PREFERENCES_VERSION, values: state.values },
-      showSaveOutcome(snackbar, t('SaveMessage'), 'window-level presets')
+      showSaveOutcome(t('SaveMessage'), 'window-level presets')
     );
 
     onClose();
   };
 
-  const snackbar = useSnackbarContext();
 
   const handleInputChange = (event) => {
     const $target = event.target;

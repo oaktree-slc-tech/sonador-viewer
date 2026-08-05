@@ -33,6 +33,7 @@ Page names below are docs-repo page names (append `.md` when reading files).
 | **3D model viewer + m3dCache** (`extensions/viewer3d`; STL/GLB) | `dev.ohif-frontend.m3d-viewer` |
 | Legacy `react-vtkjs-viewport` (**deprecated**) | `dev.ohif-frontend.react-vtkjs-viewports` |
 | Data services (one-way dataflow, measurement, DICOM metadata) | `dev.ohif-frontend.service-overview` |
+| **Notifications & unified logging** (single feedback pathway; Issues list) | `dev.ohif-frontend.notifications` |
 
 ## Codebase map (extensions/)
 - `cornerstone` — legacy Cornerstone (classic) 2D viewport

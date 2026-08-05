@@ -4,10 +4,37 @@
   gap: 16px;
   padding: 20px 10px 20px 5px;
 
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+
+    .summary {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+    }
+
+    .clearAll {
+      all: unset;
+      cursor: pointer;
+      color: #5acce6;
+      font-size: 14px;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
   .error {
     display: flex;
     align-items: flex-start;
     column-gap: 5px;
+    // Severity reads as a leading rule so the list can be scanned without reading every entry.
+    border-left: 3px solid transparent;
+    padding-left: 6px;
 
     .close {
       all: unset;
@@ -15,24 +42,87 @@
       padding: 5px;
     }
 
+    .body {
+      min-width: 0;
+      flex: 1;
+    }
+
     .title {
       font-weight: 700;
       font-size: 18px;
       line-height: 22px;
-      color: #FFFFFF;
+      color: #ffffff;
       margin: 0 0 5px 0;
+    }
+
+    // Repeat count: one condition seen many times stays one row.
+    .repeat {
+      margin-left: 6px;
+      font-weight: 400;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
     }
 
     .description {
       font-size: 16px;
       line-height: 20px;
-      color: #FFFFFF;
+      color: #ffffff;
       margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .details {
+      margin-top: 6px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+
+      summary {
+        cursor: pointer;
+      }
+
+      dl {
+        margin: 4px 0 0 0;
+      }
+
+      dt {
+        font-weight: 700;
+        margin-top: 4px;
+      }
+
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+    }
+
+    .source {
+      margin: 6px 0 0 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.45);
     }
   }
 
+  .severityError {
+    border-left-color: rgba(236, 61, 61, 0.9);
+  }
+
+  .severityWarning {
+    border-left-color: rgba(235, 173, 23, 0.9);
+  }
+
+  .severityInfo {
+    border-left-color: rgba(54, 156, 199, 0.9);
+  }
+
+  .severitySuccess {
+    border-left-color: rgba(94, 164, 0, 0.9);
+  }
+
   .emptyMessage {
-    color: #FFFFFF;
+    color: #ffffff;
     font-size: 24px;
     line-height: 1.5;
     text-align: center;

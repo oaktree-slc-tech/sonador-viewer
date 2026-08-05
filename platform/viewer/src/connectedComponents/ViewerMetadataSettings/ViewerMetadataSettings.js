@@ -1,7 +1,6 @@
 import _ from 'lodash';
 
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
 import classNames from 'classnames';
 
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
@@ -16,6 +15,7 @@ import { useUpdateUserPreferenceSection } from '../../queries/preferences';
 import { useViewerMetadataSettingsStore } from '../../store/useViewerMetadataSettingsStore';
 
 import styles from './ViewerMetadataSettings.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 const options = [
   { title: 'Patient Name', value: 'patientName' },
@@ -98,15 +98,23 @@ export default function ViewerMetadataSettings({ asTab = false, withHeader = fal
       {
         onSuccess: ({ outcome }) => {
           if (outcome === 'saved') {
-            toast.success('Viewer metadata settings saved successfully');
+            uiNotificationService.show({ title: 'Viewer metadata settings saved successfully', type: 'success' });
           } else if (outcome === 'queued') {
-            toast('Viewer metadata settings saved locally — they will sync when reconnected.');
+            uiNotificationService.show({
+              title: 'Viewer metadata settings saved locally',
+              message: 'They will sync when reconnected.',
+              type: 'info',
+            });
           } else {
-            toast.error('Failed to save viewer metadata settings to the server; the change was kept locally.');
+            uiNotificationService.show({
+              title: 'Failed to save viewer metadata settings',
+              message: 'The server rejected the change; it was kept locally.',
+              type: 'error',
+            });
           }
         },
         onError: (error) => {
-          toast.error(`Failed to save viewer metadata settings: ${error.message}`, { duration: 5000 });
+          uiNotificationService.show({ title: 'Failed to save viewer metadata settings', message: error.message, type: 'error' });
         },
       }
     );

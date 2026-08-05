@@ -5,7 +5,7 @@ import memoize from 'lodash/memoize';
 import PropTypes from 'prop-types';
 
 import { MODULE_TYPES, utils } from '@ohif/core';
-import { useLogger, useSnackbarContext } from '@ohif/ui';
+import { useLogger } from '@ohif/ui';
 
 import { extensionManager } from '../../App';
 
@@ -64,16 +64,15 @@ function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStud
   const rowSize = 100 / numRows;
   const colSize = 100 / numColumns;
 
-  const snackbar = useSnackbarContext();
   const logger = useLogger();
 
   useEffect(() => {
     if (isStudyLoaded) {
       viewportData.forEach((displaySet) => {
-        loadAndCacheDerivedDisplaySets(displaySet, studies, logger, snackbar);
+        loadAndCacheDerivedDisplaySets(displaySet, studies, logger);
       });
     }
-  }, [studies, viewportData, isStudyLoaded, snackbar]);
+  }, [studies, viewportData, isStudyLoaded]);
 
   // http://grid.malven.co/
   if (!viewportData?.length) {

@@ -88,7 +88,6 @@
     "query-string": "^8.1.0",
     "react-day-picker": "^9.6.7",
     "react-dropzone": "^10.1.7",
-    "react-hot-toast": "^2.5.2",
     "react-i18next": "^13.3.1",
     "react-markdown": "^10.1.0",
     "react-redux": "^8.1.3",

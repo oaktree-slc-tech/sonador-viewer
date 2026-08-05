@@ -10,7 +10,12 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
-import OHIF, { LocalCacheService, DownloadManagerService, JOB_STATES } from '@ohif/core';
+import OHIF, {
+  LocalCacheService,
+  DownloadManagerService,
+  JOB_STATES,
+  clearOfflineStorageWithNotice,
+} from '@ohif/core';
 import { useDebounce, Icon } from '@ohif/ui';
 import {
   HoverCard,
@@ -172,8 +177,27 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
     // already in flight can land AFTER clearAll() and briefly resurrect its study in the stored
     // list. The cancelled job's own cleanup then removes exactly what it stored, so the state
     // converges — the flicker is cosmetic, not a leak.
-    DownloadManagerService?.cancelAllActive();
-    LocalCacheService.clearAll();
+    //
+    // Wrapped so the user gets told what is being removed and, once the device is clear, how much
+    // space it freed. The wrapper reads those counts before the wipe destroys them and mutes the
+    // per-transfer cancel notices that cancelAllActive would otherwise raise.
+    const summaries = LocalCacheService?.getAllStudySummaries() || [];
+    const inFlight = (DownloadManagerService?.listActiveJobs() || []).filter(
+      job => job.state === JOB_STATES.QUEUED || job.state === JOB_STATES.DOWNLOADING
+    );
+
+    clearOfflineStorageWithNotice({
+      studyCount: summaries.length,
+      byteCount: summaries.reduce((bytes, summary) => bytes + (summary.totalBytes || 0), 0),
+      activeTransfers: inFlight.length,
+      clear: () => {
+        DownloadManagerService?.cancelAllActive();
+        return LocalCacheService.clearAll();
+      },
+    }).catch(() => {
+      // Reported to the user by the wrapper; nothing further to do here.
+    });
+
     setConfirmingClear(false);
   };
 

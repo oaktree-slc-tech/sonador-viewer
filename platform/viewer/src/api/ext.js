@@ -1,7 +1,12 @@
 // Methods for retrieving data from the DICOM-EXT API of an imaging server.
 import _ from 'lodash';
 
-import OHIF, { sonador } from '@ohif/core';
+import {
+  sonador,
+  DicomMetadataStore,
+  ArchiveDownloadService,
+  notifyArchivesQueued,
+} from '@ohif/core';
 import { urlUtil } from '@ohif/core/src/utils';
 
 import { getAuthToken } from './sonador';
@@ -48,69 +53,58 @@ export const createStudyComment = (server, studyId, text) => {
 };
 
 
-export const fetchDownloadStudies = async (server, studyId) => {
-  // Download DICOM Studies data from Orthanc
+export const fetchDownloadStudies = (server, studyId, descriptor) => {
+  // Queue a zip-archive export of a DICOM study for download to the user's computer.
+  //
+  // These two helpers are the ONLY entry points to archive export in the viewer, so rather than
+  // hunting down every call site they became thin adapters onto ArchiveDownloadService
+  // (ohif-viewers#52, AR-5). Every caller — present and future — therefore gets a tracked,
+  // observable, cancellable job in the Downloads menu for free.
+  //
+  // The call no longer downloads inline: it RETURNS the job and settles in the background. The
+  // server builds the archive on demand, so a large study can sit for minutes before the first
+  // byte arrives; progress, cancellation and the saved file are all owned by the service, and both
+  // ends are announced through the unified notification service (see archiveNotifications).
+  //
+  // NOTE for future work: a direct fetch of an /archive URL followed by an anchor click is a
+  // defect — it produces an export the user cannot see, monitor, or cancel. Go through the service.
 
-  const url = urlUtil.urlJoin(server.wadoRoot, 'studies', studyId, 'archive');
+  // Asked twice for the same study (a double-click, or a bulk action re-run over a partially
+  // queued selection)? The service hands back the job already in flight rather than starting a
+  // second request (FR-14), and the notice says so instead of re-announcing a queue that did not
+  // happen.
+  const duplicate = !!ArchiveDownloadService.getActiveJobForResource(studyId);
 
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    });
+  const job = ArchiveDownloadService.enqueueStudy({
+    server,
+    StudyInstanceUID: studyId,
+    // DicomMetadataStore is consulted only as a fallback: a study-list row is registered with no
+    // metadata, so callers that have the row pass its attributes explicitly.
+    descriptor: descriptor || DicomMetadataStore.getStudyMetadata(studyId) || {},
+  });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch archive: ${response.status} ${response.statusText}`);
-    }
+  notifyArchivesQueued(duplicate ? { alreadyQueued: 1 } : { queued: [job] });
 
-    const blob = await response.blob();
-
-    // Create a temporary anchor to trigger the download
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${studyId}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    // Revoke the object URL after download
-    window.URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    console.error('Download failed:', error);
-  }
+  return job;
 }
 
 
-export const fetchDownloadSeries = async (server, seriesId) => {
-  // Download DICOM Series data from Orthanc
+export const fetchDownloadSeries = (server, seriesId, descriptor) => {
+  // Queue a zip-archive export of a DICOM series. Routed through the queue exactly as the study
+  // archive above; see that function for the reasoning.
 
-  try {
-    const response = await fetch(urlUtil.urlJoin(server.wadoRoot, 'series', seriesId, 'archive'), {
-      headers: { Authorization: `Bearer ${getAuthToken()}` },
-    });
+  const duplicate = !!ArchiveDownloadService.getActiveJobForResource(seriesId);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch archive: ${response.status} ${response.statusText}`);
-    }
+  const job = ArchiveDownloadService.enqueueSeries({
+    server,
+    StudyInstanceUID: descriptor?.StudyInstanceUID,
+    SeriesInstanceUID: seriesId,
+    descriptor: descriptor || {},
+  });
 
-    const blob = await response.blob();
+  notifyArchivesQueued(duplicate ? { alreadyQueued: 1 } : { queued: [job] });
 
-    // Create a temporary anchor to trigger the download
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${seriesId}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    // Revoke the object URL after download
-    window.URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    console.error('Download for series="'+seriesId+'" failed:', error);
-  }
+  return job;
 }
 
 

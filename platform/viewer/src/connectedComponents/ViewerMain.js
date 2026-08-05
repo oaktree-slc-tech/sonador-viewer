@@ -9,10 +9,8 @@ import PropTypes from 'prop-types';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
-import { toast } from 'react-hot-toast';
 
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { eventTypes as uiEvents } from '@ohif/ui';
 import { cornerstone3dUtils } from '@ohif/extension-vtk';
 
@@ -43,7 +41,6 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
   const studiesRef = useRef(studies);
   const isStudyLoadedRef = useRef(isStudyLoaded);
 
-  const { addError } = useViewerStudyErrors();
 
   const viewportData = values(viewportSpecificData);
   const studyId = selectedStudyId || studyInstanceUIDs;
@@ -99,19 +96,13 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
               If you really think it is coplanar,\
               please adjust the tolerance in the segmentation panel settings (at your own peril!)'
               : error.message;
-          LoggerService.error({ error, message });
-
-          const errorTitle = 'DICOM Segmentation Loader';
-
-          if (studyId) {
-            addError({ studyId, error: message, title: errorTitle });
-          }
-
-          UINotificationService.show({
-            title: errorTitle,
+          // One call: console, unified Issues list, and a sticky toast (ohif-viewers#84).
+          LoggerService.error({
+            error,
+            title: 'DICOM Segmentation Loader',
             message,
-            type: 'error',
-            autoClose: false,
+            notify: true,
+            studyInstanceUID: studyId,
           });
         };
 
@@ -135,19 +126,12 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
       if (!displaySet) {
         const error = new Error('Source data not present');
         const message = 'Source data not present';
-        const errorTitle = 'Fail to load series';
-
-        LoggerService.error({ error, message });
-
-        if (studyId) {
-          addError({ studyId, error: message, title: errorTitle });
-        }
-
-        UINotificationService.show({
-          autoClose: false,
-          title: errorTitle,
+        LoggerService.error({
+          error,
+          title: 'Fail to load series',
           message,
-          type: 'error',
+          notify: true,
+          studyInstanceUID: studyId,
         });
       }
     }
@@ -155,19 +139,12 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
     if (displaySet?.isSOPClassUIDSupported === false) {
       const error = new Error('Modality not supported');
       const message = 'Modality not supported';
-      const errorTitle = 'Fail to load series';
-
-      LoggerService.error({ error, message });
-
-      if (studyId) {
-        addError({ studyId, error: message, title: errorTitle });
-      }
-
-      UINotificationService.show({
-        autoClose: false,
-        title: errorTitle,
+      LoggerService.error({
+        error,
+        title: 'Fail to load series',
         message,
-        type: 'error',
+        notify: true,
+        studyInstanceUID: studyId,
       });
     }
 

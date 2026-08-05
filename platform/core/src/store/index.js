@@ -1,5 +1,4 @@
 import { filesToStudies, fileToStudy } from './fileLoaderService/filesToStudies.js';
-import { useViewerStudyErrors } from './useViewerStudyErrors';
 
 
 const fileLoader = {
@@ -7,9 +6,8 @@ const fileLoader = {
 };
 
 const store = {
-  useViewerStudyErrors,
   fileLoader,
 }
 
 export default store;
-export { useViewerStudyErrors, fileLoader };
+export { fileLoader };

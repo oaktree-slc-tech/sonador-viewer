@@ -2,7 +2,6 @@ import _ from 'lodash';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import classNames from 'classnames';
@@ -22,6 +21,7 @@ import groupSearchStyles from '../../styles/groupSearch.module.scss';
 import globalTableStyles from '../../styles/globalTableStyles.module.scss';
 import settingsPanelTableStyles from '../../styles/settingsPanelTableStyles.module.scss';
 import styles from './DevicesList.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 
 const headers = [
@@ -129,10 +129,10 @@ export default function DeviceList() {
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['deviceList']);
-      toast.success('Device created successfully');
+      uiNotificationService.show({ title: 'Device created successfully', type: 'success' });
     },
     onError: (error) => {
-      toast.error(`Failed to create device: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to create device', message: error.message, type: 'error' });
     },
   });
 
@@ -140,10 +140,10 @@ export default function DeviceList() {
     mutationFn: ({ group, deviceId }) => removeDevice({ server: activeServer, group, deviceId }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['deviceList']);
-      toast.success('Device removed successfully');
+      uiNotificationService.show({ title: 'Device removed successfully', type: 'success' });
     },
     onError: (error) => {
-      toast.error(`Failed to remove device: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to remove device', message: error.message, type: 'error' });
     },
   });
 
@@ -168,10 +168,10 @@ export default function DeviceList() {
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries(['deviceList']);
-      toast.success('Device updated successfully');
+      uiNotificationService.show({ title: 'Device updated successfully', type: 'success' });
     },
     onError: (error) => {
-      toast.error(`Failed to update device: ${error.message}`, { duration: 5000 });
+      uiNotificationService.show({ title: 'Failed to update device', message: error.message, type: 'error' });
     },
   });
 

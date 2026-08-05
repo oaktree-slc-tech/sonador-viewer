@@ -14,7 +14,6 @@ import cornerstoneTools from 'cornerstone-tools';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 const { DicomMetadataStore: DcmMetaStore } = OHIF;
@@ -321,26 +320,18 @@ class OHIFVtkBaseViewport extends Component {
     };
 
     const onPixelDataInsertedErrorCallback = (error) => {
-      const { UINotificationService, LoggerService } = this.props.servicesManager.services;
+      const { LoggerService } = this.props.servicesManager.services;
 
       if (!this.hasError) {
         if (this.props.viewportIndex === 0) {
-          // Only show the notification from one viewport 1 in multi-viewport layouts
-          LoggerService.error({ error, message: error.message });
-
-          const studyId = extractStudyIdFromURL();
-          const errorTitle = 'Image Load Error';
-
-          if (studyId) {
-            // Will be called only on Viewer study page
-            useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
-          }
-
-          UINotificationService.show({
-            title: errorTitle,
+          // Only report from viewport 1 in multi-viewport layouts. One call: console, unified
+          // Issues list, and a sticky toast (ohif-viewers#84).
+          LoggerService.error({
+            error,
+            title: 'Image Load Error',
             message: error.message,
-            type: 'error',
-            autoClose: false,
+            notify: true,
+            studyInstanceUID: extractStudyIdFromURL(),
           });
         }
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import i18n from '@ohif/i18n';
-import { LanguageSwitcher, TabFooter, useSnackbarContext } from '@ohif/ui';
+import { LanguageSwitcher, TabFooter } from '@ohif/ui';
 
 import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
 import { useUpdateUserPreferenceSection } from '../../queries/preferences';
@@ -21,7 +21,6 @@ import './GeneralPreferences.styl';
  */
 function GeneralPreferences({ onClose }) {
   const { t } = useTranslation('UserPreferencesModal');
-  const snackbar = useSnackbarContext();
   const currentLanguage = i18n.language;
   const { availableLanguages } = i18n;
 
@@ -40,7 +39,7 @@ function GeneralPreferences({ onClose }) {
     // Cloud sync through the write queue (FR-7).
     saveGeneralSection(
       { version: PREFERENCES_VERSION, values: { language } },
-      showSaveOutcome(snackbar, t('SaveMessage'), 'general preferences')
+      showSaveOutcome(t('SaveMessage'), 'general preferences')
     );
 
     onClose();

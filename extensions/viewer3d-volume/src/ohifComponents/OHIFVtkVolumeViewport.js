@@ -5,7 +5,6 @@ import PropTypes from "prop-types";
 
 import { cache as c3dCache } from "@cornerstonejs/core";
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from "@ohif/core/src/store/useViewerStudyErrors";
 import { extractStudyIdFromURL } from "@ohif/core/src/utils/extractStudyIdFromURL";
 import { eventTypes as segmentationEventTypes } from "@ohif/extension-dicom-segmentation";
 import {

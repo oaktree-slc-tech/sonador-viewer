@@ -1,7 +1,6 @@
 import _ from 'lodash';
 
 import { measurements, utils } from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import { servicesManager } from '../../App';
@@ -31,22 +30,15 @@ export default function jumpToRowItem(
   const activeViewport = viewports[activeViewportIndex];
   if (activeViewport.vtk) {
     const error = new Error('Measurements are not supported by the MPR mode.');
-    const { UINotificationService, LoggerService } = servicesManager.services;
-    LoggerService.error({ error, message: error.message });
+    const { LoggerService } = servicesManager.services;
 
-    const studyId = extractStudyIdFromURL();
-    const errorTitle = 'Measurements panel';
-
-    if (studyId) {
-      // Will be called only on Viewer study page
-      useViewerStudyErrors.getState().addError({ studyId, error: error.message, title: errorTitle });
-    }
-
-    UINotificationService.show({
-      title: errorTitle,
+    // One call: console, unified Issues list, and a toast (ohif-viewers#84).
+    LoggerService.error({
+      error,
+      title: 'Measurements panel',
       message: error.message,
-      type: 'warning',
-      autoClose: true,
+      notify: true,
+      studyInstanceUID: extractStudyIdFromURL(),
     });
     return {
       viewportSpecificData: [],

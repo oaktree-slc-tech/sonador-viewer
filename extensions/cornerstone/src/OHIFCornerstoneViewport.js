@@ -3,12 +3,11 @@ import cornerstone from 'cornerstone-core';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { useViewerStudyErrors } from '@ohif/core/src/store/useViewerStudyErrors';
-import { useSnackbarContext } from '@ohif/ui';
 
 import OHIFCornerstoneViewportOverlay from './components/OHIFCornerstoneViewportOverlay';
 import checkForSRAnnotations from './tools/checkForSRAnnotations';
 import ConnectedCornerstoneViewport from './ConnectedCornerstoneViewport';
+import { uiNotificationService } from '@ohif/core';
 
 const { DisplaySetApi } = OHIF.display;
 const { StackManager } = OHIF.utils;
@@ -25,8 +24,6 @@ export default function OHIFCornerstoneViewport({
 }) {
   const [viewportDataState, setViewportDataState] = useState(null);  
 
-  const snackbar = useSnackbarContext();
-  const { addError } = useViewerStudyErrors();
 
   /**
    * Obtain the CornerstoneTools Stack for the specified display set.
@@ -42,18 +39,16 @@ export default function OHIFCornerstoneViewport({
     if (!studies || !studies.length) {
       const errorTitle = 'Studies not provided';
 
-      addError({ studyId: StudyInstanceUID, error: `${StudyInstanceUID} error`, title: errorTitle });
-
-      return snackbar.show({
+      return uiNotificationService.show({
         title: errorTitle,
-        message: '',
         type: 'error',
         autoClose: false,
+        studyInstanceUID: StudyInstanceUID,
       });
     }
 
     if (!StudyInstanceUID) {
-      return snackbar.show({
+      return uiNotificationService.show({
         title: 'StudyInstanceUID not provided',
         message: '',
         type: 'error',
@@ -64,13 +59,11 @@ export default function OHIFCornerstoneViewport({
     if (!displaySetInstanceUID) {
       const errorTitle = 'displaySetInstanceUID not provided';
 
-      addError({ studyId: StudyInstanceUID, error: `${StudyInstanceUID} error`, title: errorTitle });
-
-      return snackbar.show({
+      return uiNotificationService.show({
         title: errorTitle,
-        message: '',
         type: 'error',
         autoClose: false,
+        studyInstanceUID: StudyInstanceUID,
       });
     }
 
@@ -80,13 +73,11 @@ export default function OHIFCornerstoneViewport({
     if (!study) {
       const errorTitle = 'Study not found';
 
-      addError({ studyId: StudyInstanceUID, error: `${StudyInstanceUID} error`, title: errorTitle });
-
-      return snackbar.show({
+      return uiNotificationService.show({
         title: errorTitle,
-        message: '',
         type: 'error',
         autoClose: false,
+        studyInstanceUID: StudyInstanceUID,
       });
     }
 
@@ -97,13 +88,11 @@ export default function OHIFCornerstoneViewport({
     if (!displaySet) {
       const errorTitle = 'Display Set not found';
 
-      addError({ studyId: StudyInstanceUID, error: `${StudyInstanceUID} error`, title: errorTitle });
-
-      return snackbar.show({
+      return uiNotificationService.show({
         title: errorTitle,
-        message: '',
         type: 'error',
         autoClose: false,
+        studyInstanceUID: StudyInstanceUID,
       });
     }
 

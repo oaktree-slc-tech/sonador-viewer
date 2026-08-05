@@ -1,1 +1,7 @@
 $sidebarWidth: 315px;
+
+// Secondary blue. The Investigational Use notice's colour, and the hover colour for every icon
+// control in the study-list title row (Downloads, Offline Storage, Account). Primary Blue #2e46e9
+// reads too dark to register as a hover state against the dark header, so it is deliberately NOT
+// used there. Shared because those controls live in two stylesheets and must not drift apart.
+$header-notice-blue: #91b9cd;

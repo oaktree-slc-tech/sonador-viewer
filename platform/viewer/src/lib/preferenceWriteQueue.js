@@ -10,8 +10,6 @@
 //
 // Plain module by design (AR-7): no React imports, testable under node.
 
-import { toast } from 'react-hot-toast';
-
 import {
   WRITE_QUEUE_BACKOFF_CAP_MS,
   WRITE_QUEUE_BACKOFF_FLOOR_MS,
@@ -20,6 +18,10 @@ import {
 } from '../constants/preferences';
 
 import { updateUserPreferenceSection } from '../api/preferences';
+// The notification service is imported by its module path rather than the `@ohif/core` barrel:
+// this file is deliberately React-free and node-testable (AR-7), and the barrel would pull the
+// entire viewer core -- Cornerstone, VTK, and friends -- into the test environment.
+import { uiNotificationService } from '@ohif/core/src/services/UINotificationService';
 
 // Module state: timers and session flags only -- the queue itself lives in localStorage so it
 // survives reloads and browser restarts (FR-19).
@@ -104,7 +106,11 @@ export const notifyPreferenceWriteQueued = () => {
   }
   offlineToastShown = true;
   try {
-    toast('Preferences saved locally — they will sync when reconnected.');
+    uiNotificationService.show({
+      title: 'Preferences saved locally',
+      message: 'They will sync when reconnected.',
+      type: 'info',
+    });
   } catch (e) {
     // Notifications are best-effort; queueing must never fail because a toast did.
   }
@@ -116,7 +122,11 @@ const notifyDropped = (entry, error) => {
     error
   );
   try {
-    toast.error(`Failed to sync preferences for "${entry.key}": the server rejected the saved values.`);
+    uiNotificationService.show({
+      title: 'Preference sync failed',
+      message: `The server rejected the saved values for "${entry.key}".`,
+      type: 'error',
+    });
   } catch (e) {
     // Best-effort, as above.
   }

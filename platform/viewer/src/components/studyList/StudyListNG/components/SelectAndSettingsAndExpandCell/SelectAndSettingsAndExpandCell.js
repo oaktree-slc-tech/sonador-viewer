@@ -8,7 +8,13 @@ import { ChatBubbleLeftIcon } from '@heroicons/react/24/solid';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
-import OHIF, { redux, DicomMetadataStore, LocalCacheService, DownloadManagerService } from '@ohif/core';
+import OHIF, {
+  redux,
+  DicomMetadataStore,
+  LocalCacheService,
+  DownloadManagerService,
+  notifyStudiesQueued,
+} from '@ohif/core';
 import { Icon } from '@ohif/ui';
 
 import CheckboxNG from '@ohif/ui/src/components/CheckboxNG/CheckboxNG';
@@ -51,6 +57,47 @@ function _getStudyInstanceUID({ row, worklist=false}) {
 }
 
 
+// Fields lifted off a study-list row for user-facing messages and for the Download Manager's
+// display columns. Patient and study attributes only — enough for a reader to recognise the study
+// without quoting a UID at them.
+const DESCRIPTOR_FIELDS = [
+  'PatientName',
+  'PatientID',
+  'StudyDescription',
+  'StudyDate',
+  'AccessionNumber',
+  'ServiceEpisodeID',
+  'modalities',
+];
+
+
+function _getStudyDescriptor({ row, StudyInstanceUID, studyMeta }) {
+  // Human-readable descriptor for a study-list row.
+  //
+  // The row itself is the source of truth here: `DicomMetadataStore` holds only what the viewer
+  // has loaded, and a study-list row is registered with NO metadata (see addStudy below), so
+  // reading patient/study attributes from the store yields an empty object and every message
+  // degrades to "Study 1.2.826...". react-table row values are `{ value, label, type }` triples,
+  // so unwrap them; the store is consulted only as a fallback for a study the viewer has opened.
+
+  const original = row?.original || {};
+  const descriptor = {};
+
+  DESCRIPTOR_FIELDS.forEach(field => {
+    const cell = original[field];
+    const value = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
+
+    if (value !== undefined && value !== null && value !== '') {
+      descriptor[field] = value;
+    } else if (studyMeta?.[field]) {
+      descriptor[field] = studyMeta[field];
+    }
+  });
+
+  return { ...descriptor, StudyInstanceUID };
+}
+
+
 export default function SelectAndSettingsAndExpandCell({ row  }) {
   // Studylist selection control and actions menu
 
@@ -69,6 +116,10 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
     DicomMetadataStore.addStudy({ StudyInstanceUID, });
   }
   const studyMeta = DicomMetadataStore.getStudyMetadata(StudyInstanceUID);
+
+  // Patient/study attributes for the archive and offline-download notifications, and for the
+  // Download Manager rows. Read from the row, not the store — see _getStudyDescriptor.
+  const studyDescriptor = _getStudyDescriptor({ row, StudyInstanceUID, studyMeta });
 
   // Study action permissions
   const canWorkInWorklist = activeServer?.perms?.worklist;
@@ -102,7 +153,9 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
         </div>
       ),
       onClick: () => {
-        fetchDownloadStudies(activeServer, StudyInstanceUID);
+        // The row's attributes ride along so the archive notifications — and the name of the
+        // saved file — identify the study by patient and description rather than by UID.
+        fetchDownloadStudies(activeServer, StudyInstanceUID, studyDescriptor);
       },
     },
     {
@@ -122,17 +175,15 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
         if (isDownloading) {
           DownloadManagerService.cancelStudy(StudyInstanceUID);
         } else {
-          DownloadManagerService.enqueueStudy({
+          const job = DownloadManagerService.enqueueStudy({
             server: activeServer,
             StudyInstanceUID,
-            descriptor: {
-              PatientName: studyMeta?.PatientName,
-              PatientID: studyMeta?.PatientID,
-              StudyDescription: studyMeta?.StudyDescription,
-              AccessionNumber: studyMeta?.AccessionNumber,
-              ServiceEpisodeID: studyMeta?.ServiceEpisodeID,
-            },
+            descriptor: studyDescriptor,
           });
+
+          // Queueing is otherwise invisible until the row badge changes; completion and failure are
+          // announced by the DownloadManagerService subscription (see downloadNotifications).
+          notifyStudiesQueued({ queued: [job] });
         }
       },
     },
@@ -269,4 +320,4 @@ SelectAndSettingsAndExpandCell.propTypes = {
 };
 
 
-export { _getStudyInstanceUID };
+export { _getStudyInstanceUID, _getStudyDescriptor };

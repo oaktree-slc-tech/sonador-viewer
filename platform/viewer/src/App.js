@@ -8,9 +8,6 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OidcProvider } from 'redux-oidc';
 
-import  { Toaster } from 'react-hot-toast';
-
-
 import {
   CommandsManager,
   ExtensionManager,
@@ -25,9 +22,13 @@ import {
   UIDialogService,
   UIModalService,
   UINotificationService,
+  NotificationLogService,
   ViewportGridService,
   LocalCacheService,
   DownloadManagerService,
+  ArchiveDownloadService,
+  startDownloadNotifications,
+  startArchiveNotifications,
 
   SystemContextProvider,
   
@@ -36,7 +37,8 @@ import {
 import OHIFCornerstoneExtension, { createDicomLocalApi } from '@ohif/extension-cornerstone';
 
 import i18n from '@ohif/i18n';
-import { DialogProvider, LoggerProvider, ModalProvider, OHIFModal, SnackbarProvider } from '@ohif/ui';
+import { DialogProvider, LoggerProvider, ModalProvider, OHIFModal } from '@ohif/ui';
+import { NotificationProvider } from '@ohif/ui-next';
 import ErrorBoundaryNG from '@ohif/ui/src/components/ErrorBoudaryNG/ErrorBoundaryNG';
 
 import { AppProvider, CONTEXTS, useAppContext } from './context/AppContext';
@@ -173,6 +175,9 @@ class App extends Component {
       LoggerService,
       DicomMetadataStore,
       UINotificationService,
+      // Unified destination for notifications, application logs, and series warnings
+      // (ohif-viewers#84). Session-scoped: entries are reproduced from the DICOM on load.
+      NotificationLogService,
       UIModalService,
       UIDialogService,
       MeasurementService,
@@ -180,7 +185,19 @@ class App extends Component {
       // other primary services; both are also directly importable module singletons from @ohif/core.
       LocalCacheService,
       DownloadManagerService,
+      // Archive export queue (ohif-viewers#52). A separate queue with a separate destination: zip
+      // files written to the user's file system, not studies cached into this browser.
+      ArchiveDownloadService,
     ]);
+
+    // Announce offline-download outcomes (ohif-viewers#125, #84). Download jobs outlive the React
+    // tree that queued them, so completion and failure are reported from a service-level
+    // subscription rather than from any component.
+    startDownloadNotifications();
+
+    // Same reasoning for archive exports (ohif-viewers#52): the server builds the archive on
+    // demand, so an export routinely settles long after the study list that queued it is gone.
+    startArchiveNotifications();
 
     // TODO: The DisplaySetService and CustomizationService are required to support MeasurementService.
     // and limited features of OHIF v3 within the Sonador Viewer. Their utilization should be expanded 
@@ -222,7 +239,7 @@ class App extends Component {
                         hotkeysManager={hotkeysManager} servicesManager={servicesManager}>
                       <WhiteLabelingContext.Provider value={whiteLabeling}>
                         <LoggerProvider service={LoggerService}>
-                          <SnackbarProvider service={UINotificationService}>
+                          <NotificationProvider service={UINotificationService}>
                             <DialogProvider service={UIDialogService}>
                               <ModalProvider modal={OHIFModal} service={UIModalService}>
                                 <QueryClientProvider client={queryClient}>
@@ -230,7 +247,7 @@ class App extends Component {
                                 </QueryClientProvider>
                               </ModalProvider>
                             </DialogProvider>
-                          </SnackbarProvider>
+                          </NotificationProvider>
                         </LoggerProvider>
                       </WhiteLabelingContext.Provider>
                       </SystemContextProvider>
@@ -240,7 +257,6 @@ class App extends Component {
               </I18nextProvider>
             </AppProvider>
           </Provider>
-          <Toaster />
         </ErrorBoundaryNG>
       );
     }
@@ -256,7 +272,7 @@ class App extends Component {
                         hotkeysManager={hotkeysManager} servicesManager={servicesManager}>
                 <WhiteLabelingContext.Provider value={whiteLabeling}>
                   <LoggerProvider service={LoggerService}>
-                    <SnackbarProvider service={UINotificationService}>
+                    <NotificationProvider service={UINotificationService}>
                       <DialogProvider service={UIDialogService}>
                         <ModalProvider modal={OHIFModal} service={UIModalService}>
                           <QueryClientProvider client={queryClient}>
@@ -264,7 +280,7 @@ class App extends Component {
                           </QueryClientProvider>
                         </ModalProvider>
                       </DialogProvider>
-                    </SnackbarProvider>
+                    </NotificationProvider>
                   </LoggerProvider>
                 </WhiteLabelingContext.Provider>
                 </SystemContextProvider>
@@ -272,7 +288,6 @@ class App extends Component {
             </I18nextProvider>
           </AppProvider>
         </Provider>
-        <Toaster />
       </ErrorBoundaryNG>
     );
   }

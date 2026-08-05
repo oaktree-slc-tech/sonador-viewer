@@ -4,7 +4,6 @@ import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-tabl
 import classNames from 'classnames';
 import moment from 'moment';
 
-import { useSnackbarContext } from '@ohif/ui';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 import { ReactComponent as AddCircleIcon } from '@ohif/ui/src/elements/Svg/svgs/add-circle.svg';
@@ -18,6 +17,7 @@ import { useCreateToken, useDeleteToken, useTokens } from './logic';
 
 import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import styles from '../SecurityTabNG/SecurityTabNG.module.scss';
+import { uiNotificationService } from '@ohif/core';
 
 /**
  *
@@ -74,7 +74,6 @@ export default function SecurityAPITokensTabNG() {
   const { mutate: createToken, data: createdTokenData = {} } = useCreateToken();
   const { mutate: deleteToken } = useDeleteToken();
 
-  const snackbar = useSnackbarContext();
 
   // NOTE: `data` and `columns` MUST be referentially stable across renders.
   // Passing a freshly-built array on every render sends @tanstack/react-table into an
@@ -128,7 +127,7 @@ export default function SecurityAPITokensTabNG() {
     if (navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(key);
-        snackbar.show({
+        uiNotificationService.show({
           message: t('Copied'),
           type: 'success',
         });
@@ -143,7 +142,7 @@ export default function SecurityAPITokensTabNG() {
 
       try {
         document.execCommand('copy');
-        snackbar.show({
+        uiNotificationService.show({
           message: t('Copied'),
           type: 'success',
         });

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import classnames from 'classnames';
 import PropTypes from 'prop-types';
 
-import { HotkeyField, TabFooter, useSnackbarContext } from '@ohif/ui';
+import { HotkeyField, TabFooter } from '@ohif/ui';
 
 import { hotkeysManager } from '../../App';
 import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
@@ -83,8 +83,6 @@ function HotkeysPreferences({ onClose }) {
 
   const [state, setState] = useState(initialState(hotkeyDefinitions));
 
-  const snackbar = useSnackbarContext();
-
   const onResetPreferences = () => {
     const defaultHotKeyDefinitions = {};
 
@@ -110,7 +108,7 @@ function HotkeysPreferences({ onClose }) {
     // "saved locally" when the write was queued, error on a validation failure.
     saveHotkeysSection(
       { version: PREFERENCES_VERSION, values: hotkeys },
-      showSaveOutcome(snackbar, t('SaveMessage'), 'hotkey preferences')
+      showSaveOutcome(t('SaveMessage'), 'hotkey preferences')
     );
 
     onClose();
