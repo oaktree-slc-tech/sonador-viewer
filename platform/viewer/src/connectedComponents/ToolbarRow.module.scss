@@ -1,5 +1,10 @@
 .toolbarRow {
   border-bottom: var(--ui-border-thickness) solid var(--ui-border-color);
+  // Same reason as .entry-header: the viewer layout subtracts exactly --toolbar-height for this
+  // bar, and box-sizing is not inherited from the html/body/#root rule. Under content-box the
+  // border-bottom sat OUTSIDE the declared 78px, so the bar rendered at 79px and contributed the
+  // last pixel of the page's vertical overflow.
+  box-sizing: border-box;
   flex: 0 0 auto;
   height: var(--toolbar-height);
   padding-left: 1rem;

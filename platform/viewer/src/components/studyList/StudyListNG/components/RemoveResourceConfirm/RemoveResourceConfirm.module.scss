@@ -1,0 +1,198 @@
+// Blocking removal confirmation (ohif-viewers#127, FR-11).
+//
+// Geometry, card and button treatment follow DownloadManagerModal's Clear Storage overlay so the
+// two destructive confirmations in the study list read as the same control. `position: absolute;
+// inset: 0` means the host must be a positioned ancestor — every current caller renders this
+// inside one (the drawer's content column, the row's action cell, the bulk toolbar), and .host
+// below is provided for a caller that needs to establish one.
+
+.host {
+  position: relative;
+}
+
+.confirmOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.65);
+  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// Viewport variant, portalled to <body>, for callers with no surface of their own to cover.
+// z-index sits above the study list's dropdowns and date popups so the confirmation is never the
+// thing hidden behind the menu that opened it.
+.confirmOverlayFixed {
+  position: fixed;
+  z-index: 1100;
+}
+
+.confirmCard {
+  background: #1e1f23;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  padding: 25px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  row-gap: 12px;
+  max-width: 480px;
+  max-height: 90%;
+  overflow-y: auto;
+}
+
+.confirmPrompt {
+  margin: 0;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.confirmSubject {
+  margin: 0;
+  color: #fff;
+  font-size: 16px;
+  text-align: center;
+}
+
+.confirmContext {
+  margin: 0;
+  color: #b0b3ba;
+  font-size: 14px;
+  text-align: center;
+}
+
+// Completion hold: why the overlay is still up after the work finished.
+.confirmNote {
+  margin: 0;
+  color: #60646d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.confirmDetails {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.confirmDetailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 20px;
+  padding: 4px 6px;
+
+  &:nth-of-type(odd) {
+    background-color: #27292d;
+  }
+}
+
+.confirmDetailLabel {
+  color: #b0b3ba;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmDetailValue {
+  color: #d3d3d3;
+  font-size: 13px;
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+// Enumerated selection for the bulk case: scrolls rather than growing the card past the dialog.
+.confirmList {
+  width: 100%;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+}
+
+.confirmListRow {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+
+  &:nth-of-type(odd) {
+    background-color: #27292d;
+  }
+}
+
+.confirmListTitle {
+  color: #d3d3d3;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmListSubtitle {
+  color: #b0b3ba;
+  font-size: 12px;
+}
+
+// The sentence that makes this different from "Remove Offline Copy": that evicts a cached copy
+// from this browser, this destroys the data on the imaging server.
+.confirmWarning {
+  margin: 0;
+  color: #e0574a;
+  font-size: 13px;
+  text-align: center;
+}
+
+.confirmActions {
+  display: flex;
+  column-gap: 15px;
+  margin-top: 4px;
+}
+
+.removeConfirm {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 12px;
+  background: #e0574a;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 16px;
+  padding: 12px 15px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.removeCancel {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 12px;
+  background: transparent;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  color: #b0b3ba;
+  font-size: 16px;
+  padding: 11px 15px;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}

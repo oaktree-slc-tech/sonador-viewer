@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import qs from 'query-string';
 
 import useStudiesTable from '@ohif/sonador-viewer/src/hooks/useStudiesTable';
+import useStudyListRefresh from '../../../../hooks/useStudyListRefresh';
 import { useDebounce } from '@ohif/ui';
 
 import StudyListNG from '../../../../components/studyList/StudyListNG/StudyListNG';
@@ -17,7 +18,8 @@ export default function RecentUploadTable() {
 
   const [studyStartDate, setStartStudyDate] = useState('');
   const [studyEndDate, setStudyEndDate] = useState('');
-  const [forceRerender, setForceRerender] = useState(Math.random());
+  // Refresh: re-seeds the row query AND drops the memoised series metadata the drawer reads.
+  const { forceRerender, refreshApp } = useStudyListRefresh();
 
   const debouncedSearch = useDebounce(search, 500);
   const { uploadStudiesSelectedColumns, setUploadStudiesSelectedColumns, uploadColumnOrder, setUploadColumnOrder } =
@@ -52,10 +54,6 @@ export default function RecentUploadTable() {
     isForce: forceRerender,
     tags,
   });
-
-  const refreshApp = () => {
-    setForceRerender(Math.random());
-  };
 
   return (
     <StudyListNG

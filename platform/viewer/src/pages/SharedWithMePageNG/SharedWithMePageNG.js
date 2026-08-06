@@ -11,6 +11,7 @@ import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTab
 
 import useStudies from '../../hooks/useStudies';
 import useStudiesTable from '../../hooks/useStudiesTable';
+import useStudyListRefresh from '../../hooks/useStudyListRefresh';
 import useTags from '../../hooks/useTags';
 
 import Layout from '../../layouts/Layout/Layout';
@@ -31,7 +32,8 @@ export default function SharedWithMePageNG() {
 
   const [studyStartDate, setStartStudyDate] = useState('');
   const [studyEndDate, setStudyEndDate] = useState('');
-  const [forceRerender, setForceRerender] = useState(Math.random());
+  // Refresh: re-seeds the row query AND drops the memoised series metadata the drawer reads.
+  const { forceRerender, refreshApp } = useStudyListRefresh();
 
   const { sharedWithMePageFilters, setSharedWithMePageFilters } = useStudiesTableFilters();
   const {
@@ -77,10 +79,6 @@ export default function SharedWithMePageNG() {
     tags,
     requireExplicitAccess: true,
   });
-
-  const refreshApp = () => {
-    setForceRerender(Math.random());
-  };
 
   return (
     <Layout noHorizontalPadding fixedHeight>

@@ -49,3 +49,13 @@
   column-gap: 10px;
   color: #d3d3d3;
 }
+
+// Server-side removal, distinguished from the neighbouring "Remove Offline Copy" — which shares
+// the same trash icon but only evicts this browser's cached copy (ohif-viewers#127, AR-9).
+.rowDotsOptionDestructive {
+  color: #e0574a;
+
+  svg {
+    fill: #e0574a;
+  }
+}

@@ -141,3 +141,21 @@ export function deleteStudyMetadataPromise(StudyInstanceUID) {
     StudyMetaDataPromises.delete(StudyInstanceUID);
   }
 }
+
+
+export function purgeStudyMetadataPromises() {
+
+  /**
+  * Delete EVERY cached study metadata retrieval promise, so that the next request for any study
+  * re-retrieves it from the server.
+  *
+  * Counterpart to deleteStudyMetadataPromise above, for callers that need the whole cache dropped
+  * rather than one study: a user-initiated "refresh the study list" cannot enumerate the studies
+  * whose metadata happens to be memoised, and until now the only way to clear this Map was a full
+  * page reload. Without it, a series added from another tab (a saved SR document, say) stays
+  * invisible to the study drawer no matter how many times the list is refreshed.
+  *
+  */
+
+  StudyMetaDataPromises.clear();
+}

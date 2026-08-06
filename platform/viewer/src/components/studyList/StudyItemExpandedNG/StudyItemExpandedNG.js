@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useCallback, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import classNames from 'classnames';
 import moment from 'moment';
@@ -22,7 +22,15 @@ import useSeriesMetadata from '@ohif/sonador-viewer/src/hooks/useSeriesMetadata'
 import * as RoutesUtil from '@ohif/sonador-viewer/src/routes/routesUtil';
 
 import { useDeviceStore } from '../../../store/useDeviceStore';
-import { fetchStudyAclPermissions } from '../../../api/ext';
+import {
+  fetchDownloadSeries,
+  fetchSeriesAclPermissions,
+  fetchStudyAclPermissions,
+} from '../../../api/ext';
+import { _getStudyDescriptor } from '../StudyListNG/components/SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell';
+
+import RemoveResourceConfirm from '../StudyListNG/components/RemoveResourceConfirm/RemoveResourceConfirm';
+import useRemoveResource from '../StudyListNG/hooks/useRemoveResource';
 
 import Comments from './components/Comments/Comments';
 import { useAllSeriesComments, useStudyComments } from './components/Comments/logic';
@@ -57,6 +65,9 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   const [aclView, setAclView] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);
   const [aclComments, setAclComments] = useState(activeServer?.perms?.comment_view || studyMeta.perms?.CommentView || false);
   const [aclCommentEdit, setAclCommentEdit] = useState(activeServer?.perms?.comment_edit || studyMeta.perms?.CommentEdit || false);
+  // Study-level `remove` grant. Distinct from #125's offline-cache eviction, which needs no
+  // server permission at all: this one destroys the data on the imaging server.
+  const [aclRemove, setAclRemove] = useState(activeServer?.perms?.remove || studyMeta?.perms?.Remove || false);
 
   useEffect(() => {
     // Sonador Viewer Service Integration
@@ -76,6 +87,10 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
 
           if (!aclCommentEdit && studyMetadata?.perms?.CommentEdit) {
             setAclCommentEdit(studyMetadata?.perms?.CommentEdit);
+          }
+
+          if (!aclRemove && studyMetadata?.perms?.Remove) {
+            setAclRemove(studyMetadata?.perms?.Remove);
           }
         }
       });
@@ -127,7 +142,121 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   const { data: allSeriesCommentsArr = [] } = useAllSeriesComments(activeServer, aclComments ? allSeries : []);
   const { data: studyCommentsArr = [] } = useStudyComments(activeServer, aclComments ? studyId : undefined);
 
-  
+  // Series-granular ACL grants (ohif-viewers#127, FR-9/AR-8).
+  //
+  // Resolved here, not in Metadata: the drawer already owns selection and the study-level signals,
+  // and Metadata stays a presentation component. The effective permission for a series action is
+  // `study-or-server grant OR series grant` — a series grant can authorise where the study grant
+  // does not, and the study grant covers its series by inheritance. Because
+  // `activeServer.perms.*` is wildcard-only (true only for a superuser or a `resource: '*'` group
+  // policy), gating on it alone would hide these actions from exactly the users the ACL system
+  // exists to serve.
+  //
+  // Fetched lazily on menu open and cached per series for the lifetime of the drawer; the cache is
+  // keyed by SeriesInstanceUID, so switching series simply misses rather than needing invalidation.
+  const [seriesPerms, setSeriesPerms] = useState({});
+  const seriesAclInFlight = useRef({});
+
+  const selectedSeriesUID = selectedThumbnail?.SeriesInstanceUID;
+
+  const resolveSeriesAcl = useCallback(async () => {
+    // Lazy per-series ACL fetch, issued when the series Actions menu opens.
+
+    if (!activeServer || !selectedSeriesUID) {
+      return;
+    }
+    // Already resolved, or a resolution for this series is already in flight (the trigger can be
+    // re-opened faster than the request settles).
+    if (selectedSeriesUID in seriesPerms || seriesAclInFlight.current[selectedSeriesUID]) {
+      return;
+    }
+
+    seriesAclInFlight.current[selectedSeriesUID] = true;
+
+    try {
+      const resourcePerms = await fetchSeriesAclPermissions(activeServer, selectedSeriesUID);
+      setSeriesPerms((prev) => ({ ...prev, [selectedSeriesUID]: resourcePerms?.perms || {} }));
+    } catch (err) {
+      // A failed lookup must not strand the menu in a permanently-loading state. Record an empty
+      // grant so the study/server signals still decide, and allow a later retry.
+      OHIF.log.error(`Unable to retrieve ACL permissions for series=${selectedSeriesUID}`, err);
+      setSeriesPerms((prev) => ({ ...prev, [selectedSeriesUID]: {} }));
+    } finally {
+      delete seriesAclInFlight.current[selectedSeriesUID];
+    }
+  }, [activeServer, selectedSeriesUID, seriesPerms]);
+
+  const selectedSeriesPerms = selectedSeriesUID ? seriesPerms[selectedSeriesUID] : undefined;
+  const seriesAclView = !!(aclView || selectedSeriesPerms?.View);
+  const seriesAclRemove = !!(aclRemove || selectedSeriesPerms?.Remove);
+
+  const seriesDescriptor = useMemo(() => {
+    // Descriptor for the selected series, assembled from three sources (ohif-viewers#127, §5.2):
+    // the thumbnail carries SeriesInstanceUID/SeriesNumber/SeriesDescription but NOT Modality or
+    // StudyInstanceUID, Modality comes off the display set, and the patient/study attributes come
+    // off the study-list row (react-table cells are `{ value, label, type }` triples, which
+    // _getStudyDescriptor already unwraps — reused rather than reimplemented).
+    if (!selectedThumbnail) {
+      return null;
+    }
+
+    const displaySet = selectedThumbnail.displaySetInstanceUID
+      ? displaySetApi.displaySetService.getDisplaySetByUID(selectedThumbnail.displaySetInstanceUID)
+      : undefined;
+
+    return {
+      ..._getStudyDescriptor({ row: { original: study }, StudyInstanceUID: studyId, studyMeta }),
+      SeriesInstanceUID: selectedThumbnail.SeriesInstanceUID,
+      SeriesNumber: selectedThumbnail.SeriesNumber,
+      SeriesDescription: selectedThumbnail.SeriesDescription,
+      Modality: displaySet?.Modality,
+      numImageFrames: selectedThumbnail.numImageFrames,
+      // What the removal confirmation states will be destroyed. The display set's image list is
+      // the instance count; numImageFrames is the fallback and counts frames, which for a
+      // single-frame series is the same number.
+      numberOfSeriesRelatedInstances: displaySet?.images?.length ?? selectedThumbnail.numImageFrames,
+    };
+  }, [selectedThumbnail, study, studyId]);
+
+
+  const handleDownloadSeries = () => {
+    // Queue a zip-archive export of the selected series (ohif-viewers#127, FR-3).
+    //
+    // fetchDownloadSeries is the existing adapter onto ArchiveDownloadService, which has handled
+    // `kind: 'series'` end to end since #52 and until now had no caller: the bounded queue,
+    // streaming progress, cancellation, de-duplication, the Downloads-menu series row and the
+    // queued/completed notifications all come along by calling it. There is deliberately no new
+    // command and no second code path (AR-3).
+    if (!seriesDescriptor?.SeriesInstanceUID) {
+      return;
+    }
+
+    fetchDownloadSeries(activeServer, seriesDescriptor.SeriesInstanceUID, seriesDescriptor);
+  };
+
+
+  // Pending series removal (ohif-viewers#127, FR-4). The descriptor is captured when the menu item
+  // is chosen rather than read from `seriesDescriptor` at confirm time, so the overlay keeps
+  // naming the series the user actually picked even if selection moves underneath it.
+  const [pendingSeriesRemoval, setPendingSeriesRemoval] = useState(null);
+  const { isRemoving, removeSeriesResource } = useRemoveResource();
+
+  const handleConfirmRemoveSeries = async () => {
+    const descriptor = pendingSeriesRemoval;
+    const ok = await removeSeriesResource(activeServer, descriptor);
+
+    setPendingSeriesRemoval(null);
+
+    if (ok && selectedThumbnail?.SeriesInstanceUID === descriptor?.SeriesInstanceUID) {
+      // Selection falls back to the STUDY tile: the series it pointed at no longer exists, and
+      // leaving it selected would leave the Metadata panel describing a deleted resource until
+      // the rail's refetch lands.
+      setSelectedThumbnail(null);
+      setSelectedStudy(studyId);
+    }
+  };
+
+
   const handleClickOpenInViewer = () => {
     // Open link in Sonador Viewer
 
@@ -290,9 +419,14 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
               </div>
             )}
             
-            <Metadata 
-              study={study} seriesCount={data?.[0]?.thumbnails?.length??0} 
+            <Metadata
+              study={study} seriesCount={data?.[0]?.thumbnails?.length??0}
               selectedSeries={selectedThumbnail}
+              seriesAclView={seriesAclView}
+              seriesAclRemove={seriesAclRemove}
+              onDownloadSeries={handleDownloadSeries}
+              onRemoveSeries={() => setPendingSeriesRemoval(seriesDescriptor)}
+              onSeriesActionsOpen={resolveSeriesAcl}
             />
             
             {aclView && aclComments && (
@@ -304,6 +438,19 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
             commentsEdit={aclCommentEdit} />
         )}
       </div>
+
+      {/* Blocking removal confirmation, covering the whole drawer so nothing in it — including the
+          thumbnail rail and the Open in Viewer controls — is clickable until the user confirms or
+          cancels. .container is the positioned ancestor its `absolute; inset: 0` anchors to. */}
+      {pendingSeriesRemoval && (
+        <RemoveResourceConfirm
+          kind="series"
+          descriptor={pendingSeriesRemoval}
+          isRemoving={isRemoving}
+          onConfirm={handleConfirmRemoveSeries}
+          onCancel={() => setPendingSeriesRemoval(null)}
+        />
+      )}
     </div>
   );
 }

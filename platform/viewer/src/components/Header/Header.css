@@ -1,6 +1,17 @@
 /* Viewer Route */
 .entry-header {
-  padding: 10px 15px;
+  /* The viewer layout subtracts EXACTLY --top-bar-height for this bar:
+     .FlexboxLayout is `height: calc(100% - var(--toolbar-height) - var(--top-bar-height))`.
+     box-sizing is set only on html/body/#root and is not inherited, so with the default
+     content-box this element rendered at 40 + 10 + 10 = 60px while the layout accounted for 40 —
+     20px of overflow that pushed the page past the window and produced a global scrollbar
+     (ohif-viewers#127 follow-up).
+
+     Vertical padding drops 10px -> 5px so the 30px .header-brand still fits exactly inside the
+     40px box (5 + 30 + 5). .entry-header.header-big below is unaffected: it re-declares
+     `height: auto` and its own padding, and border-box is a no-op at auto height. */
+  box-sizing: border-box;
+  padding: 5px 15px;
   height: var(--top-bar-height);
 }
 

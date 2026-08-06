@@ -22,6 +22,8 @@ import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
 import { SeriesTagToolbarButton } from './toolbarComponents/SeriesTagToolbarButton.js';
 import { DistortionFilterToolbarButton } from './toolbarComponents/DistortionFilterToolbarButton.js';
 import { LocalCacheToolbarButton } from './toolbarComponents/LocalCacheToolbarButton.js';
+import { DownloadStudyToolbarButton } from './toolbarComponents/DownloadStudyToolbarButton.js';
+import { RemoveStudyToolbarButton } from './toolbarComponents/RemoveStudyToolbarButton.js';
 
 /* TODO: Export enums through a extension manager. */
 const enums = {
@@ -225,14 +227,29 @@ const definitions = [
         commandName: 'flipViewportVertical',
       },
       {
-        id: 'Download',
-        label: 'Download',
-        icon: 'create-screen-capture',        
+        // Captures the CURRENTLY DISPLAYED IMAGE off the viewport canvas as a PNG/JPEG. It was
+        // labelled "Download", which described neither the scope (one image, not the study) nor
+        // the action (a screen capture, not a DICOM export) -- and it now sits in the same menu as
+        // a real study download (ohif-viewers#127, AR-9). Verb + object, sentence case, no
+        // redundant "image of the current series": the menu is already viewport-scoped.
+        id: 'CaptureImage',
+        label: 'Capture Image',
+        icon: 'create-screen-capture',
         type: TOOLBAR_BUTTON_TYPES.BUILT_IN,
         options: {
           behavior: TOOLBAR_BUTTON_BEHAVIORS.DOWNLOAD_SCREEN_SHOT,
           togglable: true,
         },
+      },
+      {
+        // Export the whole study as a .zip, the study-list row menu's Download reachable from the
+        // viewer. CustomComponent purely so it can be hidden from a user without `view`.
+        id: 'DownloadStudy',
+        label: 'Download',
+        icon: 'cloud-download',
+        CustomComponent: DownloadStudyToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'downloadStudyArchive',
       },
       {
         // Local/offline study cache toggle (ohif-viewers#125, FR-9). CustomComponent branches
@@ -251,6 +268,21 @@ const definitions = [
         icon: 'reset',
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'reloadStudy',
+      },
+      {
+        // Permanently delete the open study from the imaging server, behind the study list's
+        // blocking confirmation; the tab closes once the user has read the result. Last in the
+        // menu, and deliberately not adjacent to 'LocalCache' above, which removes only THIS
+        // BROWSER's cached copy (ohif-viewers#127, AR-9).
+        id: 'RemoveStudy',
+        label: 'Remove Study',
+        icon: 'trash',
+        CustomComponent: RemoveStudyToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        // No commandName on purpose. The CustomComponent owns the confirmation and the removal, so
+        // it never calls toolbarClickCallback; ToolbarRow guards on `if (button.commandName)`, so
+        // omitting it is inert. Registering one would create a second path to an irreversible
+        // delete that bypasses the confirmation entirely.
       },
     ],
   },

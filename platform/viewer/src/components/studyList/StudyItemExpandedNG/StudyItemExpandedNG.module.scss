@@ -5,6 +5,11 @@
   border-radius: 0 0 10px 10px;
   padding: 0 20px 20px;
   background-color: #000000;
+  // Positioned ancestor for the removal confirmation overlay (ohif-viewers#127, FR-11), which
+  // covers the whole drawer with `absolute; inset: 0`. .list below is `position: sticky`, which
+  // resolves against the nearest scrolling ancestor rather than the nearest positioned one, so it
+  // is unaffected.
+  position: relative;
 
   .list {
     display: flex;

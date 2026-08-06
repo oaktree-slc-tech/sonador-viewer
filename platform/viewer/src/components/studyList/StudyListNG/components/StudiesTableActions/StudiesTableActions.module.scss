@@ -26,6 +26,19 @@
     }
   }
 
+  // Server-side removal. Carries the same red as the confirmation's Remove button so the button
+  // and the overlay it raises read as one action, and so it is not mistaken for the two
+  // offline-cache buttons beside it (ohif-viewers#127, AR-9).
+  .destructiveAction {
+    background-color: #e0574a;
+
+    svg {
+      fill: #fff;
+      width: 14px;
+      height: 14px;
+    }
+  }
+
   .shareContainer {
     position: relative;
 

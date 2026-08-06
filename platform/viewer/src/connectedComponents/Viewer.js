@@ -32,6 +32,7 @@ import ErrorBoundaryDialog from './../components/ErrorBoundaryDialog';
 import SidePanel from './../components/SidePanel/SidePanel';
 import ViewerIssuesContent from './ViewerIssuesContent/ViewerIssuesContent';
 import ConnectedStudyBrowser from './ConnectedStudyBrowser';
+import SeriesActionsMenu from '../components/SeriesActionsMenu/SeriesActionsMenu';
 import ToolbarRow from './ToolbarRow';
 import ViewerMain from './ViewerMain';
 
@@ -305,6 +306,22 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
                       showThumbnailProgressBar={
                         studyPrefetcher && studyPrefetcher.enabled && studyPrefetcher.displayProgress
                       }
+                      // Per-series Download / Remove, permission-gated (ohif-viewers#127). Supplied
+                      // ONLY here: StudyBrowser renders no menu without this slot, which is what
+                      // keeps the affordance out of the study list and the quick-switch panel.
+                      renderSeriesActions={(series) => (
+                        <SeriesActionsMenu
+                          key={series.SeriesInstanceUID}
+                          {...series}
+                          onSeriesRemoved={() => {
+                            // The removed series is gone from the server and from the metadata
+                            // caches, but this viewer's study tree was built before that. Reload
+                            // rather than splicing: the removed series may be the one on screen,
+                            // and it may have derived display sets (SEG/SR) referencing it.
+                            DisplaySetApi.Instance.reloadStudy();
+                          }}
+                        />
+                      )}
                     />
                   );
                 }}

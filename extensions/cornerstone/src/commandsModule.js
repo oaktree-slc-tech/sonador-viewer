@@ -22,7 +22,9 @@ const {
   display,
   LocalCacheService,
   DownloadManagerService,
+  ArchiveDownloadService,
   notifyStudiesQueued,
+  notifyArchivesQueued,
 } = OHIF;
 const { studyMetadataManager, cornerstoneUtils } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
@@ -631,6 +633,45 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
 
+    downloadStudyArchive: ({ viewports, servers }) => {
+      // Export the open study as a .zip through the tracked archive queue (ohif-viewers#127).
+      //
+      // The study-list row menu's 'download' action, reachable from the viewer. Distinct from
+      // 'CaptureImage' in the same More menu (a single rendered image off the canvas) and from
+      // 'goOffline' below (caches instances into THIS BROWSER rather than writing a file out).
+      //
+      // Goes through ArchiveDownloadService exactly as the study list does, so the job appears in
+      // the Downloads menu with progress and cancellation and raises the same queued/completed
+      // notifications -- there is deliberately no second export path.
+      const activeServer = sonador.getActiveServer(servers.servers);
+      const vsd = viewports.viewportSpecificData?.[viewports.activeViewportIndex] || {};
+      const { StudyInstanceUID } = vsd;
+
+      if (!StudyInstanceUID || !activeServer) {
+        log.warn('[cornerstone:commands:downloadStudyArchive] missing StudyInstanceUID or active server.');
+        return;
+      }
+
+      // Asked twice for the same study? The service hands back the job already in flight and the
+      // notice says so, rather than re-announcing a queue that did not happen.
+      const duplicate = !!ArchiveDownloadService.getActiveJobForResource(StudyInstanceUID);
+
+      const job = ArchiveDownloadService.enqueueStudy({
+        server: activeServer,
+        StudyInstanceUID,
+        descriptor: {
+          PatientName: vsd.PatientName,
+          PatientID: vsd.PatientID,
+          StudyDescription: vsd.StudyDescription,
+          StudyDate: vsd.StudyDate,
+          AccessionNumber: vsd.AccessionNumber,
+          ServiceEpisodeID: vsd.ServiceEpisodeID,
+        },
+      });
+
+      notifyArchivesQueued(duplicate ? { alreadyQueued: 1 } : { queued: [job] });
+    },
+
     cancelStudyDownload: ({ viewports }) => {
       // Cancel an in-flight offline download for the open study (leaves already-cached data, AC-3).
       const { StudyInstanceUID } =
@@ -818,6 +859,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     setWindowLevel: {
       commandFn: actions.setWindowLevel,
       storeContexts: ['viewports'],
+      options: {},
+    },
+    downloadStudyArchive: {
+      commandFn: actions.downloadStudyArchive,
+      storeContexts: ['viewports', 'servers'],
       options: {},
     },
     goOffline: {

@@ -13,6 +13,7 @@ import { useStudiesTableFilters } from '../../store/useStudiesTableFilters';
 import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTableFiltersAndColumnsStore';
 
 import useStudiesTable from '../../hooks/useStudiesTable';
+import useStudyListRefresh from '../../hooks/useStudyListRefresh';
 import { useWorklistItems } from '../../queries/worklist';
 
 import Layout from '../../layouts/Layout/Layout';
@@ -32,7 +33,8 @@ export default function WorkListPageNG() {
 
   const [studyStartDate, setStartStudyDate] = useState('');
   const [studyEndDate, setStudyEndDate] = useState('');
-  const [forceRerender, setForceRerender] = useState(Math.random());
+  // Refresh: re-seeds the row query AND drops the memoised series metadata the drawer reads.
+  const { forceRerender, refreshApp } = useStudyListRefresh();
 
   const { workListPageFilters, setWorkListPageFilters } = useStudiesTableFilters();
   const {
@@ -110,10 +112,6 @@ export default function WorkListPageNG() {
     // Update metadata store
     DicomMetadataStore.updateStudyMetadata(studyMeta);
   });
-
-  const refreshApp = () => {
-    setForceRerender(Math.random());
-  };
 
   // Study list permissions
   const canWorkInWorklist = activeServer?.perms?.worklist;
