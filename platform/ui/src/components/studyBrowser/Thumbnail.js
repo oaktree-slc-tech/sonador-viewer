@@ -86,7 +86,7 @@ function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
 }
 
 
-function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets, hasClientWarnings, StudyInstanceUID, SeriesInstanceUID }) {
+function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasWarnings, hasDerivedDisplaySets, hasClientWarnings, StudyInstanceUID, SeriesInstanceUID, seriesActions }) {
   // Footer which summarizes the attributes of an imaging series including description, series number, 
   // warnings, and other information to be summarized for the user.
 
@@ -183,7 +183,15 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
   };
 
   const getDerivedInfo = (derivedDisplaySetsActive) => {
-    if (!derivedDisplaySetsActive) {
+    // Only when there IS a derived resource (a DICOM-SEG or DICOM-SR referencing this series).
+    // The guard used to be `!derivedDisplaySetsActive`, and the state initialises to `[]` -- a
+    // truthy empty array -- so the link icon rendered on every thumbnail regardless. Handles both
+    // shapes because the resolved value has been a list in some paths and a flag in others.
+    const hasDerived = Array.isArray(derivedDisplaySetsActive)
+      ? derivedDisplaySetsActive.length > 0
+      : !!derivedDisplaySetsActive;
+
+    if (!hasDerived) {
       return null;
     }
 
@@ -195,17 +203,29 @@ function ThumbnailFooter({ SeriesDescription, SeriesNumber, numImageFrames, hasW
   };
 
   const getSeriesInformation = (SeriesNumber, numImageFrames, inconsistencyWarnings, derivedDisplaySetsActive, clientWarnings) => {
-    if (!SeriesNumber && !numImageFrames) {
+    // The actions menu alone is reason enough to render this row: a series with no number and no
+    // frame count still has a series to download or remove.
+    if (!SeriesNumber && !numImageFrames && !seriesActions) {
       return null;
     }
 
+    // Two explicit groups rather than six loose children under `justify-content: space-between`,
+    // which spread every indicator evenly across the row and left nothing anchored to either edge.
+    // Left is what the series IS (number, instance count); right is its state and its controls,
+    // ordered so the actions button is always the outermost thing and the indicators sit inboard
+    // of it in a stable order.
     return (
       <div className="series-information">
-        {SeriesNumber !== undefined && getInfo(SeriesNumber, 'S:')}
-        {numImageFrames !== undefined && getInfo(numImageFrames, '', 'image-frames')}
-        {getDerivedInfo(derivedDisplaySetsActive)}
-        {getWarningInfo(SeriesNumber, inconsistencyWarnings, clientWarnings)}
-        <SeriesCacheBadge StudyInstanceUID={StudyInstanceUID} SeriesInstanceUID={SeriesInstanceUID} />
+        <div className="series-information-left">
+          {SeriesNumber !== undefined && getInfo(SeriesNumber, 'S:')}
+          {numImageFrames !== undefined && getInfo(numImageFrames, '', 'image-frames')}
+        </div>
+        <div className="series-information-right">
+          <SeriesCacheBadge StudyInstanceUID={StudyInstanceUID} SeriesInstanceUID={SeriesInstanceUID} />
+          {getWarningInfo(SeriesNumber, inconsistencyWarnings, clientWarnings)}
+          {getDerivedInfo(derivedDisplaySetsActive)}
+          {seriesActions}
+        </div>
       </div>
     );
   };
@@ -235,6 +255,7 @@ function Thumbnail({
   imageSrc,
   StudyInstanceUID,
   showProgressBar,
+  seriesActions,
   ...props
 }) {
   // Summary of the medical imaging displayed to the user in the viewer sidepanel.
@@ -329,7 +350,7 @@ function Thumbnail({
           <h1>{altImageText}</h1>
         </div>
       )}
-      {ThumbnailFooter({ ...props, StudyInstanceUID, hasClientWarnings: clientWarnings })}
+      {ThumbnailFooter({ ...props, StudyInstanceUID, seriesActions, hasClientWarnings: clientWarnings })}
     </div>
   );
 }
@@ -360,6 +381,12 @@ Thumbnail.propTypes = {
   onClick: PropTypes.func,
   onMouseDown: PropTypes.func,
   showProgressBar: PropTypes.bool,
+  /**
+   Optional node rendered at the far right of the footer's series-information row. The viewer's
+   study browser supplies a series actions menu here; every other consumer of this component
+   passes nothing and gets no menu.
+   */
+  seriesActions: PropTypes.node,
 };
 
 

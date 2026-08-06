@@ -12,6 +12,7 @@ function StudyBrowser({
   onThumbnailClick = () => {},
   supportsDrag = true,
   showThumbnailProgressBar = true,
+  renderSeriesActions,
 }) {
   // View sidepanel / study browser
 
@@ -62,6 +63,22 @@ function StudyBrowser({
                     hasWarnings={hasWarnings}
                     hasDerivedDisplaySets={hasDerivedDisplaySets}
                     
+                    // Optional per-series actions menu, rendered at the far right of the footer.
+                    // Only the viewer's ConnectedStudyBrowser supplies this; everything else that
+                    // renders a Thumbnail passes nothing and shows no menu.
+                    seriesActions={
+                      renderSeriesActions
+                        ? renderSeriesActions({
+                            StudyInstanceUID,
+                            SeriesInstanceUID,
+                            SeriesNumber,
+                            SeriesDescription,
+                            displaySetInstanceUID,
+                            numImageFrames,
+                          })
+                        : undefined
+                    }
+
                     // Events
                     onClick={onThumbnailClick.bind(undefined, displaySetInstanceUID)}
                     showProgressBar={showThumbnailProgressBar}
@@ -97,6 +114,12 @@ StudyBrowser.propTypes = {
   supportsDrag: PropTypes.bool,
   onThumbnailClick: PropTypes.func,
   showThumbnailProgressBar: PropTypes.bool,
+  /**
+   Optional slot renderer for per-series actions, called with the series identifiers and expected
+   to return a node (or null). Left undefined, no thumbnail renders a menu -- which is how this
+   stays a viewer-only affordance.
+   */
+  renderSeriesActions: PropTypes.func,
 };
 
 export { StudyBrowser };

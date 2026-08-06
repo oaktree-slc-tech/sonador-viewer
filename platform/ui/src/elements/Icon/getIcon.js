@@ -26,6 +26,7 @@ import circleO from './icons/circle-o.svg';
 import clipboard from './icons/clipboard.svg';
 import cog from './icons/cog.svg';
 import createComment from './icons/create-comment.svg';
+import cloudDownload from './icons/cloud-download.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
 import offlineCache from './icons/offline-cache.svg';
 import crop from './icons/crop.svg';
@@ -139,6 +140,9 @@ const ICONS = {
   'circle-o': circleO,
   times,
   'create-comment': createComment,
+  // Same asset the study list uses for its zip-export Download, so the viewer's Download reads
+  // as the same action (ohif-viewers#127).
+  'cloud-download': cloudDownload,
   'create-screen-capture': createScreenCapture,
   'offline-cache': offlineCache,
   edit,

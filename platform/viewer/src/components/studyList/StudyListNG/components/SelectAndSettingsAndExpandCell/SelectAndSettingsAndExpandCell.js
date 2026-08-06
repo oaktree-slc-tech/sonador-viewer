@@ -32,70 +32,18 @@ import AppContext from '../../../../../context/AppContext';
 import * as RoutesUtil from '../../../../../routes/routesUtil';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import CreateWorklistModal from '../CreateWorklistModal/CreateWorklistModal';
+import RemoveResourceConfirm from '../RemoveResourceConfirm/RemoveResourceConfirm';
 import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
+import useRemoveResource from '../../hooks/useRemoveResource';
+import {
+  _getStudyInstanceUID,
+  _getStudyDescriptor,
+  _getRemovalDescriptor,
+} from './studyRowDescriptors';
 
 import tableStyles from '../StudiesTable/StudiesTable.module.scss';
 import styles from './SelectAndSettingsAndExpandCell.module.scss';
-
-
-function _getStudyInstanceUID({ row, worklist=false}) {
-  // Retrieve StudyInstanceUID for the row from the DicomMetadataStore
-  if (!worklist) {
-    return row.id;
-  }
-
-  // Attempt to retrieve StudyInstanceUID from DicomMetadataStore
-  const _study = DicomMetadataStore.findStudy((_s) => {
-    // Check study metdata for a worklistId which matches the row.id
-
-    const studyMeta = (_s.getStudyMetadata() || {});
-    return _.includes(studyMeta.worklistItems || [], row.id);
-  });
-
-  return _study.StudyInstanceUID;
-}
-
-
-// Fields lifted off a study-list row for user-facing messages and for the Download Manager's
-// display columns. Patient and study attributes only — enough for a reader to recognise the study
-// without quoting a UID at them.
-const DESCRIPTOR_FIELDS = [
-  'PatientName',
-  'PatientID',
-  'StudyDescription',
-  'StudyDate',
-  'AccessionNumber',
-  'ServiceEpisodeID',
-  'modalities',
-];
-
-
-function _getStudyDescriptor({ row, StudyInstanceUID, studyMeta }) {
-  // Human-readable descriptor for a study-list row.
-  //
-  // The row itself is the source of truth here: `DicomMetadataStore` holds only what the viewer
-  // has loaded, and a study-list row is registered with NO metadata (see addStudy below), so
-  // reading patient/study attributes from the store yields an empty object and every message
-  // degrades to "Study 1.2.826...". react-table row values are `{ value, label, type }` triples,
-  // so unwrap them; the store is consulted only as a fallback for a study the viewer has opened.
-
-  const original = row?.original || {};
-  const descriptor = {};
-
-  DESCRIPTOR_FIELDS.forEach(field => {
-    const cell = original[field];
-    const value = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
-
-    if (value !== undefined && value !== null && value !== '') {
-      descriptor[field] = value;
-    } else if (studyMeta?.[field]) {
-      descriptor[field] = studyMeta[field];
-    }
-  });
-
-  return { ...descriptor, StudyInstanceUID };
-}
 
 
 export default function SelectAndSettingsAndExpandCell({ row  }) {
@@ -110,9 +58,11 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
   const isExpanded = row.getIsExpanded();
   const { activeServer } = useSelector(redux.selectors.activeOhifServer); 
 
-  // Retrieve study metadata
-  const _study = DicomMetadataStore.getStudy(StudyInstanceUID);
-  if (!_study) {
+  // Retrieve study metadata. Guarded on the UID: a worklist row whose study has been removed
+  // resolves to undefined (see _getStudyInstanceUID), and registering `{ StudyInstanceUID:
+  // undefined }` would put a junk entry in the store that later lookups would match against.
+  const _study = StudyInstanceUID ? DicomMetadataStore.getStudy(StudyInstanceUID) : undefined;
+  if (StudyInstanceUID && !_study) {
     DicomMetadataStore.addStudy({ StudyInstanceUID, });
   }
   const studyMeta = DicomMetadataStore.getStudyMetadata(StudyInstanceUID);
@@ -121,13 +71,25 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
   // Download Manager rows. Read from the row, not the store — see _getStudyDescriptor.
   const studyDescriptor = _getStudyDescriptor({ row, StudyInstanceUID, studyMeta });
 
+  // The same attributes plus the series/instance counts, for the removal confirmation.
+  const removalDescriptor = _getRemovalDescriptor({ row, StudyInstanceUID, studyMeta });
+
   // Study action permissions
   const canWorkInWorklist = activeServer?.perms?.worklist;
   const [aclDownload, setAclDownload] = useState(activeServer?.perms?.view || studyMeta?.perms?.View || false);
   const [aclShare, setAclShare] = useState(activeServer?.perms?.acl || studyMeta?.perms?.ACL || false);
+  // Permission to permanently delete this study from the imaging server. `activeServer.perms.remove`
+  // is wildcard-only — true for a superuser or a `resource: '*'` group policy and nothing else —
+  // so a user holding a per-study grant reads false here and is refined by the resource-acl fetch
+  // on menu open (FR-8). Not to be confused with 'remove-offline' below, which evicts this
+  // browser's cached copy and needs no server permission at all.
+  const [aclRemove, setAclRemove] = useState(activeServer?.perms?.remove || studyMeta?.perms?.Remove || false);
   const [resourceAclLoaded, setResourceAclLoaded] = useState(() => false);
   const [createWorklistModalOpen, setCreateWorklistModalOpen] = useState(false);
   const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
+  const [confirmingRemoveStudy, setConfirmingRemoveStudy] = useState(false);
+
+  const { isRemoving, removeStudyResource } = useRemoveResource();
 
   const { appConfig } = useContext(AppContext);
 
@@ -227,6 +189,26 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
         },
       }]
       : []),
+    {
+      // Permanently delete this study from the imaging server (ohif-viewers#127, FR-6). Last in
+      // the menu, after share and create-worklist: it is irreversible and should not sit under
+      // the cursor's resting position.
+      //
+      // AR-9 — 'remove-study' is a deliberately distinct id from 'remove-offline' above, and the
+      // two labels are the place this feature is most likely to be misread. "Remove Offline Copy"
+      // evicts this browser's cached copy; "Remove Study" destroys the data on the server. Both
+      // can appear in this menu at the same time.
+      id: 'remove-study',
+      Label: () => (
+        <div className={classNames(styles.rowDotsOption, styles.rowDotsOptionDestructive)}>
+          <TrashBinIcon />
+          <span>{t('Remove Study')}</span>
+        </div>
+      ),
+      onClick: () => {
+        setConfirmingRemoveStudy(true);
+      },
+    },
   ];
 
   const filteredOptions = useMemo(() => {
@@ -244,17 +226,22 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
         return isCached;
       } else if (option.id == 'share') {
         return aclShare;
+      } else if (option.id == 'remove-study') {
+        return aclRemove;
       }
 
       return true;
     });
-  }, [aclDownload, aclShare, isCached, isDownloading])
+  }, [aclDownload, aclShare, aclRemove, isCached, isDownloading])
 
   const onDropdownClick = async (e) => {
     // Retrieve resource permissions for study
     e.stopPropagation();
 
-    if (activeServer && StudyInstanceUID && !resourceAclLoaded && (!aclDownload || !aclShare)) {
+    // The short-circuit widens to include the new remove signal: without `!aclRemove` here, a user
+    // who already has download and share from the server flags would never trigger the fetch, and
+    // a per-study `remove` grant would stay invisible (FR-8). Same single fetch, one more reader.
+    if (activeServer && StudyInstanceUID && !resourceAclLoaded && (!aclDownload || !aclShare || !aclRemove)) {
       const resourcePerms = await fetchStudyAclPermissions(activeServer, StudyInstanceUID);
       DicomMetadataStore.updateStudyMetadata(_.omit(resourcePerms, 'Level'));
 
@@ -266,6 +253,11 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
       // Set permission for ACL management
       if (!aclShare && resourcePerms?.perms?.ACL) {
         setAclShare(resourcePerms.perms.ACL);
+      }
+
+      // Set permission for removal from the imaging server
+      if (!aclRemove && resourcePerms?.perms?.Remove) {
+        setAclRemove(resourcePerms.perms.Remove);
       }
 
       // Mark resource ACL as loaded to prevent repeated API calls
@@ -309,6 +301,25 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
           selectedStudy={{ id: StudyInstanceUID }}
         />
       )}
+      {confirmingRemoveStudy && (
+        <RemoveResourceConfirm
+          kind="study"
+          descriptor={removalDescriptor}
+          isRemoving={isRemoving}
+          onConfirm={async () => {
+            const ok = await removeStudyResource(activeServer, removalDescriptor);
+
+            setConfirmingRemoveStudy(false);
+
+            // A selection that includes a study that no longer exists would carry it into the
+            // next bulk action (FR-12).
+            if (ok && row.getIsSelected?.()) {
+              row.toggleSelected?.(false);
+            }
+          }}
+          onCancel={() => setConfirmingRemoveStudy(false)}
+        />
+      )}
 
     </>
   );
@@ -320,4 +331,4 @@ SelectAndSettingsAndExpandCell.propTypes = {
 };
 
 
-export { _getStudyInstanceUID, _getStudyDescriptor };
+export { _getStudyInstanceUID, _getStudyDescriptor, _getRemovalDescriptor };

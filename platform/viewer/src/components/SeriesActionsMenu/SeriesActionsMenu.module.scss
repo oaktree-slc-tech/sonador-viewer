@@ -1,0 +1,58 @@
+// Series actions menu on the viewer's study-browser thumbnails (ohif-viewers#127 follow-up).
+//
+// The menu surface matches the study list's series Actions menu — the same white popover with dark
+// text from radixUi's shared .Content / .DropdownItem — so "Actions" looks and means the same thing
+// in both places. No colour overrides beyond the destructive item, so the two cannot drift.
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  // Matches the 16-18px status glyphs beside it so the row reads as one set of indicators.
+  height: 18px;
+  width: 18px;
+  border-radius: 3px;
+  color: var(--text-secondary-color, #91b9cd);
+  // Placement is the footer row's job: .series-information-right is the flex group that pins this
+  // to the right edge. An extra `margin-left: auto` here fought that grouping and shoved the
+  // neighbouring indicators around.
+  flex: 0 0 auto;
+
+  &:hover,
+  &[data-state='open'] {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.content {
+  background-color: white;
+  min-width: 180px;
+  // Above the sidepanel and the viewport chrome; Radix copies the content's z-index onto the
+  // popper wrapper, so it has to be set here rather than on an ancestor.
+  z-index: 1100;
+}
+
+.item {
+  cursor: pointer;
+}
+
+// Destructive item: the same red as the removal confirmation's Remove button, and it keeps that
+// red on hover instead of taking .DropdownItem's shared violet highlight -- at the moment the user
+// is about to commit to an irreversible delete, the colour should not change to a neutral one.
+.itemDestructive {
+  color: #e0574a;
+
+  svg {
+    fill: #e0574a;
+  }
+
+  &[data-highlighted] {
+    background-color: #e0574a;
+    color: #ffffff;
+
+    svg {
+      fill: #ffffff;
+    }
+  }
+}

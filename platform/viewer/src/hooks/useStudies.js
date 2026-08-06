@@ -5,6 +5,8 @@ import moment from 'moment';
 import OHIF from '@ohif/core';
 import DICOMWeb from '@ohif/core/src/DICOMWeb';
 
+import { STUDY_LIST_QUERY_KEY } from './queryKeys';
+
 const DISPLAY_TYPES = {
   'Code String': 'string',
   Date: 'date',
@@ -104,9 +106,15 @@ async function getStudyList({
  * }} params
  */
 
+// Re-exported for callers that already import this hook; defined in ./queryKeys so that
+// invalidating the study list never requires importing this module.
+export { STUDY_LIST_QUERY_KEY };
+
+
 export default function useStudies(params) {
   return useQuery({
     queryKey: [
+      STUDY_LIST_QUERY_KEY,
       params.isForce,
       params.server?.perms?.query,
       params.server?.token,

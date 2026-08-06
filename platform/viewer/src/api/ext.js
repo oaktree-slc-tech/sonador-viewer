@@ -118,6 +118,94 @@ export const fetchStudyAclPermissions = (server, studyId) => {
 }
 
 
+export const fetchSeriesAclPermissions = (server, seriesId) => {
+  // Retrieve ACL permissions for the provided series ID.
+  //
+  // Direct analogue of fetchStudyAclPermissions above; the payload differs only in carrying
+  // Level: 'Series' and a SeriesInstanceUID key alongside the same PascalCase `perms` object
+  // ({ View, Modify, Remove, CommentEdit, CommentView, ACL }).
+  //
+  // Series-granular grants are why this exists (ohif-viewers#127, FR-9): a user can hold `view`
+  // on one series of a study without holding it on the study, and `activeServer.perms` is
+  // wildcard-only, so neither the server flag nor the study resource-acl can authorise them.
+  // Callers combine the two — the effective permission is the study/server grant OR the series
+  // grant, never the series grant alone.
+
+  return fetch(urlUtil.urlJoin(server.wadoRoot, 'series', seriesId, 'resource-acl'), {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  }).then((res) => res.json());
+}
+
+
+const _removeResource = async (server, resourceType, resourceId) => {
+  // Permanently remove an imaging resource from the imaging server.
+  //
+  // removeStudy and removeSeries below are the ONLY entry points to resource removal in the
+  // viewer (ohif-viewers#127, AR-1), the same discipline fetchDownloadStudies/fetchDownloadSeries
+  // document for archive export. No component issues its own DELETE: removal is irreversible, and
+  // a second code path is a second place for the error handling, the 404 semantics and the
+  // redirect behavior below to drift.
+  //
+  // REDIRECT — do not "fix" this by setting a `redirect` option. The gateway answers 307 with a
+  // Location pointing at the Orthanc-native resource endpoint, and 307 preserves the method, so
+  // fetch's DEFAULT follow behavior re-issues the DELETE at the target and that is what actually
+  // performs the deletion. `redirect: 'manual'` yields an opaque response whose headers cannot be
+  // read, so the Location cannot be recovered and the follow-up cannot be issued by hand. The
+  // request shape here deliberately mirrors the archive helpers, which follow the same gateway's
+  // redirect in production. (A regression to 302 on the server side would let the user agent
+  // rewrite DELETE to GET and silently delete nothing — that is asserted server-side, in
+  // orthanc-sonador#57.)
+  const url = urlUtil.urlJoin(server.wadoRoot, resourceType, resourceId, 'manage');
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+
+  // 404 is success, not failure (FR-15). The resource is already gone — a double-click, or a row
+  // that went stale while the study list sat open — and the caller's terminal state is the same
+  // either way. Raising an error here would put an Issues-list entry behind every double-click.
+  if (response.ok || response.status === 404) {
+    return { url, status: response.status, alreadyRemoved: response.status === 404 };
+  }
+
+  // Capture the body so the failure notification can carry it (FR-13). Read as text rather than
+  // JSON: a 403 from the authorization plugin and a 500 from the gateway do not agree on a
+  // content type, and a parse failure here would replace a diagnosable error with a useless one.
+  let body;
+  try {
+    body = await response.text();
+  } catch (err) {
+    body = undefined;
+  }
+
+  const error = new Error(`Unable to remove ${resourceType}=${resourceId} (HTTP ${response.status})`);
+  error.url = url;
+  error.status = response.status;
+  error.body = body;
+
+  throw error;
+}
+
+
+export const removeStudy = (server, studyId) => {
+  // Permanently remove a study, and every series and instance beneath it, from the imaging
+  // server. Hard delete — Orthanc has no undo, no soft delete and no recycle bin. Distinct from
+  // LocalCacheService.removeStudy, which evicts this browser's offline copy and touches nothing
+  // on the server (ohif-viewers#125).
+
+  return _removeResource(server, 'studies', studyId);
+}
+
+
+export const removeSeries = (server, seriesId) => {
+  // Permanently remove a series, and every instance beneath it, from the imaging server. Removing
+  // the last series of a study removes the study too, by Orthanc's cascade.
+
+  return _removeResource(server, 'series', seriesId);
+}
+
+
 export const fetchStudyWorklists = (server, studyId) => {
   // Retrieve the worklist items assigned to the provided study. Each item carries its
   // reviewer-facing Meta (RequestedProcedure, PerformedProcedure and the per-transition

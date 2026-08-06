@@ -63,16 +63,48 @@
       display: none
 
   .series-information
+    // One row, everything on a shared vertical centreline. `align-items: center` is what actually
+    // lines the indicators up: without it flex stretches each item to the row height and every
+    // glyph sits wherever its own box happens to put it.
     display: flex
     flex-direction: row
+    align-items: center
     justify-content: space-between
+    // Discernible separation from the series description above.
+    margin-top: 7px
+    min-height: 18px
+    gap: 8px
+
+    .series-information-left,
+    .series-information-right
+      display: flex
+      flex-direction: row
+      align-items: center
+      // Spacing between adjacent indicators, so nothing needs its own bespoke margin.
+      gap: 8px
+
+    .series-information-left
+      // May ellipsis; must not push the controls off the row.
+      min-width: 0
+      overflow: hidden
+
+    .series-information-right
+      // Never compresses -- the actions button and the status glyphs keep their size and the
+      // left group gives way instead.
+      flex: 0 0 auto
+      margin-left: auto
+
+    .item-series
+      display: flex
+      flex-direction: row
+      align-items: center
+      min-width: 0
 
     .item-frames .icon
       height: 18px
 
     .item-series.image-frames .icon
         background-color: var(--series-count-background-color);
-        margin-top: 6px
         position: relative
 
         &:after
@@ -91,25 +123,51 @@
           height: 11px
           width: 11px
 
+    .item-series.image-frames
+      // Clearance from the series number. The stacked-squares glyph hangs 4px up and LEFT of its
+      // own box (the :after above), so 4px of any gap is eaten before it reads as space: this is
+      // the row `gap` (8px) + 8px - the 4px overhang = 12px of visible separation.
+      margin-left: 8px
+
     .warning
-      margin: auto 0;
+      display: flex
+      align-items: center
       opacity: 1
       color: #e29e4a;
 
       svg
         width: 16px;
         height: 14px;
+        display: block
         pointer-events: inherit;
+
+    // Derived-resource link: this series has an associated DICOM-SEG or DICOM-SR.
+    .derived
+      display: flex
+      align-items: center
+      // On top of the row `gap`, so the link stands apart from the warning glyph on one side and
+      // the actions button on the other rather than reading as one run of icons: 8px + 5px = 13px
+      // of separation each way.
+      margin-left: 5px
+      margin-right: 5px
+      color: var(--active-color, #20a5d6);
+
+      svg
+        width: 14px;
+        height: 14px;
+        display: block
 
     // Offline-cache availability indicator (ohif-viewers#125, FR-8)
     .cache-indicator
-      margin: auto 0;
+      display: flex
+      align-items: center
       opacity: 1
       color: var(--active-color, #20a5d6);
 
       svg
         width: 16px;
         height: 16px;
+        display: block
         pointer-events: inherit;
 
 
@@ -117,17 +175,22 @@
       color: var(--text-secondary-color);
       display: inline-block
       font-size: 12px
+      line-height: 1
       margin-left: 4px
       overflow: hidden
       text-overflow: ellipsis
       white-space: nowrap
-      width: calc(100% - 15px)
-      vertical-align: middle
+      // NOT `width: calc(100% - 15px)`. A percentage width on a flex item resolves against the
+      // whole row, so each indicator claimed nearly the full width and they rendered on top of
+      // one another. These are short numbers -- size to content and cap it.
+      max-width: 72px
 
     .icon
       color: var(--active-color);
       display: inline-block
+      flex: 0 0 auto
       font-size: 10px
       font-weight: 900
+      line-height: 1
       text-align: right
       width: 11px

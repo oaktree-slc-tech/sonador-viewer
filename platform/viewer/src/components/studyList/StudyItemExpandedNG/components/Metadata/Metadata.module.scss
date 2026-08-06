@@ -21,6 +21,25 @@
       cursor: pointer;
     }
 
+    // Series Actions trigger (ohif-viewers#127, FR-1). The header is a plain flex row with no
+    // justify-content, so the trigger claims the remaining space itself instead of the row
+    // redistributing its existing children.
+    .seriesActionsTrigger {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 24px;
+      width: 24px;
+      border-radius: 4px;
+      color: #d3d3d3;
+
+      &:hover,
+      &[data-state='open'] {
+        background-color: #27292d;
+      }
+    }
+
     .metadataDropdown {
       position: absolute;
       top: calc(100% + 10px);
@@ -172,6 +191,51 @@
 
     .contentMetadataItemLabel {
       font-weight: 700;
+    }
+  }
+}
+
+
+// Series Actions menu surface (ohif-viewers#127, FR-5).
+//
+// Matches the Open in Viewer dropdown beside it: a WHITE popover with dark text, from
+// radixUi's shared .Content and .DropdownItem. The popover is a light surface floating over the
+// drawer's dark chrome, not a continuation of it, so it does not inherit the drawer's colours —
+// and this menu must not diverge from the dropdown it sits next to.
+//
+// This class exists only to mirror .moreViewersContentContainer's explicit white background;
+// there is deliberately no text, icon or highlight override, so the two menus cannot drift.
+// `cursor: pointer` is the one addition — .DropdownItem does not set it.
+//
+// Declared at the top level rather than nested under .contentMetadata because Radix portals the
+// content out of this subtree; a nested selector would compile to `.contentMetadata .x` and never
+// match.
+.seriesActionsContent {
+  background-color: white;
+
+  .seriesActionsItem {
+    cursor: pointer;
+  }
+
+  // Destructive item: the same red the Clear Storage / Remove confirmations use, so an
+  // irreversible delete does not sit in the menu looking like the export above it. This is the
+  // one place the menu deliberately departs from the Open in Viewer dropdown's treatment — it
+  // also overrides .DropdownItem's shared violet highlight, which would otherwise drop the red
+  // on hover, at the moment the user is about to commit to the delete.
+  .seriesActionsItemDestructive {
+    color: #e0574a;
+
+    svg {
+      fill: #e0574a;
+    }
+
+    &[data-highlighted] {
+      background-color: #e0574a;
+      color: #ffffff;
+
+      svg {
+        fill: #ffffff;
+      }
     }
   }
 }

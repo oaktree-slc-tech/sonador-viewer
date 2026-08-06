@@ -5,6 +5,7 @@ import { log, metadata, studies, utils, display } from '@ohif/core';
 
 import { extensionManager } from '../App';
 import AppContext from '../context/AppContext';
+import { SERIES_METADATA_QUERY_KEY } from './queryKeys';
 const { OHIFStudyMetadata, OHIFSeriesMetadata } = metadata;
 const { retrieveStudiesMetadata } = studies;
 const { studyMetadataManager } = utils;
@@ -171,12 +172,18 @@ const updateStudyMetadataManager = (study, studyMetadata) => {
 };
 
 
+// Re-exported for callers that already import this hook. The constant itself lives in
+// ./queryKeys, because this module imports `extensionManager` from '../App' and anything
+// importable from an extension must not be able to reach it — see queryKeys.js.
+export { SERIES_METADATA_QUERY_KEY };
+
+
 export default function useSeriesMetadata({ studyId, server, mapToThumbnails = true }) {
   const { appConfig = {} } = useContext(AppContext);
 
   return useQuery({
     queryFn: () => loadStudies(studyId, server, appConfig),
-    queryKey: [JSON.stringify(server), studyId],
+    queryKey: [SERIES_METADATA_QUERY_KEY, JSON.stringify(server), studyId],
     enabled: !!JSON.stringify(server) && !!studyId,
     select: (response) => {
       if (mapToThumbnails) {

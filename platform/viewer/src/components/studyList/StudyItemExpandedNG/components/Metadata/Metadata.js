@@ -1,28 +1,47 @@
 import _ from 'lodash';
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 
+import classNames from 'classnames';
 import moment from 'moment';
 import PropTypes from 'prop-types';
+
+import { DropdownMenu } from 'radix-ui';
+import { DotsVerticalIcon } from '@radix-ui/react-icons';
 
 import OHIF, { display, redux } from '@ohif/core';
 import { useDebounce } from '@ohif/ui';
 
 import { ReactComponent as ClosedEyeIcon } from '@ohif/ui/src/elements/Svg/svgs/closed-eye.svg';
+import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
+import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
 import useClickOutside from '../../../../../hooks/useClickOutside';
 import useTags from '../../../../../hooks/useTags';
 import { useMetadataSettingsStore } from '../../../../../store/useMetadataSettingsStore';
 
+import radixStyles from '../../../../../styles/radixUi.module.scss';
 import styles from './Metadata.module.scss';
 
 
-export default function Metadata({ study, selectedSeries, seriesCount }) {
+export default function Metadata({
+  study,
+  selectedSeries,
+  seriesCount,
+  seriesAclView = false,
+  seriesAclRemove = false,
+  onDownloadSeries,
+  onRemoveSeries,
+  onSeriesActionsOpen,
+}) {
   // Display study and series metadata
+
+  const { t } = useTranslation('StudyList');
 
   // Retrieve tags and metadata settings
   const { displaySetService } = display.DisplaySetApi.Instance;
@@ -142,6 +161,43 @@ export default function Metadata({ study, selectedSeries, seriesCount }) {
   const debouncedExtendedMetaSearch = useDebounce(extendedMetaSearch, 500);
 
 
+  // Series-scoped actions (ohif-viewers#127, FR-1/FR-2). The menu describes the SELECTED SERIES,
+  // so it is absent while the STUDY tile is selected, and absent again when the user holds none of
+  // the permissions its items need — a trigger that opens an empty menu, or one that is rendered
+  // disabled, both advertise an operation the user cannot perform.
+  const seriesActions = [];
+
+  if (seriesAclView) {
+    seriesActions.push({
+      // Export this series as a .zip through the tracked archive queue. Named "Download Series" —
+      // not "Download" — because the study-list row menu already carries a study-scoped
+      // "Download", and #125's "Save Offline Copy"/"Remove Offline Copy" are a different
+      // destination entirely (AR-9).
+      id: 'download-series',
+      label: t('Download Series'),
+      Icon: DownloadIcon,
+      iconClassName: classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon),
+      onSelect: onDownloadSeries,
+    });
+  }
+
+  if (seriesAclRemove) {
+    seriesActions.push({
+      // Permanently deletes the series from the imaging server. Named "Remove Series" against
+      // #125's "Remove Offline Copy" — the two are not variants of one operation, and the
+      // confirmation says which one this is in full (AR-9).
+      id: 'remove-series',
+      label: t('Remove Series'),
+      Icon: TrashBinIcon,
+      iconClassName: classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon),
+      itemClassName: styles.seriesActionsItemDestructive,
+      onSelect: onRemoveSeries,
+    });
+  }
+
+  const showSeriesActions = !!selectedSeries && seriesActions.length > 0;
+
+
   return (
     <div className={styles.contentMetadata}>
       <div className={styles.contentMetadataHeader} ref={ref}>
@@ -150,7 +206,48 @@ export default function Metadata({ study, selectedSeries, seriesCount }) {
           onClick={() => setIsMetadataDropdownOpen((prevState) => !prevState)}
         />
         <p className={styles.contentMetadataTitle}>Metadata</p>
-        
+
+        {showSeriesActions && (
+          // Right-aligned within the header: .contentMetadataHeader is a flex row with no
+          // justify-content, so the trigger pushes itself over with margin-left: auto rather than
+          // the whole row changing its distribution (which would move the filter icon and title).
+          <DropdownMenu.Root
+            onOpenChange={(open) => {
+              if (open && onSeriesActionsOpen) {
+                onSeriesActionsOpen();
+              }
+            }}
+          >
+            <DropdownMenu.Trigger asChild>
+              <button
+                className={classNames(radixStyles.IconButton, styles.seriesActionsTrigger)}
+                aria-label={t('Series Actions')}
+              >
+                <DotsVerticalIcon height={18} width={18} />
+              </button>
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className={classNames(radixStyles.Content, styles.seriesActionsContent)}
+                align="end"
+                sideOffset={5}
+              >
+                {seriesActions.map(({ id, label, Icon, iconClassName, itemClassName, onSelect }) => (
+                  <DropdownMenu.Item
+                    key={id}
+                    className={classNames(radixStyles.DropdownItem, styles.seriesActionsItem, itemClassName)}
+                    onSelect={() => onSelect && onSelect()}
+                  >
+                    <Icon className={iconClassName} />
+                    <span>{label}</span>
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        )}
+
         {isMetadataDropdownOpen && (
           <div className={styles.metadataDropdown}>
             <p className={styles.metadataDropdownTitle}>Metadata Settings</p>
@@ -239,5 +336,15 @@ export default function Metadata({ study, selectedSeries, seriesCount }) {
 Metadata.propTypes = {
   study: PropTypes.object.isRequired,
   series: PropTypes.object,
-  selectedSeries: PropTypes.oneOfType(null, PropTypes.string)
+  // The selected thumbnail, or null while the STUDY tile is selected. (Previously declared as
+  // `PropTypes.oneOfType(null, PropTypes.string)` — wrong arity and wrong type for what is passed.)
+  selectedSeries: PropTypes.object,
+  seriesCount: PropTypes.number,
+  // Series-scoped permissions and handlers are resolved by the drawer and passed down; this stays
+  // a presentation component and does no fetching of its own (AR-8).
+  seriesAclView: PropTypes.bool,
+  seriesAclRemove: PropTypes.bool,
+  onDownloadSeries: PropTypes.func,
+  onRemoveSeries: PropTypes.func,
+  onSeriesActionsOpen: PropTypes.func,
 };
