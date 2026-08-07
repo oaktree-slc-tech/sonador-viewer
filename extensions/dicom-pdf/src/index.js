@@ -1,26 +1,10 @@
 import _ from 'lodash';
 import React from 'react';
 
-import OHIF, { ViewportRefsProvider } from '@ohif/core';
-
 import dicomPdfVersion from '../package.json';
 
+import ConnectedOHIFDicomPDFViewport from './connectedComponents/ConnectedOHIFDicomPDFViewport.js';
 import OHIFDicomPDFSopClassHandler from './OHIFDicomPDFSopClassHandler.js';
-
-const Component = React.lazy(() => {
-  return import('./viewports/OHIFCornerstonePdfViewport');
-});
-
-
-const ConnectedOHIFDicomPDFViewer = (props) => {
-  return (
-    <React.Suspense fallback={<div>Loading...</div>}>
-      <ViewportRefsProvider>
-        <Component {...props} />
-      </ViewportRefsProvider>
-    </React.Suspense>
-  );
-};
 
 
 export default {
@@ -45,7 +29,7 @@ export default {
 
     return (props) => {
       return (
-        <ConnectedOHIFDicomPDFViewer
+        <ConnectedOHIFDicomPDFViewport
           {...props}
           servicesManager={servicesManager}
           commandsManager={commandsManager}
