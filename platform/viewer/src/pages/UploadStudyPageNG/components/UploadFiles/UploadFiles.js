@@ -244,11 +244,6 @@ export default function UploadFiles({ onUpload }) {
 
   return (
     <>
-      <div className={styles.header}>
-        <p className={styles.headerLabel}>{t('Upload')}</p>
-        <p className={styles.investigational}>{t('INVESTIGATIONAL USE ONLY')}</p>
-      </div>
-
       <div className={styles.uploadContainer}>
         
         {/* File Upload Controls: Browse Files, Browse Folders, Drag/Drop */}

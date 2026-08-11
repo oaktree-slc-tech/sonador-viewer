@@ -1,51 +1,5 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 25px;
-
-  // Study-list padding rail (Layout is noHorizontalPadding, matching Studies/Worklist/Shared).
-  padding-left: 40px;
-  padding-right: 40px;
-
-  @include lg {
-    padding-left: 30px;
-    padding-right: 30px;
-  }
-
-  @include xs {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-
-  .headerLabel {
-    margin: 0;
-    font-size: 24px;
-    line-height: 28px;
-    color: #ffffff;
-    font-weight: 700;
-
-    @include md {
-      font-size: 22px;
-      line-height: 26px;
-    }
-  }
-
-  .investigational {
-    margin: 0;
-    font-size: 16px;
-    line-height: 18.75px;
-    color: #ffffff;
-
-    @include md {
-      font-size: 12px;
-      line-height: 14px;
-    }
-  }
-}
-
 .uploadContainer {
   display: flex;
   gap: 25px;
