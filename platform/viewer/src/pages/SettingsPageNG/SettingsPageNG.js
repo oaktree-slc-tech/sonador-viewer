@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import OHIF from '@ohif/core';
-import { AboutContent } from '@ohif/ui';
 
+import AboutSonador from '../../components/AboutSonador/AboutSonador';
 import DeviceList from '../../components/DistortionFilter/DeviceList';
 import ViewerMetadataSettings from '../../connectedComponents/ViewerMetadataSettings/ViewerMetadataSettings';
 import Layout from '../../layouts/Layout/Layout';
@@ -68,7 +68,7 @@ export default function SettingsPageNG() {
     if (selectedTabId === 'about') {
       return <div>
         {isDesktop && <TabHeaderNG title="About" />}
-        <AboutContent />
+        <AboutSonador />
       </div>;
     }
 

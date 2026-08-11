@@ -1,4 +1,5 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
+@import '@ohif/sonador-viewer/src/styles/variables';
 
 .header {
   display: flex;
@@ -18,16 +19,14 @@
     }
   }
 
+  // Matches `.useOnly` in PageHeaderNG so the notice reads identically here and on the study list,
+  // worklists and uploads. No breakpoint override, for the same reason: those pages hold one size.
   .investigational {
     margin: 0;
-    font-size: 16px;
-    line-height: 18.75px;
-    color: #ffffff;
-
-    @include lg {
-      font-size: 12px;
-      line-height: 14px;
-    }
+    line-height: 1;
+    font-size: 13px;
+    font-weight: 700;
+    color: $header-notice-blue;
   }
 }
 

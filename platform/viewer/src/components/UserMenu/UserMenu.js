@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import PropTypes from 'prop-types';
 
-import { AboutContent, withModal } from '@ohif/ui';
+import { withModal } from '@ohif/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,7 @@ import {
 
 import { useAppContext } from '../../context/AppContext';
 import UserManagerContext from '../../context/UserManagerContext';
+import AboutSonador from '../AboutSonador/AboutSonador';
 
 
 /**
@@ -154,7 +155,7 @@ function UserMenu({ modal: { show }, align = 'end', className }) {
         )}
 
         <DropdownMenuItem
-          onSelect={() => show({ content: AboutContent, title: t('Sonador Viewer / About') })}
+          onSelect={() => show({ content: AboutSonador, title: t('Sonador Viewer / About') })}
         >
           <Icons.Info className="h-5 w-5" />
           <span className="pl-2">{t('About')}</span>

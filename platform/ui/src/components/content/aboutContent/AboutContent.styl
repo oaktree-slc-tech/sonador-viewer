@@ -1,20 +1,72 @@
 @import '../../../design/styles/common/button.styl'
 @import '../../../design/styles/common/table.styl'
 
+// Accent shared with the "Investigational Use Only" notice and the page headers on the study list,
+// worklists and uploads ($header-notice-blue in the viewer's variables.scss). Repeated as a literal
+// because this package cannot reach the viewer's SCSS variables. The global anchor colour, #337ab7,
+// is too dark against this panel.
+$notice-blue = #91b9cd
+
 .AboutContent
   .btn
     border-color: #ccc;
 
-  .table
-    thead:first-child
-      tr:first-child
-        th, td
-          border-top: 0;
+  h3
+    margin-bottom: 24px;
 
-    thead, tbody, tfoot
+  .table
+    a
+      color: $notice-blue;
+
+    tbody
+      // `table.table > tbody tr` in StudyList.styl is unscoped and paints every table in the app
+      // black. Overridden once here rather than per row.
       tr
+        background-color: transparent;
+
         th, td
           padding: 8px;
           line-height: 1.42857143;
           vertical-align: top;
           border-top: 1px solid #ddd;
+
+        // Label cells are row headers for assistive technology, not emphasis.
+        th[scope='row']
+          font-weight: 400;
+
+      // Group heading. Sized in `em` because the table inherits its font size, and inherits a
+      // different one in the About modal than on the settings page.
+      //
+      // No border above: groups are separated by the whitespace of `padding-top`, so a rule there
+      // would read as an underline on the last row of the group above. The first row of the group
+      // keeps its own `border-top`, which underlines the heading.
+      tr.sectionRow
+        th
+          padding-top: 22px;
+          font-size: 1.18em;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: $notice-blue;
+          border-top: 0;
+
+      tr.sectionRow:first-child
+        th
+          padding-top: 8px;
+
+  // Independently versioned components sharing a row. The gap is wide enough that they read as
+  // separate software rather than one compound version string.
+  .segments
+    display: inline-flex;
+    flex-wrap: wrap;
+    column-gap: 32px;
+    row-gap: 2px;
+
+  .segment
+    white-space: nowrap;
+
+  // Service URL belonging to the value above it. Styled identically to the Source Code links --
+  // same colour, size and face -- so every URL in the table reads the same way.
+  .detail
+    margin-top: 2px;
+    word-break: break-all;
