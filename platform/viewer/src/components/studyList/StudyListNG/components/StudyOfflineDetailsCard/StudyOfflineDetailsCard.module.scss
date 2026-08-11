@@ -3,16 +3,19 @@
 //
 // ui-next HoverCardContent portals to document.body, so it must out-stack the ModalNG content
 // (z-index 200) it is opened over — Radix copies the CONTENT's z-index onto the popper wrapper, so
-// it is set here, on the content class. Width overrides the default w-64. Colors override the
-// component's viewer-aqua theme tokens (border-input / text-muted-foreground) with the study-list
-// gray/black scheme; these unlayered rules outrank the layered utilities.
+// it is set here, on the content class. Width overrides the default w-64, and the background and
+// text colour the component's theme tokens with the study list's gray/black scheme.
+//
+// The border is NOT set here: HoverCardContent carries the --overlay-line token, which is the
+// canonical charcoal for every floating menu surface (ohif-viewers#128). This rule used to restate
+// it locally to escape the aqua border-input token, which is how the app ended up framing the same
+// Radix primitive in two different colours depending on the consumer.
 .detailsCard {
   z-index: 1080;
   width: auto;
   min-width: 360px;
   max-width: 520px;
   background: #1e1f23;
-  border-color: #3a3d44;
   color: #d3d3d3;
 }
 

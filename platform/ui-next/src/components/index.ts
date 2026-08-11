@@ -30,6 +30,7 @@ import {
 } from './Dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
 import { HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal } from './HoverCard';
+import { Popover, PopoverTrigger, PopoverAnchor, PopoverContent, PopoverPortal } from './Popover';
 import { Toaster, toast } from './Sonner';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
@@ -62,6 +63,7 @@ export {
   Slider,
   ScrollArea, ScrollBar,
   HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal,
+  Popover, PopoverTrigger, PopoverAnchor, PopoverContent, PopoverPortal,
   SegmentationTable,
   InputDialog, PresetDialog,
   FooterAction,

@@ -2,7 +2,10 @@
 @import '../../styles/variables';
 
 .contentContainer {
-  margin-left: $sidebarWidth;
+  // Follows the rail off the same custom property the sidebar reads, so the two animate together
+  // and cannot land on disagreeing widths however fast the collapse control is toggled.
+  margin-left: var(--sonador-sidebar-width, #{$sidebarWidth});
+  transition: margin-left var(--transition-duration) var(--transition-effect);
   height: fit-content;
   min-height: 100dvh;
 

@@ -12,8 +12,22 @@
   flex-direction: column;
   height: 100%;
   position: fixed;
-  overflow: auto;
-  width: $sidebarWidth;
+
+  // Vertical only. `overflow: auto` also armed the horizontal axis, which showed during the
+  // expand transition: the mode flips to `full` on the first frame, so the labels and the 165px
+  // wordmark are laid out at full size while the rail is still animating up from 64px. For those
+  // 300ms the content is wider than the box and a horizontal scrollbar appeared along the bottom,
+  // then vanished once the width caught up. Collapsing never showed it because the labels unmount
+  // immediately and the content is narrower than the rail the whole way down.
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  // Driven by the sidebar store through an inline custom property on the Layout root, so the rail
+  // and the content area's left margin animate off one value and cannot disagree mid-transition.
+  // The SCSS fallback keeps the tablet/mobile rules below working unchanged.
+  width: var(--sonador-sidebar-width, #{$sidebarWidth});
+  box-sizing: border-box;
+  transition: width var(--transition-duration) var(--transition-effect);
 
   @include lg {
     position: static;
@@ -43,6 +57,14 @@
     color: #60646d;
     text-decoration: none;
 
+    // Every icon in the rail takes its colour from the row. A CSS `fill` outranks the presentation
+    // attribute the SVGs carry, and their paths set no fill of their own, so this reaches them all
+    // — which is what replaced the old per-icon `fill={isXPage ? ... : ...}` props.
+    svg {
+      fill: currentColor;
+      flex-shrink: 0;
+    }
+
     @include lg {
       &:first-of-type {
         margin-top: 0;
@@ -57,7 +79,27 @@
 
     .name {
       font-size: 18px;
+      white-space: nowrap;
     }
+  }
+
+  // Rows rendered as <button> (the narrow-mode section triggers and the collapse control) have to
+  // be stripped back to look like the links beside them.
+  button.menuItem {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  // Trailing affordance on a section that has sub-navigation it is not currently showing inline.
+  // chevron-down rotated a quarter turn, so no second asset is needed.
+  .chevron {
+    margin-left: auto;
+    transform: rotate(-90deg);
+    flex-shrink: 0;
   }
 
   .navigation {
@@ -104,15 +146,40 @@
       width: 4px;
       background: #ffffff;
     }
-
-    .count {
-      background-color: #1e1f23;
-      border-radius: 5px;
-      padding: 2px;
-    }
   }
 
   .active {
     color: #fff;
+  }
+}
+
+
+// Narrow rail: icons only, everything else either hidden or centred in 40px. Scoped to the desktop
+// rail — the tablet/mobile drawer always renders in full mode, so none of this applies there.
+.ngSidebar.narrow {
+  // Gutter either side of the 40px icon button, so the icons are not flush against the window
+  // chrome. SIDEBAR_WIDTHS in the store accounts for both gutters in the 64px total.
+  padding: 30px $sidebarNarrowGutter 50px;
+  align-items: center;
+
+  .logoWrapper {
+    padding: 6px;
+    margin-bottom: 15px;
+  }
+
+  // 40px boxes sitting shoulder to shoulder need a tighter rhythm than the 30px one the labelled
+  // rows use, or the rail reads as three unrelated icons.
+  .menuItem {
+    justify-content: center;
+    column-gap: 0;
+    width: 40px;
+    height: 40px;
+    margin-top: 10px;
+    border-radius: 5px;
+    box-sizing: border-box;
+
+    &.active {
+      background-color: #1e1f23;
+    }
   }
 }

@@ -40,6 +40,8 @@ import 'regenerator-runtime/runtime';
 import viewerPackage from '../package.json';
 
 import App from './App.js';
+import OHIFLogo from './components/OHIFLogo/OHIFLogo.js';
+import SonadorMark from './components/OHIFLogo/SonadorMark.js';
 import { uiNotificationService } from '@ohif/core';
 
 const initOHIFViewer = function () {
@@ -131,11 +133,21 @@ if (window && window.sonador && window.sonador.host) {
     .then(function (ohifconfig) {
       window.config = ohifconfig;
 
-      // Logos and branding for viewer
+      // Logos and branding for viewer.
+      //
+      // App.js hands this object straight to WhiteLabelingContext.Provider, replacing the context
+      // defaults wholesale rather than merging with them — so every branding function the viewer
+      // calls has to be defined here, with its own fallback, or the default is unreachable.
+      var branding = ohifconfig.branding || {};
+
       window.config.whiteLabeling = {
-        
+
         // Logo
         createLogoComponentFn: function (React) {
+          if (!branding.logo) {
+            return OHIFLogo();
+          }
+
           return React.createElement('a', {
             // Create link with Sonador message
             target: '_self',
@@ -145,7 +157,30 @@ if (window && window.sonador && window.sonador.host) {
             style: {
               height: '36px',
               width: '165px',
-              backgroundImage: 'url(' + ohifconfig.branding.logo + ')',
+              backgroundImage: 'url(' + branding.logo + ')',
+              backgroundSize: 'contain',
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'center',
+            },
+          });
+        },
+
+        // Square mark for the collapsed sidebar (ohif-viewers#128). Falls back to the bundled
+        // Sonador mark when the site has no narrow logo configured.
+        createNarrowLogoComponentFn: function (React) {
+          if (!branding.logo_narrow) {
+            return SonadorMark();
+          }
+
+          return React.createElement('a', {
+            target: '_self',
+            href: '/',
+            className: 'header-brand-narrow',
+            rel: 'noopener noreferrer',
+            style: {
+              height: '28px',
+              width: '28px',
+              backgroundImage: 'url(' + branding.logo_narrow + ')',
               backgroundSize: 'contain',
               backgroundRepeat: 'no-repeat',
               backgroundPosition: 'center',

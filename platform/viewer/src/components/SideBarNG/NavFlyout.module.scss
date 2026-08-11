@@ -1,0 +1,142 @@
+// Skin for the sidebar flyout (ohif-viewers#128). The Radix behaviour lives in NavFlyout.js and
+// useFlyoutTrigger; everything visual is here, because Tailwind utilities authored under
+// platform/viewer/src are never generated (the @source list in ui-next's tailwind-integration.css
+// does not reach this tree).
+
+.flyout {
+  // Radix copies the CONTENT's z-index onto the popper wrapper it portals into <body>, so this is
+  // the value that decides stacking. It has to clear the legacy react-modal overlay at 1071 — the
+  // Tailwind z-scale caps at 50, and tailwind-integration.css's 1080 lift is scoped to
+  // [data-radix-popper-content-wrapper] [role='listbox'], which a Popover is not. 1080 matches the
+  // studylist's other portalled surfaces (StudyOfflineDetailsCard, DownloadManagerModal).
+  z-index: 1080;
+
+  // Chrome — background, border colour, radius, padding, min-width, shadow — deliberately NOT set
+  // here. It all comes from PopoverContent, which carries the same utilities DropdownMenuContent
+  // does, so this flyout and the account menu are the same panel at the same size with the same
+  // 4px inset. Restating any of it locally is how the study list ended up with menus in two
+  // different colours, and it is not even reliably winnable: this build emits Tailwind utilities
+  // UNLAYERED, so a module rule and a utility of equal specificity are settled by stylesheet order
+  // rather than by the layer precedence one would expect.
+
+  // The entrance is PopoverContent's too — its data-[state]/data-[side] animate-in utilities are
+  // the same ones DropdownMenuContent uses, so the flyout and the account menu enter identically.
+  // A local copy of the keyframes here was a third implementation of one animation, and it won:
+  // setting animation-name overrode the wrapper's, which is precisely the divergence this MR is
+  // trying to remove.
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+// Section label. Non-interactive: it names the group the rows below belong to, and in narrow mode
+// it is the only thing that carries the section's identity once the label is gone from the rail.
+// It therefore has to outrank the rows beneath it — 18px matches the weight and size the same
+// label has on the expanded rail, so collapsing the sidebar does not demote it.
+//
+// Structure follows the account menu, which is Label + Separator + items.
+.header {
+  padding: 6px 8px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+// The separator, applied only when rows follow: a header-only flyout (Shared, Upload, the collapse
+// control) is a single label and has nothing to be divided from.
+.headerDivided {
+  margin-bottom: 4px;
+  border-bottom: 1px solid hsl(var(--overlay-line));
+}
+
+// One CONTINUOUS rule down the left of the group, exactly as the inline sub-navigation draws it in
+// full mode: the border is on the wrapper so it spans the gaps between rows. The 8px indent is
+// what keeps it legible as a grouping device now that the panel's own inset is only 4px — flush
+// against the panel border it reads as a rendering artefact rather than as structure.
+.group {
+  border-left: 2px solid #60646d;
+  margin-left: 8px;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+
+  // 8px vertical, against 8px horizontal + the panel's own 4px, so the whitespace around the group
+  // is the same 12px on every side: 4 (separator gap) + 8 here from the rule down to the first
+  // row's text, 8 + 4 (panel) from the last row's text to the bottom edge, and 4 + 8 either side.
+  // It also sets the gap between rows at 16px, which is what stops them reading as cramped.
+  padding: 8px;
+  box-sizing: border-box;
+
+  // Square against the rule, rounded away from it: a fully rounded row would pull its hover fill
+  // off the rule and break the continuous line the group is drawing.
+  border-radius: 0 3px 3px 0;
+  color: #60646d;
+  font-size: 16px;
+  text-decoration: none;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    color: #ffffff;
+
+    // The same fill DropdownMenuItem uses for its hover/focus state.
+    background-color: hsl(var(--accent));
+  }
+
+  // Active row: a thicker white segment overlaid on the rule, spanning just this row, and the
+  // label at the weight the top-level items use.
+  &.active {
+    color: #ffffff;
+    font-weight: 600;
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: -2px;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #ffffff;
+    }
+  }
+
+  // Keyboard focus reads as the same fill as hover, which is how DropdownMenuItem marks itself
+  // (focus:bg-accent). An outline ring here would put yet another accent colour on a menu.
+  &:focus-visible {
+    outline: none;
+    color: #ffffff;
+    background-color: hsl(var(--accent));
+  }
+}
+
+// Server rows carry a name and a type, so they stack rather than sitting on one line.
+.serverItem {
+  display: block;
+
+  .serverItemName {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 19px;
+  }
+
+  .serverItemType {
+    margin: 0;
+    font-size: 12px;
+    line-height: 14px;
+  }
+}
+
+
+
+

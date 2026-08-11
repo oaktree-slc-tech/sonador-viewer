@@ -1,4 +1,13 @@
+// Fallback for --sonador-sidebar-width, which is what actually drives the rail and the content
+// area's left margin at runtime (see useSidebarStore / Layout). Kept as a static value so the
+// tablet/mobile drawer rules, which never see the custom property, are unaffected.
 $sidebarWidth: 315px;
+
+// Gutter either side of the narrow rail's 40px icon button. There is deliberately no
+// $sidebarNarrowWidth to go with it: the narrow width is set at runtime from SIDEBAR_WIDTHS in
+// store/useSidebarStore.js through --sonador-sidebar-width, and a second copy here would be a
+// mirror nothing reads and nothing can keep honest.
+$sidebarNarrowGutter: 12px;
 
 // Secondary blue. The Investigational Use notice's colour, and the hover colour for every icon
 // control in the study-list title row (Downloads, Offline Storage, Account). Primary Blue #2e46e9

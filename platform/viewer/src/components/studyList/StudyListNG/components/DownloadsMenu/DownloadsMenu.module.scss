@@ -58,12 +58,8 @@
 }
 
 // -- Tooltip ------------------------------------------------------------------------------------
-// Swaps the ui-next aqua border-input token for the study list's gray (unlayered rule outranks the
-// layered utility), as the Offline Storage launcher does.
-
-.tooltipContent {
-  border-color: #3a3d44;
-}
+// No border override: TooltipContent carries the --overlay-line token, the canonical charcoal for
+// floating menu surfaces (ohif-viewers#128).
 
 .tooltipTitle {
   font-weight: 600;
@@ -82,15 +78,15 @@
 }
 
 // -- Panel --------------------------------------------------------------------------------------
-// Merges onto DropdownMenuContent, which ships tailwind padding/background/border utilities. These
-// rules are unlayered, so they win.
+// Merges onto DropdownMenuContent, which ships tailwind padding/background/border utilities. The
+// border colour is left to that component's --overlay-line token (ohif-viewers#128); everything
+// here is panel-specific sizing and surface.
 
 .panel {
   width: 420px;
   max-width: 92vw;
   padding: 0;
   background: #27292d;
-  border-color: #3a3d44;
   color: #fff;
   overflow: hidden;
 }

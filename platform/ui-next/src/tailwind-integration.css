@@ -94,6 +94,7 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-overlay-line: hsl(var(--overlay-line));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
@@ -234,12 +235,26 @@
  * `ohif-scrollbar` and the `overflow-y-scroll` utility.
  *
  * `.ohif-scrollbar` (from the unlayered assets/styles.css import) declares
- * `overflow-y: auto`. Because Tailwind v4 emits its utilities inside
- * `@layer utilities`, and unlayered declarations outrank ANY layered ones, that
- * `auto` overrides the element's `overflow-y-scroll` utility — even though the
- * utility has equal specificity. Under OHIF-v3's Tailwind v3 (flat cascade) the
- * utility wins instead, so the element keeps a permanently-reserved scrollbar
- * gutter.
+ * `overflow-y: auto`, and that `auto` overrides the element's
+ * `overflow-y-scroll` utility even though the two have equal specificity.
+ *
+ * CORRECTION (ohif-viewers#128): this was originally explained as Tailwind v4
+ * emitting utilities inside `@layer utilities`, with unlayered declarations
+ * outranking layered ones. That is Tailwind's standard behaviour but NOT what
+ * happens here — this file imports the bare `tailwindcss/utilities.css`
+ * (`@tailwind utilities;`) rather than `tailwindcss/index.css`, which is what
+ * opens with `@layer theme, base, components, utilities;`. Nothing establishes
+ * a utilities layer, so the emitted CSS has none: `@layer base` and
+ * `@layer properties` only. Both declarations are therefore unlayered and the
+ * cascade falls through to stylesheet ORDER, with assets/styles.css imported
+ * after the utilities.
+ *
+ * The fix below is unaffected, and its own reasoning was already right: it wins
+ * on specificity, which decides regardless of how the two got there.
+ *
+ * The practical rule this leaves: a CSS module cannot be relied on to override
+ * a ui-next utility, because the winner depends on chunk order. Own the value
+ * in a theme token or in the component, as --overlay-line does.
  *
  * Without that reserved gutter the DICOM Tag Browser's column header row no
  * longer matches the width of the virtualized list below it (whose scrollbar
@@ -280,6 +295,23 @@
     --destructive-foreground: 0 0% 98%;
     --border: 197 50% 50%;
     --input: 197 50% 50%;
+
+    /*
+     * Canonical outline for floating menu surfaces -- popovers, dropdowns, hover cards, tooltips.
+     * #3a3d44, the charcoal the study list already hand-patched onto DownloadsMenu and
+     * StudyOfflineDetailsCard.
+     *
+     * It exists because --border and --input above are hsl(197 50% 50%), an aqua carried over from
+     * OHIF v3's dark theme. That reads as a deliberate accent on a focused text input, but as a
+     * cyan halo around a menu -- and only the two surfaces that happened to override it locally
+     * escaped, so the same Radix primitive framed its menus in two different colours depending on
+     * which consumer rendered it.
+     *
+     * Deliberately a separate token rather than a change to --border/--input: those two also
+     * colour form controls and every `border-border` consumer across the extensions, which is a
+     * far wider blast radius than the menus this addresses.
+     */
+    --overlay-line: 222 8% 25%;
     --ring: 197 74% 52%;
     --radius: 0.5rem;
 

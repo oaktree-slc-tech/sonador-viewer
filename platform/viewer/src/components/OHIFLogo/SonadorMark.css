@@ -1,0 +1,24 @@
+/* Collapsed-sidebar mark. Kept alongside .header-brand so the two branding surfaces stay together;
+   the narrow rail is 40px, so the mark is boxed to 28px square and centred within it. */
+.header-brand-narrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.header-brand-narrow:hover,
+.header-brand-narrow:active,
+.header-brand-narrow:visited {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.header-brand-narrow svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
