@@ -1,5 +1,32 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 
+// Collapsed-rail trigger (ohif-viewers#128): the 240px picker reduced to the server icon alone,
+// sized to the 40px rail. The server list itself moves into a flyout (see NavFlyout).
+.narrowButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  box-sizing: border-box;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: #60646d;
+  cursor: pointer;
+
+  svg {
+    fill: currentColor;
+  }
+
+  &:hover,
+  &[aria-expanded='true'] {
+    color: #ffffff;
+    background-color: #1e1f23;
+  }
+}
+
 .container {
   position: relative;
 

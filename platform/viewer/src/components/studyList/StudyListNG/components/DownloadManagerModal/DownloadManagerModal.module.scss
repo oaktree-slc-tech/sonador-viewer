@@ -256,11 +256,10 @@
 
 // ui-next tooltip: TooltipContent portals to document.body, so it must out-stack the ModalNG
 // content (z-index 200) — Radix copies the CONTENT's z-index onto the popper wrapper, same
-// pattern as StudyOfflineDetailsCard's .detailsCard. Border swaps the aqua border-input token for
-// the dialog's gray.
+// pattern as StudyOfflineDetailsCard's .detailsCard. The border colour is left to
+// TooltipContent's own --overlay-line token (ohif-viewers#128).
 .tooltipContent {
   z-index: 1080;
-  border-color: #3a3d44;
 }
 
 .tooltipBody {

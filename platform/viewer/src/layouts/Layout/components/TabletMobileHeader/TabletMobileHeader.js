@@ -72,8 +72,10 @@ export default function TabletMobileHeader() {
           >
             <div className={styles.sideBarContainer}>
               <WhiteLabelingContext.Consumer>
+                {/* Always full width: the collapse control is a desktop affordance and the drawer
+                    must not inherit a collapsed desktop state (ohif-viewers#128, FR-19). */}
                 {(whiteLabeling) => (
-                  <SideBarNG>
+                  <SideBarNG mode="full">
                     {whiteLabeling?.createLogoComponentFn && whiteLabeling.createLogoComponentFn(React)}
                   </SideBarNG>
                 )}
