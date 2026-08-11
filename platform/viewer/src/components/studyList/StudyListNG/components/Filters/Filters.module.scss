@@ -1,158 +1,20 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 @import '@ohif/sonador-viewer/src/styles/variables';
 
-// Box size of the title-row icon controls: an 18px glyph plus the 2px padding each button carries.
-// The Investigational Use notice matches it so the three share a centerline.
-$header-control-size: 22px;
-
-// Air between the Investigational Use notice and the icon controls' separating rule. Deliberately
-// much wider than the 15px gap between the icons themselves, so the notice reads as its own thing.
-$header-notice-gap: 30px;
-
-.studyListHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-// Matches the Study Viewer header's notice (.header-menu .research-use in Header.css) so the two
-// surfaces read identically; already small enough that the lg step-down is unnecessary.
-//
-// Its own flex box with the icon controls' height: a bare text box is only as tall as its line, so
-// centering it against the taller icon buttons left the caps riding above their centerline. Giving
-// the label the same box height and centering the line inside it puts the two on one centerline.
-.useOnly {
-  display: flex;
-  align-items: center;
-  min-height: $header-control-size;
-  line-height: 1;
-  // Flex box, so the former text-align would be inert on the anonymous text item.
-  justify-content: flex-end;
-  font-size: 13px;
-  font-weight: 700;
-  color: $header-notice-blue;
-  margin: 0;
-}
-
-// Right-side group of the title row: the Investigational Use notice, then the Download Manager
-// launcher and account menu (ohif-viewers#125, FR-5), in the same order as the Study Viewer header.
-//
-// The trailing button carries 2px of its own padding, which would inset its glyph from the row's
-// padding rail; pulling the group out by that much lands the account icon's right edge on the rail
-// itself, mirroring where the page title's first glyph starts on the left.
-.headerRight {
-  display: flex;
-  align-items: center;
-  column-gap: $header-notice-gap;
-  margin-right: -2px;
-}
-
-// The icon controls, fenced off from the notice by a rule so the statutory label does not read as
-// a caption for them. The rule takes the controls' height (22px) rather than the row's, and sits
-// with equal air on both sides ($header-notice-gap before it, its own padding after).
-.headerControls {
-  display: flex;
-  align-items: center;
-  column-gap: 15px;
-  padding-left: $header-notice-gap;
-  border-left: 1px solid #3c4247;
-}
-
-// Account menu trigger (ohif-viewers#31). Sits immediately right of the offline storage toggle
-// and deliberately mirrors it exactly, so the two read as one group of title-row controls.
-.userMenu {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  outline: none;
-  padding: 2px;
-  cursor: pointer;
-  color: #fff;
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  &:hover {
-    color: $header-notice-blue;
-  }
-}
-
-// Download Manager launcher / offline-cache indicator, sized to fit within the title row.
-.downloadManager {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  outline: none;
-  padding: 2px;
-  cursor: pointer;
-  color: #fff;
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  &:hover {
-    color: $header-notice-blue;
-  }
-
-  .downloadBadge {
-    position: absolute;
-    top: -4px;
-    right: -6px;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
-    box-sizing: border-box;
-    border-radius: 7px;
-    background-color: #2e46e9;
-    color: #fff;
-    font-size: 9px;
-    line-height: 14px;
-    text-align: center;
-  }
-}
-
-// Launcher hover card: swap the ui-next aqua border-input token for the Offline Storage
-// dialog's gray (unlayered rule outranks the layered utility).
-.dmTooltipContent {
+// Refresh button's tooltip: swaps the ui-next aqua border-input token for the study list's gray
+// (unlayered rule outranks the layered utility). PageHeaderNG keeps its own copy for the controls
+// that moved there.
+.tooltipContent {
   border-color: #3a3d44;
 }
 
-.dmTooltipTitle {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
 
-.dmTooltipBody {
+.tooltipBody {
   font-size: 12px;
   line-height: 1.4;
   max-width: 220px;
 }
 
-.dmTooltipCount {
-  margin-top: 4px;
-  color: #2e46e9;
-}
-
-.title {
-  font-size: 24px;
-  margin: 0;
-  font-weight: 700;
-
-  @include lg {
-    font-size: 22px;
-  }
-}
 
 .topToolbar {
   display: flex;
@@ -302,24 +164,6 @@ $header-notice-gap: 30px;
 
 .filterSelectionDropdown {
   left: 0;
-}
-
-// Symmetric about the section's padding rail: the account icon's right edge is inset as far as the
-// page title's left edge. (.headerRight's -2px pulls the trailing button's own padding off the rail
-// so the two are measured glyph-to-glyph.)
-.studyListHeader {
-  padding-left: 40px;
-  padding-right: 40px;
-
-  @include lg {
-    padding-left: 30px;
-    padding-right: 30px;
-  }
-
-  @include xs {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
 }
 
 // The search bar/refresh row sits closer to the panel edges than the padding rail: its
