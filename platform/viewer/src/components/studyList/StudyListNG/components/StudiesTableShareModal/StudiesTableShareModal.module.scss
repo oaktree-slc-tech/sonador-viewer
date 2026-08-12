@@ -134,15 +134,25 @@
     }
   }
 
+  // Horizontal scrollport for the permissions table. With all six ACL permissions exposed the
+  // table is wider than the space beside the name column on a narrow window; it scrolls here
+  // rather than forcing the whole dialog wider than the viewport.
+  .tableScroll {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
   .table {
     th {
-      padding: 0 10px 10px; padding-top: 10px;
-      font-size: 16px;
+      padding: 0 8px 10px; padding-top: 10px;
+      font-size: 15px;
       line-height: 18px;
+      // "View Comments" must not wrap to two lines and misalign the header row.
+      white-space: nowrap;
     }
 
     td {
-      padding: 10px;
+      padding: 10px 8px;
       height: 54px;
     }
 

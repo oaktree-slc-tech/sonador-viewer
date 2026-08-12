@@ -30,6 +30,13 @@ $notice-blue = #91b9cd
           vertical-align: top;
           border-top: 1px solid #ddd;
 
+          // Every rule in this table is drawn by the row below it, never by the row above. Zeroed
+          // explicitly because settingsPanelTableStyles.module.scss declares bare `table th` /
+          // `table td` selectors -- CSS Modules only localises class names, so its `border-bottom`
+          // leaks globally the moment the settings page loads and would underline the last row of
+          // each group, where the whitespace is meant to do the dividing.
+          border-bottom: 0;
+
         // Label cells are row headers for assistive technology, not emphasis.
         th[scope='row']
           font-weight: 400;

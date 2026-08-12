@@ -1,23 +1,22 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useEffect, useRef,useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation,useNavigate } from 'react-router-dom';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import OHIF, {
-  display,
-  redux,
-  DicomMetadataStore,
-  LocalCacheService,
-  DownloadManagerService,
   ArchiveDownloadService,
-  notifyStudiesQueued,
+  DicomMetadataStore,
+  display,
+  DownloadManagerService,
+  LocalCacheService,
   notifyArchivesQueued,
+  notifyStudiesQueued,
+  redux,
 } from '@ohif/core';
-
-import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as OfflineCacheIcon } from '@ohif/ui/src/elements/Icon/icons/offline-cache.svg';
+import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as UpdateStatusIcon } from '@ohif/ui/src/elements/Svg/svgs/reload-circle.svg';
 import { ReactComponent as ViewAndProcessIcon } from '@ohif/ui/src/elements/Svg/svgs/search-circle.svg';
@@ -27,15 +26,16 @@ import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/t
 import AppContext from '../../../../../context/AppContext';
 import { parseViewerPath } from '../../../../../routes/routesUtil';
 import { useWorkListStore } from '../../../../../store/useWorkListStore';
-import RemoveResourceConfirm from '../RemoveResourceConfirm/RemoveResourceConfirm';
-import { summariseBulkRemoval } from '../RemoveResourceConfirm/describeRemoval';
-import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
 import useRemoveResource from '../../hooks/useRemoveResource';
+import BulkShareModal from '../BulkShareModal/BulkShareModal';
+import { summariseBulkRemoval } from '../RemoveResourceConfirm/describeRemoval';
+import RemoveResourceConfirm from '../RemoveResourceConfirm/RemoveResourceConfirm';
 import {
-  _getStudyInstanceUID,
-  _getStudyDescriptor,
   _getRemovalDescriptor,
+  _getStudyDescriptor,
+  _getStudyInstanceUID,
 } from '../SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell.js';
+import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
 
 import UpdateWorklistModal from './components/UpdateWorklistModal';
 
@@ -81,9 +81,38 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
     clearSelection();
   };
 
+  const [bulkShareStudies, setBulkShareStudies] = useState(null);
+
   const handleClickShare = () => {
+    // One study opens the per-study editor, which is the only place existing policies can be seen
+    // and revoked. Two or more open the bulk dialog, which composes ONE policy and writes it across
+    // the selection -- previously the button was simply disabled here, with a tooltip saying only
+    // one resource could be shared at a time.
     if (selectedRows.length === 1) {
       setIsOpenedShareModal(true);
+      return;
+    }
+
+    const descriptors = [];
+
+    selectedRows.forEach(row => {
+      const StudyInstanceUID = _getStudyInstanceUID({ row, worklist: pathname.includes('worklist') });
+
+      if (!StudyInstanceUID) {
+        return;
+      }
+
+      descriptors.push(
+        _getStudyDescriptor({
+          row,
+          StudyInstanceUID,
+          studyMeta: DicomMetadataStore.getStudyMetadata(StudyInstanceUID),
+        })
+      );
+    });
+
+    if (descriptors.length) {
+      setBulkShareStudies(descriptors);
     }
   };
 
@@ -334,13 +363,10 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
         ) : (
           <div className={styles.shareContainer}>
             {aclShare && (
-              <button className={styles.action} disabled={selectedRows.length !== 1} onClick={handleClickShare}>
+              <button className={styles.action} disabled={!selectedRows.length} onClick={handleClickShare}>
                 <ShareIcon />
                 Share
               </button>
-            )}
-            {selectedRows.length > 1 && (
-              <span className={styles.tooltipText}>Only one resource at a time can be shared</span>
             )}
           </div>
         )}
@@ -393,6 +419,20 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
             }
           }}
           selectedStudy={selectedRows[0]}
+        />
+      )}
+      {bulkShareStudies && (
+        <BulkShareModal
+          isOpen
+          studies={bulkShareStudies}
+          setIsOpen={(open) => {
+            // Clear on close, matching the other bulk dialogs -- the modal reads `studies` while it
+            // is up, and the descriptors were snapshotted off the rows when it opened.
+            if (!open) {
+              setBulkShareStudies(null);
+              clearSelection();
+            }
+          }}
         />
       )}
       {isWorkList && openUpdateWorklistModal &&
