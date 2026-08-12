@@ -39,26 +39,10 @@
     }
   }
 
+  // The "Only one resource at a time can be shared" tooltip lived here. Removed along with the
+  // restriction it explained -- Share now takes a multi-study selection into the bulk dialog.
   .shareContainer {
     position: relative;
-
-    .tooltipText {
-      visibility: hidden;
-      background-color: black;
-      color: #fff;
-      text-align: center;
-      padding: 5px 0;
-      border-radius: 6px;
-      position: absolute;
-      z-index: 1;
-      transform: translate(-50%, calc(-100% - 40px));
-      width: 280px;
-      left: 50%
-    }
-
-    &:hover .tooltipText {
-      visibility: visible;
-    }
   }
 
   .noSelectedRows {
