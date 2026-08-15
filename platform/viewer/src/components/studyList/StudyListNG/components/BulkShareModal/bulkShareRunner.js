@@ -12,6 +12,11 @@ import {
   upsertAclGroup,
   upsertAclUser,
 } from '../../../../../api/share';
+import {
+  describeOperationFailure,
+  isTransportFailure,
+  reportSafely,
+} from '../bulkAction/bulkFailure';
 import { describeStudy } from '../RemoveResourceConfirm/describeRemoval';
 
 import { describeSubject, isUserSubject } from './bulkSharePlan';
@@ -26,22 +31,6 @@ export const MAX_CONCURRENT_STUDIES = 3;
 
 
 const DEFAULT_API = { getAclUsers, getAclGroups, upsertAclUser, upsertAclGroup };
-
-
-/**
- * Invoke a reporting callback without letting it affect the run.
- *
- * The run's job is to write policies and say truthfully what happened. A notification service that
- * throws must not abort the remaining writes, and must not be mistaken for a write that failed --
- * it is reported to the console instead, where it is a bug in the caller rather than in the data.
- */
-const _report = (callback, payload) => {
-  try {
-    callback(payload);
-  } catch (err) {
-    console.error('Bulk share: a progress callback threw; the ACL write itself was unaffected.', err);
-  }
-};
 
 
 /**
@@ -60,42 +49,22 @@ const _report = (callback, payload) => {
 const _policyBody = (permissions) => buildPermissionPayload(permissions);
 
 
+// What may still be true when the response never reached the client. The ACL wording points the user
+// at the place they can check, which is the per-study share dialog.
+const NO_RESPONSE_HEDGE = 'The policy may still have been applied.';
+
+
 /**
- * A one-line reason for a failed write, drawn from the gateway's validation payload when it sent
- * one.
+ * A one-line reason for a rejected ACL write.
  *
- * The plugin answers a rejected write with `{ errors: { <Field>: [{ code, message }] } }`, so the
- * field and code are the useful part -- "User: unique" says the policy already exists, "User:
- * required" says the payload was wrong. Falls back to the status alone.
+ * The response shapes and the no-status hedge are handled by the shared helper -- the same
+ * distinction the worklist path needs, and one worth having exactly one implementation of.
  */
-export const describeWriteFailure = (err) => {
-  const entries = Object.entries(err?.json?.errors || {});
-
-  if (entries.length) {
-    const [field, messages] = entries[0];
-    const first = (messages || [])[0];
-    const detail = first?.code || first?.message || first;
-
-    return `${field}: ${detail} (HTTP ${err.status})`;
-  }
-
-  if (err?.status) {
-    return `Request failed (HTTP ${err.status}).`;
-  }
-
-  // No status at all means the response never reached JavaScript -- a network drop, or a response
-  // the browser refused to expose because it carried no CORS headers. The distinction matters and
-  // must not be flattened into "Request failed": the request may well have been applied on the
-  // server, so telling the user their policy was not written would be wrong. `fetch` reports this
-  // as a bare TypeError, which is why the message has to be quoted rather than a status read.
-  return err?.message
-    ? `No response from the server (${err.message}). The policy may still have been applied.`
-    : 'Request failed.';
-};
+export const describeWriteFailure = (err) =>
+  describeOperationFailure(err, { hedge: NO_RESPONSE_HEDGE });
 
 
-/** True when the failure is a transport/CORS failure rather than a response from the gateway. */
-export const isTransportFailure = (err) => Boolean(err) && err.status === undefined;
+export { isTransportFailure };
 
 
 /**
@@ -222,6 +191,12 @@ export const runBulkShare = async ({
       } catch (err) {
         // The study's current policies could not be read, so PUT-vs-POST cannot be decided. Its
         // recipients are all reported as failed rather than guessed at.
+        //
+        // Reported through the same guard as the write outcomes below. These two calls were the last
+        // bare ones in the loop, and they are the worst place to leave unguarded: a reporting
+        // callback that throws HERE throws while the run is already handling a failure, so the
+        // rejection escapes the worker, `Promise.all` rejects, and the dialog -- which refuses to
+        // close while a run is in flight -- is left stuck on its progress panel with no way out.
         studyOperations.forEach((operation) => {
           if (issued.has(operation.key)) {
             return;
@@ -229,15 +204,15 @@ export const runBulkShare = async ({
 
           issued.add(operation.key);
           failed += 1;
-          onRecord({
+          reportSafely(onRecord, {
             key: operation.key,
             label: `${describeSubject(operation.subject)} — ${studyLabel}`,
             status: 'failed',
             message: 'Existing permissions could not be read.',
-          });
+          }, 'Bulk share');
         });
 
-        onFailure({ studyLabel, subjectLabel: null, err, StudyInstanceUID });
+        reportSafely(onFailure, { studyLabel, subjectLabel: null, err, StudyInstanceUID }, 'Bulk share');
         continue;
       }
 
@@ -272,22 +247,22 @@ export const runBulkShare = async ({
 
         if (writeError) {
           failed += 1;
-          _report(onRecord, {
+          reportSafely(onRecord, {
             key: operation.key,
             label: `${subjectLabel} — ${studyLabel}`,
             status: 'failed',
             message: describeWriteFailure(writeError),
-          });
-          _report(onFailure, { studyLabel, subjectLabel, err: writeError, StudyInstanceUID });
+          }, 'Bulk share');
+          reportSafely(onFailure, { studyLabel, subjectLabel, err: writeError, StudyInstanceUID }, 'Bulk share');
         } else {
           applied += 1;
-          _report(onRecord, {
+          reportSafely(onRecord, {
             key: operation.key,
             label: `${subjectLabel} — ${studyLabel}`,
             status: 'ok',
             message: undefined,
-          });
-          _report(onSuccess, { subjectLabel, studyLabel, StudyInstanceUID });
+          }, 'Bulk share');
+          reportSafely(onSuccess, { subjectLabel, studyLabel, StudyInstanceUID }, 'Bulk share');
         }
       }
     }

@@ -1,309 +1,146 @@
-// Bulk share dialog. Deliberately shares the visual vocabulary of StudiesTableShareModal -- the
-// same search field, the same Cancel/Apply pair, the same palette -- so the two Share surfaces read
-// as one feature rather than two.
+// What is specific to the bulk share dialog: the recipient search, the recipient chips, the
+// permission checkboxes and the confirmation step.
+//
+// The modal shell, the study list, the progress panel and the buttons come from
+// bulkAction.module.scss, shared with the bulk review-request dialog. They used to live here and be
+// duplicated there, byte for byte.
+//
+// Flat, not nested under `.modal`, because `.modal` is now a class in the shared stylesheet: CSS
+// Modules hashes class names per file, so a `.modal` written here would be a different name that
+// never matches the one on the element.
+//
+// The recipient search deliberately keeps the visual vocabulary of StudiesTableShareModal -- the same
+// field, the same palette -- so the two Share surfaces read as one feature rather than two.
 
-.modal {
-  min-width: 560px;
-  max-width: 720px;
+.autoComplete {
+  position: relative;
+}
+
+.autoCompleteInput {
+  width: 100%;
+  background-color: transparent;
+  border: 1px solid #60646D;
+  border-radius: 5px;
+  padding: 11px 12px;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+  outline: none;
   color: #FFFFFF;
+  box-sizing: border-box;
 
-  // The dialog stays a fixed, predictable size whatever the selection: the study list and the
-  // progress log scroll inside themselves rather than growing the card past the viewport.
-  //
-  // NO blanket `p { margin: 0 }` here. It used to sit in this block and silently flattened every
-  // gap in the dialog: `.modal .section p` scores (0,2,1) and beats `.modal .sectionLabel` at
-  // (0,2,0), so each heading's own margin-bottom lost to it and headings sat flush against the
-  // control beneath them. Margins are set per element instead.
-  .section {
-    margin-top: 24px;
+  &::placeholder {
+    color: #60646D;
+  }
+}
+
+.autoCompleteList {
+  position: absolute;
+  top: calc(100% + 10px);
+  background-color: #60646D;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border-radius: 5px;
+  max-height: 240px;
+  overflow-y: auto;
+  width: 100%;
+  z-index: 10;
+}
+
+.autoCompleteListItem {
+  all: unset;
+  padding: 12px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+
+  .userEmail {
+    margin-left: 1rem;
+    color: #96a2f4;
   }
 
-  // Section heading -- "N studies will be affected", "Share with", "Permissions". The 1rem gap is
-  // what separates it from the control it labels.
-  .sectionLabel {
-    font-size: 16px;
-    line-height: 20px;
-    font-weight: 600;
-    margin: 0 0 1rem;
+  &:hover {
+    background-color: #e2e2e2;
+    color: #545457;
+
+    .groupIcon { fill: #545457; }
+    .userIcon path { stroke: #545457; }
+    .userEmail { color: #172375; }
   }
 
-  // Explanatory line under a heading. Carries its own bottom margin so the heading, the note and
-  // the control below are three distinct steps rather than one block of text.
-  .sectionNote {
-    font-size: 13px;
-    line-height: 18px;
-    color: #A0A4AD;
-    margin: 0 0 1rem;
-  }
-
-  .studyList {
-    max-height: 140px;
-    overflow-y: auto;
-    border: 1px solid #3A3E47;
-    border-radius: 6px;
-    padding: 8px 10px;
-  }
-
-  .studyRow {
-    display: flex;
-    column-gap: 10px;
-    align-items: baseline;
-    padding: 3px 0;
-  }
-
-  .studyTitle {
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .studySubtitle {
-    font-size: 13px;
-    color: #A0A4AD;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .autoComplete {
-    position: relative;
-  }
-
-  .autoCompleteInput {
-    width: 100%;
-    background-color: transparent;
-    border: 1px solid #60646D;
-    border-radius: 5px;
-    padding: 11px 12px;
-    font-size: 16px;
-    line-height: 20px;
-    font-weight: 500;
-    outline: none;
-    color: #FFFFFF;
-    box-sizing: border-box;
-
-    &::placeholder {
-      color: #60646D;
-    }
-  }
-
-  .autoCompleteList {
-    position: absolute;
-    top: calc(100% + 10px);
-    background-color: #60646D;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    border-radius: 5px;
-    max-height: 240px;
-    overflow-y: auto;
-    width: 100%;
-    z-index: 10;
-  }
-
-  .autoCompleteListItem {
-    all: unset;
-    padding: 12px 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    box-sizing: border-box;
-
-    .userEmail {
-      margin-left: 1rem;
-      color: #96a2f4;
-    }
+  // Already picked. Left visible rather than filtered out so the list does not reshuffle under the
+  // cursor as recipients are added.
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
 
     &:hover {
-      background-color: #e2e2e2;
-      color: #545457;
-
-      .groupIcon { fill: #545457; }
-      .userIcon path { stroke: #545457; }
-      .userEmail { color: #172375; }
-    }
-
-    // Already picked. Left visible rather than filtered out so the list does not reshuffle under
-    // the cursor as recipients are added.
-    &:disabled {
-      opacity: 0.45;
-      cursor: default;
-
-      &:hover {
-        background-color: transparent;
-        color: inherit;
-      }
+      background-color: transparent;
+      color: inherit;
     }
   }
+}
 
-  .subjectList {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-  }
+.subjectList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
 
-  .subjectChip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #3A3E47;
-    border-radius: 16px;
-    padding: 5px 10px 5px 8px;
-    font-size: 14px;
-  }
+.subjectChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #3A3E47;
+  border-radius: 16px;
+  padding: 5px 10px 5px 8px;
+  font-size: 14px;
+}
 
-  .subjectName {
-    font-weight: 500;
-  }
+.subjectName {
+  font-weight: 500;
+}
 
-  .subjectRemove {
-    width: 18px;
-    height: 18px;
-    fill: #FF6B6B;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
+.subjectRemove {
+  width: 18px;
+  height: 18px;
+  fill: #FF6B6B;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 
-  .permissionRow {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: 28px;
-    row-gap: 10px;
-  }
+.permissionRow {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 28px;
+  row-gap: 10px;
+}
 
-  // Applied to CheckboxNG's own container label, which already lays the caption out beside the box.
-  .permission {
-    font-size: 15px;
-    cursor: pointer;
-  }
+// Applied to CheckboxNG's own container label, which already lays the caption out beside the box.
+.permission {
+  font-size: 15px;
+  cursor: pointer;
+}
 
-  .checkmark {
-    top: 0;
-  }
+.checkmark {
+  top: 0;
+}
 
-  // Full margins, not just margin-bottom: with the blanket `p { margin: 0 }` gone these would
-  // otherwise pick up the browser's default 1em top margin.
-  .confirmHeading {
-    font-size: 20px;
-    line-height: 26px;
-    font-weight: 700;
-    margin: 0 0 10px;
-  }
+// Full margins, not just margin-bottom: this would otherwise pick up the browser's default 1em top
+// margin. The summary, detail and warning lines beneath it are shared with the other bulk dialog and
+// live in bulkAction.module.scss.
+.confirmHeading {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
 
-  .confirmSummary {
-    font-size: 16px;
-    line-height: 22px;
-    margin: 0 0 6px;
-  }
-
-  .confirmDetail {
-    font-size: 15px;
-    line-height: 20px;
-    color: #A0A4AD;
-    margin: 0 0 14px;
-  }
-
-  // The overwrite warning. Given the same weight as the removal confirmation's "cannot be
-  // recovered" line, because losing access you already had is the surprise this dialog can spring.
-  .confirmWarning {
-    font-size: 14px;
-    line-height: 20px;
-    color: #FFC46B;
-    border-left: 3px solid #FFC46B;
-    padding-left: 10px;
-    margin: 0;
-  }
-
-  .progressTrack {
-    height: 6px;
-    border-radius: 3px;
-    background-color: #3A3E47;
-    overflow: hidden;
-    margin-bottom: 12px;
-  }
-
-  .progressBar {
-    height: 100%;
-    background-color: #2E46E9;
-    transition: width 120ms linear;
-  }
-
-  .progressLog {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #3A3E47;
-    border-radius: 6px;
-    padding: 8px 10px;
-  }
-
-  .progressEntry {
-    display: flex;
-    justify-content: space-between;
-    column-gap: 16px;
-    padding: 4px 0;
-    font-size: 13px;
-    line-height: 18px;
-  }
-
-  .progressEntryFailed {
-    color: #FF8A8A;
-  }
-
-  .progressEntryLabel {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .progressEntryMessage {
-    color: #A0A4AD;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .progressEntryFailed .progressEntryMessage {
-    color: #FF8A8A;
-  }
-
-  .userIcon, .groupIcon {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-  }
-
-  .bottom {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 30px;
-
-    .cancelBtn {
-      all: unset;
-      border-radius: 8px;
-      font-size: 16px;
-      line-height: 22px;
-      color: #FFFFFF;
-      padding: 12px 16px;
-      cursor: pointer;
-      font-weight: 800;
-      background-color: #89898B;
-      margin-right: 8px;
-    }
-
-    .saveBtn {
-      all: unset;
-      cursor: pointer;
-      background-color: #2E46E9;
-      border-radius: 10px;
-      padding: 10px 20px;
-      font-size: 18px;
-      line-height: 21px;
-      font-weight: 600;
-      color: #FFFFFF;
-
-      &:disabled {
-        opacity: 0.45;
-        cursor: default;
-      }
-    }
-  }
+.userIcon, .groupIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }

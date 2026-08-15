@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useMutation } from '@tanstack/react-query';
-import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { useDebounce } from '@ohif/ui';
@@ -11,7 +10,8 @@ import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 import { searchAcl } from '../../../../../api/share';
 import useClickOutside from '../../../../../hooks/useClickOutside';
 import useBulkShare from '../../hooks/useBulkShare';
-import { describeStudy } from '../RemoveResourceConfirm/describeRemoval';
+import BulkProgressPanel from '../bulkAction/BulkProgressPanel';
+import BulkStudyList from '../bulkAction/BulkStudyList';
 import { ReactComponent as GroupIcon } from '../StudiesTableShareModal/group.svg';
 import { ReactComponent as TrashIcon } from '../StudiesTableShareModal/trash.svg';
 import { ReactComponent as UserIcon } from '../StudiesTableShareModal/user.svg';
@@ -25,6 +25,7 @@ import {
 } from './bulkSharePlan';
 import { emptyPermissions,PERMISSION_IDS } from './permissionFields';
 
+import bulk from '../bulkAction/bulkAction.module.scss';
 import styles from './BulkShareModal.module.scss';
 
 
@@ -83,14 +84,6 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
     }
   }, [debouncedSearch]);
 
-  // Progress list auto-scroll, so the newest line stays visible on a long run.
-  const progressRef = useRef(null);
-  useEffect(() => {
-    if (progressRef.current) {
-      progressRef.current.scrollTop = progressRef.current.scrollHeight;
-    }
-  }, [progress?.completed]);
-
   const intent = useMemo(
     () => describeBulkShareIntent({ studies, subjects, permissions }),
     [studies, subjects, permissions]
@@ -136,7 +129,19 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
     appliedRef.current = true;
     setStage(STAGE.APPLYING);
 
-    const result = await applyBulkShare({ server: activeServer, studies, subjects, permissions });
+    let result;
+
+    try {
+      result = await applyBulkShare({ server: activeServer, studies, subjects, permissions });
+    } catch (err) {
+      // The run is not supposed to reject -- every write failure is reported per policy and the loop
+      // carries on. But if it ever does, the dialog must not be left in APPLYING: `handleClose`
+      // refuses to close while a run is in flight, so an unrecovered rejection here leaves the user
+      // looking at a dialog they cannot dismiss. Fall back to the form, which is closable, and let
+      // the error surface rather than swallowing it.
+      console.error('Bulk share: the run rejected unexpectedly.', err);
+      result = null;
+    }
 
     if (!result) {
       // Nothing to issue, or a run was already in flight. Falls back to the form rather than
@@ -181,38 +186,22 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
       isOpen={isOpen}
       title="Share Access"
       onClose={handleClose}
-      classes={{ content: styles.modal }}
+      classes={{ content: bulk.modal }}
       onModalClick={(e) => {
         // Keeps stray clicks off the study-list row underneath, matching StudiesTableShareModal.
         e.preventDefault();
         e.stopPropagation();
       }}
     >
-      {/* Which studies this affects, always visible and never collapsed behind a count: the
-          selection is the thing most easily got wrong, and the count alone gives the user nothing
-          to check it against. Same reasoning as the bulk removal confirmation. */}
-      <div className={styles.section}>
-        <p className={styles.sectionLabel}>
-          {studies.length} {studies.length === 1 ? 'study' : 'studies'} will be affected
-        </p>
-        <div className={styles.studyList}>
-          {studies.map((study) => {
-            const { title, subtitle } = describeStudy(study);
-
-            return (
-              <div key={study.StudyInstanceUID} className={styles.studyRow}>
-                <span className={styles.studyTitle}>{title}</span>
-                {subtitle && <span className={styles.studySubtitle}>{subtitle}</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <BulkStudyList
+        studies={studies}
+        heading={(count) => `${count} ${count === 1 ? 'study' : 'studies'} will be affected`}
+      />
 
       {stage === STAGE.EDIT && (
         <>
-          <div className={styles.section}>
-            <p className={styles.sectionLabel}>Share with</p>
+          <div className={bulk.section}>
+            <p className={bulk.sectionLabel}>Share with</p>
             <div className={styles.autoComplete} ref={autocompleteRef}>
               <input
                 type="search"
@@ -267,9 +256,9 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
             )}
           </div>
 
-          <div className={styles.section}>
-            <p className={styles.sectionLabel}>Permissions</p>
-            <p className={styles.sectionNote}>
+          <div className={bulk.section}>
+            <p className={bulk.sectionLabel}>Permissions</p>
+            <p className={bulk.sectionNote}>
               Applied identically to every recipient on every study listed above.
             </p>
             {/* CheckboxNG renders its own <label> and stops click propagation, so the text goes
@@ -288,13 +277,13 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
             </div>
           </div>
 
-          <div className={styles.bottom}>
-            <button type="button" className={styles.cancelBtn} onClick={handleClose}>
+          <div className={bulk.bottom}>
+            <button type="button" className={bulk.cancelBtn} onClick={handleClose}>
               Cancel
             </button>
             <button
               type="button"
-              className={styles.saveBtn}
+              className={bulk.saveBtn}
               disabled={!canApply}
               onClick={() => setStage(STAGE.CONFIRM)}
             >
@@ -305,66 +294,35 @@ export default function BulkShareModal({ isOpen, setIsOpen, studies = [] }) {
       )}
 
       {stage === STAGE.CONFIRM && (
-        <div className={styles.section}>
+        <div className={bulk.section}>
           <p className={styles.confirmHeading}>{intent.heading}</p>
-          <p className={styles.confirmSummary}>{intent.summary}</p>
-          <p className={styles.confirmDetail}>{intent.detail}</p>
-          <p className={styles.confirmWarning}>{intent.warning}</p>
+          <p className={bulk.intentSummary}>{intent.summary}</p>
+          <p className={bulk.intentDetail}>{intent.detail}</p>
+          <p className={bulk.calloutWarning}>{intent.warning}</p>
 
-          <div className={styles.bottom}>
-            <button type="button" className={styles.cancelBtn} onClick={() => setStage(STAGE.EDIT)}>
+          <div className={bulk.bottom}>
+            <button type="button" className={bulk.cancelBtn} onClick={() => setStage(STAGE.EDIT)}>
               Back
             </button>
-            <button type="button" className={styles.saveBtn} onClick={handleApply}>
+            <button type="button" className={bulk.saveBtn} onClick={handleApply}>
               Apply to {intent.total} {intent.total === 1 ? 'policy' : 'policies'}
             </button>
           </div>
         </div>
       )}
 
-      {(stage === STAGE.APPLYING || stage === STAGE.DONE) && progress && (
-        <div className={styles.section}>
-          <p className={styles.sectionLabel}>
-            {stage === STAGE.APPLYING
-              ? `Applying ${progress.completed} of ${progress.total}...`
-              : summariseBulkShare({ applied: outcome?.applied ?? 0, total: outcome?.total ?? 0 })}
-          </p>
-
-          <div className={styles.progressTrack}>
-            <div
-              className={styles.progressBar}
-              style={{ width: `${progress.total ? (progress.completed / progress.total) * 100 : 0}%` }}
-            />
-          </div>
-
-          {/* One line per policy, which is where the per-recipient detail lives instead of in a
-              toast per write. */}
-          <div className={styles.progressLog} ref={progressRef}>
-            {progress.entries.map((entry) => (
-              <div
-                key={entry.key}
-                className={classNames(styles.progressEntry, {
-                  [styles.progressEntryFailed]: entry.status !== 'ok',
-                })}
-              >
-                <span className={styles.progressEntryLabel}>{entry.label}</span>
-                <span className={styles.progressEntryMessage}>{entry.message}</span>
-              </div>
-            ))}
-          </div>
-
-          {stage === STAGE.APPLYING ? (
-            <p className={styles.sectionNote}>
-              Leave this dialog open until every policy has been written.
-            </p>
-          ) : (
-            <div className={styles.bottom}>
-              <button type="button" className={styles.saveBtn} onClick={handleClose}>
-                Close
-              </button>
-            </div>
-          )}
-        </div>
+      {(stage === STAGE.APPLYING || stage === STAGE.DONE) && (
+        <BulkProgressPanel
+          progress={progress}
+          isRunning={stage === STAGE.APPLYING}
+          runningLabel={`Applying ${progress?.completed ?? 0} of ${progress?.total ?? 0}...`}
+          doneLabel={summariseBulkShare({
+            applied: outcome?.applied ?? 0,
+            total: outcome?.total ?? 0,
+          })}
+          runningNote="Leave this dialog open until every policy has been written."
+          onClose={handleClose}
+        />
       )}
     </ModalNG>
   );

@@ -7,6 +7,7 @@ import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Icon/icons/ti
 import { ReactComponent as LeftArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/leftArrow.svg';
 import { ReactComponent as RightArrowIcon } from '@ohif/ui/src/elements/Svg/svgs/rightArrow.svg';
 
+import TruncatedText from '../../components/TruncatedText/TruncatedText';
 import { WORK_LIST_VIEWER_PARAM } from '../../constants/worklist';
 import { useWorkListStore } from '../../store/useWorkListStore';
 
@@ -67,20 +68,26 @@ export default function WorkListViewerPageNG() {
               <span>MRN</span>
               <span>{selectedStudy.original?.mrn?.value ?? "N/A"}</span>
             </div>
+            {/* Both of these are free text and routinely outrun the 220px the header gives them.
+                They keep the same clipping (`.longValue`) and trade the browser's `title` tooltip
+                for the viewer's own hover card, which only appears when there is genuinely
+                something clipped to reveal. */}
             {selectedStudy.original?.ReasonForReview?.value && (
               <div className={styles.studyDataItem}>
                 <span>Reason for Review</span>
-                <span className={styles.longValue} title={selectedStudy.original.ReasonForReview.value}>
-                  {selectedStudy.original.ReasonForReview.value}
-                </span>
+                <TruncatedText
+                  value={selectedStudy.original.ReasonForReview.value}
+                  className={styles.longValue}
+                />
               </div>
             )}
             {selectedStudy.original?.RequestedProcedure?.value && (
               <div className={styles.studyDataItem}>
                 <span>Requested Procedure</span>
-                <span className={styles.longValue} title={selectedStudy.original.RequestedProcedure.value}>
-                  {selectedStudy.original.RequestedProcedure.value}
-                </span>
+                <TruncatedText
+                  value={selectedStudy.original.RequestedProcedure.value}
+                  className={styles.longValue}
+                />
               </div>
             )}
           </div>

@@ -1,0 +1,81 @@
+// Controls for the shared review-request form.
+//
+// Owned by the component rather than by either dialog, so the per-study and bulk request forms
+// cannot drift apart visually the way they drifted apart behaviourally. The per-study dialog's
+// inputs were unstyled browser defaults; these are the dark bordered fields the rest of the
+// study-list dialogs use.
+
+.field {
+  position: relative;
+  margin-top: 24px;
+}
+
+.label {
+  display: block;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  cursor: pointer;
+}
+
+.autoComplete {
+  position: relative;
+}
+
+// Shared by both search inputs, the reason textarea and the procedure input, so the form reads as
+// one column of controls rather than four differently-sized boxes.
+.input {
+  width: 100%;
+  background-color: transparent;
+  border: 1px solid #60646D;
+  border-radius: 5px;
+  padding: 11px 12px;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 500;
+  outline: none;
+  color: #FFFFFF;
+  box-sizing: border-box;
+  font-family: inherit;
+  resize: vertical;
+
+  &::placeholder {
+    color: #60646D;
+  }
+}
+
+// Positioning and stacking only. The dropdown's own look comes from the shared
+// groupSearch.module.scss, which every worklist group/member search in the viewer uses; overriding
+// it here would make these suggestions look unlike the rest.
+//
+// `position: absolute` matters: the shared class is laid out in flow, which pushed the fields below
+// it down the card as the user typed. `z-index` puts it over the field beneath.
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: #60646D;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  z-index: 10;
+}
+
+// The suggestion is a <button> so it is keyboard-reachable; this strips the control chrome the UA
+// gives it and makes it fill the row.
+//
+// Deliberately NOT `all: unset`, and deliberately silent about colour, padding and hover: those come
+// from the shared `.dropdownItem` class this sits alongside, and `all: unset` scores the same as
+// that class, so which one won would depend on stylesheet order.
+.dropdownButton {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}

@@ -7,6 +7,7 @@ import PropTypes from 'prop-types';
 
 import { redux, sonador } from '@ohif/core';
 import { updateServer } from '../../../hooks/useServer';
+import TruncatedText from '../../TruncatedText/TruncatedText';
 import { useMetadataSettingsStore } from '../../../store/useMetadataSettingsStore';
 
 import Filters from './components/Filters/Filters';
@@ -25,11 +26,6 @@ import styles from './StudyListNG.module.scss';
 const COLUMN_LABEL_OVERRIDES = {
   mrn: 'MRN',
 };
-
-// "Reason for Review" routinely carries long free text; anything past this cap is elided in
-// the row (full text remains available via the cell tooltip and the expanded study drawer).
-const REASON_FOR_REVIEW_MAX_CHARS = 160;
-
 
 function StudyListNG({ studies = [], 
   server, 
@@ -145,16 +141,13 @@ function StudyListNG({ studies = [],
             }
 
             if (id === 'ReasonForReview' && typeof value === 'string') {
-              const truncated =
-                value.length > REASON_FOR_REVIEW_MAX_CHARS
-                  ? `${value.slice(0, REASON_FOR_REVIEW_MAX_CHARS).trimEnd()}…`
-                  : value;
-
-              return (
-                <span className={styles.reasonForReviewCell} title={value}>
-                  {truncated}
-                </span>
-              );
+              // "Reason for Review" routinely carries long free text. The full value is rendered and
+              // `.reasonForReviewCell` clamps it to three lines in CSS, which keeps the whole reason
+              // in the DOM -- so it stays the cell's accessible name, and the hover card is an
+              // addition to it rather than the only way to reach it. A previous version sliced the
+              // string to a character budget first, which left the remainder nowhere but a `title`
+              // attribute.
+              return <TruncatedText value={value} className={styles.reasonForReviewCell} />;
             }
 
             return value;

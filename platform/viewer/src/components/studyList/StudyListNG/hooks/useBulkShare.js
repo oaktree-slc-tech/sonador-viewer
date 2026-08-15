@@ -7,6 +7,9 @@ import {
   uiNotificationService,
 } from '@ohif/core';
 
+import { reportSafely } from '../components/bulkAction/bulkFailure';
+import { withBulkRunLatch } from '../components/bulkAction/bulkRun';
+import { dedupeStudies } from '../components/bulkAction/bulkStudies';
 import { buildShareOperations, summariseBulkShare, summarisePermissions }
   from '../components/BulkShareModal/bulkSharePlan';
 import {
@@ -14,6 +17,8 @@ import {
   isTransportFailure,
   runBulkShare,
 } from '../components/BulkShareModal/bulkShareRunner';
+
+import useBulkProgress from './useBulkProgress';
 
 
 function _notifyOperationFailure({ studyLabel, subjectLabel, err, StudyInstanceUID }) {
@@ -63,71 +68,48 @@ export default function useBulkShare() {
 
   const queryClient = useQueryClient();
   const [isApplying, setIsApplying] = useState(false);
-  // { total, completed, succeeded, failed, entries: [{ key, label, status, message }] }
-  const [progress, setProgress] = useState(null);
+  const { progress, begin, record, reset: resetProgress } = useBulkProgress();
 
   // Guards re-entry synchronously. `isApplying` is state and lands a render too late to stop a
   // second click landing on the same Apply button -- the same trap the segmentation editor hit.
   const applyingRef = useRef(false);
 
-  const resetProgress = useCallback(() => setProgress(null), []);
-
-  const _record = useCallback((entry) => {
-    setProgress((prev) => {
-      if (!prev) {
-        return prev;
-      }
-
-      // Idempotent on the operation key. The runner already issues each key once, but this is the
-      // list the user reads, and a duplicated row here would look exactly like a duplicated write.
-      if (prev.entries.some((existing) => existing.key === entry.key)) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        completed: prev.completed + 1,
-        succeeded: prev.succeeded + (entry.status === 'ok' ? 1 : 0),
-        failed: prev.failed + (entry.status === 'ok' ? 0 : 1),
-        entries: [...prev.entries, entry],
-      };
-    });
-  }, []);
-
 
   const applyBulkShare = useCallback(async ({ server, studies = [], subjects = [], permissions = {} }) => {
-    if (applyingRef.current) {
-      return null;
-    }
-
     const operations = buildShareOperations({ studies, subjects });
 
     if (!operations.length) {
       return null;
     }
 
-    applyingRef.current = true;
-    setIsApplying(true);
-    setProgress({ total: operations.length, completed: 0, succeeded: 0, failed: 0, entries: [] });
+    // Every line below runs inside the latch's try/finally, so the release cannot be skipped -- see
+    // withBulkRunLatch. The in-flight check the ref used to do by hand happens in there too.
+    const run = async () => {
+      begin(operations.length);
 
-    // One notice for the whole operation, before anything is written (the per-policy detail streams
-    // into the dialog instead -- a twelve-study, three-group run is thirty-six writes, and
-    // thirty-six toasts would bury everything else in the tray).
-    uiNotificationService.show({
-      title: 'Applying access policies',
-      message: `${summarisePermissions(permissions)} on ${studies.length} `
-        + `${studies.length === 1 ? 'study' : 'studies'} for ${subjects.length} `
-        + `${subjects.length === 1 ? 'recipient' : 'recipients'}.`,
-      type: 'info',
-      log: true,
-    });
+      // One notice for the whole operation, before anything is written (the per-policy detail
+      // streams into the dialog instead -- a twelve-study, three-group run is thirty-six writes, and
+      // thirty-six toasts would bury everything else in the tray).
+      //
+      // Guarded, like every other reporting call in this feature: a notification service that throws
+      // must not abort a run the user asked for, and must not decide whether their policies get
+      // written. The count is the de-duplicated one, matching the dialog's own heading.
+      const affected = dedupeStudies(studies);
 
-    try {
-      const outcome = await runBulkShare({
+      reportSafely((notice) => uiNotificationService.show(notice), {
+        title: 'Applying access policies',
+        message: `${summarisePermissions(permissions)} on ${affected.length} `
+          + `${affected.length === 1 ? 'study' : 'studies'} for ${subjects.length} `
+          + `${subjects.length === 1 ? 'recipient' : 'recipients'}.`,
+        type: 'info',
+        log: true,
+      }, 'Bulk share');
+
+      return runBulkShare({
         server,
         operations,
         permissions,
-        onRecord: (entry) => _record({
+        onRecord: (entry) => record({
           ...entry,
           message: entry.status === 'ok' ? summarisePermissions(permissions) : entry.message,
         }),
@@ -150,13 +132,10 @@ export default function useBulkShare() {
         }),
         onFailure: _notifyOperationFailure,
       });
+    };
 
-      return outcome;
-    } finally {
-      applyingRef.current = false;
-      setIsApplying(false);
-    }
-  }, [_record]);
+    return withBulkRunLatch({ latchRef: applyingRef, setBusy: setIsApplying, run });
+  }, [begin, record]);
 
 
 
@@ -166,7 +145,10 @@ export default function useBulkShare() {
     const { applied = 0, total = 0 } = outcome || {};
     const clean = applied === total;
 
-    uiNotificationService.show({
+    // Guarded for the same reason as the opening notice: the run has finished and its
+    // outcome is settled, so a notification service that throws here must not propagate out
+    // of the dialog's completion path and leave a finished run looking unfinished.
+    reportSafely((notice) => uiNotificationService.show(notice), {
       title: summariseBulkShare({ applied, total }),
       message: clean
         ? 'The selected studies are now shared with the chosen users and groups.'
@@ -174,7 +156,7 @@ export default function useBulkShare() {
       type: clean ? 'success' : 'warning',
       autoClose: clean,
       log: true,
-    });
+    }, 'Bulk share');
 
     // The study list carries no ACL column, so nothing there needs refetching. What does go stale
     // is any open share dialog's per-study policy cache.
