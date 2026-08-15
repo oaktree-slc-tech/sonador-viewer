@@ -337,6 +337,26 @@ describe('reporting failures are never mistaken for write failures', () => {
     expect(api.upsertAclGroup).toHaveBeenCalledTimes(2);
   });
 
+  it('survives a reporting callback that throws while the pre-read is already failing', async () => {
+    // The worst place for an unguarded callback. A throw here happens while the run is ALREADY
+    // handling a failure, so it escapes the worker and rejects Promise.all -- and the dialog refuses
+    // to close while a run is in flight, leaving the user stuck on a progress panel with no way out.
+    const api = makeApi({
+      getAclGroups: jest.fn().mockRejectedValue(Object.assign(new Error('nope'), { status: 500 })),
+    });
+
+    const outcome = await runBulkShare({
+      server: SERVER,
+      operations: buildShareOperations({ studies: [study('a'), study('b')], subjects: [group(1)] }),
+      onRecord: () => { throw new Error('render blew up'); },
+      onFailure: () => { throw new Error('notification blew up'); },
+      api,
+    });
+
+    // Resolved rather than rejected, and every operation still accounted for as failed.
+    expect(outcome).toEqual({ total: 2, applied: 0, failed: 2 });
+  });
+
   it('does not claim "not applied" when the response never reached the client', async () => {
     // fetch rejects with a bare TypeError for a network drop or a response withheld for want of
     // CORS headers. The server may have applied the policy, so the wording must not assert it did

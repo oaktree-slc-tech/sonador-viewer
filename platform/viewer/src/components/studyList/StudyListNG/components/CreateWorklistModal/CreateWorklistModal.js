@@ -1,227 +1,94 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
+import PropTypes from 'prop-types';
 
-import OHIF, { redux } from '@ohif/core';
-
+import { redux, uiNotificationService } from '@ohif/core';
 import BouncingLoader from '@ohif/ui/src/components/Loader/BouncingLoader';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
 
 import { createWorklistRequest } from '../../../../../api/worklist';
-import { getDisplayName } from '../../../../../lib/getDisplayName';
-import { useGroupMembership, useGroupSearch } from '../../../../../queries/worklist';
+import useWorklistRequestForm from '../worklistRequest/useWorklistRequestForm';
+import WorklistRequestFields from '../worklistRequest/WorklistRequestFields';
+import { INITIAL_REVIEW_STATE } from '../worklistRequest/worklistRequestForm';
 
-import groupSearchStyles from '../../../../../styles/groupSearch.module.scss';
 import styles from './CreateWorklistModal.module.scss';
-import { uiNotificationService } from '@ohif/core';
 
 
 export default function CreateWorklistModal({ isOpen, setIsOpen, studyInstanceUIDs }) {
-  // Modal dialog which can be used to create worklist items
+  // Modal dialog which can be used to create worklist items for a single study.
+  //
+  // The form itself -- group, reviewer, reason, requested procedure, and the rules for changing them
+  // -- is shared with the bulk dialog (WorklistRequestFields / useWorklistRequestForm). Keeping a
+  // second copy here is what let the two drift: this dialog filtered its membership list
+  // case-sensitively, gave both its inputs the same element id so its two labels pointed at the same
+  // control, and left a chosen group in place when the user typed over it.
 
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
-  const [groupSearchTerm, setGroupSearchTerm] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [showGroupSearchResponse, setShowGroupSearchResponse] = useState(true);
-  const { data: groupSearch = [] } = useGroupSearch(activeServer, groupSearchTerm);
-  
-  const handleGroupInputChange = (e) => {
-    // Update group search term
+  const { form, fields, canSubmit, procedure } = useWorklistRequestForm(activeServer);
 
-    setShowGroupSearchResponse(true);
-    setGroupSearchTerm(e.target.value);
-  };
-
-  const handleSelectGroup = (group) => {
-    // Set currently selected group and update the input name to the group name
-
-    setSelectedGroup(group);
-    setGroupSearchTerm(group.name);
-    setShowGroupSearchResponse(false);
-    setShowMembershipSearchResponse(true);
-  };
-
-  // members
-  const [membershipSearchTerm, setMembershipSearchTerm] = useState('');
-  const [selectedMembership, setSelectedMembership] = useState(null);
-  const [showMembershipSearchResponse, setShowMembershipSearchResponse] = useState(false);
-  const { data: groupMembership = [] } = useGroupMembership({
-    server: activeServer,
-    enabled: !!selectedGroup,
-    groupId: selectedGroup?.id,
-    term: membershipSearchTerm,
-  });
-  const handleMemberInputChange = (e) => {
-    setShowMembershipSearchResponse(true);
-    setMembershipSearchTerm(e.target.value);
-  };
-
-  const handleSelectMember = (member) => {
-    setSelectedMembership(member);
-    setMembershipSearchTerm(getDisplayName(member));
-    setShowMembershipSearchResponse(false);
-  };
-
-  // requested procedure
-  const [reasonForReview, setReasonForReview] = useState('');
-  const [requestedProcedureDescription, setRequestedProcedureDescription] = useState('');
-
-  const buildProcedure = () => {
-    // Assemble the optional RequestedProcedure facet from the reason/description inputs.
-    // Empty inputs are omitted; if neither is provided no Procedure block is sent.
-
-    const requested = {
-      ...(reasonForReview.trim() ? { ReasonForTheRequestedProcedure: reasonForReview.trim() } : {}),
-      ...(requestedProcedureDescription.trim()
-        ? { RequestedProcedureDescription: requestedProcedureDescription.trim() } : {}),
-    };
-    return Object.keys(requested).length ? { RequestedProcedure: requested } : undefined;
-  };
-
-  // create worklist
-  const { mutate: createWorklistRequestMutate, isLoading: isLoadingCreateWorklistRequest } = useMutation({
+  const { mutate: createWorklistRequestMutate, isLoading } = useMutation({
     mutationFn: () => createWorklistRequest({
-      server: activeServer, groupId: selectedGroup.id, userId: selectedMembership.id,
-      State: 'Scheduled', StudyInstanceUID: studyInstanceUIDs, Procedure: buildProcedure(),
+      server: activeServer,
+      groupId: form.group.id,
+      userId: form.member.id,
+      State: INITIAL_REVIEW_STATE,
+      StudyInstanceUID: studyInstanceUIDs,
+      Procedure: procedure,
     }),
     onSuccess: () => {
-      setIsOpen(false);      
+      setIsOpen(false);
     },
     onError: () => {
       uiNotificationService.show({ title: 'Failed to create worklist request', type: 'error' });
     },
   });
 
-  const handleCreateWorklistRequest = (e) => {
-    e.stopPropagation();
-    createWorklistRequestMutate();
-  };
-
   const errantModalClick = (e) => {
     // Prevent unintended click events from propagating to associated components
-    
     e.preventDefault();
     e.stopPropagation();
-  }
-
-  const filteredGroupMembership = groupMembership && groupMembership.length
-    && groupMembership.filter((member)=> {
-
-      return membershipSearchTerm == ''
-        || (member.first_name || '').includes(membershipSearchTerm)
-        || (member.last_name || '').includes(membershipSearchTerm)
-        || (member.email || '').includes(membershipSearchTerm)
-        || (getDisplayName(member) || '').includes(membershipSearchTerm);
-    });  
+  };
 
   return (
     <ModalNG
       isOpen={isOpen}
       title="Create Worklist item"
       onClose={(e) => {
-        e.stopPropagation()
+        e.stopPropagation();
         return setIsOpen(false);
       }}
       classes={{ content: styles.modal }}
       onModalClick={errantModalClick}
     >
-      {/* Group*/}
-      <div className={styles.inputGroup}>
-        <label htmlFor="group-search">Select Group</label>
-        <input
-          id="group-search"
-          type="text"
-          value={groupSearchTerm}
-          onChange={handleGroupInputChange}
-          onFocus={() => setShowGroupSearchResponse(true)}
-          placeholder="Search for a group"
-          className={styles.input}
-        />
-        {showGroupSearchResponse && groupSearch.length > 0 && (
-          <ul className={groupSearchStyles.dropdown}>
-            {groupSearch.map((group) => (
-              <li
-                key={group.id}
-                className={groupSearchStyles.dropdownItem}
-                onClick={() => handleSelectGroup(group)}
-              >
-                {group.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <WorklistRequestFields fields={fields} idPrefix="create-worklist" />
 
-      {/*Membership*/}
-      {selectedGroup &&
-        <div className={styles.inputGroup}>
-          <label htmlFor="group-search">Select Member</label>
-          <input
-            id="group-search"
-            type="text"
-            value={membershipSearchTerm}
-            onChange={handleMemberInputChange}
-            onFocus={() => setShowMembershipSearchResponse(true)}
-            placeholder="Search for a member"
-            className={styles.input}
-          />
-          {showMembershipSearchResponse && filteredGroupMembership.length > 0&& (
-            <ul className={groupSearchStyles.dropdown}>
-              {filteredGroupMembership.map((member) => (
-                <li
-                  key={member.id}
-                  className={groupSearchStyles.dropdownItem}
-                  onClick={() => handleSelectMember(member)}
-                >
-                  {getDisplayName(member)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      }
-
-      {selectedMembership &&
-        <div className={styles.inputGroup}>
-          <label htmlFor="reason-for-review">Reason for Review</label>
-          <textarea
-            id="reason-for-review"
-            value={reasonForReview}
-            onChange={(e) => setReasonForReview(e.target.value)}
-            placeholder="Why is this study being reviewed?"
-            className={styles.input}
-            rows={3}
-          />
-        </div>
-      }
-
-      {selectedMembership &&
-        <div className={styles.inputGroup}>
-          <label htmlFor="requested-procedure-description">Requested Procedure (optional)</label>
-          <input
-            id="requested-procedure-description"
-            type="text"
-            value={requestedProcedureDescription}
-            onChange={(e) => setRequestedProcedureDescription(e.target.value)}
-            placeholder="Describe the requested procedure"
-            className={styles.input}
-          />
-        </div>
-      }
-
-      {selectedMembership &&
+      {/* Gated on `canSubmit`, which reads the stored group and reviewer rather than the text in the
+          search fields -- text that merely looks like a group name is not a group. */}
+      {canSubmit && (
         <div className={styles.createButtonWrapper}>
-
-          <button disabled={isLoadingCreateWorklistRequest} onClick={handleCreateWorklistRequest}
-                  className={styles.createWorklist}>
-            {isLoadingCreateWorklistRequest ? <BouncingLoader width={40} height={32} /> :
-              'Create worklist request'
-            }
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={(e) => {
+              e.stopPropagation();
+              createWorklistRequestMutate();
+            }}
+            className={styles.createWorklist}
+          >
+            {isLoading ? <BouncingLoader width={40} height={32} /> : 'Create worklist request'}
           </button>
         </div>
-      }
+      )}
     </ModalNG>
   );
 }
+
+
+CreateWorklistModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  setIsOpen: PropTypes.func.isRequired,
+  /** StudyInstanceUID of the study the review is being requested for. */
+  studyInstanceUIDs: PropTypes.string,
+};

@@ -5,6 +5,8 @@
 // are agreeing to, and this repo's jest setup has no React renderer. An access-control change that
 // silently touches more studies than the confirmation claimed is the defect worth a test.
 
+import { dedupeStudies } from '../bulkAction/bulkStudies';
+
 import { PERMISSION_IDS } from './permissionFields';
 
 
@@ -58,16 +60,9 @@ export const buildShareOperations = ({ studies = [], subjects = [] } = {}) => {
   // Studies are de-duplicated too. Only the recipients were, which left the study side of the
   // pairing able to double the whole run: a selection that yields the same StudyInstanceUID twice
   // produced two writes per recipient, and the second was rejected by the gateway as a duplicate.
-  // Nothing downstream should have to assume the caller handed over a clean list.
-  const seenStudies = new Set();
-  const uniqueStudies = studies.filter((study) => {
-    if (!study?.StudyInstanceUID || seenStudies.has(study.StudyInstanceUID)) {
-      return false;
-    }
-
-    seenStudies.add(study.StudyInstanceUID);
-    return true;
-  });
+  // Nothing downstream should have to assume the caller handed over a clean list. Shared with the
+  // worklist plan and with the dialogs' own study list, so all three agree on what the selection is.
+  const uniqueStudies = dedupeStudies(studies);
 
   const operations = [];
   // Final guard on the pairing itself, so `key` is genuinely unique whatever the inputs did --
@@ -118,13 +113,16 @@ const _plural = (count, singular, plural) => `${count} ${count === 1 ? singular 
  */
 export const describeBulkShareIntent = ({ studies = [], subjects = [], permissions = {} } = {}) => {
   const operations = buildShareOperations({ studies, subjects });
+  // De-duplicated, like the operation count beside it: quoting the raw selection size here would
+  // claim more studies than the run touches whenever the selection repeats one.
+  const affected = dedupeStudies(studies);
 
   return {
     heading: 'Apply these permissions?',
     summary:
       `${summarisePermissions(permissions)} will be granted to ` +
       `${_plural(subjects.length, 'recipient', 'recipients')} on ` +
-      `${_plural(studies.length, 'study', 'studies')}.`,
+      `${_plural(affected.length, 'study', 'studies')}.`,
     detail: `This writes ${_plural(operations.length, 'access policy', 'access policies')}.`,
     // Overwrite semantics. Every permission the gateway stores is editable in this dialog, so this
     // is a genuine whole-policy replacement: a recipient who currently has more access than is set

@@ -1,0 +1,29 @@
+// The reveal card for a clipped value.
+//
+// Colours and stacking match StudyOfflineDetailsCard, which is the other HoverCardContent in the
+// study-list/worklist surfaces: same charcoal panel, same muted text, same z-index above ModalNG's
+// content (200) so a clipped value inside a dialog is still readable.
+//
+// The BORDER is deliberately not set here. HoverCardContent already carries the --overlay-line
+// token, which is the canonical charcoal for every floating surface in the viewer; restating it
+// locally is how the same Radix primitive once ended up framed in two different colours depending
+// on the consumer.
+//
+// `width: auto` overrides the component's default `w-64` so a one-line reason does not sit in a
+// half-empty card, and the max-width keeps a long free-text reason from spanning the window.
+.card {
+  z-index: 1080;
+  width: auto;
+  max-width: 420px;
+  padding: 10px 12px;
+  background: #1e1f23;
+  color: #d3d3d3;
+  font-size: 13px;
+  line-height: 18px;
+
+  // Reason-for-review is free text typed by a clinician: it can carry newlines, which must survive,
+  // and it can carry a single unbroken token (a pasted identifier) long enough to push past
+  // max-width unless it is allowed to break mid-word.
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

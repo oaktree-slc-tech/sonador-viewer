@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef,useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { useLocation,useNavigate } from 'react-router-dom';
+import { ChatBubbleLeftIcon } from '@heroicons/react/24/solid';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
@@ -28,6 +29,7 @@ import { parseViewerPath } from '../../../../../routes/routesUtil';
 import { useWorkListStore } from '../../../../../store/useWorkListStore';
 import useRemoveResource from '../../hooks/useRemoveResource';
 import BulkShareModal from '../BulkShareModal/BulkShareModal';
+import BulkWorklistModal from '../BulkWorklistModal/BulkWorklistModal';
 import { summariseBulkRemoval } from '../RemoveResourceConfirm/describeRemoval';
 import RemoveResourceConfirm from '../RemoveResourceConfirm/RemoveResourceConfirm';
 import {
@@ -82,17 +84,14 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
   };
 
   const [bulkShareStudies, setBulkShareStudies] = useState(null);
+  const [bulkWorklistStudies, setBulkWorklistStudies] = useState(null);
 
-  const handleClickShare = () => {
-    // One study opens the per-study editor, which is the only place existing policies can be seen
-    // and revoked. Two or more open the bulk dialog, which composes ONE policy and writes it across
-    // the selection -- previously the button was simply disabled here, with a tooltip saying only
-    // one resource could be shared at a time.
-    if (selectedRows.length === 1) {
-      setIsOpenedShareModal(true);
-      return;
-    }
-
+  const collectSelectedDescriptors = () => {
+    // Snapshot the selection as descriptors for a bulk dialog.
+    //
+    // Snapshotted, not read live: the dialogs stay up across a study-list refetch, which replaces
+    // the react-table row instances underneath them. Rows without a resolvable UID are dropped --
+    // a worklist row can outlive its study (see _getStudyInstanceUID).
     const descriptors = [];
 
     selectedRows.forEach(row => {
@@ -111,8 +110,37 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
       );
     });
 
+    return descriptors;
+  };
+
+  const handleClickShare = () => {
+    // One study opens the per-study editor, which is the only place existing policies can be seen
+    // and revoked. Two or more open the bulk dialog, which composes ONE policy and writes it across
+    // the selection -- previously the button was simply disabled here, with a tooltip saying only
+    // one resource could be shared at a time.
+    if (selectedRows.length === 1) {
+      setIsOpenedShareModal(true);
+      return;
+    }
+
+    const descriptors = collectSelectedDescriptors();
+
     if (descriptors.length) {
       setBulkShareStudies(descriptors);
+    }
+  };
+
+  const handleRequestReview = () => {
+    // Queue a review request for every selected study, from one group, one reviewer and one reason.
+    //
+    // Unlike Share above there is no single-study special case: the per-study dialog
+    // (CreateWorklistModal, from the row menu) is a create form with nothing extra to show -- there
+    // is no existing state to inspect the way there is for an ACL -- so the bulk dialog serves a
+    // selection of one just as well, and does it with the same progress reporting.
+    const descriptors = collectSelectedDescriptors();
+
+    if (descriptors.length) {
+      setBulkWorklistStudies(descriptors);
     }
   };
 
@@ -308,6 +336,9 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
   // does refine per resource. The server is the authority either way; an individual 403 is
   // surfaced per study.
   const aclRemove = activeServer?.perms?.remove;
+  // Bulk review requests are gated on exactly the same server permission as the per-study "Request
+  // review" item in the row menu, so a user who can request one review can request fifteen.
+  const canWorkInWorklist = activeServer?.perms?.worklist;
 
   return (
     <>
@@ -370,6 +401,20 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
             )}
           </div>
         )}
+        {/* Bulk review request: assigns every selected study to one reviewer with one reason, the
+            way Share applies one policy across the selection. Not offered on the worklist, where
+            every row is already a review request -- matching the row menu, which hides its own
+            "Request review" item there. */}
+        {!isWorkList && canWorkInWorklist && (
+          <button
+            className={styles.action}
+            disabled={!selectedRows.length}
+            onClick={handleRequestReview}
+          >
+            <ChatBubbleLeftIcon width={15} height={15} />
+            Request Review
+          </button>
+        )}
         {/* Bulk offline caching (ohif-viewers#125): queues every selected study into the Download
             Manager. Gated on the same view permission as the per-row action (AR-7); distinct from
             the zip-export 'Download' button above (AR-6). */}
@@ -430,6 +475,20 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
             // is up, and the descriptors were snapshotted off the rows when it opened.
             if (!open) {
               setBulkShareStudies(null);
+              clearSelection();
+            }
+          }}
+        />
+      )}
+      {bulkWorklistStudies && (
+        <BulkWorklistModal
+          isOpen
+          studies={bulkWorklistStudies}
+          setIsOpen={(open) => {
+            // Clear on close, matching the other bulk dialogs -- the modal reads `studies` while it
+            // is up, and the descriptors were snapshotted off the rows when it opened.
+            if (!open) {
+              setBulkWorklistStudies(null);
               clearSelection();
             }
           }}

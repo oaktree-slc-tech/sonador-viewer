@@ -41,10 +41,43 @@ export const getWorklistMembership = ({ server, groupId, term }) => {
 };
 
 
+const _rejectedRequest = async (res, url) => {
+  // Build the error a rejected worklist write throws.
+  //
+  // The `message` is unchanged from what this module has always thrown, so nothing that only reads
+  // it is affected. What is new is the structure hung off it: status, the raw body, the url and the
+  // parsed payload when the gateway sent JSON. The bulk path needs those to tell the user WHY one
+  // study out of twelve failed -- with a bare message string the only honest thing it could report
+  // was "it didn't work", which is what made a single rejected request in a large run undiagnosable.
+  //
+  // A body that is not JSON is kept as text rather than discarded: a proxy's HTML error page is
+  // still the most useful thing available when it is all there is.
+  const body = await res.text().catch(() => '');
+  let json;
+
+  try {
+    json = body ? JSON.parse(body) : undefined;
+  } catch (err) {
+    json = undefined;
+  }
+
+  const error = new Error(`HTTP ${res.status}: ${body}`);
+
+  error.status = res.status;
+  error.body = body;
+  error.url = url;
+  error.json = json;
+
+  return error;
+};
+
+
 export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userId, State, Procedure }) => {
   // Create a worklist request
 
-  return fetch(urlUtil.urlJoin(server.wadoRoot, 'studies', StudyInstanceUID, 'worklists'), {
+  const url = urlUtil.urlJoin(server.wadoRoot, 'studies', StudyInstanceUID, 'worklists');
+
+  return fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
@@ -59,8 +92,7 @@ export const createWorklistRequest = ({ server, groupId, StudyInstanceUID, userI
   })
     .then(async (res) => {
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
+        throw await _rejectedRequest(res, url);
       }
       return res.json();
     })

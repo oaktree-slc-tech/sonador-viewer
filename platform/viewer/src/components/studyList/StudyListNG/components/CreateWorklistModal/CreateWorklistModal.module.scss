@@ -1,45 +1,42 @@
+// What is specific to the per-study review-request dialog: the card size and the submit button.
+//
+// The form controls come from WorklistRequestFields, shared with the bulk dialog. The `.inputGroup`
+// and `.input` rules that used to live here went with them -- they were a second, slightly different
+// styling of the same four fields.
+
 .modal {
   width: 700px;
-  height: 700px;
   min-width: 750px;
   color: #FFFFFF;
 
-  .inputGroup {
-    position: relative;
-    margin-top: 1rem;
-    margin-bottom: 20px;
+  // No fixed height: the form discloses its fields progressively, so a card sized for the complete
+  // form left a large empty space under a dialog that had only been opened.
+}
+
+.createButtonWrapper {
+  display: flex;
+  justify-content: right;
+  margin-top: 30px;
+}
+
+.createWorklist {
+  display: flex;
+  background-color: #2E46E9;
+  border-radius: 10px;
+  padding: 10px 20px;
+  border: none;
+  font-size: 18px;
+  line-height: 21px;
+  font-weight: 600;
+  color: #FFFFFF;
+  cursor: pointer;
+
+  div {
+    height: 16px;
+    width: 16px;
   }
 
-  .input {
-    width: 100%;
-    padding: 8px;
-    font-size: 1rem;
-  }
-
-
-  .createButtonWrapper {
-    display: flex;
-    justify-content: right;
-
-    .createWorklist {
-      display: flex;
-      background-color: #2E46E9;
-      border-radius: 10px;
-      padding: 10px 20px;
-      border: none;
-      font-size: 18px;
-      line-height: 21px;
-      font-weight: 600;
-      color: #FFFFFF;
-      cursor: pointer;
-      div{
-        height: 16px;
-        width: 16px;
-      }
-
-      &:disabled {
-        cursor: not-allowed;
-      }
-    }
+  &:disabled {
+    cursor: not-allowed;
   }
 }
