@@ -156,12 +156,71 @@ $offline-indicator-gutter: 20px;
         opacity: 0;
       }
 
-      &:hover .studiesTableHeaderSorting {
+      // The carets are shown while the header is hovered or holds keyboard focus, and stay shown
+      // for the column the list is ordered by -- the active sort has to be readable without
+      // hovering every header in turn to find it.
+      &:hover .studiesTableHeaderSorting,
+      &:focus-within .studiesTableHeaderSorting,
+      &.sorted .studiesTableHeaderSorting {
         opacity: 1;
+      }
+
+      .studiesTableHeaderSortingButton {
+        display: flex;
+        padding: 0;
+        border: 0;
+        background: none;
+        line-height: 0;
+        cursor: pointer;
+
+        .studiesTableHeaderSortingIcon {
+          fill: #7a7c84;
+        }
+
+        &:hover .studiesTableHeaderSortingIcon {
+          fill: #a9a9a9;
+        }
+
+        // Direction in force: white and enlarged, so which way the column is ordered reads at a
+        // glance against its dimmed counterpart
+        &.active .studiesTableHeaderSortingIcon {
+          fill: #fff;
+          scale: 1.3;
+        }
       }
 
       .studiesTableHeaderSortingUpIcon {
         rotate: 180deg;
+      }
+
+      // Stands in for the carets on a column that cannot be sorted, keeping its label aligned with
+      // the rest of the row (the carets hold their space whether or not they are shown)
+      .studiesTableHeaderSpacer {
+        width: 11px;
+      }
+
+      &.static {
+        cursor: default;
+      }
+
+      .studiesTableHeaderLabel {
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+
+        // Inherit the header row's type: the button is a hit target, not a control of its own
+        font: inherit;
+        color: inherit;
+        letter-spacing: inherit;
+        text-align: left;
+        text-transform: inherit;
+      }
+
+      // Column the list is ordered by: brighter and heavier than the rest of the header row
+      &.sorted {
+        color: #fff;
+        font-weight: 600;
       }
     }
 

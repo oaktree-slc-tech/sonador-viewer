@@ -11,6 +11,7 @@ import { ReactComponent as ChevronDown } from '@ohif/ui/src/elements/Svg/svgs/ch
 
 import { LocalCacheService } from '@ohif/core';
 
+import { isSortableColumn } from '../../../../../lib/studyListSorting';
 import { useDeviceStore } from '../../../../../store/useDeviceStore';
 import StudyItemExpandedNG from '../../../StudyItemExpandedNG/StudyItemExpandedNG';
 import StudiesTableActions from '../StudiesTableActions/StudiesTableActions';
@@ -22,6 +23,73 @@ import styles from './StudiesTable.module.scss';
 // Columns that carry row controls/state rather than a DICOM attribute: their headers render as-is,
 // without the sort affordance and label treatment the tag columns get.
 const RAW_HEADER_COLUMN_IDS = ['selector-settings-expander', OFFLINE_INDICATOR_COLUMN_ID];
+
+const SORT_DIRECTIONS = [
+  { direction: 'asc', label: 'ascending' },
+  { direction: 'desc', label: 'descending' },
+];
+
+function StaticHeader({ children }) {
+  // Header for a column the server holds no orderable field for. The room the carets take is
+  // reserved regardless, so that every label in the header row starts at the same offset.
+  return (
+    <div className={classNames(styles.studiesTableHeaderItem, styles.static)}>
+      <div className={styles.studiesTableHeaderSpacer} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+StaticHeader.propTypes = {
+  children: PropTypes.node,
+};
+
+function SortableHeader({ columnId, sorting, onSorting, children }) {
+  // Header for a column the imaging server can order by. The label cycles the column's sort
+  // (ascending, descending, then back to the list's default order); the carets each name a
+  // direction outright, so ordering descending does not mean clicking through ascending first, and
+  // each toggles -- clicking the order in force takes the sort off again.
+  //
+  // The column currently in force keeps its carets visible -- the rest only show on hover -- and is
+  // rendered white and heavier than the other headers so the active sort is legible at a glance.
+  const isSorted = !!sorting?.fieldName && sorting.fieldName === columnId;
+  const activeDirection = isSorted ? sorting.direction : null;
+
+  return (
+    <div className={classNames(styles.studiesTableHeaderItem, { [styles.sorted]: isSorted })}>
+      <div className={styles.studiesTableHeaderSorting}>
+        {SORT_DIRECTIONS.map(({ direction, label }) => (
+          <button
+            key={direction}
+            type="button"
+            aria-label={activeDirection === direction ? `Remove ${label} sort` : `Sort ${label}`}
+            aria-pressed={activeDirection === direction}
+            className={classNames(styles.studiesTableHeaderSortingButton, {
+              [styles.active]: activeDirection === direction,
+            })}
+            onClick={() => onSorting(columnId, direction)}
+          >
+            <CaretIcon
+              className={classNames(styles.studiesTableHeaderSortingIcon, {
+                [styles.studiesTableHeaderSortingUpIcon]: direction === 'asc',
+              })}
+            />
+          </button>
+        ))}
+      </div>
+      <button type="button" className={styles.studiesTableHeaderLabel} onClick={() => onSorting(columnId)}>
+        {children}
+      </button>
+    </div>
+  );
+}
+
+SortableHeader.propTypes = {
+  columnId: PropTypes.string.isRequired,
+  sorting: PropTypes.object,
+  onSorting: PropTypes.func.isRequired,
+  children: PropTypes.node,
+};
 
 export default function StudiesTable({
   rows,
@@ -167,34 +235,18 @@ export default function StudiesTable({
                     onDragOver={isOfflineIndicator ? undefined : handleDragOver}
                     onDrop={isOfflineIndicator ? undefined : (e) => handleDrop(e, header.id)}
                   >
-                    {!RAW_HEADER_COLUMN_IDS.includes(header.id) ? (
-                      <div
-                        tabIndex={0}
-                        role='button'
-                        className={styles.studiesTableHeaderItem}
-                        onClick={() => onSorting(header.id)}
-                      >
-                        <div className={styles.studiesTableHeaderSorting}>
-                          <CaretIcon
-                            fill={
-                              sorting.fieldName === header.id && sorting.direction === 'asc'
-                                ? 'rgb(169, 169, 169)'
-                                : 'rgb(122, 124, 132)'
-                            }
-                            className={styles.studiesTableHeaderSortingUpIcon}
-                          />
-                          <CaretIcon
-                            fill={
-                              sorting.fieldName === header.id && sorting.direction === 'desc'
-                                ? 'rgb(169, 169, 169)'
-                                : 'rgb(122, 124, 132)'
-                            }
-                          />
-                        </div>
-                        <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
-                      </div>
-                    ) : (
+                    {RAW_HEADER_COLUMN_IDS.includes(header.id) ? (
                       flexRender(header.column.columnDef.header, header.getContext())
+                    ) : isSortableColumn(header.id) ? (
+                      <SortableHeader columnId={header.id} sorting={sorting} onSorting={onSorting}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </SortableHeader>
+                    ) : (
+                      // Columns the server holds no orderable field for carry no sort control:
+                      // offering one would only issue a query the server rejects.
+                      <StaticHeader>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </StaticHeader>
                     )}
                   </th>
                 );

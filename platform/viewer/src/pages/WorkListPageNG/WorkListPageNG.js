@@ -14,6 +14,7 @@ import { useStudiesTableFiltersAndColumnsStore } from '../../store/useStudiesTab
 
 import useStudiesTable from '../../hooks/useStudiesTable';
 import useStudyListRefresh from '../../hooks/useStudyListRefresh';
+import { getOrderByParam } from '../../lib/studyListSorting';
 import { useWorklistItems } from '../../queries/worklist';
 
 import Layout from '../../layouts/Layout/Layout';
@@ -68,6 +69,12 @@ export default function WorkListPageNG() {
     // Worklist search filters
 
     const offset = pageNumber >1?(pageNumber - 1) * rowsPerPage:0;
+
+    // Sorting is applied by the imaging server. The worklist rows the table holds are one page of
+    // a larger result set, so the sort has to travel with the query -- it is part of `filters`
+    // precisely so that changing it re-keys the query and refetches, the same as any other filter.
+    const orderBy = getOrderByParam(debouncedSort);
+
     return {
       allFields: debouncedSearch,
       limit: rowsPerPage,
@@ -76,8 +83,9 @@ export default function WorkListPageNG() {
       ...(assignedUserSearch && { User: assignedUserSearch }),
       ...(groupSearch && { Group: groupSearch }),
       ...(worklistStateSearch && { State: worklistStateSearch }),
+      ...(orderBy && { OrderBy: orderBy }),
     };
-  }, [workListPageFilters, assignedUserSearch, groupSearch, worklistStateSearch, debouncedSearch, rowsPerPage, pageNumber]);
+  }, [workListPageFilters, assignedUserSearch, groupSearch, worklistStateSearch, debouncedSearch, rowsPerPage, pageNumber, debouncedSort]);
 
   const debouncedFilters = useDebounce(filters, 500);
 

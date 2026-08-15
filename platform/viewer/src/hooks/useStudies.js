@@ -5,6 +5,8 @@ import moment from 'moment';
 import OHIF from '@ohif/core';
 import DICOMWeb from '@ohif/core/src/DICOMWeb';
 
+import { getOrderByParam } from '../lib/studyListSorting';
+
 import { STUDY_LIST_QUERY_KEY } from './queryKeys';
 
 const DISPLAY_TYPES = {
@@ -63,7 +65,8 @@ async function getStudyList({
   requireExplicitAccess = false,
   filters = {},
 }) {
-  const sortField = sort.fieldName ? { OrderBy: `${sort.direction === 'desc' ? '-' : ''}${sort.fieldName}` } : {};
+  const orderBy = getOrderByParam(sort);
+  const sortField = orderBy ? { OrderBy: orderBy } : {};
   const modifiedFilters = Object.entries(filters).reduce((acc, [key, value]) => {
     const filterName = key === 'Modality' ? 'ModalitiesInStudy' : key;
 
