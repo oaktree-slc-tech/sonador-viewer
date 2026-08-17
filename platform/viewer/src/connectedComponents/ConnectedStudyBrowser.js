@@ -43,7 +43,10 @@ const mapDispatchToProps = (dispatch, ownProps) => {
             dispatch(setViewportActive(0));
           }
 
-          dispatch(setLayout({ numRows: 1, numCols: 1, viewports }));
+          // numColumns (not numCols): the reducer prunes viewportSpecificData with
+          // numRows * numColumns, so a misspelled key left the extra MPR viewport entries in
+          // state after the layout had already collapsed back to a single viewport.
+          dispatch(setLayout({ numRows: 1, numColumns: 1, viewports }));
         }
       }
 

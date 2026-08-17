@@ -39,13 +39,20 @@ const findActiveViewportSpecificData = (numRows, numColumns, currentViewportSpec
   const numberOfViewports = numRows * numColumns;
   const viewportSpecificData = _.cloneDeep(currentViewportSpecificData);
 
-  if (numberOfViewports < Object.keys(viewportSpecificData).length) {
-    Object.keys(viewportSpecificData).forEach((key) => {
-      if (key > numberOfViewports - 1) {
-        delete viewportSpecificData[key];
-      }
-    });
+  // Guard against malformed dimensions (a missing/misspelled numRows or numColumns makes this
+  // NaN). Every NaN comparison below is false, so the stale data would be kept silently.
+  if (!Number.isFinite(numberOfViewports) || numberOfViewports < 1) {
+    return viewportSpecificData;
   }
+
+  // Data is keyed by viewport index, so compare each key against the new layout rather than
+  // gating on the total key count: a sparse set of keys (indices cleared, but not deleted) can
+  // hold an out-of-range index without the count exceeding the number of viewports.
+  Object.keys(viewportSpecificData).forEach((key) => {
+    if (Number(key) > numberOfViewports - 1) {
+      delete viewportSpecificData[key];
+    }
+  });
 
   return viewportSpecificData;
 };

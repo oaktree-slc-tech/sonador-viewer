@@ -117,6 +117,44 @@ describe('viewports reducer', () => {
     Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
   });
 
+  it('should handle SET_VIEWPORT_LAYOUT when an out of range viewport index remains', () => {
+    // Data is keyed by viewport index, so a sparse set of keys can hold an index which is out of
+    // range for the new layout without the key count exceeding the number of viewports.
+    const initialState = {
+      numRows: 1,
+      numColumns: 2,
+      viewportSpecificData: {
+        0: { viewportData0: 'viewportData0' },
+        2: { viewportData2: 'viewportData2' },
+      },
+      layout: {
+        viewports: [],
+      },
+      activeViewportIndex: 0,
+    };
+
+    const action = {
+      type: types.SET_VIEWPORT_LAYOUT,
+      numRows: 1,
+      numColumns: 2,
+      viewports: [],
+    };
+
+    const expectedState = {
+      numRows: 1,
+      numColumns: 2,
+      viewportSpecificData: {
+        0: { viewportData0: 'viewportData0' },
+      },
+      layout: {
+        viewports: [],
+      },
+      activeViewportIndex: 0,
+    };
+
+    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
+  });
+
   it('should handle SET_VIEWPORT_LAYOUT_AND_DATA', () => {
     const initialState = {
       numRows: 1,

@@ -47,6 +47,7 @@ const { SonadorSegmentationHeader } = csextComponents
  *
  * @param {Array} props.studies - Studies data
  * @param {Array} props.viewports - Viewports data (viewportSpecificData)
+ * @param {Object} props.layout - Current viewport layout (state.viewports.layout)
  * @param {number} props.activeIndex - Active viewport index
  * @param {boolean} props.isOpen - Boolean that indicates if the panel is expanded
  * @param {Function} props.onSegmentItemClick - Segment click handler
@@ -60,6 +61,7 @@ const { SonadorSegmentationHeader } = csextComponents
 const SegmentationPanel = ({
   studies,
   viewports,
+  layout,
   activeIndex,
   isOpen,
   onSegmentItemClick,
@@ -806,7 +808,24 @@ const SegmentationPanel = ({
 
 
   // Display state functions: display helpers for actions and UI elements
-  const showSegEditorLaunchButton = () => !isSegEditor() && isCornerstone() && Object.keys(state.segmentData).length > 0 && _.keys(viewports).length == 1;
+
+  const getDisplayedViewportCount = () => {
+    // Number of viewports currently on screen.
+    //
+    // Read this from the layout, not from the keys of viewportSpecificData: that data is keyed by
+    // viewport index and can outlive the layout which created it (e.g. leaving a 1x3 MPR layout by
+    // clicking a series thumbnail), which left the editor launch hidden over a single viewport.
+    if (layout && _.isArray(layout.viewports)) {
+      return layout.viewports.length;
+    }
+
+    return _.keys(viewports).length;
+  };
+
+  // The editor takes over the whole viewport, so it is only offered for a single Cornerstone
+  // viewport displaying a segmentation.
+  const showSegEditorLaunchButton = () => !isSegEditor() && isCornerstone()
+    && Object.keys(state.segmentData).length > 0 && getDisplayedViewportCount() === 1;
 
 
   // Build the data structure expected by SegmentationTable from cornerstone-tools state.
@@ -971,6 +990,13 @@ SegmentationPanel.propTypes = {
     SeriesTime: PropTypes.string,
     sopClassUIDs: PropTypes.arrayOf(PropTypes.string),
     StudyInstanceUID: PropTypes.string,
+  }),
+  /*
+   * Maps to: state.viewports.layout, in `viewer`. The authoritative count of displayed
+   * viewports; viewportSpecificData may still hold entries from a previous layout.
+   */
+  layout: PropTypes.shape({
+    viewports: PropTypes.array,
   }),
   activeIndex: PropTypes.number.isRequired,
   studies: PropTypes.array.isRequired,
