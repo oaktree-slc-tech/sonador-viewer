@@ -53,6 +53,10 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
 
   const viewports = useSelector((state) => state.viewports.viewportSpecificData);
   const activeViewportIndex = useSelector((state) => state.viewports.activeViewportIndex);
+  // Panels which gate UI on how many viewports are displayed need the layout: viewportSpecificData
+  // is keyed by viewport index and can outlive a layout change, so its key count is not a reliable
+  // viewport count.
+  const layout = useSelector((state) => state.viewports.layout);
   const activeServer = useSelector((state) => state.servers.servers.find((s) => s.active));
 
   const [thumbnails, setThumbnails] = useState([]);
@@ -292,7 +296,8 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
         <ErrorBoundaryDialog context="LeftSidePanel">
           <SidePanel from="left" isOpen={isLeftSidePanelOpen}>
             {VisiblePanelLeft ? (
-              <VisiblePanelLeft viewports={viewports} studies={studies} activeIndex={activeViewportIndex} />
+              <VisiblePanelLeft viewports={viewports} studies={studies} activeIndex={activeViewportIndex}
+                layout={layout} />
             ) : (
               <AppContext.Consumer>
                 {(appContext) => {
@@ -348,6 +353,7 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
                 viewports={viewports}
                 studies={studies}
                 activeIndex={activeViewportIndex}
+                layout={layout}
                 activeViewport={viewports[activeViewportIndex]}
                 getActiveViewport={getActiveViewport}
               />
