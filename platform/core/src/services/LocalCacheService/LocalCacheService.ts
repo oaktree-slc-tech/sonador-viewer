@@ -64,11 +64,22 @@ interface StudySummary {
   // True when the raw DICOM+JSON study metadata payload is stored alongside the instances,
   // enabling a fully local (network-free) study open (see put/getStudyMetadataPayload).
   hasMetadataPayload?: boolean;
+  // True when that payload describes only SOME of the study's series -- what a series-scoped
+  // download stores. A partial payload can reconstruct the series it covers, but it must not be
+  // replayed in place of the network, or the series it omits would look as though they do not
+  // exist (ohif-viewers#130).
+  metadataPayloadPartial?: boolean;
 }
 
 interface CacheIndex {
   version: number;
   studies: Record<string, StudySummary>;
+}
+
+/** A mutation's claim on the cache state it started from. See _beginCacheMutation. */
+interface CacheMutationToken {
+  generation: number;
+  clearing: boolean;
 }
 
 interface InstanceUIDs {
@@ -189,6 +200,33 @@ class LocalCacheServiceClass extends PubSubService {
 
   private _ready: Promise<void>;
 
+  // In-flight series evictions, keyed `study::series`. See removeSeries.
+  private _seriesRemovals = new Map<string, Promise<void>>();
+
+  // Serialises every mutation that touches ONE study's index entry or its metadata payload.
+  // Per-series de-duplication is not enough: the payload is study-scoped, so removing series A and
+  // series B at once takes two different de-duplication keys and would still interleave a
+  // read-modify-write over the same document, dropping one of the two removals.
+  private _studyLocks = new Map<string, Promise<unknown>>();
+
+  // The cache-wide clear protocol. `_clearing` is true for the WHOLE of clearAll, including its
+  // failure path, and `_generation` moves once when it ends. A mutation captures both before it
+  // reads anything and re-checks them before it writes, which leaves no interval uncovered:
+  //
+  //   starts and writes before the clear   -> clean token, generation unchanged   -> writes
+  //   starts before, writes during         -> a clear is running now               -> abandons
+  //   starts before, writes after          -> generation moved                    -> abandons
+  //   starts during (whenever it writes)   -> token was taken mid-clear           -> abandons
+  //   starts and writes after              -> clean token, generation unchanged   -> writes
+  //
+  // A generation bump alone cannot express this: a mutation that both starts and finishes inside
+  // the clear would see an unchanged generation at either end of its own lifetime.
+  // Held for as long as a clear is running, and shared by any caller that asks for one while it is
+  // in flight. Two overlapping clears would otherwise each own the flag, and the first to finish
+  // would declare the cache quiet while the second was still emptying it.
+  private _clearing: Promise<void> | null = null;
+  private _generation = 0;
+
   constructor() {
     super(EVENTS);
     if (_hasIndexedDB()) {
@@ -296,6 +334,43 @@ class LocalCacheServiceClass extends PubSubService {
     });
   }
 
+  /**
+   * Run `mutate` with exclusive access to one study's index entry and metadata payload.
+   *
+   * A plain promise chain per study: each caller waits on the previous one, so mutations queue in
+   * arrival order instead of interleaving their awaits. Failures do not poison the chain -- the
+   * next waiter runs regardless -- and the map entry is dropped once nothing is queued behind it.
+   */
+  private _withStudyLock<T>(StudyInstanceUID: string, mutate: () => Promise<T>): Promise<T> {
+    const previous = this._studyLocks.get(StudyInstanceUID) || Promise.resolve();
+    const result = previous.catch(() => undefined).then(mutate);
+
+    const settled = result.catch(() => undefined);
+    this._studyLocks.set(StudyInstanceUID, settled);
+    settled.then(() => {
+      if (this._studyLocks.get(StudyInstanceUID) === settled) {
+        this._studyLocks.delete(StudyInstanceUID);
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Eligibility for a cache mutation, captured BEFORE it awaits anything.
+   *
+   * Taking it after a read would misclassify an operation that began mid-clear as one that began
+   * after the clear, because by then the generation has already settled.
+   */
+  private _beginCacheMutation(): CacheMutationToken {
+    return { generation: this._generation, clearing: !!this._clearing };
+  }
+
+  /** True when the cache has not been wiped since `token` was taken, and is not being wiped now. */
+  private _mutationStillValid(token: CacheMutationToken): boolean {
+    return !token.clearing && !this._clearing && token.generation === this._generation;
+  }
+
   private async _persistIndex(): Promise<void> {
     if (!this._indexStore) {
       return;
@@ -368,23 +443,110 @@ class LocalCacheServiceClass extends PubSubService {
    * payloads the online retrieve pipeline consumes, so a cached study can be opened by replaying
    * them through the same code path with zero network requests.
    */
-  async putStudyMetadataPayload(StudyInstanceUID: string, payload: Record<string, unknown>): Promise<void> {
+  putStudyMetadataPayload(
+    StudyInstanceUID: string,
+    payload: Record<string, unknown>,
+    options: { partial?: boolean } = {}
+  ): Promise<void> {
     if (!StudyInstanceUID || !payload || !this._instanceStore) {
+      return Promise.resolve();
+    }
+    // Taken here, not inside the callback: waiting for the lock is itself an await, so a request
+    // made before a wipe could otherwise acquire the lock afterwards and take a token that looks
+    // clean for input that is already stale.
+    const token = this._beginCacheMutation();
+
+    // Under the study lock: this writes the same document a concurrent series removal prunes.
+    return this._withStudyLock(StudyInstanceUID, () =>
+      this._putStudyMetadataPayload(StudyInstanceUID, payload, { ...options, token })
+    );
+  }
+
+  /**
+   * Fold `payload` into whatever is stored for this study, atomically.
+   *
+   * The read, the merge and the write all happen inside the study's critical section. A caller that
+   * read the stored payload itself and then asked for a write would have done its read outside the
+   * lock, which is the interleaving this exists to prevent.
+   */
+  mergeStudyMetadataPayload(
+    StudyInstanceUID: string,
+    payload: Record<string, any>,
+    options: { partial?: boolean } = {}
+  ): Promise<void> {
+    if (!StudyInstanceUID || !payload || !this._instanceStore) {
+      return Promise.resolve();
+    }
+
+    // Before the lock wait AND before the read below: an operation that begins mid-clear, or that
+    // is queued behind another study mutation while a wipe happens, must still be recognisable as
+    // predating the wipe once the generation has settled.
+    const token = this._beginCacheMutation();
+
+    return this._withStudyLock(StudyInstanceUID, async () => {
+      let stored: Record<string, any> | null = null;
+      try {
+        stored = (await get(STUDY_META_KEY_PREFIX + StudyInstanceUID, this._instanceStore)) || null;
+      } catch (error) {
+        stored = null;
+      }
+
+      const merged = stored?.instancesBySeries
+        ? _mergePayloads(stored, payload)
+        : payload;
+
+      // A study-scoped payload supersedes; a series-scoped one must not downgrade a complete
+      // payload that is already stored. Read inside the lock, so it cannot change under us.
+      const partial =
+        !!options.partial && !this.hasCompleteStudyMetadataPayloadSync(StudyInstanceUID);
+
+      return this._putStudyMetadataPayload(StudyInstanceUID, merged, { partial, token });
+    });
+  }
+
+  private async _putStudyMetadataPayload(
+    StudyInstanceUID: string,
+    payload: Record<string, unknown>,
+    {
+      partial = false,
+      token,
+    }: { partial?: boolean; token?: CacheMutationToken } = {}
+  ): Promise<void> {
+    // The caller's token, not one taken here: for a merge, "here" is already past its read.
+    const claim = token || this._beginCacheMutation();
+    if (!this._mutationStillValid(claim)) {
       return;
     }
+
     await set(STUDY_META_KEY_PREFIX + StudyInstanceUID, payload, this._instanceStore);
 
     const study = this._index.studies[StudyInstanceUID];
-    if (study) {
-      study.hasMetadataPayload = true;
-      await this._persistIndex();
-      this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+    if (!this._mutationStillValid(claim) || !study) {
+      // Either the cache was wiped while this was in flight, or the study is not in the index and
+      // nothing could ever reach this document. Both leave an orphan if the key is kept.
+      await del(STUDY_META_KEY_PREFIX + StudyInstanceUID, this._instanceStore).catch(() => {});
+      return;
     }
+
+    study.hasMetadataPayload = true;
+    study.metadataPayloadPartial = partial;
+    await this._persistIndex();
+    this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
   }
 
-  /** Synchronous check used by the study-open path to decide local vs network metadata. */
+  /** Synchronous check used by the study-open path: is a payload of any kind stored? */
   hasStudyMetadataPayloadSync(StudyInstanceUID?: string): boolean {
     return !!StudyInstanceUID && !!this._index.studies[StudyInstanceUID]?.hasMetadataPayload;
+  }
+
+  /**
+   * True only when the stored payload covers the WHOLE study, which is what makes a network-free
+   * open safe: a study rebuilt from a partial payload would present the series it omits as
+   * non-existent rather than as not-yet-cached.
+   */
+  hasCompleteStudyMetadataPayloadSync(StudyInstanceUID?: string): boolean {
+    const study = StudyInstanceUID ? this._index.studies[StudyInstanceUID] : undefined;
+    return !!study?.hasMetadataPayload && !study?.metadataPayloadPartial;
   }
 
   async getStudyMetadataPayload(StudyInstanceUID: string): Promise<Record<string, any> | null> {
@@ -397,6 +559,66 @@ class LocalCacheServiceClass extends PubSubService {
   private async _removeStudyMetadataPayload(StudyInstanceUID: string): Promise<void> {
     if (this._instanceStore) {
       await del(STUDY_META_KEY_PREFIX + StudyInstanceUID, this._instanceStore).catch(() => {});
+    }
+    const study = this._index.studies[StudyInstanceUID];
+    if (study) {
+      study.hasMetadataPayload = false;
+      study.metadataPayloadPartial = false;
+    }
+  }
+
+  /**
+   * Drop one series from the stored metadata payload, leaving the rest of the study's intact.
+   *
+   * The payload becomes partial by definition once a series is removed from it: it no longer
+   * describes the whole study, so it must not be replayed in place of the network.
+   */
+  private async _pruneSeriesFromMetadataPayload(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string,
+    token: CacheMutationToken
+  ): Promise<void> {
+    const study = this._index.studies[StudyInstanceUID];
+    if (!this._instanceStore || !study?.hasMetadataPayload) {
+      return;
+    }
+
+    try {
+      const key = STUDY_META_KEY_PREFIX + StudyInstanceUID;
+      const payload = await get<Record<string, any>>(key, this._instanceStore);
+      if (!payload) {
+        study.hasMetadataPayload = false;
+        study.metadataPayloadPartial = false;
+        return;
+      }
+
+      const instancesBySeries = { ...(payload.instancesBySeries || {}) };
+      delete instancesBySeries[SeriesInstanceUID];
+
+      const series = (payload.series || []).filter(
+        (entry: any) => entry?.['0020000E']?.Value?.[0] !== SeriesInstanceUID
+      );
+
+      if (!Object.keys(instancesBySeries).length) {
+        await del(key, this._instanceStore).catch(() => {});
+        study.hasMetadataPayload = false;
+        study.metadataPayloadPartial = false;
+        return;
+      }
+
+      if (!this._mutationStillValid(token)) {
+        // The cache was wiped while the payload was being read; writing the survivor back now
+        // would resurrect a document for a study the cache no longer holds.
+        return;
+      }
+
+      await set(key, { ...payload, series, instancesBySeries }, this._instanceStore);
+      study.metadataPayloadPartial = true;
+    } catch (error) {
+      console.warn(
+        '[LocalCacheService] Failed to prune the removed series from the study metadata payload.',
+        error
+      );
     }
   }
 
@@ -652,7 +874,41 @@ class LocalCacheServiceClass extends PubSubService {
     this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
   }
 
-  async removeSeries(StudyInstanceUID: string, SeriesInstanceUID: string) {
+  /**
+   * Evict one series' local copy.
+   *
+   * De-duplicated per series while a removal is in flight. Every UI caller fires this without
+   * awaiting it -- a menu item, a popover button -- so two quick activations would otherwise both
+   * read the same `series` object before the first `await` resolves, and both subtract its
+   * `totalBytes` from the study on the way out, leaving the index reporting a size the cache does
+   * not have. The second caller now joins the first instead of racing it.
+   */
+  // Deliberately not `async`: an async function adopts the promise it returns rather than handing
+  // back the same object, so a joining caller could not be given the in-flight removal itself.
+  removeSeries(StudyInstanceUID: string, SeriesInstanceUID: string): Promise<void> {
+    const key = `${StudyInstanceUID}::${SeriesInstanceUID}`;
+    const inFlight = this._seriesRemovals.get(key);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // Taken before the lock wait, for the same reason as the payload writers.
+    const token = this._beginCacheMutation();
+
+    const removal = this._withStudyLock(StudyInstanceUID, () =>
+      this._removeSeries(StudyInstanceUID, SeriesInstanceUID, token)
+    ).finally(() => {
+      this._seriesRemovals.delete(key);
+    });
+    this._seriesRemovals.set(key, removal);
+    return removal;
+  }
+
+  private async _removeSeries(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string,
+    token: CacheMutationToken
+  ): Promise<void> {
     const series = this._index.studies[StudyInstanceUID]?.series[SeriesInstanceUID];
     if (!series) {
       return;
@@ -662,7 +918,14 @@ class LocalCacheServiceClass extends PubSubService {
       await Promise.all(sopUids.map(sop => del(sop, this._instanceStore)));
     }
 
+    // Re-read after the await: the in-flight guard covers repeat activation of THIS series, but the
+    // index is shared mutable state and anything that ran while the deletes were pending (a study
+    // removal, a clearAll) may already have taken this entry out. Subtracting its bytes twice is
+    // the corruption the guard exists to prevent, so do not do it here either.
     const study = this._index.studies[StudyInstanceUID];
+    if (!study || !study.series[SeriesInstanceUID]) {
+      return;
+    }
     study.totalBytes -= series.totalBytes;
     delete study.series[SeriesInstanceUID];
     this._seriesSet.delete(SeriesInstanceUID);
@@ -672,6 +935,12 @@ class LocalCacheServiceClass extends PubSubService {
       delete this._index.studies[StudyInstanceUID];
       this._studySet.delete(StudyInstanceUID);
       await this._removeStudyMetadataPayload(StudyInstanceUID);
+    } else {
+      // Other series remain, so the payload survives -- but it must stop describing this one.
+      // Left alone, an offline open would reconstruct the removed series from stale DICOM JSON and
+      // present images that are no longer stored, and its metadata would linger in IndexedDB after
+      // the user asked for it to be gone.
+      await this._pruneSeriesFromMetadataPayload(StudyInstanceUID, SeriesInstanceUID, token);
     }
     await this._persistIndex();
 
@@ -703,7 +972,29 @@ class LocalCacheServiceClass extends PubSubService {
    * storage" action). Uses the store-level clear rather than per-study deletes, so it is O(1)-ish
    * and also sweeps any orphaned instance records that a corrupted index no longer references.
    */
-  async clearAll(): Promise<void> {
+  clearAll(): Promise<void> {
+    // A second request while one is running joins it rather than starting another. The Clear
+    // Storage control returns as soon as the click is handled, so two clears overlapping is one
+    // impatient double-click away -- and two of them interleaved would each believe they owned the
+    // clearing state. Joining is safe because no mutation can land during a clear to be missed by
+    // the one already running.
+    if (this._clearing) {
+      return this._clearing;
+    }
+
+    const running = this._clearAll().finally(() => {
+      this._generation += 1;
+      this._clearing = null;
+    });
+
+    // Assigned synchronously, before anything can await, so a mutation starting on the next tick
+    // already sees it. The promise itself is stored rather than a swallowed copy, so a joining
+    // caller sees a failed clear fail.
+    this._clearing = running;
+    return running;
+  }
+
+  private async _clearAll(): Promise<void> {
     const studyUids = Array.from(this._studySet);
 
     if (this._instanceStore) {
@@ -718,6 +1009,32 @@ class LocalCacheServiceClass extends PubSubService {
       this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID })
     );
   }
+}
+
+/**
+ * Union two DICOM+JSON study payloads: the series lists by SeriesInstanceUID, the instance map by
+ * key. `incoming` wins for a series both describe, since it is the fresher enumeration.
+ */
+function _mergePayloads(
+  stored: Record<string, any>,
+  incoming: Record<string, any>
+): Record<string, any> {
+  const series = Array.isArray(stored.series) ? [...stored.series] : [];
+  const known = new Set(series.map(entry => entry?.['0020000E']?.Value?.[0]).filter(Boolean));
+
+  (incoming.series || []).forEach((entry: any) => {
+    const uid = entry?.['0020000E']?.Value?.[0];
+    if (uid && !known.has(uid)) {
+      series.push(entry);
+      known.add(uid);
+    }
+  });
+
+  return {
+    ...stored,
+    series,
+    instancesBySeries: { ...stored.instancesBySeries, ...incoming.instancesBySeries },
+  };
 }
 
 function _formatPatientName(pn: any): string | undefined {

@@ -64,6 +64,7 @@ export default function PageHeaderNG({ title }) {
                     className={styles.downloadManager}
                     onClick={() => setIsDownloadManagerOpen(true)}
                     aria-label={t('Manage Offline Storage')}
+                    data-cy="offline-storage-launcher"
                   >
                     <Icon name="offline-cache" />
                     {activeDownloadCount > 0 && (

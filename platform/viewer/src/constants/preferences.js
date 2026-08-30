@@ -33,6 +33,14 @@ export const PREFERENCE_SECTION_PATHS = {
   [PREFERENCE_SECTIONS.STUDYLIST]: 'studylist',
 };
 
+// Offline-storage transfer strategy (ohif-viewers#129, FR-1). Lives in the existing `general`
+// section rather than a new one: a new section would need its own server endpoint slug, its own
+// applier and a PREFERENCES_VERSION bump for a single boolean (#129 AR-7).
+//
+// Default OFF -- the per-instance transfer stays the default and the fallback.
+export const ARCHIVE_TRANSFER_PREFERENCE_KEY = 'offlineArchiveTransfer';
+export const ARCHIVE_TRANSFER_DEFAULT = false;
+
 // Study-list interfaces stored under `UserPref.studylist[version]` (FR-13). `upload` carries
 // `selectedColumns`/`columnOrder` only -- no `selectedFilters`.
 export const STUDYLIST_INTERFACES = {

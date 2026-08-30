@@ -6,11 +6,23 @@
 // Colour is the study list's own #91b9cd (the Investigational Use notice in Filters.module.scss),
 // NOT the viewer's marine cache-indicator aqua — nothing else on this page wears that, so the badge
 // read as an import from another surface.
+// A button, because it opens a popover carrying the per-series removal control; styled back down
+// to the bare badge it has always looked like.
 .indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #91b9cd;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid #2e46e9;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 
   svg {
     display: block;

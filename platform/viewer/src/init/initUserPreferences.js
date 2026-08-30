@@ -18,9 +18,11 @@
 // no-op on error, never a crash or an error dialog.
 
 import i18n from '@ohif/i18n';
-import { redux } from '@ohif/core';
+import { redux, DownloadManagerService } from '@ohif/core';
 
 import {
+  ARCHIVE_TRANSFER_DEFAULT,
+  ARCHIVE_TRANSFER_PREFERENCE_KEY,
   PREFERENCES_VERSION,
   PREFERENCE_SECTIONS,
   PREFERENCE_SECTION_PATHS,
@@ -68,6 +70,19 @@ const getReduxStore = () => (typeof window !== 'undefined' && window.store) || n
 const applyGeneral = (values) => {
   if (typeof values.language === 'string' && values.language && values.language !== i18n.language) {
     void i18n.changeLanguage(values.language);
+  }
+
+  // Offline-storage transfer strategy (ohif-viewers#129, FR-1). The service is a module singleton
+  // outside the React tree and reads this when a job STARTS, so hydrating it here is all the
+  // plumbing the download queue needs. An absent key means the stored document predates the
+  // preference: fall back to the default rather than leaving whatever a previous identity set.
+  if (DownloadManagerService) {
+    const enabled = values[ARCHIVE_TRANSFER_PREFERENCE_KEY];
+    // `applyHydrated...`, not `set...`: this fetch may resolve after the user has already changed
+    // the setting in Settings, and a value read before that change must not reinstate itself.
+    DownloadManagerService.applyHydratedArchiveTransfer(
+      typeof enabled === 'boolean' ? enabled : ARCHIVE_TRANSFER_DEFAULT
+    );
   }
 };
 

@@ -7,11 +7,18 @@
 
 import { uiNotificationService } from '@ohif/core';
 
-export const showSaveOutcome = (successMessage, sectionLabel) => ({
+/**
+ * @param {string} successMessage - Title for a successful save
+ * @param {string} sectionLabel - Section name, used in the queued/failed messages
+ * @param {string} [successDetail] - Optional second line naming what the saved settings now do.
+ *   A title alone can only say that something was saved, not what changed.
+ */
+export const showSaveOutcome = (successMessage, sectionLabel, successDetail) => ({
   onSuccess: ({ outcome }) => {
     if (outcome === 'saved') {
       uiNotificationService.show({
         title: successMessage,
+        message: successDetail,
         type: 'success',
       });
     } else if (outcome === 'queued') {

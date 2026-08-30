@@ -1,5 +1,8 @@
 .GeneralPreferences
   display: flex;
+  // Column, so the offline-storage setting sits under the language row rather than beside it.
+  // The rows below keep their own internal layout, so the language row is unchanged.
+  flex-direction: column;
   padding: 20px 0;
 
   .language
@@ -16,3 +19,35 @@
     .language-select
       flex-grow: 1.5;
       flex-basis: 0;
+
+  // Offline-storage transfer strategy (ohif-viewers#129). Same two-column proportions as the
+  // language row above, so the labels line up.
+  .offlineTransfer
+    display: flex;
+    width: 100%;
+    padding-top: 20px;
+
+    .offlineTransferLabel
+      display: flex;
+      flex-basis: 0;
+      flex-grow: 1.5;
+      justify-content: flex-end;
+      padding-right: 20px;
+
+    .offlineTransferControl
+      flex-grow: 4.5;
+      flex-basis: 0;
+
+      .offlineTransferOption
+        display: flex;
+        align-items: center;
+
+        input
+          margin: 0 8px 0 0;
+
+      .offlineTransferHelp
+        margin: 6px 0 0;
+        max-width: 520px;
+        opacity: 0.7;
+        font-size: 12px;
+        line-height: 1.4;

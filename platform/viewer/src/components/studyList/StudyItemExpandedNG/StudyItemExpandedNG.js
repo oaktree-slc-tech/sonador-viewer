@@ -11,7 +11,16 @@ import {
   ChevronDownIcon, 
 } from '@radix-ui/react-icons';
 
-import OHIF, { display, redux, DicomMetadataStore, utils, sonador } from '@ohif/core';
+import OHIF, {
+  display,
+  redux,
+  DicomMetadataStore,
+  utils,
+  sonador,
+  LocalCacheService,
+  DownloadManagerService,
+  notifySeriesQueued,
+} from '@ohif/core';
 import Loader from '@ohif/ui/src/components/Loader/Loader';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as Cube3dIcon } from '@ohif/ui/src/elements/Icon/icons/cube-3d-solid.svg';
@@ -30,6 +39,7 @@ import {
 import { _getStudyDescriptor } from '../StudyListNG/components/SelectAndSettingsAndExpandCell/SelectAndSettingsAndExpandCell';
 
 import RemoveResourceConfirm from '../StudyListNG/components/RemoveResourceConfirm/RemoveResourceConfirm';
+import useLocalCacheVersion from '../StudyListNG/hooks/useLocalCacheVersion';
 import useRemoveResource from '../StudyListNG/hooks/useRemoveResource';
 
 import Comments from './components/Comments/Comments';
@@ -217,6 +227,56 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
       numberOfSeriesRelatedInstances: displaySet?.images?.length ?? selectedThumbnail.numImageFrames,
     };
   }, [selectedThumbnail, study, studyId]);
+
+
+  // Offline-cache state for the selected series (ohif-viewers#130, AR-3). Read synchronously from
+  // the service singletons at render and kept live by useLocalCacheVersion; Metadata receives the
+  // resolved booleans and stays a presentation component (AR-2).
+  useLocalCacheVersion();
+  const seriesIsCached = !!(
+    selectedSeriesUID && LocalCacheService?.isSeriesCachedSync(selectedSeriesUID)
+  );
+  const seriesIsTransferring = !!(
+    selectedSeriesUID && DownloadManagerService?.isSeriesDownloading(selectedSeriesUID)
+  );
+  const seriesTransferInFlight = !!(
+    selectedSeriesUID &&
+    DownloadManagerService?.isSeriesTransferInFlight(studyId, selectedSeriesUID)
+  );
+
+
+  const handleSaveSeriesOffline = () => {
+    // Queue the selected series for offline storage, or cancel its transfer (ohif-viewers#130,
+    // FR-1/FR-2). The descriptor is the one the export and the removal confirmation already use,
+    // so the Download Manager row and the queued notice identify the series the same way they do.
+    if (!seriesDescriptor?.SeriesInstanceUID) {
+      return;
+    }
+
+    if (seriesIsTransferring) {
+      DownloadManagerService.cancelSeries(seriesDescriptor.SeriesInstanceUID);
+      return;
+    }
+
+    const job = DownloadManagerService.enqueueSeries({
+      server: activeServer,
+      StudyInstanceUID: studyId,
+      SeriesInstanceUID: seriesDescriptor.SeriesInstanceUID,
+      descriptor: seriesDescriptor,
+    });
+
+    notifySeriesQueued({ job });
+  };
+
+
+  const handleRemoveSeriesOffline = () => {
+    // Evicts this browser's copy of the series. No confirmation: it is reversible (FR-5), and it
+    // is deliberately not the same operation as Remove Series below.
+    if (!seriesDescriptor?.SeriesInstanceUID) {
+      return;
+    }
+    LocalCacheService.removeSeries(studyId, seriesDescriptor.SeriesInstanceUID);
+  };
 
 
   const handleDownloadSeries = () => {
@@ -424,7 +484,12 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
               selectedSeries={selectedThumbnail}
               seriesAclView={seriesAclView}
               seriesAclRemove={seriesAclRemove}
+              seriesIsCached={seriesIsCached}
+              seriesIsTransferring={seriesIsTransferring}
+              seriesTransferInFlight={seriesTransferInFlight}
               onDownloadSeries={handleDownloadSeries}
+              onSaveSeriesOffline={handleSaveSeriesOffline}
+              onRemoveSeriesOffline={handleRemoveSeriesOffline}
               onRemoveSeries={() => setPendingSeriesRemoval(seriesDescriptor)}
               onSeriesActionsOpen={resolveSeriesAcl}
             />
