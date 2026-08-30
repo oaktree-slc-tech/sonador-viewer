@@ -27,8 +27,11 @@ const formatBytes = OHIF.utils.formatBytes;
 function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
   // Offline-availability indicator for a series thumbnail (ohif-viewers#125, FR-8). Shows an
   // offline-cache icon when the series is locally cached; the hover popup (OverlayTrigger + Tooltip,
-  // reusing the getWarningInfo pattern per AR-9) reports cached-instance count + storage size and a
-  // delete-local-copy control at the bottom.
+  // reusing the getWarningInfo pattern per AR-9) reports cached-instance count + storage size.
+  //
+  // A pure indicator, with no control of its own (ohif-viewers#130, FR-7): removing the local copy
+  // is "Remove Offline Storage" in this thumbnail's own series actions menu, and two removal
+  // affordances on one thumbnail would be worse than one.
   const { t } = useTranslation('Common');
   const compute = () =>
     LocalCacheService

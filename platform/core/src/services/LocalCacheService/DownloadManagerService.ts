@@ -8,6 +8,17 @@
 // Concurrency model: multiple study jobs may run at once (FR-4), each fetching its own instances
 // with a bounded per-job pool. Cancellation is cooperative (a per-job flag + AbortController) and
 // leaves already-cached instances independently usable (AC-3).
+//
+// TWO TRANSFER MODES (ohif-viewers#129). `instances` is the original strategy and the default: one
+// WADO-RS request per SOP instance. `archives` fetches ONE server-built zip per series and unpacks
+// it in the browser (see seriesArchiveTransfer). The mode is resolved once, when a job starts, from
+// the user preference -- changing the preference does not disturb a running job (FR-1).
+//
+// The job model stays study-scoped and count-based: `progress.total / completed / failed` keeps its
+// instance-count meaning in BOTH modes, because the Download Manager dialog, the notifications, the
+// header badge and the study-list menus all read it. Series-level detail and byte counters are
+// additive optional fields, and a job hydrated from a previous release simply has none of them
+// (#129 AR-2).
 
 import { get, set, createStore } from 'idb-keyval';
 
@@ -22,11 +33,19 @@ import { isUsablePart10 } from '../../utils/dicomPart10';
 import { PubSubService } from '../_shared/pubSubServiceInterface';
 
 import LocalCacheService from './LocalCacheService';
+import transferSeriesArchive, {
+  SERIES_TRANSFER_STATES,
+  SeriesArchiveRequestError,
+} from './seriesArchiveTransfer';
 
 const EVENTS = {
   JOB_QUEUED: 'event::downloadManagerService:jobQueued',
   JOB_PROGRESS: 'event::downloadManagerService:jobProgress',
   JOB_STATE_CHANGED: 'event::downloadManagerService:jobStateChanged',
+  // The transfer-strategy preference changed (#129 FR-1). Emitted for the settings UI: preference
+  // hydration is asynchronous and lands after a settings page may already have rendered, so a form
+  // that only read the value once would show the default and then save it over the stored one.
+  TRANSFER_MODE_CHANGED: 'event::downloadManagerService:transferModeChanged',
 };
 
 const JOB_STATES = {
@@ -41,9 +60,25 @@ type JobState = typeof JOB_STATES[keyof typeof JOB_STATES];
 
 const TERMINAL_STATES: JobState[] = [JOB_STATES.CANCELLED, JOB_STATES.COMPLETED, JOB_STATES.ERROR];
 
+/** How a job retrieves instance bytes (ohif-viewers#129 FR-1). */
+const TRANSFER_MODES = {
+  INSTANCES: 'instances',
+  ARCHIVES: 'archives',
+} as const;
+
+type TransferMode = typeof TRANSFER_MODES[keyof typeof TRANSFER_MODES];
+
 // How many study jobs run concurrently, and how many instance fetches per job.
 const MAX_CONCURRENT_JOBS = 2;
 const PER_JOB_FETCH_CONCURRENCY = 5;
+
+// Concurrent SERIES ARCHIVE requests per job, sized independently of PER_JOB_FETCH_CONCURRENCY
+// (#129 AR-10). One archive request is far heavier than one instance request and the server packs
+// it on demand, so five concurrent archives per study times two concurrent studies would be a
+// materially different load on the gateway than the per-instance path. Two per job (four in
+// flight across the queue) is the deliberate starting point; #129 V-3 measures it at one, two and
+// four before this becomes a settled number.
+const PER_JOB_ARCHIVE_CONCURRENCY = 2;
 
 const JOBS_KEY = 'jobs';
 
@@ -53,9 +88,41 @@ interface InstanceUIDsForCleanup {
   SOPInstanceUID: string;
 }
 
+/** An instance an archive carried that the enumerated metadata did not mention (#129 FR-5), with
+ * the DICOM+JSON dataset read from its own bytes so it can be added to the stored study payload. */
+interface UnmatchedInstance {
+  SeriesInstanceUID: string;
+  SOPInstanceUID: string;
+  dataset: Record<string, any>;
+}
+
+/** Per-series detail for an archive-mode job (#129 §5.1). Optional on the job: absent in instance
+ * mode and on every job persisted by a release before #129. */
+interface SeriesTransfer {
+  SeriesInstanceUID: string;
+  SeriesNumber?: string | number;
+  SeriesDescription?: string;
+  Modality?: string;
+  state: string;
+  bytesReceived: number;
+  totalBytes: number | null;
+  instanceCount: number;
+  cachedCount: number;
+  failedCount: number;
+  /** Which retrieval actually served this series -- an archive, or the per-instance fallback of
+   * FR-9. Surfaced in the transfer dialog, so a fallback is visible without the console. */
+  path: 'archive' | 'instances';
+  error?: string;
+  details?: { url: string; status?: number; body?: string };
+}
+
 interface DownloadJob {
   id: string;
   StudyInstanceUID: string;
+  /** Series-scoped jobs (ohif-viewers#130) carry the series they transfer; absent means the whole
+   * study, which is what every job created before #130 is. */
+  SeriesInstanceUID?: string;
+  kind?: 'study' | 'series';
   state: JobState;
   progress: { total: number; completed: number; failed: number };
   error?: string;
@@ -69,6 +136,17 @@ interface DownloadJob {
   ServiceEpisodeID?: string;
   StudyDate?: string;
   modalities?: string;
+  SeriesNumber?: string | number;
+  SeriesDescription?: string;
+  Modality?: string;
+  // -- Archive-mode additions (#129 §5.1). Additive and optional; a consumer that knows nothing
+  // about them still renders the job correctly from `progress` alone (AR-2).
+  transferMode?: TransferMode;
+  series?: SeriesTransfer[];
+  bytesReceived?: number;
+  totalBytes?: number | null;
+  /** Series that fell back to per-instance retrieval, for the completion notice (#129 FR-9). */
+  fallbackSeriesCount?: number;
 }
 
 class DownloadManagerServiceClass extends PubSubService {
@@ -77,9 +155,23 @@ class DownloadManagerServiceClass extends PubSubService {
   private _jobs = new Map<string, DownloadJob>();
   private _servers = new Map<string, any>(); // jobId -> server config (not persisted / serialisable)
   private _cancelFlags = new Map<string, boolean>();
+  // In-flight archive requests, per job. Cancellation is cooperative for everything the run loop
+  // can poll between awaits, but a fetch parked on response headers -- or a read stalled on a
+  // server that stopped sending -- can only be interrupted by aborting it, so `cancel()` needs to
+  // reach the controllers directly.
+  private _archiveControllers = new Map<string, Set<AbortController>>();
 
   private _runningJobIds = new Set<string>();
   private _pendingQueue: string[] = [];
+
+  // Transfer strategy for jobs started from now on (#129 FR-1). Default OFF: the per-instance path
+  // stays the default and the fallback. Set from the user preference at startup hydration and
+  // whenever the preference is saved; deliberately NOT persisted here, because the preference
+  // document is the record and this is only the value a starting job reads.
+  private _archiveTransferEnabled = false;
+  // True once the user has chosen a value in this session, after which startup hydration is
+  // ignored (see applyHydratedArchiveTransfer).
+  private _archiveTransferUserSet = false;
 
   // Created lazily only when IndexedDB is available (createStore opens the DB eagerly).
   private _jobStore: ReturnType<typeof createStore> | null = null;
@@ -103,6 +195,52 @@ class DownloadManagerServiceClass extends PubSubService {
 
   get STATES() {
     return JOB_STATES;
+  }
+
+  get TRANSFER_MODES() {
+    return TRANSFER_MODES;
+  }
+
+  get SERIES_TRANSFER_STATES() {
+    return SERIES_TRANSFER_STATES;
+  }
+
+  /**
+   * Select the transfer strategy for jobs started from now on (#129 FR-1), on the user's behalf.
+   * A job already running keeps the mode it resolved when it started.
+   *
+   * Recorded as an explicit choice, which startup hydration may no longer override: the preference
+   * fetch is asynchronous, so a GET issued before the user pressed Save can land afterwards and
+   * would otherwise reinstate the value they had just changed.
+   */
+  setArchiveTransferEnabled(enabled: boolean): void {
+    this._archiveTransferUserSet = true;
+    this._setArchiveTransferEnabled(enabled);
+  }
+
+  /**
+   * Apply the value that startup preference hydration resolved. Ignored once the user has made a
+   * choice in this session -- local intent outranks a fetch that was already in flight when they
+   * made it.
+   */
+  applyHydratedArchiveTransfer(enabled: boolean): void {
+    if (this._archiveTransferUserSet) {
+      return;
+    }
+    this._setArchiveTransferEnabled(enabled);
+  }
+
+  private _setArchiveTransferEnabled(enabled: boolean): void {
+    const next = !!enabled;
+    if (this._archiveTransferEnabled === next) {
+      return;
+    }
+    this._archiveTransferEnabled = next;
+    this._broadcastEvent(EVENTS.TRANSFER_MODE_CHANGED, { archiveTransferEnabled: next });
+  }
+
+  isArchiveTransferEnabled(): boolean {
+    return this._archiveTransferEnabled;
   }
 
   private async _hydrate(): Promise<void> {
@@ -153,17 +291,50 @@ class DownloadManagerServiceClass extends PubSubService {
     return this._jobs.get(jobId);
   }
 
-  /** The in-flight (queued/downloading) job for a study, if any. Used for de-duplication (AC-4). */
+  /** The in-flight (queued/downloading) job for a study, if any. Used for de-duplication (AC-4).
+   * Series-scoped jobs are excluded: they transfer part of the study, so one must not stand in for
+   * a whole-study download (nor suppress one). */
   getActiveJobForStudy(StudyInstanceUID: string): DownloadJob | undefined {
     return this.listJobs().find(
       job =>
         job.StudyInstanceUID === StudyInstanceUID &&
-        (job.state === JOB_STATES.QUEUED || job.state === JOB_STATES.DOWNLOADING)
+        job.kind !== 'series' &&
+        _isActive(job)
     );
   }
 
   isStudyDownloading(StudyInstanceUID: string): boolean {
     return !!this.getActiveJobForStudy(StudyInstanceUID);
+  }
+
+  /** The in-flight series-scoped job for a series, if any (ohif-viewers#130 FR-2). */
+  getActiveJobForSeries(SeriesInstanceUID: string): DownloadJob | undefined {
+    return this.listJobs().find(
+      job => job.kind === 'series' && job.SeriesInstanceUID === SeriesInstanceUID && _isActive(job)
+    );
+  }
+
+  isSeriesDownloading(SeriesInstanceUID: string): boolean {
+    return !!this.getActiveJobForSeries(SeriesInstanceUID);
+  }
+
+  /**
+   * True when ANY in-flight transfer is writing this series into the cache -- its own series job,
+   * or a whole-study job for the study it belongs to.
+   *
+   * This is the #130 FR-8 signal: the series menus withhold `Remove Offline Storage` while it
+   * holds, so a removal can never be silently undone a moment later by a job that is still
+   * downloading the series it just evicted. Cancelling the transfer (or letting it finish) makes
+   * the removal available again.
+   */
+  isSeriesTransferInFlight(StudyInstanceUID: string, SeriesInstanceUID: string): boolean {
+    return this.listJobs().some(
+      job =>
+        _isActive(job) &&
+        (job.kind === 'series'
+          ? job.SeriesInstanceUID === SeriesInstanceUID
+          : job.StudyInstanceUID === StudyInstanceUID)
+    );
   }
 
   // ---- Enqueue / cancel ----------------------------------------------------------------------
@@ -187,8 +358,62 @@ class DownloadManagerServiceClass extends PubSubService {
       return existing;
     }
 
+    return this._enqueue({ server, StudyInstanceUID, descriptor, kind: 'study' });
+  }
+
+  /**
+   * Queue a single series for offline storage (ohif-viewers#130 FR-1). Same lifecycle, same
+   * cleanup and the same two transfer modes as a study job -- only the enumeration is narrowed to
+   * one series.
+   *
+   * De-duplicated on the Series UID. A series job and a whole-study job for the same study may
+   * both be queued, but they do not run at the same time -- see `_conflictsWithRunningJob`.
+   *
+   * It writes a study metadata payload covering the series it saved, marked PARTIAL, which is what
+   * lets that series be opened with no network. Partial is load-bearing: the open path replays a
+   * complete payload instead of the network but treats a partial one as a fallback behind it, so
+   * the series this job did not save are never presented as non-existent.
+   */
+  enqueueSeries({
+    server,
+    StudyInstanceUID,
+    SeriesInstanceUID,
+    descriptor = {},
+  }: {
+    server: any;
+    StudyInstanceUID: string;
+    SeriesInstanceUID: string;
+    descriptor?: Partial<DownloadJob>;
+  }): DownloadJob {
+    const existing = this.getActiveJobForSeries(SeriesInstanceUID);
+    if (existing) {
+      return existing;
+    }
+
+    return this._enqueue({
+      server,
+      StudyInstanceUID,
+      SeriesInstanceUID,
+      descriptor,
+      kind: 'series',
+    });
+  }
+
+  private _enqueue({
+    server,
+    StudyInstanceUID,
+    SeriesInstanceUID,
+    descriptor = {},
+    kind,
+  }: {
+    server: any;
+    StudyInstanceUID: string;
+    SeriesInstanceUID?: string;
+    descriptor?: Partial<DownloadJob>;
+    kind: 'study' | 'series';
+  }): DownloadJob {
     const job: DownloadJob = {
-      id: `dl-${StudyInstanceUID}-${Date.now()}`,
+      id: `dl-${SeriesInstanceUID || StudyInstanceUID}-${Date.now()}`,
       StudyInstanceUID,
       state: JOB_STATES.QUEUED,
       progress: { total: 0, completed: 0, failed: 0 },
@@ -203,6 +428,14 @@ class DownloadManagerServiceClass extends PubSubService {
       StudyDate: descriptor.StudyDate,
       modalities: descriptor.modalities,
     };
+
+    if (kind === 'series') {
+      job.kind = 'series';
+      job.SeriesInstanceUID = SeriesInstanceUID;
+      job.SeriesNumber = descriptor.SeriesNumber;
+      job.SeriesDescription = descriptor.SeriesDescription;
+      job.Modality = descriptor.Modality;
+    }
 
     this._jobs.set(job.id, job);
     this._servers.set(job.id, server);
@@ -230,6 +463,11 @@ class DownloadManagerServiceClass extends PubSubService {
     }
     this._cancelFlags.set(jobId, true);
 
+    // Abort any archive request this job has in flight. Without this the flag is only observed
+    // between awaits, so a request waiting on response headers would keep the job "cancelling"
+    // until the network timed out.
+    this._abortArchiveRequests(jobId);
+
     // A still-queued job never entered the run loop, so transition it here.
     if (job.state === JOB_STATES.QUEUED) {
       this._pendingQueue = this._pendingQueue.filter(id => id !== jobId);
@@ -237,9 +475,53 @@ class DownloadManagerServiceClass extends PubSubService {
     }
   }
 
+  private _abortArchiveRequests(jobId: string): void {
+    this._archiveControllers.get(jobId)?.forEach(controller => {
+      try {
+        controller.abort();
+      } catch (error) {
+        // An already-settled request rejects the abort on some implementations; nothing to do.
+      }
+    });
+  }
+
+  /** Registers an archive request so `cancel()` can abort it; returns its de-registration. */
+  private _trackArchiveRequest(jobId: string, controller: AbortController): () => void {
+    let controllers = this._archiveControllers.get(jobId);
+    if (!controllers) {
+      controllers = new Set();
+      this._archiveControllers.set(jobId, controllers);
+    }
+    controllers.add(controller);
+
+    // A cancel that landed between the flag check and this registration would otherwise be missed.
+    if (this._isCancelled(jobId)) {
+      controller.abort();
+    }
+
+    return () => {
+      const set = this._archiveControllers.get(jobId);
+      if (!set) {
+        return;
+      }
+      set.delete(controller);
+      if (!set.size) {
+        this._archiveControllers.delete(jobId);
+      }
+    };
+  }
+
   /** Cancel by study UID (convenience for the toolbar/study-list "Remove offline"-while-downloading). */
   cancelStudy(StudyInstanceUID: string): void {
     const job = this.getActiveJobForStudy(StudyInstanceUID);
+    if (job) {
+      this.cancel(job.id);
+    }
+  }
+
+  /** Cancel the in-flight series-scoped job for a series (ohif-viewers#130 FR-2). */
+  cancelSeries(SeriesInstanceUID: string): void {
+    const job = this.getActiveJobForSeries(SeriesInstanceUID);
     if (job) {
       this.cancel(job.id);
     }
@@ -263,6 +545,7 @@ class DownloadManagerServiceClass extends PubSubService {
     this._jobs.delete(jobId);
     this._servers.delete(jobId);
     this._cancelFlags.delete(jobId);
+    this._archiveControllers.delete(jobId);
     this._persistJobs();
     this._broadcastEvent(EVENTS.JOB_STATE_CHANGED, { job });
   }
@@ -282,9 +565,46 @@ class DownloadManagerServiceClass extends PubSubService {
     this._broadcastEvent(EVENTS.JOB_PROGRESS, { job });
   }
 
+  /**
+   * TWO JOBS TOUCHING ONE STUDY NEVER RUN AT THE SAME TIME.
+   *
+   * This is the invariant several other things rest on, so it is enforced in one place rather than
+   * defended against in each of them:
+   *
+   *   - the stored metadata payload is read, merged and written back by each job that finishes; two
+   *     concurrent jobs would read the same payload and last-writer-wins, losing a saved series;
+   *   - `pending` is computed from `isInstanceCachedSync` at job start, so two concurrent jobs both
+   *     see an instance as uncached, both store it, and both take it into their cancellation
+   *     cleanup — whichever cancels first would then revoke a copy the other completed.
+   *
+   * Serialised, both disappear: the second job starts after the first has finished, sees its
+   * instances as already cached, and neither stores nor claims them. The cost is that saving two
+   * series of one study queues rather than parallelises, which for transfers this heavy is a
+   * reasonable trade and is gentler on the server besides.
+   */
+  private _conflictsWithRunningJob(job: DownloadJob): boolean {
+    for (const runningId of this._runningJobIds) {
+      const running = this._jobs.get(runningId);
+      if (running && running.StudyInstanceUID === job.StudyInstanceUID) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private _pump(): void {
     while (this._runningJobIds.size < MAX_CONCURRENT_JOBS && this._pendingQueue.length > 0) {
-      const jobId = this._pendingQueue.shift()!;
+      // The first queued job that is not blocked by a running job for the same study. A blocked job
+      // stays queued and starts when that job finishes -- `_pump` runs again on every completion.
+      const index = this._pendingQueue.findIndex(id => {
+        const candidate = this._jobs.get(id);
+        return !candidate || candidate.state !== JOB_STATES.QUEUED || !this._conflictsWithRunningJob(candidate);
+      });
+      if (index === -1) {
+        return;
+      }
+
+      const [jobId] = this._pendingQueue.splice(index, 1);
       const job = this._jobs.get(jobId);
       if (!job || job.state !== JOB_STATES.QUEUED) {
         continue;
@@ -305,12 +625,25 @@ class DownloadManagerServiceClass extends PubSubService {
   private async _runJob(job: DownloadJob): Promise<void> {
     const jobId = job.id;
     const server = this._servers.get(jobId);
+
+    // Resolve the transfer strategy ONCE, here (#129 FR-1): changing the preference mid-transfer
+    // must not alter a job already running, and every later decision in this run reads the job.
+    job.transferMode = this._archiveTransferEnabled
+      ? TRANSFER_MODES.ARCHIVES
+      : TRANSFER_MODES.INSTANCES;
+
     this._setState(job, JOB_STATES.DOWNLOADING);
 
     let instances: any[];
+    let seriesGroups: any[] = [];
     let metadataPayload: Record<string, unknown> | null = null;
     try {
-      ({ instances, metadataPayload } = await this._enumerateInstances(server, job.StudyInstanceUID, jobId));
+      ({ instances, seriesGroups, metadataPayload } = await this._enumerateInstances(
+        server,
+        job.StudyInstanceUID,
+        jobId,
+        job.SeriesInstanceUID
+      ));
     } catch (error: any) {
       if (this._isCancelled(jobId)) {
         this._setState(job, JOB_STATES.CANCELLED);
@@ -340,25 +673,108 @@ class DownloadManagerServiceClass extends PubSubService {
     job.progress = { total: instances.length, completed: 0, failed: 0 };
     this._emitProgress(job);
 
+    // Reuse the app's DICOMweb client (same auth/CORS path as metadata retrieval) to pull each
+    // instance's Part10 bytes via WADO-RS, rather than a raw fetch of the WADO-URI (which the
+    // server may not serve or CORS-allow when configured for WADO-RS rendering). Both modes use
+    // it: archive mode for the per-series fallback of FR-9.
+    const client = this._makeWadoClient(server);
+
+    // Instances stored by THIS job — the cleanup set if the job is cancelled. Instances that were
+    // already cached before the job started are never in here, so cancelling a top-up download
+    // can't evict a previously completed one.
+    const downloadedByThisJob: InstanceUIDsForCleanup[] = [];
+
+    // Archive-only instances (#129 FR-5), merged into the metadata payload below so a zero-network
+    // open can see them.
+    const unmatchedInstances: UnmatchedInstance[] = [];
+
+    const quotaHit =
+      job.transferMode === TRANSFER_MODES.ARCHIVES
+        ? await this._runArchiveMode(
+            job,
+            server,
+            client,
+            seriesGroups,
+            downloadedByThisJob,
+            unmatchedInstances
+          )
+        : await this._runInstanceMode(job, client, instances, downloadedByThisJob);
+
+    if (this._isCancelled(jobId)) {
+      // Clean up after ourselves: remove everything this job stored (including a retrieve that was
+      // mid-flight when the cancel landed and completed afterwards).
+      await this._cleanupCancelledDownloads(downloadedByThisJob);
+      this._setState(job, JOB_STATES.CANCELLED);
+      return;
+    }
+
+    // Persist the raw study metadata payload so a cached study can be opened with ZERO network
+    // requests (the study-open path replays it through the normal retrieve pipeline). Stored even
+    // on partial success — missing instances fall back to network per-instance. Unchanged by the
+    // archive path: enumeration still runs in both modes and only byte retrieval differs, so a
+    // study cached through archives opens exactly as one cached instance-by-instance (#129 FR-4).
+    //
+    // A SERIES-scoped job stores one too, marked partial: without it the series it saved could not
+    // be opened at all without a network, because the open path has nothing to rebuild from. It is
+    // marked partial because it describes only that series, and the open path must therefore treat
+    // it as a fallback rather than as the study (ohif-viewers#130).
+    if (metadataPayload && LocalCacheService.isStudyCachedSync(job.StudyInstanceUID)) {
+      try {
+        _mergeUnmatchedIntoPayload(metadataPayload, unmatchedInstances);
+
+        // A study job enumerated the whole study, so its payload supersedes. A series job's covers
+        // only its series, so it merges into what is stored and is marked partial -- and the read,
+        // merge and write happen inside the cache's own per-study critical section rather than
+        // here, where the read would sit outside the lock that guards the write.
+        if (job.kind === 'series') {
+          await LocalCacheService.mergeStudyMetadataPayload(job.StudyInstanceUID, metadataPayload, {
+            partial: true,
+          });
+        } else {
+          await LocalCacheService.putStudyMetadataPayload(job.StudyInstanceUID, metadataPayload);
+        }
+      } catch (error) {
+        console.warn('[DownloadManagerService] Failed to store study metadata payload.', error);
+      }
+    }
+
+    if (quotaHit) {
+      this._setState(
+        job,
+        JOB_STATES.ERROR,
+        'Browser storage quota exceeded — cached what fit before running out of space.'
+      );
+    } else if (job.progress.failed > 0) {
+      this._setState(
+        job,
+        JOB_STATES.ERROR,
+        `${job.progress.failed} of ${job.progress.total} instance(s) failed to download.`
+      );
+    } else {
+      this._setState(job, JOB_STATES.COMPLETED);
+    }
+  }
+
+  /**
+   * The original strategy: one WADO-RS request per instance, through a bounded pool.
+   *
+   * @returns true when the job hit the browser storage quota and must stop.
+   */
+  private async _runInstanceMode(
+    job: DownloadJob,
+    client: any,
+    instances: any[],
+    downloadedByThisJob: InstanceUIDsForCleanup[]
+  ): Promise<boolean> {
+    const jobId = job.id;
+
     // Skip instances already cached (idempotent re-queue / partial resume) so completed counts
     // reflect real work and we never double-store (AC-4).
-    const pending = instances.filter(
-      inst => !LocalCacheService.isInstanceCachedSync(_sop(inst))
-    );
+    const pending = instances.filter(inst => !LocalCacheService.isInstanceCachedSync(_sop(inst)));
     job.progress.completed = instances.length - pending.length;
     this._emitProgress(job);
 
-    // Reuse the app's DICOMweb client (same auth/CORS path as metadata retrieval) to pull each
-    // instance's Part10 bytes via WADO-RS, rather than a raw fetch of the WADO-URI (which the
-    // server may not serve or CORS-allow when configured for WADO-RS rendering).
-    const client = this._makeWadoClient(server);
-
     let quotaHit = false;
-
-    // Instances stored by THIS job — the cleanup set if the job is cancelled. Instances that were
-    // already cached before the job started (filtered into `pending` above) are never in here, so
-    // cancelling a top-up download can't evict a previously completed one.
-    const downloadedByThisJob: InstanceUIDsForCleanup[] = [];
 
     const worker = async (inst: any): Promise<void> => {
       if (this._isCancelled(jobId) || quotaHit) {
@@ -399,52 +815,337 @@ class DownloadManagerServiceClass extends PubSubService {
 
     await this._runPool(pending, worker, PER_JOB_FETCH_CONCURRENCY);
 
-    if (this._isCancelled(jobId)) {
-      // Clean up after ourselves: remove everything this job stored (including a retrieve that was
-      // mid-flight when the cancel landed and completed afterwards).
-      await this._cleanupCancelledDownloads(downloadedByThisJob);
-      this._setState(job, JOB_STATES.CANCELLED);
+    return quotaHit;
+  }
+
+  /**
+   * The archive strategy (#129 §5.2): one server-built zip per series, extracted and indexed as it
+   * arrives.
+   *
+   * Retrieval, extraction and the cache writes live in seriesArchiveTransfer; what stays here is
+   * the job lifecycle both modes share — the already-cached skip, the retry, the per-instance
+   * fallback, the counter roll-up and the cancellation cleanup set.
+   *
+   * @returns true when the job hit the browser storage quota and must stop.
+   */
+  private async _runArchiveMode(
+    job: DownloadJob,
+    server: any,
+    client: any,
+    seriesGroups: any[],
+    downloadedByThisJob: InstanceUIDsForCleanup[],
+    unmatchedInstances: UnmatchedInstance[]
+  ): Promise<boolean> {
+    const jobId = job.id;
+
+    job.series = seriesGroups.map(group => ({
+      SeriesInstanceUID: group.SeriesInstanceUID,
+      SeriesNumber: group.SeriesNumber,
+      SeriesDescription: group.SeriesDescription,
+      Modality: group.Modality,
+      state: SERIES_TRANSFER_STATES.QUEUED,
+      bytesReceived: 0,
+      totalBytes: null,
+      instanceCount: group.instances.length,
+      cachedCount: 0,
+      failedCount: 0,
+      path: 'archive' as const,
+    }));
+    job.bytesReceived = 0;
+    job.totalBytes = null;
+    job.fallbackSeriesCount = 0;
+
+    // Series already fully cached are counted in before anything is requested (FR-11).
+    const alreadyCachedBySeries = new Map<string, Set<string>>();
+    seriesGroups.forEach((group, index) => {
+      const cached = new Set<string>(
+        group.instances
+          .map((inst: any) => _sop(inst))
+          .filter((sop: string) => LocalCacheService.isInstanceCachedSync(sop))
+      );
+      alreadyCachedBySeries.set(group.SeriesInstanceUID, cached);
+
+      const detail = job.series![index];
+      detail.cachedCount = cached.size;
+      if (cached.size === detail.instanceCount && detail.instanceCount > 0) {
+        detail.state = SERIES_TRANSFER_STATES.COMPLETE;
+        // A fully-cached series reports a known size of zero rather than an unknown one, so it
+        // cannot by itself force the aggregate onto the count-based fallback (FR-7).
+        detail.totalBytes = 0;
+      }
+    });
+    this._rollUpSeriesProgress(job);
+
+    let quotaHit = false;
+
+    const worker = async (group: any): Promise<void> => {
+      const detail = job.series!.find(s => s.SeriesInstanceUID === group.SeriesInstanceUID)!;
+
+      if (this._isCancelled(jobId) || quotaHit) {
+        return;
+      }
+      if (detail.state === SERIES_TRANSFER_STATES.COMPLETE) {
+        return; // Fully cached already; no request issued (FR-11).
+      }
+
+      const alreadyCached = alreadyCachedBySeries.get(group.SeriesInstanceUID)!;
+      // Every SOP instance of this series known to be cached, counting from what was already there.
+      // A union rather than a running increment: an archive carries the whole series, including
+      // instances already cached, and a retry re-stores what the first attempt landed — both of
+      // which would over-report a counter that only ever went up.
+      const cachedSops = new Set<string>(alreadyCached);
+      const metadataBySOP: Record<string, any> = {};
+      group.instances.forEach((inst: any) => {
+        const metadata = inst.metadata || inst;
+        if (metadata.SOPInstanceUID) {
+          metadataBySOP[metadata.SOPInstanceUID] = metadata;
+        }
+      });
+
+      const runArchive = async () => {
+        detail.error = undefined;
+        detail.details = undefined;
+        let untrack: (() => void) | null = null;
+        try {
+          return await transferSeriesArchive({
+            server,
+            StudyInstanceUID: job.StudyInstanceUID,
+            SeriesInstanceUID: group.SeriesInstanceUID,
+            metadataBySOP,
+            alreadyCached,
+            isCancelled: () => this._isCancelled(jobId) || quotaHit,
+            onRequestStarted: controller => {
+              untrack = this._trackArchiveRequest(jobId, controller);
+            },
+            onUnmatchedInstance: instance => {
+              // Kept so the study metadata payload written at the end of the job describes this
+              // instance too -- otherwise it is cached but invisible to a zero-network open (FR-5).
+              unmatchedInstances.push(instance);
+            },
+            onState: state => {
+              detail.state = state;
+              this._emitProgress(job);
+            },
+            onProgress: ({ bytesReceived, totalBytes }) => {
+              detail.bytesReceived = bytesReceived;
+              detail.totalBytes = totalBytes;
+              this._rollUpSeriesProgress(job);
+              this._emitProgress(job);
+            },
+            onInstanceStored: uids => {
+              // Only instances THIS job introduced go in the cleanup set. An archive carries the
+              // whole series, so a partially-cached series re-stores instances an earlier completed
+              // download put there — cancelling must not evict those (FR-10).
+              if (!alreadyCached.has(uids.SOPInstanceUID)) {
+                downloadedByThisJob.push(uids);
+              }
+              cachedSops.add(uids.SOPInstanceUID);
+              detail.cachedCount = cachedSops.size;
+              this._rollUpSeriesProgress(job);
+            },
+          });
+        } finally {
+          // Always de-register, on success, failure and abort alike, so a finished request cannot
+          // be aborted later and the map does not grow across retries.
+          untrack?.();
+        }
+      };
+
+      // FR-9: one retry, then the per-instance fallback for THIS series only. Series granularity
+      // exists precisely to make retry cheap, and a study must not be left without an offline copy
+      // because one archive response failed.
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const outcome = await runArchive();
+          if (outcome.cancelled) {
+            detail.state = SERIES_TRANSFER_STATES.CANCELLED;
+            return;
+          }
+          detail.failedCount = outcome.failed;
+          detail.bytesReceived = outcome.bytesReceived;
+          detail.totalBytes = outcome.totalBytes;
+          detail.state = outcome.failed
+            ? SERIES_TRANSFER_STATES.FAILED
+            : SERIES_TRANSFER_STATES.COMPLETE;
+          lastError = null;
+
+          if (outcome.failed) {
+            // Members arrived but could not be cached (AR-9). There is no transfer-syntax control
+            // on the archive route, so the only way to recover those instances is per-instance
+            // retrieval — the same fallback a failed request takes.
+            break;
+          }
+          this._rollUpSeriesProgress(job);
+          this._emitProgress(job);
+          return;
+        } catch (error: any) {
+          if (this._isCancelled(jobId)) {
+            detail.state = SERIES_TRANSFER_STATES.CANCELLED;
+            return;
+          }
+          if (_isQuotaError(error)) {
+            quotaHit = true;
+            detail.state = SERIES_TRANSFER_STATES.FAILED;
+            detail.error = 'Browser storage quota exceeded.';
+            this._rollUpSeriesProgress(job);
+            this._emitProgress(job);
+            return;
+          }
+          lastError = error;
+          detail.error = error?.message || String(error);
+          if (error instanceof SeriesArchiveRequestError) {
+            detail.details = error.details;
+          }
+        }
+      }
+
+      if (lastError) {
+        console.error(
+          `[DownloadManagerService] Series archive failed for ${group.SeriesInstanceUID} ` +
+          `(job ${job.id}); falling back to per-instance retrieval.`,
+          lastError
+        );
+      }
+
+      // Per-instance fallback for this series. Other series keep using archives.
+      detail.path = 'instances';
+      detail.state = SERIES_TRANSFER_STATES.DOWNLOADING;
+      job.fallbackSeriesCount = (job.fallbackSeriesCount || 0) + 1;
+
+      // Discard the abandoned archive attempt's byte counters. They describe a transfer that is no
+      // longer happening, and the per-instance path does not advance them: left in place, a
+      // numeric `totalBytes` keeps the job's aggregate in byte mode (see _rollUpSeriesProgress),
+      // where it would stall short of 100% even as the fallback completes every instance. `null`
+      // means "size unknown", which is true, and drops the job to the honest count-based form.
+      detail.bytesReceived = 0;
+      detail.totalBytes = null;
+      this._rollUpSeriesProgress(job);
+      this._emitProgress(job);
+
+      let failed = 0;
+      const pending = group.instances.filter((inst: any) => !LocalCacheService.isInstanceCachedSync(_sop(inst)));
+
+      await this._runPool(
+        pending,
+        async (inst: any) => {
+          if (this._isCancelled(jobId) || quotaHit) {
+            return;
+          }
+          try {
+            await this._downloadInstance(client, inst);
+            const m = inst.metadata || inst;
+            downloadedByThisJob.push({
+              StudyInstanceUID: m.StudyInstanceUID,
+              SeriesInstanceUID: m.SeriesInstanceUID,
+              SOPInstanceUID: m.SOPInstanceUID,
+            });
+            if (!alreadyCached.has(m.SOPInstanceUID)) {
+              detail.cachedCount += 1;
+            }
+          } catch (error: any) {
+            if (this._isCancelled(jobId)) {
+              return;
+            }
+            if (_isQuotaError(error)) {
+              quotaHit = true;
+              return;
+            }
+            failed += 1;
+          } finally {
+            this._rollUpSeriesProgress(job);
+            this._emitProgress(job);
+          }
+        },
+        PER_JOB_FETCH_CONCURRENCY
+      );
+
+      if (this._isCancelled(jobId)) {
+        detail.state = SERIES_TRANSFER_STATES.CANCELLED;
+      } else if (quotaHit) {
+        detail.state = SERIES_TRANSFER_STATES.FAILED;
+        detail.error = 'Browser storage quota exceeded.';
+      } else {
+        detail.failedCount = failed;
+        detail.state = failed ? SERIES_TRANSFER_STATES.FAILED : SERIES_TRANSFER_STATES.COMPLETE;
+        if (!failed) {
+          detail.error = undefined;
+          detail.details = undefined;
+        }
+      }
+      this._rollUpSeriesProgress(job);
+      this._emitProgress(job);
+    };
+
+    await this._runPool(seriesGroups, worker, PER_JOB_ARCHIVE_CONCURRENCY);
+
+    this._rollUpSeriesProgress(job);
+    this._emitProgress(job);
+
+    return quotaHit;
+  }
+
+  /**
+   * Roll the per-series counters up into the study-scoped `progress` (#129 AR-2).
+   *
+   * `progress.total / completed / failed` keeps its instance-count meaning in both modes, so every
+   * existing consumer — the dialog, the notifications, the header badge, the study-list menus —
+   * renders an archive job correctly without knowing archive mode exists.
+   *
+   * The byte aggregate is reported ONLY when every series has a known size (a series that has not
+   * started yet does not have one). A denominator that grows as series start would be a false
+   * percentage, which FR-7 rules out; until then the dialog falls back to the count-based form.
+   */
+  private _rollUpSeriesProgress(job: DownloadJob): void {
+    if (!job.series) {
       return;
     }
 
-    // Persist the raw study metadata payload so a cached study can be opened with ZERO network
-    // requests (the study-open path replays it through the normal retrieve pipeline). Stored even
-    // on partial success — missing instances fall back to network per-instance.
-    if (metadataPayload && LocalCacheService.isStudyCachedSync(job.StudyInstanceUID)) {
-      try {
-        await LocalCacheService.putStudyMetadataPayload(job.StudyInstanceUID, metadataPayload);
-      } catch (error) {
-        console.warn('[DownloadManagerService] Failed to store study metadata payload.', error);
-      }
-    }
+    let completed = 0;
+    let failed = 0;
+    let bytesReceived = 0;
+    let totalBytes: number | null = 0;
 
-    if (quotaHit) {
-      this._setState(
-        job,
-        JOB_STATES.ERROR,
-        'Browser storage quota exceeded — cached what fit before running out of space.'
-      );
-    } else if (job.progress.failed > 0) {
-      this._setState(
-        job,
-        JOB_STATES.ERROR,
-        `${job.progress.failed} of ${job.progress.total} instance(s) failed to download.`
-      );
-    } else {
-      this._setState(job, JOB_STATES.COMPLETED);
-    }
+    job.series.forEach(series => {
+      completed += series.cachedCount;
+      failed += series.failedCount;
+      bytesReceived += series.bytesReceived;
+      if (totalBytes !== null && typeof series.totalBytes === 'number') {
+        totalBytes += series.totalBytes;
+      } else {
+        totalBytes = null;
+      }
+    });
+
+    job.progress.completed = Math.min(completed, job.progress.total);
+    job.progress.failed = failed;
+    job.bytesReceived = bytesReceived;
+    job.totalBytes = totalBytes;
   }
 
   /**
    * Enumerate every instance of a study with the app's DICOMweb client (QIDO series search +
    * per-series WADO-RS metadata — the same requests the online retrieve pipeline makes), keeping
    * the RAW DICOM+JSON payloads so they can be stored for network-free study opens.
+   *
+   * Runs in BOTH transfer modes: a zip archive carries no naturalized metadata, and `putInstance`
+   * requires it, so archive mode replaces per-instance byte retrieval only (#129 FR-4).
+   *
+   * `onlySeriesInstanceUID` narrows the enumeration to one series for a series-scoped job
+   * (ohif-viewers#130). The returned payload then covers only that series, and the caller stores it
+   * marked partial — enough to rebuild the saved series with no network, while the partial marking
+   * keeps it from standing in for the study and hiding the series it does not describe.
    */
   private async _enumerateInstances(
     server: any,
     StudyInstanceUID: string,
-    jobId: string
-  ): Promise<{ instances: any[]; metadataPayload: Record<string, unknown> | null }> {
+    jobId: string,
+    onlySeriesInstanceUID?: string
+  ): Promise<{
+    instances: any[];
+    seriesGroups: any[];
+    metadataPayload: Record<string, unknown> | null;
+  }> {
     const client = new StaticWadoClient({
       ...server,
       url: server.qidoRoot || server.wadoRoot,
@@ -461,14 +1162,19 @@ class DownloadManagerServiceClass extends PubSubService {
 
     const { naturalizeDataset } = dcmjs.data.DicomMetaDictionary;
     const instances: any[] = [];
+    const seriesGroups: any[] = [];
     const instancesBySeries: Record<string, any[]> = {};
 
     for (const series of seriesSorted) {
       if (this._isCancelled(jobId)) {
         break;
       }
-      const seriesInstanceUID = getSeriesInfo(series).SeriesInstanceUID;
+      const seriesInfo = getSeriesInfo(series);
+      const seriesInstanceUID = seriesInfo.SeriesInstanceUID;
       if (!seriesInstanceUID) {
+        continue;
+      }
+      if (onlySeriesInstanceUID && seriesInstanceUID !== onlySeriesInstanceUID) {
         continue;
       }
 
@@ -478,6 +1184,19 @@ class DownloadManagerServiceClass extends PubSubService {
           seriesInstanceUID,
         })) || [];
       instancesBySeries[seriesInstanceUID] = sopInstances;
+
+      // Per-series grouping, in the enumerated (sorted) order archive mode transfers in. Instance
+      // mode ignores it and works off the flat list, exactly as before.
+      // getSeriesInfo exposes Modality and a SeriesNumber that defaults to 0, and no description;
+      // the naturalized instance metadata below carries all three properly, so the series JSON is
+      // only the fallback.
+      const group = {
+        SeriesInstanceUID: seriesInstanceUID,
+        SeriesNumber: undefined as string | number | undefined,
+        SeriesDescription: undefined as string | undefined,
+        Modality: seriesInfo.Modality || undefined,
+        instances: [] as any[],
+      };
 
       sopInstances.forEach((instJson: any) => {
         let metadata: Record<string, any>;
@@ -489,16 +1208,44 @@ class DownloadManagerServiceClass extends PubSubService {
         metadata.StudyInstanceUID = metadata.StudyInstanceUID || StudyInstanceUID;
         metadata.SeriesInstanceUID = metadata.SeriesInstanceUID || seriesInstanceUID;
         instances.push({ metadata });
+        group.instances.push({ metadata });
+
+        group.SeriesNumber = group.SeriesNumber ?? metadata.SeriesNumber;
+        group.SeriesDescription = group.SeriesDescription || metadata.SeriesDescription;
+        group.Modality = group.Modality || metadata.Modality;
       });
+
+      group.SeriesNumber = group.SeriesNumber ?? (seriesInfo.SeriesNumber || undefined);
+
+      seriesGroups.push(group);
     }
 
     return {
       instances,
-      metadataPayload: { series: seriesSorted, instancesBySeries },
+      seriesGroups,
+      // For a series-scoped job this describes only the requested series, and the caller stores it
+      // marked partial. It is stored rather than withheld because it is the only thing that can
+      // rebuild that series without a network; marking it partial is what stops the open path from
+      // presenting the study's other series as non-existent (ohif-viewers#130).
+      metadataPayload: {
+        series: onlySeriesInstanceUID
+          ? seriesSorted.filter(
+              (series: any) => getSeriesInfo(series).SeriesInstanceUID === onlySeriesInstanceUID
+            )
+          : seriesSorted,
+        instancesBySeries,
+      },
     };
   }
 
-  /** Remove the instances a cancelled job stored, so a cancelled transfer leaves no partial data. */
+  /**
+   * Remove the instances a cancelled job stored, so a cancelled transfer leaves no partial data.
+   *
+   * `items` holds only what this job INTRODUCED -- an instance already cached when the job started
+   * is never added to it. Combined with the one-job-per-study rule in `_pump`, that makes an
+   * unconditional delete correct: no other job can have stored these bytes, because no other job
+   * for this study was running.
+   */
   private async _cleanupCancelledDownloads(items: InstanceUIDsForCleanup[]): Promise<void> {
     for (const item of items) {
       try {
@@ -634,6 +1381,48 @@ function _sop(inst: any): string {
   return (inst.metadata || inst).SOPInstanceUID;
 }
 
+/**
+ * Add archive-only instances to the study metadata payload (#129 FR-5).
+ *
+ * Caching such an instance is only half the job: `buildStudyFromCachedMetadata` reconstructs a
+ * network-free study open purely from this payload and then sets `seriesLoader = null`, so an
+ * instance the payload does not mention is stored but invisible — an offline copy with a hole in
+ * it, which is exactly what FR-5 exists to prevent.
+ *
+ * The datasets are already DICOM+JSON, the same shape `retrieveSeriesMetadata` returns, so they
+ * append directly. A series the enumeration never saw gets its own entry.
+ */
+function _mergeUnmatchedIntoPayload(
+  payload: Record<string, any>,
+  unmatched: UnmatchedInstance[]
+): void {
+  if (!unmatched.length || !payload?.instancesBySeries) {
+    return;
+  }
+
+  unmatched.forEach(({ SeriesInstanceUID, SOPInstanceUID, dataset }) => {
+    if (!dataset || !SeriesInstanceUID) {
+      return;
+    }
+    const series = payload.instancesBySeries[SeriesInstanceUID] || [];
+
+    // Idempotent: a re-queue re-extracts the same archive, and the payload must not accumulate
+    // duplicate instances across runs.
+    const alreadyPresent = series.some(
+      (instance: any) => instance?.['00080018']?.Value?.[0] === SOPInstanceUID
+    );
+    if (!alreadyPresent) {
+      series.push(dataset);
+    }
+    payload.instancesBySeries[SeriesInstanceUID] = series;
+  });
+}
+
+/** Queued or downloading — the two states a job is still writing into the cache from. */
+function _isActive(job: DownloadJob): boolean {
+  return job.state === JOB_STATES.QUEUED || job.state === JOB_STATES.DOWNLOADING;
+}
+
 function _isQuotaError(error: any): boolean {
   return (
     error &&
@@ -646,5 +1435,13 @@ function _isQuotaError(error: any): boolean {
 
 const DownloadManagerService = new DownloadManagerServiceClass();
 
-export { DownloadManagerService, EVENTS as DownloadManagerServiceEvents, JOB_STATES };
+export {
+  DownloadManagerService,
+  EVENTS as DownloadManagerServiceEvents,
+  JOB_STATES,
+  // Archive-mode vocabulary (#129 AR-6). Distinct names, never `JOB_STATES` and never the export
+  // queue's `ARCHIVE_JOB_STATES`.
+  TRANSFER_MODES,
+  SERIES_TRANSFER_STATES,
+};
 export default DownloadManagerService;

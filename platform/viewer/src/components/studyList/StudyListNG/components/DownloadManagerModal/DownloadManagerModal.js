@@ -14,12 +14,14 @@ import OHIF, {
   LocalCacheService,
   DownloadManagerService,
   JOB_STATES,
+  TRANSFER_MODES,
+  SERIES_TRANSFER_STATES,
   clearOfflineStorageWithNotice,
 } from '@ohif/core';
 import { useDebounce, Icon } from '@ohif/ui';
 import {
-  HoverCard,
-  HoverCardTrigger,
+  Popover,
+  PopoverTrigger,
   Tooltip,
   TooltipTrigger,
   TooltipContent,
@@ -59,12 +61,50 @@ function jobMatchesSearch(job, needle) {
     .some(value => String(value).toLowerCase().includes(needle));
 }
 
+// Aggregate progress (ohif-viewers#129, FR-7). Byte-based when the server reported a size for
+// every series of an archive transfer, and count-based otherwise. Never a mixture, and never an
+// estimate: a denominator that grew as each series started would be a false percentage.
 function jobPercent(job) {
+  if (isArchiveJob(job) && job.totalBytes) {
+    return Math.min(100, Math.round(((job.bytesReceived || 0) / job.totalBytes) * 100));
+  }
+
   const { total, completed } = job.progress || {};
   if (!total) {
     return 0;
   }
   return Math.min(100, Math.round((completed / total) * 100));
+}
+
+function isArchiveJob(job) {
+  // `transferMode` is absent on jobs persisted before #129; those are instance-mode jobs.
+  return job?.transferMode === TRANSFER_MODES.ARCHIVES;
+}
+
+// The detail line under a job's progress bar: state, then whichever aggregate FR-7 selected, then
+// the transfer mode when it is not the default, then the error.
+function jobDetailLine(job, t) {
+  const pieces = [t(_stateLabel(job))];
+
+  if (isArchiveJob(job) && job.totalBytes) {
+    pieces.push(`${formatBytes(job.bytesReceived || 0)} ${t('of')} ${formatBytes(job.totalBytes)}`);
+  } else {
+    pieces.push(`${job.progress?.completed || 0}/${job.progress?.total || 0}`);
+  }
+
+  if (isArchiveJob(job)) {
+    const series = job.series || [];
+    const complete = series.filter(s => s.state === SERIES_TRANSFER_STATES.COMPLETE).length;
+    if (series.length) {
+      pieces.push(`${complete}/${series.length} ${t('series')}`);
+    }
+  }
+
+  if (job.error) {
+    pieces.push(job.error);
+  }
+
+  return pieces.join(' · ');
 }
 
 // Primary line for a download card: Patient Name, (Patient ID) as de-emphasized secondary text,
@@ -127,6 +167,20 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
   );
   const storedStudies = LocalCacheService ? LocalCacheService.searchCachedStudies(debouncedSearch) : [];
 
+  // Per-series eviction from the details card (ohif-viewers#130, FR-6). Reversible and unconfirmed,
+  // like every other offline-copy removal in this dialog.
+  const handleRemoveSeries = (StudyInstanceUID, SeriesInstanceUID) => {
+    if (!StudyInstanceUID || !SeriesInstanceUID) {
+      return;
+    }
+    LocalCacheService.removeSeries(StudyInstanceUID, SeriesInstanceUID);
+  };
+
+  // FR-8: no removal control for a series a transfer is still writing, so a removal can never be
+  // undone by the job that follows it. Same rule the two series menus apply.
+  const isSeriesRemovable = StudyInstanceUID => SeriesInstanceUID =>
+    !DownloadManagerService?.isSeriesTransferInFlight(StudyInstanceUID, SeriesInstanceUID);
+
   const renderActiveTab = () => {
     if (!activeJobs.length) {
       return <p className={styles.empty}>{t('No active transfers')}</p>;
@@ -138,22 +192,43 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
 
       return (
         <div key={job.id} className={styles.row}>
-          <HoverCard openDelay={300}>
-            <HoverCardTrigger asChild>
-              <div className={styles.rowMain}>
-                <div className={styles.rowTitle}>{renderPrimaryLine(job, t, styles)}</div>
+          <Popover>
+            {/* A popover: the card it opens carries the per-series removal control, and Radix
+                hover-card content cannot be reached by keyboard. */}
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={styles.rowMain}
+                aria-label={t('Transfer details')}
+                data-cy="offline-transfer-row"
+              >
+                <div className={styles.rowTitle}>
+                  {renderPrimaryLine(job, t, styles)}
+                  {/* How this study is being transferred (FR-8). Only archive mode is badged: an
+                      instance-mode row is unchanged from before #129, and the word "archive" here
+                      means a way of moving the offline copy, never a file saved to the computer
+                      (AR-6) — hence "Series archives", not "Download". */}
+                  {isArchiveJob(job) && (
+                    <span className={styles.modeBadge}>{t('Series archives')}</span>
+                  )}
+                  {job.kind === 'series' && (
+                    <span className={styles.modeBadge}>{t('Single series')}</span>
+                  )}
+                </div>
                 {renderDescriptionLine(job, styles)}
                 <div className={styles.progressTrack}>
                   <div className={styles.progressFill} style={{ width: `${percent}%` }} />
                 </div>
-                <div className={styles.rowSub}>
-                  {t(_stateLabel(job))} · {job.progress?.completed || 0}/{job.progress?.total || 0}
-                  {job.error ? ` · ${job.error}` : ''}
-                </div>
-              </div>
-            </HoverCardTrigger>
-            <StudyOfflineDetailsCard item={job} />
-          </HoverCard>
+                <div className={styles.rowSub}>{jobDetailLine(job, t)}</div>
+              </button>
+            </PopoverTrigger>
+            <StudyOfflineDetailsCard
+              item={job}
+              job={isArchiveJob(job) ? job : undefined}
+              onRemoveSeries={handleRemoveSeries}
+              isSeriesRemovable={isSeriesRemovable(job.StudyInstanceUID)}
+            />
+          </Popover>
           <button
             type="button"
             className={styles.actionButton}
@@ -270,19 +345,28 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
 
     return storedStudies.map(summary => (
       <div key={summary.StudyInstanceUID} className={styles.row}>
-        <HoverCard openDelay={300}>
-          <HoverCardTrigger asChild>
-            <div className={styles.rowMain}>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={styles.rowMain}
+              aria-label={t('Offline study details')}
+              data-cy="offline-study-row"
+            >
               <div className={styles.rowTitle}>{renderPrimaryLine(summary, t, styles)}</div>
               {renderDescriptionLine(summary, styles)}
               <div className={styles.rowSub}>
                 {summary.seriesCount} {t('series')} · {summary.instanceCount} {t('instances')}
                 {summary.modalities ? <> · {summary.modalities}</> : null} · {formatBytes(summary.totalBytes)}
               </div>
-            </div>
-          </HoverCardTrigger>
-          <StudyOfflineDetailsCard item={summary} />
-        </HoverCard>
+            </button>
+          </PopoverTrigger>
+          <StudyOfflineDetailsCard
+            item={summary}
+            onRemoveSeries={handleRemoveSeries}
+            isSeriesRemovable={isSeriesRemovable(summary.StudyInstanceUID)}
+          />
+        </Popover>
         <button
           type="button"
           className={styles.actionButton}
@@ -314,6 +398,7 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
           type="button"
           className={activeTab === TABS.STORED ? styles.tabActive : styles.tab}
           onClick={() => setActiveTab(TABS.STORED)}
+          data-cy="offline-studies-tab"
         >
           {t('Offline Studies')}
         </button>

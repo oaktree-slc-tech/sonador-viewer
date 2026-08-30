@@ -1,6 +1,13 @@
 {
   "Cancel": "$t(Buttons:Cancel)",
+  "GeneralSettingsSaved": "General settings saved",
+  "Language": "Language",
   "No hotkeys found": "No hotkeys are configured for this application. Hotkeys can be configured in the application's app-config.js file.",
+  "Offline storage": "Offline storage",
+  "OfflineArchiveTransferHelp": "Fetches one compressed archive per series instead of one request per image. This is usually much faster over slow or high-latency connections. The copy stored on this device is the same either way.",
+  "OfflineArchiveTransferLabel": "Transfer offline copies as per-series archives",
+  "OfflineArchiveTransferSavedOff": "Offline copies will be transferred one image at a time. Transfers already in progress are not affected.",
+  "OfflineArchiveTransferSavedOn": "Offline copies will be transferred as one archive per series. Transfers already in progress are not affected.",
   "Reset to Defaults": "$t(Buttons:Reset to Defaults)",
   "ResetDefaultMessage": "Preferences successfully reset to default. <br /> You must <strong>Save</strong> to perform this action.",
   "Save": "$t(Buttons:Save)",

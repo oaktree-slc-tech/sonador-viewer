@@ -266,6 +266,8 @@ export default function StudiesTable({
                 return (
                   <Fragment key={row.id}>
                     <tr
+                      data-cy="study-row"
+                      data-study-uid={studyId}
                       onClick={() => {
                         tableContainerRef.current?.scrollTo({ left: 0 });
                         row.getToggleExpandedHandler()();

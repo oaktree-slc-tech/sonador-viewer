@@ -1,12 +1,12 @@
-// Hover-details card for a cached study (ohif-viewers#125). Shared by the Offline Storage dialog
+// Details card for a cached study (ohif-viewers#125). Shared by the Offline Storage dialog
 // and the study-results table's offline indicator.
 //
-// ui-next HoverCardContent portals to document.body, so it must out-stack the ModalNG content
+// ui-next PopoverContent portals to document.body, so it must out-stack the ModalNG content
 // (z-index 200) it is opened over — Radix copies the CONTENT's z-index onto the popper wrapper, so
 // it is set here, on the content class. Width overrides the default w-64, and the background and
 // text colour the component's theme tokens with the study list's gray/black scheme.
 //
-// The border is NOT set here: HoverCardContent carries the --overlay-line token, which is the
+// The border is NOT set here: PopoverContent carries the --overlay-line token, which is the
 // canonical charcoal for every floating menu surface (ohif-viewers#128). This rule used to restate
 // it locally to escape the aqua border-input token, which is how the app ended up framing the same
 // Radix primitive in two different colours depending on the consumer.
@@ -17,6 +17,10 @@
   max-width: 520px;
   background: #1e1f23;
   color: #d3d3d3;
+  // Stated here rather than inherited from the primitive: PopoverContent's own padding is `p-1`.
+  padding: 16px;
+  border-radius: 6px;
+  text-align: left;
 }
 
 .detailsTitle {
@@ -72,5 +76,32 @@
 
   tr:last-child td {
     border-bottom: none;
+  }
+}
+
+// A series whose transfer failed, so the row that needs attention is findable at a glance
+// (ohif-viewers#129).
+.transferFailed {
+  color: #e46e6e;
+}
+
+// Per-series "remove offline storage" control (ohif-viewers#130, FR-6). Deliberately quiet: it
+// evicts a local copy, which is reversible, and must not read like the destructive server-side
+// removal that lives in the series menus.
+.seriesRemoveButton {
+  background: transparent;
+  border: none;
+  padding: 0 2px;
+  color: #9a9da4;
+  cursor: pointer;
+  line-height: 0;
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    color: #fff;
   }
 }

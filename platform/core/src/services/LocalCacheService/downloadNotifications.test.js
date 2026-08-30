@@ -8,9 +8,14 @@
 import { uiNotificationService } from '../UINotificationService';
 import { notificationLogService } from '../NotificationLogService';
 
-import DownloadManagerService, { DownloadManagerServiceEvents, JOB_STATES } from './DownloadManagerService';
+import DownloadManagerService, {
+  DownloadManagerServiceEvents,
+  JOB_STATES,
+  TRANSFER_MODES,
+} from './DownloadManagerService';
 import {
   notifyStudiesQueued,
+  notifySeriesQueued,
   clearOfflineStorageWithNotice,
   startDownloadNotifications,
   stopDownloadNotifications,
@@ -36,6 +41,19 @@ const JOB = {
   PatientName: 'Doe^Jane',
   PatientID: 'MRN0042',
   StudyDescription: 'CT CHEST',
+};
+
+// A series-scoped job (ohif-viewers#130): same shape, plus the series attributes every notice
+// about it is composed from.
+const SERIES_JOB = {
+  ...JOB,
+  id: 'dl-1.2.3.4-1000',
+  kind: 'series',
+  SeriesInstanceUID: '1.2.3.4',
+  SeriesNumber: 4,
+  SeriesDescription: 'AXIAL 1.25MM',
+  Modality: 'CT',
+  progress: { total: 60, completed: 0, failed: 0 },
 };
 
 let shown;
@@ -102,6 +120,26 @@ describe('notifyStudiesQueued', () => {
   });
 });
 
+describe('notifySeriesQueued (ohif-viewers#130, FR-9)', () => {
+  it('names the series rather than the study, and carries its UID', () => {
+    notifySeriesQueued({ job: SERIES_JOB });
+
+    expect(shown).toHaveLength(1);
+    expect(shown[0].title).toBe('Series queued for offline storage');
+    expect(shown[0].message).toContain('Series 4');
+    expect(shown[0].message).toContain('AXIAL 1.25MM');
+    // `seriesInstanceUID` is consumed by UINotificationService (it routes to the unified log) and
+    // is not forwarded to the renderer, so it is not observable on `shown` -- same as the
+    // study-scoped notices above.
+  });
+
+  it('stays silent without a job', () => {
+    notifySeriesQueued({});
+
+    expect(shown).toHaveLength(0);
+  });
+});
+
 describe('job outcomes', () => {
   it('announces a completed download with its stored image count', () => {
     broadcastState({ ...JOB, id: 'dl-completed', state: JOB_STATES.COMPLETED });
@@ -110,6 +148,31 @@ describe('job outcomes', () => {
     expect(shown[0].type).toBe('success');
     expect(shown[0].title).toBe('Study saved for offline use');
     expect(shown[0].message).toContain('240 images stored on this device');
+    // The default transfer is not worth a sentence; only archive mode names itself (#129 FR-8).
+    expect(shown[0].message).not.toContain('archive');
+  });
+
+  it('names the transfer mode and any per-series fallback for an archive job (#129 FR-8/FR-9)', () => {
+    broadcastState({
+      ...JOB,
+      id: 'dl-archived',
+      state: JOB_STATES.COMPLETED,
+      transferMode: TRANSFER_MODES.ARCHIVES,
+      fallbackSeriesCount: 1,
+    });
+
+    expect(shown).toHaveLength(1);
+    expect(shown[0].message).toContain('Transferred as per-series archives.');
+    expect(shown[0].message).toContain('1 series was retrieved image by image');
+  });
+
+  it('announces a completed series transfer as a series (#130 FR-9)', () => {
+    broadcastState({ ...SERIES_JOB, id: 'dl-series-done', state: JOB_STATES.COMPLETED });
+
+    expect(shown).toHaveLength(1);
+    expect(shown[0].title).toBe('Series saved for offline use');
+    expect(shown[0].message).toContain('Series 4');
+    expect(shown[0].message).toContain('60 images stored on this device');
   });
 
   it('announces a failure with the job error, sticky and logged', () => {

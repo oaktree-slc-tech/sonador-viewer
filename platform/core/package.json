@@ -47,6 +47,7 @@
     "@cornerstonejs/tools": "~4.22.13",
     "@icr/polyseg-wasm": "^0.4.0",
     "dicomweb-client": "^0.8.3",
+    "fflate": "0.7.3",
     "immutability-helper": "^3.1.1",
     "immer": "^10.0.3",
     "mathjs": "11.8.2",

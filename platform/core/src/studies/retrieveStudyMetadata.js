@@ -64,7 +64,7 @@ export function retrieveStudyMetadata(server, StudyInstanceUID, filters, separat
     // this study (memoized instance imageIds, thumbnails, stacks) is constructed with the cache
     // membership fully populated, keeping every downstream request local for cached studies.
     promise = LocalCacheService.ready().then(() => {
-      if (LocalCacheService.hasStudyMetadataPayloadSync(StudyInstanceUID)) {
+      if (LocalCacheService.hasCompleteStudyMetadataPayloadSync(StudyInstanceUID)) {
         return buildStudyFromCachedMetadata(server, StudyInstanceUID).catch((error) => {
           console.warn(
             `${moduleName}: cached-metadata open failed for ${StudyInstanceUID}; falling back to network.`,
@@ -73,6 +73,22 @@ export function retrieveStudyMetadata(server, StudyInstanceUID, filters, separat
           return RetrieveMetadata(server, StudyInstanceUID, filters);
         });
       }
+
+      // A PARTIAL payload — what a series-scoped download stores (ohif-viewers#130) — describes
+      // only the series that were saved. Replaying it in place of the network would present the
+      // study as though its other series did not exist, so the network comes first and the payload
+      // is the fallback: online the user gets the whole study, offline they get the series they
+      // deliberately saved instead of a failed open.
+      if (LocalCacheService.hasStudyMetadataPayloadSync(StudyInstanceUID)) {
+        return RetrieveMetadata(server, StudyInstanceUID, filters).catch((error) => {
+          console.warn(
+            `${moduleName}: metadata retrieval failed for ${StudyInstanceUID}; opening the locally cached series.`,
+            error
+          );
+          return buildStudyFromCachedMetadata(server, StudyInstanceUID);
+        });
+      }
+
       return RetrieveMetadata(server, StudyInstanceUID, filters);
     });
   } else {

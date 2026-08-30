@@ -3,9 +3,15 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import i18n from '@ohif/i18n';
+import { DownloadManagerService } from '@ohif/core';
 import { LanguageSwitcher, TabFooter } from '@ohif/ui';
 
-import { PREFERENCES_VERSION, PREFERENCE_SECTIONS } from '../../constants/preferences';
+import {
+  ARCHIVE_TRANSFER_DEFAULT,
+  ARCHIVE_TRANSFER_PREFERENCE_KEY,
+  PREFERENCES_VERSION,
+  PREFERENCE_SECTIONS,
+} from '../../constants/preferences';
 import { useUpdateUserPreferenceSection } from '../../queries/preferences';
 
 import { showSaveOutcome } from './saveOutcomeNotification';
@@ -25,20 +31,30 @@ function GeneralPreferences({ onClose }) {
   const { availableLanguages } = i18n;
 
   const [language, setLanguage] = useState(currentLanguage);
+  // Read from the service, which is where the hydrated preference lives (ohif-viewers#129, FR-1).
+  const [archiveTransfer, setArchiveTransfer] = useState(
+    () => DownloadManagerService?.isArchiveTransferEnabled?.() ?? ARCHIVE_TRANSFER_DEFAULT
+  );
 
   const onResetPreferences = () => {
     setLanguage(i18n.defaultLanguage);
+    setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
   };
 
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
   const onSave = () => {
-    // Local application first (AR-5): i18n keeps its own detection cache as the fallback.
+    // Local application first (AR-5): i18n keeps its own detection cache as the fallback, and the
+    // download queue reads its transfer mode from the service when a job starts.
     i18n.changeLanguage(language);
+    DownloadManagerService?.setArchiveTransferEnabled?.(archiveTransfer);
 
     // Cloud sync through the write queue (FR-7).
     saveGeneralSection(
-      { version: PREFERENCES_VERSION, values: { language } },
+      {
+        version: PREFERENCES_VERSION,
+        values: { language, [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer },
+      },
       showSaveOutcome(t('SaveMessage'), 'general preferences')
     );
 
@@ -55,6 +71,31 @@ function GeneralPreferences({ onClose }) {
             Language
           </label>
           <LanguageSwitcher language={language} onLanguageChange={setLanguage} languages={availableLanguages} />
+        </div>
+
+        {/* Offline-storage transfer strategy (ohif-viewers#129, FR-1). Worded in transfer terms
+            rather than implementation terms, and deliberately NOT as "download an archive" — this
+            saves nothing to the user's computer; the Downloads menu is what does that (AR-6). */}
+        <div className="offlineTransfer">
+          <label className="offlineTransferLabel" htmlFor="offline-archive-transfer">
+            Offline storage
+          </label>
+          <div className="offlineTransferControl">
+            <div className="offlineTransferOption">
+              <input
+                id="offline-archive-transfer"
+                type="checkbox"
+                checked={archiveTransfer}
+                onChange={event => setArchiveTransfer(event.target.checked)}
+              />
+              <span>Transfer offline copies as per-series archives</span>
+            </div>
+            <p className="offlineTransferHelp">
+              Fetches one compressed archive per series instead of one request per image. This is
+              usually much faster over slow or high-latency connections. The copy stored on this
+              device is the same either way.
+            </p>
+          </div>
         </div>
       </div>
       <TabFooter

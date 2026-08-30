@@ -116,9 +116,27 @@
   }
 }
 
+// A button: it opens the details popover, which carries the per-series removal control. Reset to
+// the block the row has always looked like.
 .rowMain {
   flex: 1;
   min-width: 0;
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid #2e46e9;
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
 }
 
 .rowTitle {
@@ -128,6 +146,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+// Transfer-mode chip on a job's title line (ohif-viewers#129, FR-8). Present only when the job is
+// not the plain per-instance study transfer, so a row that behaves as it always has looks as it
+// always has.
+.modeBadge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 7px;
+  border: 1px solid #3a3d44;
+  border-radius: 9px;
+  color: #9a9da4;
+  font-weight: 400;
+  font-size: 11px;
+  vertical-align: middle;
 }
 
 // De-emphasized inline identifier on the title line (e.g. the Patient ID next to the name).
@@ -198,8 +231,8 @@
   font-size: 16px;
 }
 
-// The hover-details card itself lives in StudyOfflineDetailsCard (shared with the study-results
-// table's offline indicator), along with its styles.
+// The details card itself lives in StudyOfflineDetailsCard (shared with the study-results table's
+// offline indicator), along with its styles.
 
 // Bulk controls rendered inline with the search box (#125): "Clear storage" (Locally Stored) and
 // "Cancel all transfers" (Active Transfers).

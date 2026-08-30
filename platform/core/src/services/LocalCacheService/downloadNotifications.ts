@@ -18,13 +18,18 @@
 //     cancel notices for the transfers the wipe has to stop.
 
 import { uiNotificationService } from '../UINotificationService';
-import { describeStudy } from '../../utils/describeStudy';
+import { describeStudy, describeSeries } from '../../utils/describeStudy';
 import formatBytes from '../../utils/formatBytes';
 
 import DownloadManagerService, {
   DownloadManagerServiceEvents,
   JOB_STATES,
+  TRANSFER_MODES,
 } from './DownloadManagerService';
+
+/** A job's user-facing label: a series-scoped job names the series, a study job the study. */
+const _describeJob = (job: any): string =>
+  job?.kind === 'series' ? describeSeries(job) : describeStudy(job);
 
 /** Where a queued study can be watched. Repeated in every queue notice, so it lives in one place. */
 const TRACK_PROGRESS = 'Track progress in the Download Manager.';
@@ -116,6 +121,35 @@ export function notifyStudiesQueued({
     message,
     type: 'info',
     studyInstanceUID: queuedCount === 1 ? queued[0]?.StudyInstanceUID : undefined,
+  });
+}
+
+/**
+ * Announce that ONE SERIES was queued for offline storage (ohif-viewers#130 FR-9).
+ *
+ * Series-scoped rather than study-scoped: the notice names the series the user picked, and carries
+ * `seriesInstanceUID` so the Issues list and any series-aware surface can key on it. The phrasing
+ * follows `describeSeries`, which the archive-export notifications already established, so the two
+ * queues describe a series identically even though they share nothing else.
+ *
+ * There is no "already cached" / "already downloading" counterpart to `notifyStudiesQueued`'s:
+ * both menus withhold the item entirely in those states, so the user is never told about a click
+ * they could not have made.
+ *
+ * @param {object} outcome
+ * @param {object} outcome.job - The queued job, for its display fields
+ */
+export function notifySeriesQueued({ job }: { job?: any } = {}): void {
+  if (!job) {
+    return;
+  }
+
+  uiNotificationService.show({
+    title: 'Series queued for offline storage',
+    message: `${describeSeries(job)} is downloading in the background. ${TRACK_PROGRESS}`,
+    type: 'info',
+    studyInstanceUID: job.StudyInstanceUID,
+    seriesInstanceUID: job.SeriesInstanceUID,
   });
 }
 
@@ -219,7 +253,8 @@ function _onJobStateChanged({ job }): void {
     return;
   }
 
-  const label = describeStudy(job);
+  const label = _describeJob(job);
+  const isSeriesJob = job.kind === 'series';
 
   switch (job.state) {
     case JOB_STATES.COMPLETED: {
@@ -227,10 +262,18 @@ function _onJobStateChanged({ job }): void {
       const stored = job.progress?.total || 0;
 
       uiNotificationService.show({
-        title: 'Study saved for offline use',
-        message: `${label} — ${stored} ${_plural(stored, 'image', 'images')} stored on this device.`,
+        title: isSeriesJob ? 'Series saved for offline use' : 'Study saved for offline use',
+        message: [
+          `${label} — ${stored} ${_plural(stored, 'image', 'images')} stored on this device.`,
+          // How it was transferred, when that was not the default (#129 FR-8/§5.4). One line, not
+          // one per series: a per-series notification stream would drown the Issues list.
+          _describeTransferMode(job),
+        ]
+          .filter(Boolean)
+          .join(' '),
         type: 'success',
         studyInstanceUID: job.StudyInstanceUID,
+        seriesInstanceUID: job.SeriesInstanceUID,
       });
       break;
     }
@@ -243,14 +286,20 @@ function _onJobStateChanged({ job }): void {
       // renders in its Details drawer.
       uiNotificationService.show({
         title: 'Offline download failed',
-        message: `${label} — ${job.error || 'The study could not be saved to this device.'}`,
+        message: `${label} — ${job.error || 'The data could not be saved to this device.'}`,
         type: 'error',
         autoClose: false,
         studyInstanceUID: job.StudyInstanceUID,
+        seriesInstanceUID: job.SeriesInstanceUID,
         details: {
           jobId: job.id,
           StudyInstanceUID: job.StudyInstanceUID,
+          SeriesInstanceUID: job.SeriesInstanceUID,
+          transferMode: job.transferMode,
           progress: job.progress,
+          // Per-series diagnostics for an archive transfer: which series failed, which path served
+          // it, and the URL/status/body of a failed archive request (#129 FR-13).
+          series: _failedSeriesDetails(job),
         },
       });
       break;
@@ -269,6 +318,7 @@ function _onJobStateChanged({ job }): void {
         message: `${label} — nothing from this download was kept on the device.`,
         type: 'info',
         studyInstanceUID: job.StudyInstanceUID,
+        seriesInstanceUID: job.SeriesInstanceUID,
       });
       break;
     }
@@ -305,4 +355,51 @@ export function stopDownloadNotifications(): void {
 
 function _capitalize(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+/**
+ * One sentence naming the transfer mode, for a completed archive-mode job (#129 FR-8).
+ *
+ * Says "transferred as per-series archives", never "downloaded an archive": in this dialog
+ * "archive" now means both a zip file and a way of moving an offline copy, and this notice must
+ * not read as though a file was saved to the user's computer (#129 AR-6).
+ */
+function _describeTransferMode(job: any): string {
+  if (job?.transferMode !== TRANSFER_MODES.ARCHIVES) {
+    return '';
+  }
+
+  const fallbacks = job.fallbackSeriesCount || 0;
+  const mode = 'Transferred as per-series archives.';
+
+  if (!fallbacks) {
+    return mode;
+  }
+
+  // "series" is its own plural, so only the verb changes.
+  return `${mode} ${fallbacks} series ${_plural(fallbacks, 'was', 'were')} retrieved image by image ` +
+    'after the archive could not be used.';
+}
+
+/** The failed/fallback series of an archive job, for the Issues list Details drawer. */
+function _failedSeriesDetails(job: any) {
+  if (!Array.isArray(job?.series)) {
+    return undefined;
+  }
+
+  const notable = job.series.filter(
+    (series: any) => series.failedCount > 0 || series.error || series.path === 'instances'
+  );
+
+  return notable.length
+    ? notable.map((series: any) => ({
+        SeriesInstanceUID: series.SeriesInstanceUID,
+        SeriesNumber: series.SeriesNumber,
+        state: series.state,
+        path: series.path,
+        failedCount: series.failedCount,
+        error: series.error,
+        details: series.details,
+      }))
+    : undefined;
 }

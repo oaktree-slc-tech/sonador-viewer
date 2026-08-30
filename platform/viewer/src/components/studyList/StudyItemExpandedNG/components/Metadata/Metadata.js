@@ -18,6 +18,7 @@ import { ReactComponent as ClosedEyeIcon } from '@ohif/ui/src/elements/Svg/svgs/
 import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as EyeIcon } from '@ohif/ui/src/elements/Svg/svgs/eye.svg';
 import { ReactComponent as FiltersIcon } from '@ohif/ui/src/elements/Svg/svgs/filters.svg';
+import { ReactComponent as OfflineCacheIcon } from '@ohif/ui/src/elements/Icon/icons/offline-cache.svg';
 import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
@@ -35,7 +36,12 @@ export default function Metadata({
   seriesCount,
   seriesAclView = false,
   seriesAclRemove = false,
+  seriesIsCached = false,
+  seriesIsTransferring = false,
+  seriesTransferInFlight = false,
   onDownloadSeries,
+  onSaveSeriesOffline,
+  onRemoveSeriesOffline,
   onRemoveSeries,
   onSeriesActionsOpen,
 }) {
@@ -178,6 +184,36 @@ export default function Metadata({
       Icon: DownloadIcon,
       iconClassName: classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon),
       onSelect: onDownloadSeries,
+    });
+
+    // Save THIS series into this browser's offline cache (ohif-viewers#130, FR-1/FR-2). Same
+    // `view` gate as the export above. "Save Series Offline" against #125's study-scoped "Save
+    // Offline Copy": neither is a variant of the other, and neither writes a file to the
+    // computer -- that is what "Download Series" does (AR-1).
+    //
+    // Absent when the series is already cached, and absent while the STUDY transfer is writing it
+    // -- queueing it then would start a second transfer of the same images.
+    if (seriesIsTransferring || (!seriesIsCached && !seriesTransferInFlight)) {
+      seriesActions.push({
+        id: 'save-series-offline',
+        label: seriesIsTransferring ? t('Cancel Transfer') : t('Save Series Offline'),
+        Icon: OfflineCacheIcon,
+        iconClassName: classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon),
+        onSelect: onSaveSeriesOffline,
+      });
+    }
+  }
+
+  // Evicts this browser's cached copy. NOT gated on the server `remove` grant (FR-4) -- it touches
+  // no server data -- and withheld while a transfer is still writing this series, so a removal can
+  // never be silently undone by the job that follows it (FR-8).
+  if (seriesIsCached && !seriesTransferInFlight) {
+    seriesActions.push({
+      id: 'remove-series-offline',
+      label: t('Remove Offline Storage'),
+      Icon: OfflineCacheIcon,
+      iconClassName: classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon),
+      onSelect: onRemoveSeriesOffline,
     });
   }
 
@@ -344,7 +380,14 @@ Metadata.propTypes = {
   // a presentation component and does no fetching of its own (AR-8).
   seriesAclView: PropTypes.bool,
   seriesAclRemove: PropTypes.bool,
+  // Offline-cache signals for the selected series (ohif-viewers#130). Read from the services by
+  // the drawer and passed down, so this component still calls no service of its own (AR-2).
+  seriesIsCached: PropTypes.bool,
+  seriesIsTransferring: PropTypes.bool,
+  seriesTransferInFlight: PropTypes.bool,
   onDownloadSeries: PropTypes.func,
+  onSaveSeriesOffline: PropTypes.func,
+  onRemoveSeriesOffline: PropTypes.func,
   onRemoveSeries: PropTypes.func,
   onSeriesActionsOpen: PropTypes.func,
 };
