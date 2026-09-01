@@ -8,9 +8,11 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 import OHIF, {
+  redux,
   LocalCacheService,
   DownloadManagerService,
   JOB_STATES,
@@ -124,7 +126,7 @@ function renderPrimaryLine(item, t, styles) {
     );
   }
   if (item.ServiceEpisodeID) {
-    pieces.push(<span key="episode">{t('Service Episode')} {item.ServiceEpisodeID}</span>);
+    pieces.push(<span key="episode">{t('Service Episode ID')} {item.ServiceEpisodeID}</span>);
   }
 
   if (!pieces.length) {
@@ -153,6 +155,10 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
   // Bumps on every LocalCacheService / DownloadManagerService event, re-rendering the modal so the
   // lists below (read fresh from the services each render) stay live.
   useLocalCacheVersion();
+
+  // The server a Retry binds to (ohif-viewers#131 FR-7), sourced the way every enqueue call site
+  // sources it. Configs are never persisted with a job, so a re-run attaches the active one.
+  const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
   const [activeTab, setActiveTab] = useState(TABS.ACTIVE);
   const [searchValue, setSearchValue] = useState('');
@@ -189,6 +195,13 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
     return activeJobs.map(job => {
       const percent = jobPercent(job);
       const terminal = [JOB_STATES.COMPLETED, JOB_STATES.CANCELLED, JOB_STATES.ERROR].includes(job.state);
+      // Retry stands beside Dismiss on a failed row, including "Interrupted by page reload" rows
+      // (FR-5). The re-run fetches only what the local cache is missing.
+      const failed = job.state === JOB_STATES.ERROR;
+      const retryable = failed && DownloadManagerService.matchesServer(job, activeServer);
+      const retryHelp = retryable
+        ? t('Retry this transfer. Only images missing from this device are fetched.')
+        : t('This transfer belongs to a different imaging server. Switch to that server to retry it.');
 
       return (
         <div key={job.id} className={styles.row}>
@@ -229,6 +242,40 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
               isSeriesRemovable={isSeriesRemovable(job.StudyInstanceUID)}
             />
           </Popover>
+          {failed && (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* `aria-disabled`, not `disabled`. A truly disabled button takes no focus and
+                      emits no pointer events, so the one row whose control needs an explanation
+                      would be the one row that cannot deliver it to a keyboard or screen-reader
+                      user. Focusable and describable, with the click refused instead. */}
+                  <button
+                    type="button"
+                    className={styles.retryButton}
+                    aria-disabled={!retryable}
+                    aria-label={t('Retry Transfer')}
+                    aria-describedby={`${job.id}-retry-help`}
+                    onClick={() => retryable && DownloadManagerService.retry(job.id, activeServer)}
+                    data-cy="offline-transfer-retry"
+                  >
+                    {/* The registry's circular retry arrow, deliberately not the `refresh.svg`
+                        the Offline Studies tab uses for "re-read the list". */}
+                    <Icon name="reset" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className={styles.tooltipContent}>
+                  <div className={styles.tooltipBody}>{retryHelp}</div>
+                </TooltipContent>
+              </Tooltip>
+              {/* The same sentence, off-screen and permanently in the accessibility tree. The
+                  tooltip is a hover/focus affordance; this is what makes the explanation part of
+                  the control's accessible description regardless of how it was reached. */}
+              <span id={`${job.id}-retry-help`} className={styles.visuallyHidden}>
+                {retryHelp}
+              </span>
+            </TooltipProvider>
+          )}
           <button
             type="button"
             className={styles.actionButton}
@@ -409,7 +456,7 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
           <SearchIcon />
           <input
             type="search"
-            placeholder={t('Search by Patient, Study, Series, Accession, Service Episode, or UID')}
+            placeholder={t('Search by Patient, Study, Series, Accession, Service Episode ID, or UID')}
             value={searchValue}
             onChange={e => setSearchValue(e.target.value)}
             className={styles.searchInput}

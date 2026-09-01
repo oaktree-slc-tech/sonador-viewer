@@ -14,10 +14,11 @@
 // SCOPE, STATED PRECISELY so these cases are not read as more than they are. What is exercised:
 // the trigger takes focus, Enter opens the card, Radix moves focus into the content, Escape closes
 // it and returns focus to the trigger, and the removal control is focusable and activates on Enter.
-// What is NOT exercised: the browser's own Tab sequence. Cypress 13 has no native tab command and
-// `cy.realPress` comes from `cypress-real-events`, which is deliberately not a dependency here, so
-// the control is reached with `.focus()`. That distinguishes "focusable" from "actually next in the
-// tab order" -- these cases prove the former.
+// What is NOT exercised: the browser's own Tab sequence. Cypress 13 has no native tab command, so
+// the control is reached with `.focus()`, which distinguishes "focusable" from "actually next in
+// the tab order" -- these cases prove the former. Where the tab order itself is the property under
+// test, use the `cy.realTab` / `cy.realTabTo` commands in `support/commands.js`, which dispatch
+// through the DevTools protocol; OfflineStorageRetryKeyboard.spec.js does exactly that.
 
 const SEEDED_STUDY = '1.2.826.0.1.3680043.999.42';
 const SEEDED_SERIES_ONE = `${SEEDED_STUDY}.1`;

@@ -572,3 +572,81 @@ Cypress.Commands.add('setLanguage', (language, save = true) => {
     cy.get(toClick).scrollIntoView().click();
   });
 });
+
+// Real browser key events, dispatched by Chrome itself (ohif-viewers#131).
+//
+// Cypress has no native Tab command, and `.focus()` proves only that an element CAN hold focus --
+// not that the browser's sequential focus navigation reaches it. These go through the DevTools
+// protocol, so the key is delivered by the browser and focus moves exactly as it would for a user.
+// Chrome-family browsers only; the e2e scripts already pin `--browser chrome`.
+
+// What each key is on the wire. `key` is the DOM KeyboardEvent.key value and is NOT the friendly
+// name: Space is " ", which is what Chrome matches when deciding whether to activate a control.
+// `text` is sent as a separate `char` event for the keys whose default action needs one; Tab is
+// deliberately without it, since a char event for Tab types a tab character into a focused field.
+const KEYS = {
+  Tab: { key: 'Tab', code: 'Tab', keyCode: 9 },
+  Enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
+  Space: { key: ' ', code: 'Space', keyCode: 32, text: ' ' },
+  Escape: { key: 'Escape', code: 'Escape', keyCode: 27 },
+};
+
+const dispatchKey = (type, name, modifiers) => {
+  const { key, code, keyCode, text } = KEYS[name];
+
+  return Cypress.automation('remote:debugger:protocol', {
+    command: 'Input.dispatchKeyEvent',
+    params: {
+      type,
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+      nativeVirtualKeyCode: keyCode,
+      text: type === 'char' ? text : undefined,
+      modifiers,
+    },
+  });
+};
+
+/** Press a key for real. */
+Cypress.Commands.add('realKey', (name, { shift = false } = {}) => {
+  if (!KEYS[name]) {
+    throw new Error(`realKey does not know the key "${name}".`);
+  }
+  const modifiers = shift ? 8 : 0;
+
+  return cy
+    .then(() => dispatchKey('rawKeyDown', name, modifiers))
+    .then(() => (KEYS[name].text ? dispatchKey('char', name, modifiers) : null))
+    .then(() => dispatchKey('keyUp', name, modifiers))
+    // The dispatch resolves when Chrome accepts the event, which is before the page has handled it.
+    .wait(50, { log: false });
+});
+
+/** Press Tab (or Shift+Tab) for real. */
+Cypress.Commands.add('realTab', ({ shift = false } = {}) => cy.realKey('Tab', { shift }));
+
+/**
+ * Press Tab until `selector` holds focus, up to `limit` presses.
+ *
+ * Fails if the element is never reached, which is the assertion worth having: an element the
+ * browser excludes from the focus order is unreachable however many times Tab is pressed.
+ */
+Cypress.Commands.add('realTabTo', (selector, { limit = 6 } = {}) => {
+  const press = attempt => {
+    if (attempt > limit) {
+      throw new Error(`"${selector}" was not reached after ${limit} Tab presses.`);
+    }
+
+    return cy.realTab().then(() =>
+      cy.focused({ log: false }).then($focused => {
+        if ($focused.is(selector)) {
+          return cy.wrap($focused, { log: false });
+        }
+        return press(attempt + 1);
+      })
+    );
+  };
+
+  return press(1);
+});

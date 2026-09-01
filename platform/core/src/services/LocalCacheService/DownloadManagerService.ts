@@ -19,6 +19,13 @@
 // header badge and the study-list menus all read it. Series-level detail and byte counters are
 // additive optional fields, and a job hydrated from a previous release simply has none of them
 // (#129 AR-2).
+//
+// A per-instance failure is classified before it is counted (#131): transient failures are
+// re-attempted within the job's attempt budget, 403/404 fails the instance at once, and quota
+// still halts the job. `retry()` re-arms a failed job and sends it back through this same
+// pipeline; because every path already diffs enumeration output against the cache, a re-run
+// fetches only what is missing. Which instances failed is deliberately not recorded -- the
+// increment is "everything absent from the cache" (#131 AR-1).
 
 import { get, set, createStore } from 'idb-keyval';
 
@@ -46,6 +53,12 @@ const EVENTS = {
   // hydration is asynchronous and lands after a settings page may already have rendered, so a form
   // that only read the value once would show the default and then save it over the stored one.
   TRANSFER_MODE_CHANGED: 'event::downloadManagerService:transferModeChanged',
+  // The per-instance attempt budget changed (#131 FR-12). Same reason as TRANSFER_MODE_CHANGED:
+  // the settings form has to follow hydration that lands after it rendered.
+  RETRY_ATTEMPTS_CHANGED: 'event::downloadManagerService:retryAttemptsChanged',
+  // A failed job was re-armed by the user (#131 §5.3). Consumed by downloadNotifications, which
+  // clears the job's announce-once entry and retires its sticky failure toast.
+  JOB_RETRIED: 'event::downloadManagerService:jobRetried',
 };
 
 const JOB_STATES = {
@@ -79,6 +92,33 @@ const PER_JOB_FETCH_CONCURRENCY = 5;
 // flight across the queue) is the deliberate starting point; #129 V-3 measures it at one, two and
 // four before this becomes a settled number.
 const PER_JOB_ARCHIVE_CONCURRENCY = 2;
+
+// Per-instance attempt budget (#131 FR-1). TOTAL attempts, not retries; read once when a job
+// starts, so a preference change never alters a transfer already in flight.
+const RETRY_ATTEMPTS_DEFAULT = 3;
+const RETRY_ATTEMPTS_MIN = 1;
+const RETRY_ATTEMPTS_MAX = 5;
+
+// Delay before attempt N+1, multiplied by the attempt just made (#131 FR-3). Cancellation is
+// observed DURING the wait, in slices this size.
+const INSTANCE_RETRY_DELAY_MS = 500;
+const RETRY_DELAY_POLL_MS = 50;
+
+/** How a per-instance failure is treated (#131 FR-2 / §5.1). */
+const DOWNLOAD_ERROR_CLASSES = {
+  /** Browser storage is full: halt the job. Takes precedence over any remaining budget. */
+  QUOTA: 'quota',
+  /** The user cancelled: not a failure, and it consumes no budget. */
+  ABORT: 'abort',
+  /** Deterministic for this instance -- retrying would ask the same question again. */
+  FATAL_INSTANCE: 'fatal-instance',
+  /** Everything else, including anything unrecognised. Retries are cheap; giving up is not. */
+  RETRYABLE: 'retryable',
+} as const;
+
+// 401 is deliberately absent: in this deployment it arises transiently from token expiry and
+// refresh races mid-transfer, so it is retryable rather than fatal (#131 FR-2).
+const FATAL_INSTANCE_STATUSES = [403, 404];
 
 const JOBS_KEY = 'jobs';
 
@@ -147,6 +187,16 @@ interface DownloadJob {
   totalBytes?: number | null;
   /** Series that fell back to per-instance retrieval, for the completion notice (#129 FR-9). */
   fallbackSeriesCount?: number;
+  // -- Retry additions (#131 §5.2). The persisted model grows by exactly these two: per-instance
+  // attempt counters stay loop-local and never reach IndexedDB (AR-2).
+  /**
+   * The WADO root this job was enqueued against -- a fingerprint, not a credential. Retry attaches
+   * the ACTIVE server's config and compares against this. Absent on jobs persisted before #131,
+   * which are retryable against whatever server is active (FR-7).
+   */
+  wadoRoot?: string;
+  /** How many times the job has been re-run. Diagnostic only -- nothing renders it. */
+  runCount?: number;
 }
 
 class DownloadManagerServiceClass extends PubSubService {
@@ -172,6 +222,11 @@ class DownloadManagerServiceClass extends PubSubService {
   // True once the user has chosen a value in this session, after which startup hydration is
   // ignored (see applyHydratedArchiveTransfer).
   private _archiveTransferUserSet = false;
+
+  // Per-instance attempt budget for jobs started from now on (#131 FR-12), with the same
+  // hydration-versus-user-choice rules as the transfer mode above.
+  private _retryAttempts = RETRY_ATTEMPTS_DEFAULT;
+  private _retryAttemptsUserSet = false;
 
   // Created lazily only when IndexedDB is available (createStore opens the DB eagerly).
   private _jobStore: ReturnType<typeof createStore> | null = null;
@@ -241,6 +296,36 @@ class DownloadManagerServiceClass extends PubSubService {
 
   isArchiveTransferEnabled(): boolean {
     return this._archiveTransferEnabled;
+  }
+
+  /**
+   * Set the per-instance attempt budget for jobs started from now on (#131 FR-12), on the user's
+   * behalf. Clamped to 1..5; a job already running keeps the budget it read when it started.
+   */
+  setRetryAttempts(attempts: number): void {
+    this._retryAttemptsUserSet = true;
+    this._setRetryAttempts(attempts);
+  }
+
+  /** Apply the hydrated preference value, unless the user has already chosen one this session. */
+  applyHydratedRetryAttempts(attempts: number): void {
+    if (this._retryAttemptsUserSet) {
+      return;
+    }
+    this._setRetryAttempts(attempts);
+  }
+
+  private _setRetryAttempts(attempts: number): void {
+    const next = _clampAttempts(attempts);
+    if (this._retryAttempts === next) {
+      return;
+    }
+    this._retryAttempts = next;
+    this._broadcastEvent(EVENTS.RETRY_ATTEMPTS_CHANGED, { retryAttempts: next });
+  }
+
+  getRetryAttempts(): number {
+    return this._retryAttempts;
   }
 
   private async _hydrate(): Promise<void> {
@@ -427,6 +512,9 @@ class DownloadManagerServiceClass extends PubSubService {
       ServiceEpisodeID: descriptor.ServiceEpisodeID,
       StudyDate: descriptor.StudyDate,
       modalities: descriptor.modalities,
+      // Which server this job belongs to, so a Retry days later can tell whether the study it is
+      // about to re-enumerate is even on the server now active (#131 FR-7).
+      wadoRoot: _wadoFingerprint(server),
     };
 
     if (kind === 'series') {
@@ -536,6 +624,91 @@ class DownloadManagerServiceClass extends PubSubService {
     });
   }
 
+  // ---- Retry ---------------------------------------------------------------------------------
+
+  /**
+   * Can this failed job be re-run against `server`? (#131 FR-5/FR-7) A job persisted before #131
+   * carries no `wadoRoot` and is retryable against whatever is active.
+   */
+  canRetry(jobId: string, server: any): boolean {
+    const job = this._jobs.get(jobId);
+    if (!job || job.state !== JOB_STATES.ERROR) {
+      return false;
+    }
+    return this.matchesServer(job, server);
+  }
+
+  /** Whether a job's recorded server fingerprint matches `server` (absent fingerprint = yes). */
+  matchesServer(job: DownloadJob | undefined, server: any): boolean {
+    if (!job?.wadoRoot) {
+      return true;
+    }
+    return job.wadoRoot === _wadoFingerprint(server);
+  }
+
+  /**
+   * Re-run a failed job incrementally (#131 FR-6): re-arm it and push it back through the standard
+   * pipeline, which diffs the study against the cache and fetches only what is missing.
+   *
+   * `server` is supplied by the caller rather than remembered -- configs carry credentials and are
+   * never persisted (§8) -- after `canRetry` has confirmed it is the job's server.
+   *
+   * @returns the re-armed job, or undefined when the request was refused
+   */
+  retry(jobId: string, server: any): DownloadJob | undefined {
+    const job = this._jobs.get(jobId);
+    // The state check is also what makes a double-click harmless: the first call moves the job to
+    // QUEUED synchronously, so the second finds nothing to re-arm (AC "one re-run, not several").
+    if (!job || job.state !== JOB_STATES.ERROR || !server || !this.matchesServer(job, server)) {
+      return undefined;
+    }
+
+    job.state = JOB_STATES.QUEUED;
+    job.error = undefined;
+    job.runCount = (job.runCount || 0) + 1;
+    // Counters are recomputed at run start from enumeration and the cache; per-series detail is
+    // rebuilt by _runArchiveMode. Clearing them here keeps the row from showing the failed run's
+    // numbers while the re-run is still enumerating.
+    job.progress = { total: 0, completed: 0, failed: 0 };
+    job.series = undefined;
+    job.bytesReceived = undefined;
+    job.totalBytes = undefined;
+    job.fallbackSeriesCount = undefined;
+    // A legacy job adopts the server it is being retried against, so a later Retry has something
+    // to compare.
+    job.wadoRoot = job.wadoRoot || _wadoFingerprint(server);
+
+    this._servers.set(jobId, server);
+    this._cancelFlags.set(jobId, false);
+    this._archiveControllers.delete(jobId);
+    this._persistJobs();
+
+    // Queued before anything is announced: `_broadcastEvent` calls subscribers directly, so a
+    // listener that throws would otherwise unwind `retry()` before scheduling and strand a
+    // persisted QUEUED job that can never be retried again (`retry()` only accepts ERROR).
+    this._pendingQueue.push(jobId);
+
+    // Announced before the job runs, so the notification module has cleared its announce-once
+    // entry and retired the sticky failure toast before this run reaches a terminal state (FR-9).
+    // Isolated per event: reporting must not cost the re-run, nor the other event.
+    this._broadcastSafely(EVENTS.JOB_RETRIED, { job });
+    this._broadcastSafely(EVENTS.JOB_STATE_CHANGED, { job });
+
+    // `_pump` holds the job behind any job already running for this study (FR-10).
+    this._pump();
+
+    return job;
+  }
+
+  /** Broadcast without letting a subscriber's failure propagate to the caller. */
+  private _broadcastSafely(event: string, payload: Record<string, unknown>): void {
+    try {
+      this._broadcastEvent(event, payload);
+    } catch (error) {
+      console.warn(`[DownloadManagerService] A subscriber to ${event} threw.`, error);
+    }
+  }
+
   /** Drop a terminal job from the list (does not touch cached data). */
   dismiss(jobId: string): void {
     const job = this._jobs.get(jobId);
@@ -632,6 +805,12 @@ class DownloadManagerServiceClass extends PubSubService {
       ? TRANSFER_MODES.ARCHIVES
       : TRANSFER_MODES.INSTANCES;
 
+    // The attempt budget is likewise resolved ONCE, here (#131 FR-1): a preference change during a
+    // transfer must not lengthen or shorten the retries of the instances still to come. It is
+    // carried down the call chain rather than stored on the job, because it describes this run and
+    // nothing persisted should have to be reasoned about later (AR-2).
+    const attempts = this._retryAttempts;
+
     this._setState(job, JOB_STATES.DOWNLOADING);
 
     let instances: any[];
@@ -696,9 +875,10 @@ class DownloadManagerServiceClass extends PubSubService {
             client,
             seriesGroups,
             downloadedByThisJob,
-            unmatchedInstances
+            unmatchedInstances,
+            attempts
           )
-        : await this._runInstanceMode(job, client, instances, downloadedByThisJob);
+        : await this._runInstanceMode(job, client, instances, downloadedByThisJob, attempts);
 
     if (this._isCancelled(jobId)) {
       // Clean up after ourselves: remove everything this job stored (including a retrieve that was
@@ -764,12 +944,14 @@ class DownloadManagerServiceClass extends PubSubService {
     job: DownloadJob,
     client: any,
     instances: any[],
-    downloadedByThisJob: InstanceUIDsForCleanup[]
+    downloadedByThisJob: InstanceUIDsForCleanup[],
+    attempts: number
   ): Promise<boolean> {
     const jobId = job.id;
 
     // Skip instances already cached (idempotent re-queue / partial resume) so completed counts
-    // reflect real work and we never double-store (AC-4).
+    // reflect real work and we never double-store (AC-4). Also what makes a retried job
+    // incremental: the same filter, against a cache the failed run has already partly filled.
     const pending = instances.filter(inst => !LocalCacheService.isInstanceCachedSync(_sop(inst)));
     job.progress.completed = instances.length - pending.length;
     this._emitProgress(job);
@@ -780,8 +962,14 @@ class DownloadManagerServiceClass extends PubSubService {
       if (this._isCancelled(jobId) || quotaHit) {
         return;
       }
-      try {
-        await this._downloadInstance(client, inst);
+
+      const { outcome, error } = await this._retrieveInstance(client, inst, {
+        job,
+        attempts,
+        isHalted: () => quotaHit,
+      });
+
+      if (outcome === 'stored') {
         const m = inst.metadata || inst;
         downloadedByThisJob.push({
           StudyInstanceUID: m.StudyInstanceUID,
@@ -789,33 +977,120 @@ class DownloadManagerServiceClass extends PubSubService {
           SOPInstanceUID: m.SOPInstanceUID,
         });
         job.progress.completed += 1;
-      } catch (error: any) {
-        if (this._isCancelled(jobId)) {
-          return;
-        }
-        if (_isQuotaError(error)) {
-          // Stop the whole job on quota exhaustion and surface a visible error (AC-10).
-          quotaHit = true;
-          return;
-        }
-        // Log the first failure of a job so the underlying cause (HTTP status, CORS, empty body)
-        // is diagnosable without every one of N instances spamming the console.
-        if (job.progress.failed === 0) {
-          console.error(
-            `[DownloadManagerService] Instance download failed for job ${job.id}:`,
-            error?.status ? `HTTP ${error.status}` : '',
-            error
-          );
-        }
+      } else if (outcome === 'quota') {
+        // Stop the whole job on quota exhaustion and surface a visible error (AC-10).
+        quotaHit = true;
+      } else if (outcome === 'failed') {
+        this._logFirstInstanceFailure(job, error);
         job.progress.failed += 1;
-      } finally {
-        this._emitProgress(job);
       }
+      // 'cancelled' counts as nothing: the user stopped the job, and the cleanup pass removes what
+      // it had already stored.
+
+      this._emitProgress(job);
     };
 
     await this._runPool(pending, worker, PER_JOB_FETCH_CONCURRENCY);
 
     return quotaHit;
+  }
+
+  /**
+   * Retrieve ONE instance within the job's attempt budget (#131 FR-1..FR-4). The single retrieval
+   * point for both transfer paths, so classification and budget cannot diverge between them (§6).
+   *
+   * Counts nothing: the caller owns `progress.failed` and the per-series counters, and increments
+   * them only for a returned 'failed' -- which is what keeps a recovered instance out of the
+   * failure count and out of the failure toast (FR-4).
+   *
+   * @param isHalted - a job-level stop the caller owns (quota); polled between attempts
+   */
+  private async _retrieveInstance(
+    client: any,
+    inst: any,
+    { job, attempts, isHalted }: { job: DownloadJob; attempts: number; isHalted: () => boolean }
+  ): Promise<{ outcome: 'stored' | 'failed' | 'quota' | 'cancelled'; error?: any }> {
+    const jobId = job.id;
+    const budget = Math.max(1, attempts);
+
+    for (let attempt = 1; attempt <= budget; attempt += 1) {
+      if (this._isCancelled(jobId)) {
+        return { outcome: 'cancelled' };
+      }
+      if (isHalted()) {
+        return { outcome: 'quota' };
+      }
+
+      try {
+        await this._downloadInstance(client, inst);
+        return { outcome: 'stored' };
+      } catch (error: any) {
+        if (this._isCancelled(jobId)) {
+          return { outcome: 'cancelled', error };
+        }
+
+        switch (_classifyDownloadError(error)) {
+          case DOWNLOAD_ERROR_CLASSES.QUOTA:
+            // Precedence over the remaining budget (FR-11): more attempts cannot make room.
+            return { outcome: 'quota', error };
+          case DOWNLOAD_ERROR_CLASSES.ABORT:
+            return { outcome: 'cancelled', error };
+          case DOWNLOAD_ERROR_CLASSES.FATAL_INSTANCE:
+            // Deterministic for this instance -- a second identical request is just latency.
+            return { outcome: 'failed', error };
+          default:
+            break;
+        }
+
+        if (attempt >= budget) {
+          return { outcome: 'failed', error };
+        }
+        if (!(await this._waitBeforeRetry(jobId, attempt))) {
+          return { outcome: 'cancelled', error };
+        }
+      }
+    }
+
+    // Unreachable: the loop returns on its last attempt.
+    return { outcome: 'failed' };
+  }
+
+  /**
+   * Pause between attempts (#131 FR-3). Sliced rather than one long timer so a cancel lands during
+   * the wait instead of after it.
+   *
+   * @returns false when the job was cancelled during (or by the end of) the wait
+   */
+  private async _waitBeforeRetry(jobId: string, attempt: number): Promise<boolean> {
+    const total = INSTANCE_RETRY_DELAY_MS * attempt;
+
+    for (let waited = 0; waited < total; waited += RETRY_DELAY_POLL_MS) {
+      if (this._isCancelled(jobId)) {
+        return false;
+      }
+      const slice = Math.min(RETRY_DELAY_POLL_MS, total - waited);
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(resolve => setTimeout(resolve, slice));
+    }
+
+    return !this._isCancelled(jobId);
+  }
+
+  /**
+   * Log the first counted failure of a job so the cause (HTTP status, CORS, empty body) is
+   * diagnosable without every one of N instances spamming the console. Called only once a budget
+   * is spent, so the console describes a real failure rather than a blip.
+   */
+  private _logFirstInstanceFailure(job: DownloadJob, error: any): void {
+    if (job.progress.failed !== 0) {
+      return;
+    }
+    const status = _httpStatus(error);
+    console.error(
+      `[DownloadManagerService] Instance download failed for job ${job.id}:`,
+      status ? `HTTP ${status}` : '',
+      error
+    );
   }
 
   /**
@@ -834,7 +1109,8 @@ class DownloadManagerServiceClass extends PubSubService {
     client: any,
     seriesGroups: any[],
     downloadedByThisJob: InstanceUIDsForCleanup[],
-    unmatchedInstances: UnmatchedInstance[]
+    unmatchedInstances: UnmatchedInstance[],
+    attempts: number
   ): Promise<boolean> {
     const jobId = job.id;
 
@@ -878,6 +1154,86 @@ class DownloadManagerServiceClass extends PubSubService {
 
     let quotaHit = false;
 
+    /**
+     * Retrieve one series image by image: the fallback after an archive could not be used
+     * (#129 FR-9), and the direct route for a partly-cached series on a re-run (#131 FR-8).
+     */
+    const runInstanceFallback = async (
+      group: any,
+      detail: SeriesTransfer,
+      alreadyCached: Set<string>
+    ): Promise<void> => {
+      detail.path = 'instances';
+      detail.state = SERIES_TRANSFER_STATES.DOWNLOADING;
+
+      // Discard any abandoned archive attempt's byte counters. They describe a transfer that is no
+      // longer happening, and the per-instance path does not advance them: left in place, a
+      // numeric `totalBytes` keeps the job's aggregate in byte mode (see _rollUpSeriesProgress),
+      // where it would stall short of 100% even as the fallback completes every instance. `null`
+      // means "size unknown", which is true, and drops the job to the honest count-based form.
+      detail.bytesReceived = 0;
+      detail.totalBytes = null;
+      this._rollUpSeriesProgress(job);
+      this._emitProgress(job);
+
+      let failed = 0;
+      const pending = group.instances.filter(
+        (inst: any) => !LocalCacheService.isInstanceCachedSync(_sop(inst))
+      );
+
+      await this._runPool(
+        pending,
+        async (inst: any) => {
+          if (this._isCancelled(jobId) || quotaHit) {
+            return;
+          }
+
+          const { outcome, error } = await this._retrieveInstance(client, inst, {
+            job,
+            attempts,
+            isHalted: () => quotaHit,
+          });
+
+          if (outcome === 'stored') {
+            const m = inst.metadata || inst;
+            downloadedByThisJob.push({
+              StudyInstanceUID: m.StudyInstanceUID,
+              SeriesInstanceUID: m.SeriesInstanceUID,
+              SOPInstanceUID: m.SOPInstanceUID,
+            });
+            if (!alreadyCached.has(m.SOPInstanceUID)) {
+              detail.cachedCount += 1;
+            }
+          } else if (outcome === 'quota') {
+            quotaHit = true;
+          } else if (outcome === 'failed') {
+            this._logFirstInstanceFailure(job, error);
+            failed += 1;
+          }
+
+          this._rollUpSeriesProgress(job);
+          this._emitProgress(job);
+        },
+        PER_JOB_FETCH_CONCURRENCY
+      );
+
+      if (this._isCancelled(jobId)) {
+        detail.state = SERIES_TRANSFER_STATES.CANCELLED;
+      } else if (quotaHit) {
+        detail.state = SERIES_TRANSFER_STATES.FAILED;
+        detail.error = 'Browser storage quota exceeded.';
+      } else {
+        detail.failedCount = failed;
+        detail.state = failed ? SERIES_TRANSFER_STATES.FAILED : SERIES_TRANSFER_STATES.COMPLETE;
+        if (!failed) {
+          detail.error = undefined;
+          detail.details = undefined;
+        }
+      }
+      this._rollUpSeriesProgress(job);
+      this._emitProgress(job);
+    };
+
     const worker = async (group: any): Promise<void> => {
       const detail = job.series!.find(s => s.SeriesInstanceUID === group.SeriesInstanceUID)!;
 
@@ -889,6 +1245,18 @@ class DownloadManagerServiceClass extends PubSubService {
       }
 
       const alreadyCached = alreadyCachedBySeries.get(group.SeriesInstanceUID)!;
+
+      // FR-8: on a re-run, a partly-cached series takes the per-instance path rather than moving
+      // its whole archive again to recover a few images. Pre-dispatch only -- the archive loop's
+      // own retry and fallback rules are unchanged (AR-6), as is a first run.
+      //
+      // Not counted in `fallbackSeriesCount`: that count feeds a completion notice about archives
+      // that could not be used, and no archive was requested here.
+      if ((job.runCount || 0) > 0 && detail.cachedCount > 0) {
+        await runInstanceFallback(group, detail, alreadyCached);
+        return;
+      }
+
       // Every SOP instance of this series known to be cached, counting from what was already there.
       // A union rather than a running increment: an archive carries the whole series, including
       // instances already cached, and a retry re-stores what the first attempt landed — both of
@@ -1009,72 +1377,8 @@ class DownloadManagerServiceClass extends PubSubService {
       }
 
       // Per-instance fallback for this series. Other series keep using archives.
-      detail.path = 'instances';
-      detail.state = SERIES_TRANSFER_STATES.DOWNLOADING;
       job.fallbackSeriesCount = (job.fallbackSeriesCount || 0) + 1;
-
-      // Discard the abandoned archive attempt's byte counters. They describe a transfer that is no
-      // longer happening, and the per-instance path does not advance them: left in place, a
-      // numeric `totalBytes` keeps the job's aggregate in byte mode (see _rollUpSeriesProgress),
-      // where it would stall short of 100% even as the fallback completes every instance. `null`
-      // means "size unknown", which is true, and drops the job to the honest count-based form.
-      detail.bytesReceived = 0;
-      detail.totalBytes = null;
-      this._rollUpSeriesProgress(job);
-      this._emitProgress(job);
-
-      let failed = 0;
-      const pending = group.instances.filter((inst: any) => !LocalCacheService.isInstanceCachedSync(_sop(inst)));
-
-      await this._runPool(
-        pending,
-        async (inst: any) => {
-          if (this._isCancelled(jobId) || quotaHit) {
-            return;
-          }
-          try {
-            await this._downloadInstance(client, inst);
-            const m = inst.metadata || inst;
-            downloadedByThisJob.push({
-              StudyInstanceUID: m.StudyInstanceUID,
-              SeriesInstanceUID: m.SeriesInstanceUID,
-              SOPInstanceUID: m.SOPInstanceUID,
-            });
-            if (!alreadyCached.has(m.SOPInstanceUID)) {
-              detail.cachedCount += 1;
-            }
-          } catch (error: any) {
-            if (this._isCancelled(jobId)) {
-              return;
-            }
-            if (_isQuotaError(error)) {
-              quotaHit = true;
-              return;
-            }
-            failed += 1;
-          } finally {
-            this._rollUpSeriesProgress(job);
-            this._emitProgress(job);
-          }
-        },
-        PER_JOB_FETCH_CONCURRENCY
-      );
-
-      if (this._isCancelled(jobId)) {
-        detail.state = SERIES_TRANSFER_STATES.CANCELLED;
-      } else if (quotaHit) {
-        detail.state = SERIES_TRANSFER_STATES.FAILED;
-        detail.error = 'Browser storage quota exceeded.';
-      } else {
-        detail.failedCount = failed;
-        detail.state = failed ? SERIES_TRANSFER_STATES.FAILED : SERIES_TRANSFER_STATES.COMPLETE;
-        if (!failed) {
-          detail.error = undefined;
-          detail.details = undefined;
-        }
-      }
-      this._rollUpSeriesProgress(job);
-      this._emitProgress(job);
+      await runInstanceFallback(group, detail, alreadyCached);
     };
 
     await this._runPool(seriesGroups, worker, PER_JOB_ARCHIVE_CONCURRENCY);
@@ -1303,9 +1607,19 @@ class DownloadManagerServiceClass extends PubSubService {
       `/series/${encodeURIComponent(SeriesInstanceUID)}` +
       `/instances/${encodeURIComponent(SOPInstanceUID)}`;
 
+    // Carry whatever HTTP status the client attached through to the classifier (#131 AR-3). It
+    // does not promise one on every failure; without a status the error classifies as retryable.
     const retrieve = async (mediaTypes: any): Promise<ArrayBuffer | undefined> => {
-      const parts = await client._httpGetMultipartApplicationDicom(url, mediaTypes, false, false, false);
-      return Array.isArray(parts) ? parts[0] : parts;
+      try {
+        const parts = await client._httpGetMultipartApplicationDicom(url, mediaTypes, false, false, false);
+        return Array.isArray(parts) ? parts[0] : parts;
+      } catch (error: any) {
+        const status = _httpStatus(error);
+        if (status !== undefined && error && error.status === undefined) {
+          error.status = status;
+        }
+        throw error;
+      }
     };
 
     // First attempt: as-stored (`transfer-syntax=*`) — required for compressed images the server
@@ -1433,6 +1747,51 @@ function _isQuotaError(error: any): boolean {
   );
 }
 
+/**
+ * The HTTP status behind a failure, wherever the thrower left it (#131 AR-3) -- this module, the
+ * DICOMweb client, or SeriesArchiveRequestError's `details`. Absent is a real answer: a transport
+ * error never had one, and the classifier treats it as retryable.
+ */
+function _httpStatus(error: any): number | undefined {
+  const status = error?.status ?? error?.response?.status ?? error?.details?.status;
+  return typeof status === 'number' ? status : undefined;
+}
+
+/**
+ * How a per-instance failure should be treated (#131 FR-2, §5.1). Order is precedence. Everything
+ * unrecognised is retryable: a retry costs one request, a wrong verdict costs an instance.
+ */
+function _classifyDownloadError(error: any): string {
+  if (_isQuotaError(error)) {
+    return DOWNLOAD_ERROR_CLASSES.QUOTA;
+  }
+  if (error?.name === 'AbortError') {
+    return DOWNLOAD_ERROR_CLASSES.ABORT;
+  }
+  if (FATAL_INSTANCE_STATUSES.includes(_httpStatus(error) as number)) {
+    return DOWNLOAD_ERROR_CLASSES.FATAL_INSTANCE;
+  }
+  return DOWNLOAD_ERROR_CLASSES.RETRYABLE;
+}
+
+/** The attempt budget a stored or user-supplied value resolves to (#131 FR-12). */
+function _clampAttempts(attempts: any): number {
+  const value = Math.round(Number(attempts));
+  if (!Number.isFinite(value)) {
+    return RETRY_ATTEMPTS_DEFAULT;
+  }
+  return Math.min(RETRY_ATTEMPTS_MAX, Math.max(RETRY_ATTEMPTS_MIN, value));
+}
+
+/**
+ * The server identity a job records (#131 FR-7): a comparison key, not a config. Holds no
+ * credentials, which is what makes it safe to persist alongside the job.
+ */
+function _wadoFingerprint(server: any): string | undefined {
+  const root = server?.wadoRoot || server?.wadoUriRoot || server?.qidoRoot;
+  return typeof root === 'string' && root ? root.replace(/\/+$/, '') : undefined;
+}
+
 const DownloadManagerService = new DownloadManagerServiceClass();
 
 export {
@@ -1443,5 +1802,11 @@ export {
   // queue's `ARCHIVE_JOB_STATES`.
   TRANSFER_MODES,
   SERIES_TRANSFER_STATES,
+  // Retry vocabulary (#131). The bounds live here, with the code that clamps and applies them, so
+  // the settings form and the service cannot drift apart on what "3 attempts" means.
+  DOWNLOAD_ERROR_CLASSES,
+  RETRY_ATTEMPTS_DEFAULT,
+  RETRY_ATTEMPTS_MIN,
+  RETRY_ATTEMPTS_MAX,
 };
 export default DownloadManagerService;

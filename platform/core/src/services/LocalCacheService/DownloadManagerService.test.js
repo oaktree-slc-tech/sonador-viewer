@@ -15,7 +15,14 @@ import dcmjs from 'dcmjs';
 
 import user from '../../user.js';
 import LocalCacheService from './LocalCacheService';
-import DownloadManagerService, { JOB_STATES, TRANSFER_MODES } from './DownloadManagerService';
+import DownloadManagerService, {
+  JOB_STATES,
+  TRANSFER_MODES,
+  RETRY_ATTEMPTS_DEFAULT,
+} from './DownloadManagerService';
+
+// Retry exhaustion spends real delays (#131 FR-3), so a handful of tests here run over a second.
+jest.setTimeout(30000);
 
 jest.mock('../../studies/services/qido/StaticWadoClient', () => {
   // One shared double: the service constructs it twice per job (enumeration + WADO-RS) and both
@@ -190,8 +197,13 @@ function parkRetrieves() {
   };
 }
 
+// Long enough to cover a job whose instances spend the #131 retry delays (500 ms x attempt) before
+// giving up. Every wait exits as soon as its predicate holds, so this costs nothing when it is not
+// needed.
+const WAIT_TICKS = 1600;
+
 async function waitFor(predicate, label = 'condition') {
-  for (let i = 0; i < 400; i += 1) {
+  for (let i = 0; i < WAIT_TICKS; i += 1) {
     if (predicate()) {
       return;
     }
@@ -202,7 +214,7 @@ async function waitFor(predicate, label = 'condition') {
 }
 
 async function waitForTerminal(jobId, label = 'the job to finish') {
-  for (let i = 0; i < 400; i += 1) {
+  for (let i = 0; i < WAIT_TICKS; i += 1) {
     const job = DownloadManagerService.getJob(jobId);
     if (job && [JOB_STATES.COMPLETED, JOB_STATES.CANCELLED, JOB_STATES.ERROR].includes(job.state)) {
       return job;
@@ -223,6 +235,7 @@ beforeEach(async () => {
   );
   DownloadManagerService.listJobs().forEach(job => DownloadManagerService.dismiss(job.id));
   DownloadManagerService.setArchiveTransferEnabled(false);
+  DownloadManagerService.setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
   user.getAccessToken = () => 'test-token';
   scriptTwoSeries();
 });
@@ -726,6 +739,460 @@ describe('transfer-mode preference', () => {
 
     unsubscribe();
     expect(seen).toEqual([true, false]);
+  });
+});
+
+// ---- Per-instance retry, classification and the Retry control (ohif-viewers#131) --------------
+
+/**
+ * Replace the per-instance retrieve with one that counts attempts per SOP and can be told to fail.
+ *
+ * @param {Function} fail - (sop, attemptNumber) => error|falsey; a returned error is thrown
+ * @returns {object} attempts - SOP -> number of retrieve calls
+ */
+function countAttempts(fail = () => null) {
+  const attempts = {};
+  // Rebuilt from the healthy script rather than layered over whatever is installed: a test that
+  // fails a job and then retries it calls this twice, and wrapping the failing stub would carry
+  // the first run's failures into the second.
+  scriptTwoSeries();
+  const succeed = script.retrieveInstance;
+
+  script.retrieveInstance = async url => {
+    const sop = url.split('/').pop();
+    attempts[sop] = (attempts[sop] || 0) + 1;
+
+    const error = fail(sop, attempts[sop]);
+    if (error) {
+      throw error;
+    }
+    return succeed(url);
+  };
+
+  return attempts;
+}
+
+const httpError = (status, message = `HTTP ${status}`) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const quotaError = () => {
+  const error = new Error('The quota has been exceeded.');
+  error.name = 'QuotaExceededError';
+  return error;
+};
+
+describe('per-instance retry (ohif-viewers#131, FR-1..FR-4)', () => {
+  it('recovers an instance that fails twice and succeeds on the third attempt', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts((sop, attempt) =>
+      sop === A1 && attempt < 3 ? new Error('socket hang up') : null
+    );
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(attempts[A1]).toBe(3);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    // Nothing failed: a recovered instance must not leave a count behind, because that count is
+    // what raises the failure toast (FR-4).
+    expect(job.progress).toEqual({ total: 4, completed: 4, failed: 0 });
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+  });
+
+  it('counts an instance once, after its budget is spent', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts(sop => (sop === A1 ? new Error('socket hang up') : null));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(attempts[A1]).toBe(3);
+    expect(job.state).toBe(JOB_STATES.ERROR);
+    expect(job.progress.failed).toBe(1);
+    expect(job.progress.completed).toBe(3);
+  });
+
+  it('attempts a 403 exactly once', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts(sop => (sop === A1 ? httpError(403) : null));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    // Deterministic for this instance: asking again would only cost the user time.
+    expect(attempts[A1]).toBe(1);
+    expect(job.progress.failed).toBe(1);
+  });
+
+  it('keeps retrying a 401, which is transient in this deployment', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts((sop, attempt) =>
+      sop === A1 && attempt < 2 ? httpError(401) : null
+    );
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(attempts[A1]).toBe(2);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+  });
+
+  it('halts the job on a quota error raised during a retry, budget notwithstanding', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts((sop, attempt) => {
+      if (sop !== A1) {
+        return null;
+      }
+      return attempt === 1 ? new Error('socket hang up') : quotaError();
+    });
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    // Two attempts, not three: quota outranks whatever budget is left (FR-11).
+    expect(attempts[A1]).toBe(2);
+    expect(job.state).toBe(JOB_STATES.ERROR);
+    expect(job.error).toContain('quota');
+  });
+
+  it('stops promptly when the job is cancelled during a retry delay', async () => {
+    global.fetch = jest.fn();
+    const attempts = countAttempts(() => new Error('socket hang up'));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => Object.keys(attempts).length > 0, 'the first attempt to be made');
+
+    DownloadManagerService.cancel(job.id);
+    await waitForTerminal(job.id);
+    const attemptsAtCancel = { ...attempts };
+
+    expect(job.state).toBe(JOB_STATES.CANCELLED);
+
+    // Nothing further is requested: the delay is observed in slices, so the cancel lands inside it
+    // rather than after it.
+    await new Promise(resolve => setTimeout(resolve, 200));
+    expect(attempts).toEqual(attemptsAtCancel);
+  });
+
+  it('holds the budget it read at job start, so a preference change mid-transfer is ignored', async () => {
+    global.fetch = jest.fn();
+    // The change lands DURING the first retry delay -- if the budget were re-read per attempt,
+    // this instance would be abandoned instead of recovered.
+    const attempts = countAttempts((sop, attempt) => {
+      if (sop !== A1 || attempt >= 2) {
+        return null;
+      }
+      DownloadManagerService.setRetryAttempts(1);
+      return new Error('socket hang up');
+    });
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(attempts[A1]).toBe(2);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    // The next job would use the new value.
+    expect(DownloadManagerService.getRetryAttempts()).toBe(1);
+  });
+
+  it('honours a budget of one attempt', async () => {
+    global.fetch = jest.fn();
+    DownloadManagerService.setRetryAttempts(1);
+    const attempts = countAttempts(sop => (sop === A1 ? new Error('socket hang up') : null));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(attempts[A1]).toBe(1);
+    expect(job.progress.failed).toBe(1);
+  });
+});
+
+describe('attempt-budget preference (ohif-viewers#131, FR-12)', () => {
+  it('clamps to 1..5 and defaults an unusable value', () => {
+    DownloadManagerService.setRetryAttempts(99);
+    expect(DownloadManagerService.getRetryAttempts()).toBe(5);
+
+    DownloadManagerService.setRetryAttempts(0);
+    expect(DownloadManagerService.getRetryAttempts()).toBe(1);
+
+    DownloadManagerService.setRetryAttempts(undefined);
+    expect(DownloadManagerService.getRetryAttempts()).toBe(RETRY_ATTEMPTS_DEFAULT);
+  });
+
+  it('ignores hydration once the user has made a choice', () => {
+    DownloadManagerService.setRetryAttempts(5);
+    DownloadManagerService.applyHydratedRetryAttempts(2);
+
+    expect(DownloadManagerService.getRetryAttempts()).toBe(5);
+  });
+
+  it('announces a change, so a settings form rendered before hydration can follow it', () => {
+    const seen = [];
+    const { unsubscribe } = DownloadManagerService.subscribe(
+      DownloadManagerService.EVENTS.RETRY_ATTEMPTS_CHANGED,
+      payload => seen.push(payload.retryAttempts)
+    );
+
+    DownloadManagerService.setRetryAttempts(4);
+    // A no-op write stays silent, or every save would churn subscribers.
+    DownloadManagerService.setRetryAttempts(4);
+    DownloadManagerService.setRetryAttempts(2);
+
+    unsubscribe();
+    expect(seen).toEqual([4, 2]);
+  });
+});
+
+describe('retrying a failed job (ohif-viewers#131, FR-5..FR-10)', () => {
+  /** Run a study job whose series-B instances fail permanently, leaving the job in ERROR. */
+  async function failedJob() {
+    global.fetch = jest.fn();
+    countAttempts(sop => (sop === B1 || sop === B2 ? httpError(403) : null));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.ERROR);
+    return job;
+  }
+
+  it('fetches only what the cache is missing, and completes', async () => {
+    const job = await failedJob();
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync(B1)).toBe(false);
+
+    // The server is healthy again; nothing about the job records which instances failed.
+    const attempts = countAttempts();
+    expect(DownloadManagerService.retry(job.id, SERVER)).toBe(job);
+    await waitForTerminal(job.id, 'the retried job to finish');
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(job.runCount).toBe(1);
+    // Series A was already cached, so the re-run never asks for it again (AR-1).
+    expect(Object.keys(attempts).sort()).toEqual([B1, B2].sort());
+    expect([A1, A2, B1, B2].every(sop => LocalCacheService.isInstanceCachedSync(sop))).toBe(true);
+    expect(job.progress).toEqual({ total: 4, completed: 4, failed: 0 });
+  });
+
+  it('completes without a single fetch when the study is already fully cached', async () => {
+    const job = await failedJob();
+
+    await Promise.all(
+      [B1, B2].map(sop =>
+        LocalCacheService.putInstance({
+          StudyInstanceUID: STUDY,
+          SeriesInstanceUID: SERIES_B,
+          SOPInstanceUID: sop,
+          bytes: new ArrayBuffer(8),
+          metadata: { StudyInstanceUID: STUDY, SeriesInstanceUID: SERIES_B, SOPInstanceUID: sop },
+        })
+      )
+    );
+
+    const attempts = countAttempts();
+    DownloadManagerService.retry(job.id, SERVER);
+    await waitForTerminal(job.id, 'the retried job to finish');
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(attempts).toEqual({});
+  });
+
+  it('re-runs a job an interrupted page reload left errored', async () => {
+    global.fetch = jest.fn();
+    const parked = parkRetrieves();
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => job.state === JOB_STATES.DOWNLOADING, 'the job to start');
+
+    // What `_hydrate` does to a job that was still running when the page went away.
+    DownloadManagerService.cancel(job.id);
+    parked.releaseAll();
+    await waitForTerminal(job.id);
+    job.state = JOB_STATES.ERROR;
+    job.error = 'Interrupted by page reload';
+
+    countAttempts();
+    expect(DownloadManagerService.retry(job.id, SERVER)).toBe(job);
+    await waitForTerminal(job.id, 'the retried job to finish');
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(job.error).toBeUndefined();
+    expect([A1, A2, B1, B2].every(sop => LocalCacheService.isInstanceCachedSync(sop))).toBe(true);
+  });
+
+  it('refuses a job that belongs to a different imaging server, and allows a legacy one', async () => {
+    const job = await failedJob();
+
+    expect(job.wadoRoot).toBe(SERVER.wadoRoot);
+    expect(DownloadManagerService.canRetry(job.id, SERVER)).toBe(true);
+    expect(
+      DownloadManagerService.canRetry(job.id, { wadoRoot: 'https://elsewhere.test/dicom-web' })
+    ).toBe(false);
+    expect(
+      DownloadManagerService.retry(job.id, { wadoRoot: 'https://elsewhere.test/dicom-web' })
+    ).toBeUndefined();
+    expect(job.state).toBe(JOB_STATES.ERROR);
+
+    // A job persisted before #131 has no fingerprint, and is retryable against whatever is active
+    // rather than permanently disabled for reasons the row cannot explain (FR-7).
+    delete job.wadoRoot;
+    expect(DownloadManagerService.canRetry(job.id, SERVER)).toBe(true);
+  });
+
+  it('produces one re-run when the control is clicked twice', async () => {
+    const job = await failedJob();
+    countAttempts();
+
+    const first = DownloadManagerService.retry(job.id, SERVER);
+    const second = DownloadManagerService.retry(job.id, SERVER);
+
+    expect(first).toBe(job);
+    expect(second).toBeUndefined();
+    await waitForTerminal(job.id, 'the retried job to finish');
+    expect(job.runCount).toBe(1);
+  });
+
+  it('refuses a job that is not failed', async () => {
+    global.fetch = jest.fn();
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(DownloadManagerService.canRetry(job.id, SERVER)).toBe(false);
+    expect(DownloadManagerService.retry(job.id, SERVER)).toBeUndefined();
+  });
+
+  it('queues a retried job behind another job already transferring the study (FR-10)', async () => {
+    const failed = await failedJob();
+
+    // A healthy retrieve for the re-run, installed before parking so `releaseAll` restores it.
+    countAttempts();
+    const parked = parkRetrieves();
+    const running = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => running.state === JOB_STATES.DOWNLOADING, 'the second job to start');
+
+    DownloadManagerService.retry(failed.id, SERVER);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(failed.state).toBe(JOB_STATES.QUEUED);
+
+    DownloadManagerService.cancel(running.id);
+    parked.releaseAll();
+    await waitForTerminal(running.id, 'the running job to unwind');
+    await waitForTerminal(failed.id, 'the retried job to run and finish');
+    expect(failed.state).toBe(JOB_STATES.COMPLETED);
+  });
+
+  it('routes a partially-cached series to per-instance retrieval on a re-run (FR-8)', async () => {
+    DownloadManagerService.setArchiveTransferEnabled(true);
+
+    // First run: series A transfers as an archive, series B fails both ways.
+    global.fetch = jest.fn(async url =>
+      url.includes(SERIES_A)
+        ? archiveFor(SERIES_A)
+        : { ok: false, status: 500, statusText: 'Server Error', headers: { get: () => null }, text: async () => 'nope' }
+    );
+    countAttempts(sop => (sop === B1 || sop === B2 ? httpError(403) : null));
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.ERROR);
+
+    // Something else cached half of series B in the meantime.
+    await LocalCacheService.putInstance({
+      StudyInstanceUID: STUDY,
+      SeriesInstanceUID: SERIES_B,
+      SOPInstanceUID: B1,
+      bytes: new ArrayBuffer(8),
+      metadata: { StudyInstanceUID: STUDY, SeriesInstanceUID: SERIES_B, SOPInstanceUID: B1 },
+    });
+
+    global.fetch = jest.fn();
+    const attempts = countAttempts();
+    DownloadManagerService.retry(job.id, SERVER);
+    await waitForTerminal(job.id, 'the retried job to finish');
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    // No archive request at all: series A is fully cached (FR-11), and series B is partially
+    // cached, so re-fetching its whole archive to recover one image would be the opposite of
+    // incremental.
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(Object.keys(attempts)).toEqual([B2]);
+    expect(job.series.find(s => s.SeriesInstanceUID === SERIES_A).state).toBe('complete');
+    expect(job.series.find(s => s.SeriesInstanceUID === SERIES_B).path).toBe('instances');
+    // Nothing fell back -- the archive was never requested -- so the completion notice must not
+    // claim a series was retrieved image by image "after the archive could not be used".
+    expect(job.fallbackSeriesCount).toBe(0);
+  });
+
+  it('still runs the re-armed job when a JOB_RETRIED subscriber throws', async () => {
+    // PubSubService calls subscribers directly. A notification cleanup that throws must not unwind
+    // retry() between the state change and the scheduling: that would leave a persisted QUEUED job
+    // that never runs and can never be retried again, because retry() only accepts ERROR.
+    const job = await failedJob();
+    const { unsubscribe } = DownloadManagerService.subscribe(
+      DownloadManagerService.EVENTS.JOB_RETRIED,
+      () => {
+        throw new Error('notification cleanup failed');
+      }
+    );
+
+    countAttempts();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => DownloadManagerService.retry(job.id, SERVER)).not.toThrow();
+    unsubscribe();
+
+    await waitForTerminal(job.id, 'the retried job to finish');
+    warn.mockRestore();
+
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect([A1, A2, B1, B2].every(sop => LocalCacheService.isInstanceCachedSync(sop))).toBe(true);
+  });
+
+  it('still emits the state change when the retry subscriber throws', async () => {
+    // The two broadcasts are isolated from each other as well: the dialog re-renders off
+    // JOB_STATE_CHANGED, and a failure to clean up notifications must not freeze the row.
+    const job = await failedJob();
+    const states = [];
+    const failing = DownloadManagerService.subscribe(
+      DownloadManagerService.EVENTS.JOB_RETRIED,
+      () => {
+        throw new Error('notification cleanup failed');
+      }
+    );
+    const watching = DownloadManagerService.subscribe(
+      DownloadManagerService.EVENTS.JOB_STATE_CHANGED,
+      payload => states.push(payload.job.state)
+    );
+
+    countAttempts();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    DownloadManagerService.retry(job.id, SERVER);
+    failing.unsubscribe();
+    warn.mockRestore();
+
+    expect(states[0]).toBe(JOB_STATES.QUEUED);
+
+    await waitForTerminal(job.id, 'the retried job to finish');
+    watching.unsubscribe();
+  });
+
+  it('announces the re-arm before the job runs', async () => {
+    const job = await failedJob();
+
+    const seen = [];
+    const { unsubscribe } = DownloadManagerService.subscribe(
+      DownloadManagerService.EVENTS.JOB_RETRIED,
+      payload => seen.push({ id: payload.job.id, state: payload.job.state })
+    );
+
+    countAttempts();
+    DownloadManagerService.retry(job.id, SERVER);
+    unsubscribe();
+    await waitForTerminal(job.id, 'the retried job to finish');
+
+    expect(seen).toEqual([{ id: job.id, state: JOB_STATES.QUEUED }]);
   });
 });
 

@@ -115,7 +115,7 @@ function statusLine(job, t) {
 }
 
 /**
- * Primary line: Patient Name, the Patient ID de-emphasized beside it, and the Service Episode.
+ * Primary line: Patient Name, the Patient ID de-emphasized beside it, and the Service Episode ID.
  * Matches the Offline Storage dialog's treatment, down to dropping absent values along with their
  * separators. Falls back to the UID only when the caller supplied no descriptor at all.
  */
@@ -131,7 +131,7 @@ function renderPrimaryLine(job, t) {
     );
   }
   if (job.ServiceEpisodeID) {
-    pieces.push(<span key="episode">{t('Service Episode')} {job.ServiceEpisodeID}</span>);
+    pieces.push(<span key="episode">{t('Service Episode ID')} {job.ServiceEpisodeID}</span>);
   }
 
   if (!pieces.length) {

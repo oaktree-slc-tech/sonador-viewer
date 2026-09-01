@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import i18n from '@ohif/i18n';
-import { DownloadManagerService } from '@ohif/core';
+import { DownloadManagerService, RETRY_ATTEMPTS_DEFAULT } from '@ohif/core';
 import { LanguageSwitcher, TabFooter } from '@ohif/ui';
 
 import {
@@ -11,6 +11,7 @@ import {
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
   PREFERENCES_VERSION,
   PREFERENCE_SECTIONS,
+  RETRY_ATTEMPTS_PREFERENCE_KEY,
 } from '../../constants/preferences';
 import { useUpdateUserPreferenceSection } from '../../queries/preferences';
 
@@ -53,7 +54,15 @@ function GeneralPreferences({ onClose }) {
     saveGeneralSection(
       {
         version: PREFERENCES_VERSION,
-        values: { language, [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer },
+        values: {
+          language,
+          [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
+          // Carried, not edited: this legacy modal has no control for the attempt budget, but a
+          // section POST replaces the section wholesale, so omitting the key would erase whatever
+          // the Settings page stored (ohif-viewers#131 FR-12).
+          [RETRY_ATTEMPTS_PREFERENCE_KEY]:
+            DownloadManagerService?.getRetryAttempts?.() ?? RETRY_ATTEMPTS_DEFAULT,
+        },
       },
       showSaveOutcome(t('SaveMessage'), 'general preferences')
     );

@@ -3,7 +3,14 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import i18n from '@ohif/i18n';
-import { DownloadManagerService, DownloadManagerServiceEvents } from '@ohif/core';
+import {
+  DownloadManagerService,
+  DownloadManagerServiceEvents,
+  RETRY_ATTEMPTS_DEFAULT,
+  RETRY_ATTEMPTS_MAX,
+  RETRY_ATTEMPTS_MIN,
+} from '@ohif/core';
+import { Numeric } from '@ohif/ui-next';
 import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CaretDownIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
 
@@ -12,7 +19,9 @@ import {
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
   PREFERENCES_VERSION,
   PREFERENCE_SECTIONS,
+  RETRY_ATTEMPTS_PREFERENCE_KEY,
 } from '../../../../constants/preferences';
+import { createHydrationLatch } from '../../../../lib/preferenceHydration';
 import { useUpdateUserPreferenceSection } from '../../../../queries/preferences';
 import { showSaveOutcome } from '../../../../components/UserPreferences/saveOutcomeNotification';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
@@ -20,6 +29,10 @@ import TabFooterNG from '../TabFooterNG/TabFooterNG';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
 import styles from './GeneralTabNG.module.scss';
+
+// Latch keys for the two offline-storage fields on this tab.
+const ARCHIVE_FIELD = 'archiveTransfer';
+const RETRY_FIELD = 'retryAttempts';
 
 export default function GeneralTabNG() {
   // The preferences namespace, which is where every string on this surface is registered. Without
@@ -52,10 +65,11 @@ export default function GeneralTabNG() {
   const [archiveTransfer, setArchiveTransfer] = useState(
     () => DownloadManagerService?.isArchiveTransferEnabled?.() ?? ARCHIVE_TRANSFER_DEFAULT
   );
-  // Set once the user touches the checkbox, and never cleared: a late hydration must not reinstate
-  // the old value after an edit OR after a save. Saving does not end the race -- the startup GET
-  // that was already in flight can still land afterwards.
-  const edited = useRef(false);
+  // Which fields the user has changed. Per FIELD, not per form: the section is saved wholesale, so
+  // one shared flag would let an edit to either control block hydration of the other and then post
+  // that other field's default over the value already stored. Never cleared by saving -- the
+  // startup GET that was already in flight can still land afterwards.
+  const latch = useRef(createHydrationLatch()).current;
 
   // The initial read above can be too early. Preference hydration is an authenticated fetch kicked
   // off from a sibling effect, so opening /settings directly can render this form BEFORE the
@@ -67,19 +81,81 @@ export default function GeneralTabNG() {
     }
     const { unsubscribe } = DownloadManagerService.subscribe(
       DownloadManagerServiceEvents.TRANSFER_MODE_CHANGED,
-      ({ archiveTransferEnabled }) => {
-        if (!edited.current) {
-          setArchiveTransfer(archiveTransferEnabled);
-        }
-      }
+      ({ archiveTransferEnabled }) =>
+        setArchiveTransfer(current => latch.accept(ARCHIVE_FIELD, archiveTransferEnabled, current))
     );
     return unsubscribe;
   }, []);
 
   const handleArchiveTransferChange = (event) => {
-    edited.current = true;
+    latch.markEdited(ARCHIVE_FIELD);
     setArchiveTransfer(event.target.checked);
   };
+
+  // Per-instance attempt budget (ohif-viewers#131, FR-12). Same shape as the toggle above: read
+  // from the service, follow its hydration event until the user touches the control, and apply
+  // locally before syncing. Held as a number -- Numeric keeps it inside min/max and ignores a
+  // partially typed value, so the form never holds something unusable.
+  const [retryAttempts, setRetryAttempts] = useState(
+    () => DownloadManagerService?.getRetryAttempts?.() ?? RETRY_ATTEMPTS_DEFAULT
+  );
+
+  useEffect(() => {
+    if (!DownloadManagerService?.subscribe) {
+      return undefined;
+    }
+    const { unsubscribe } = DownloadManagerService.subscribe(
+      DownloadManagerServiceEvents.RETRY_ATTEMPTS_CHANGED,
+      ({ retryAttempts: hydrated }) =>
+        setRetryAttempts(current => latch.accept(RETRY_FIELD, hydrated, current))
+    );
+    return unsubscribe;
+  }, []);
+
+  const handleRetryAttemptsChange = (value) => {
+    latch.markEdited(RETRY_FIELD);
+    setRetryAttempts(value);
+  };
+
+  const stepRetryAttempts = useCallback(
+    (delta) => {
+      latch.markEdited(RETRY_FIELD);
+      setRetryAttempts((current) =>
+        Math.min(RETRY_ATTEMPTS_MAX, Math.max(RETRY_ATTEMPTS_MIN, current + delta))
+      );
+    },
+    [latch]
+  );
+
+  // Numeric binds no keyboard events -- neither does the upstream component ours was ported from --
+  // so a control that looks like a spinner ignores Up and Down. Bound here, at the point of use,
+  // rather than by diverging our copy of a shared ui-next component from upstream.
+  //
+  // Attached to the rendered input rather than to the wrapping label: the label is not an
+  // interactive element, and delegating from it would also fire while a chevron button held focus.
+  // The functional state update is what keeps this listener correct without rebinding on
+  // every value change.
+  const retryFieldRef = useRef(null);
+
+  useEffect(() => {
+    const input = retryFieldRef.current?.querySelector('input');
+    if (!input) {
+      return undefined;
+    }
+
+    const onKeyDown = (event) => {
+      const delta = { ArrowUp: 1, ArrowDown: -1 }[event.key];
+      if (!delta) {
+        return;
+      }
+      // Also stops the key from scrolling the settings panel.
+      event.preventDefault();
+      stepRetryAttempts(delta);
+    };
+
+    input.addEventListener('keydown', onKeyDown);
+    return () => input.removeEventListener('keydown', onKeyDown);
+  }, [stepRetryAttempts]);
 
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
@@ -88,6 +164,7 @@ export default function GeneralTabNG() {
     // this as an explicit choice, so hydration in flight can no longer override it in the service
     // either.
     DownloadManagerService?.setArchiveTransferEnabled?.(archiveTransfer);
+    DownloadManagerService?.setRetryAttempts?.(retryAttempts);
 
     // `language` rides along because a section POST replaces the section's values wholesale --
     // sending the toggle alone would erase a stored language preference.
@@ -97,6 +174,7 @@ export default function GeneralTabNG() {
         values: {
           language: i18n.language,
           [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
+          [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
         },
       },
       // Not the shared `SaveMessage` ("Preferences saved"): a confirmation that names the setting
@@ -110,8 +188,10 @@ export default function GeneralTabNG() {
   };
 
   const onReset = () => {
-    edited.current = true;
+    latch.markEdited(ARCHIVE_FIELD);
+    latch.markEdited(RETRY_FIELD);
     setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
+    setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
   };
 
   return (
@@ -160,6 +240,38 @@ export default function GeneralTabNG() {
               <span>{t('OfflineArchiveTransferLabel')}</span>
             </label>
             <p className={styles.optionHelp}>{t('OfflineArchiveTransferHelp')}</p>
+
+            {/* Attempt budget (ohif-viewers#131, FR-12). Sits under the transfer strategy because
+                both describe how an offline copy is fetched, and neither affects a transfer
+                already in progress.
+
+                `Numeric` is the ui-next stepper, so this control looks and behaves like every
+                other numeric input in the application rather than like a one-off. No Tailwind
+                classes are passed to it: the @source list in ui-next's tailwind-integration.css
+                does not cover platform/viewer/src, so utility classes named from here are never
+                generated. The stepper's own defaults are used instead.
+
+                The `label` wraps the control rather than pointing at it with `htmlFor`, because
+                Numeric renders its own input and gives it no id. In the vertical stepper the input
+                is the first labelable descendant, so the implicit association lands on it and not
+                on the increment buttons. */}
+            <label
+              className={classNames(styles.option, styles.optionNumeric)}
+              ref={retryFieldRef}
+            >
+              <Numeric.Container
+                mode="stepper"
+                min={RETRY_ATTEMPTS_MIN}
+                max={RETRY_ATTEMPTS_MAX}
+                step={1}
+                value={retryAttempts}
+                onChange={handleRetryAttemptsChange}
+              >
+                <Numeric.NumberStepper />
+              </Numeric.Container>
+              <span>{t('OfflineRetryAttemptsLabel')}</span>
+            </label>
+            <p className={styles.optionHelp}>{t('OfflineRetryAttemptsHelp')}</p>
           </div>
         </div>
       </div>
