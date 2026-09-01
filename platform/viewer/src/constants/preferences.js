@@ -41,6 +41,16 @@ export const PREFERENCE_SECTION_PATHS = {
 export const ARCHIVE_TRANSFER_PREFERENCE_KEY = 'offlineArchiveTransfer';
 export const ARCHIVE_TRANSFER_DEFAULT = false;
 
+// How many times a single image is attempted before it counts as failed (ohif-viewers#131,
+// FR-12). Rides in `general` alongside the transfer strategy for the same reason, and like it
+// depends on a companion change in sonador: `GeneralPrefForm.clean_values` rejects unknown keys
+// with a 400, and the write queue never re-queues a 400 -- so on a server without the key this
+// setting appears to save and silently does not persist.
+//
+// The bounds and the default are NOT repeated here: they belong to DownloadManagerService, which
+// clamps whatever it is handed, and are imported from @ohif/core wherever the form needs them.
+export const RETRY_ATTEMPTS_PREFERENCE_KEY = 'offlineRetryAttempts';
+
 // Study-list interfaces stored under `UserPref.studylist[version]` (FR-13). `upload` carries
 // `selectedColumns`/`columnOrder` only -- no `selectedFilters`.
 export const STUDYLIST_INTERFACES = {

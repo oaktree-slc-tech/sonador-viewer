@@ -18,11 +18,12 @@
 // no-op on error, never a crash or an error dialog.
 
 import i18n from '@ohif/i18n';
-import { redux, DownloadManagerService } from '@ohif/core';
+import { redux, DownloadManagerService, RETRY_ATTEMPTS_DEFAULT } from '@ohif/core';
 
 import {
   ARCHIVE_TRANSFER_DEFAULT,
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
+  RETRY_ATTEMPTS_PREFERENCE_KEY,
   PREFERENCES_VERSION,
   PREFERENCE_SECTIONS,
   PREFERENCE_SECTION_PATHS,
@@ -82,6 +83,14 @@ const applyGeneral = (values) => {
     // the setting in Settings, and a value read before that change must not reinstate itself.
     DownloadManagerService.applyHydratedArchiveTransfer(
       typeof enabled === 'boolean' ? enabled : ARCHIVE_TRANSFER_DEFAULT
+    );
+
+    // Per-instance attempt budget (ohif-viewers#131, FR-12). Same hydration rules, and the
+    // service clamps the value, so a document written by a future release (or edited by hand)
+    // cannot put a job on an unbounded retry loop.
+    const attempts = values[RETRY_ATTEMPTS_PREFERENCE_KEY];
+    DownloadManagerService.applyHydratedRetryAttempts(
+      typeof attempts === 'number' ? attempts : RETRY_ATTEMPTS_DEFAULT
     );
   }
 };

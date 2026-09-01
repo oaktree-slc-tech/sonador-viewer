@@ -129,7 +129,7 @@ export default function StudyOfflineDetailsCard({
         )}
         {item?.ServiceEpisodeID && (
           <div className={styles.detailsAttr}>
-            {t('Service Episode')} {item.ServiceEpisodeID}
+            {t('Service Episode ID')} {item.ServiceEpisodeID}
           </div>
         )}
         {seriesSummaries.length > 0 ? (

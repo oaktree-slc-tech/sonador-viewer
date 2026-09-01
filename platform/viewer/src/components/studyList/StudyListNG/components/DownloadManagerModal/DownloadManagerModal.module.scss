@@ -223,6 +223,48 @@
   }
 }
 
+// Retry, on a failed job row (ohif-viewers#131, FR-5). Same footprint as the trash control beside
+// it, but NOT its red hover: re-running a transfer is the recovery action, and the destructive
+// colour is reserved for the one control that removes something.
+.retryButton {
+  background: transparent;
+  border: none;
+  color: #b0b3ba;
+  cursor: pointer;
+  padding: 6px;
+  display: inline-flex;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover:not([aria-disabled='true']) {
+    color: #fff;
+  }
+
+  &[aria-disabled='true'] {
+    // Kept visible and focusable: the row still owns a Retry, and the explanation of why it cannot
+    // be used from here has to be reachable (FR-7).
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// Present to assistive technology, absent from the layout. Carries the Retry control's accessible
+// description, which must not depend on a hover affordance.
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .empty {
   color: #9a9da4;
   text-align: center;

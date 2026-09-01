@@ -44,6 +44,12 @@ const _plural = (count: number, singular: string, plural: string): string =>
  */
 const _notifiedJobIds = new Set<string>();
 
+/**
+ * The sticky failure toast raised for a job, so Retry can retire it (ohif-viewers#131 FR-9): once
+ * the job is re-running, that notice describes a run the user has already replaced.
+ */
+const _failureToastIdsByJob = new Map<string, string>();
+
 let _subscriptions: Array<{ unsubscribe: () => void }> = [];
 
 /**
@@ -284,7 +290,7 @@ function _onJobStateChanged({ job }): void {
       // Sticky, because the study is now partially cached and the user has a decision to make
       // (retry, free up space, or remove the partial copy). `details` is what the Issues list
       // renders in its Details drawer.
-      uiNotificationService.show({
+      const toastId = uiNotificationService.show({
         title: 'Offline download failed',
         message: `${label} — ${job.error || 'The data could not be saved to this device.'}`,
         type: 'error',
@@ -302,6 +308,10 @@ function _onJobStateChanged({ job }): void {
           series: _failedSeriesDetails(job),
         },
       });
+
+      if (toastId) {
+        _failureToastIdsByJob.set(job.id, toastId);
+      }
       break;
     }
 
@@ -330,6 +340,25 @@ function _onJobStateChanged({ job }): void {
 }
 
 /**
+ * A failed job was re-armed (ohif-viewers#131 FR-9). The announce-once entry is cleared, without
+ * which the re-run would reach its terminal state in silence, and the previous run's sticky
+ * failure toast is retired.
+ */
+function _onJobRetried({ job }): void {
+  if (!job) {
+    return;
+  }
+
+  _notifiedJobIds.delete(job.id);
+
+  const toastId = _failureToastIdsByJob.get(job.id);
+  if (toastId) {
+    _failureToastIdsByJob.delete(job.id);
+    uiNotificationService.hide(toastId);
+  }
+}
+
+/**
  * Begin announcing download outcomes. Idempotent, and safe to call before any job exists.
  */
 export function startDownloadNotifications(): void {
@@ -342,6 +371,7 @@ export function startDownloadNotifications(): void {
       DownloadManagerServiceEvents.JOB_STATE_CHANGED,
       _onJobStateChanged
     ),
+    DownloadManagerService.subscribe(DownloadManagerServiceEvents.JOB_RETRIED, _onJobRetried),
   ];
 }
 
@@ -350,6 +380,7 @@ export function stopDownloadNotifications(): void {
   _subscriptions.forEach(subscription => subscription.unsubscribe());
   _subscriptions = [];
   _notifiedJobIds.clear();
+  _failureToastIdsByJob.clear();
   _suppressCancelNoticesUntil = 0;
 }
 

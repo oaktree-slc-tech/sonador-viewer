@@ -57,15 +57,17 @@ const SERIES_JOB = {
 };
 
 let shown;
+let hidden;
 
 beforeEach(() => {
   shown = [];
+  hidden = [];
   uiNotificationService.setServiceImplementation({
     show: options => {
       shown.push(options);
       return options.id || `toast-${shown.length}`;
     },
-    hide: () => {},
+    hide: id => hidden.push(id),
   });
   notificationLogService.clear();
   startDownloadNotifications();
@@ -212,6 +214,48 @@ describe('job outcomes', () => {
     broadcastState(job);
 
     expect(shown).toHaveLength(1);
+  });
+});
+
+describe('retrying a failed job (ohif-viewers#131, FR-9)', () => {
+  const broadcastRetry = job =>
+    DownloadManagerService._broadcastEvent(DownloadManagerServiceEvents.JOB_RETRIED, { job });
+
+  it('retires the failed run\'s sticky toast and announces the re-run exactly once', () => {
+    const job = { ...JOB, id: 'dl-retried', state: JOB_STATES.ERROR, error: 'Network error.' };
+
+    broadcastState(job);
+    expect(shown).toHaveLength(1);
+    const failureToastId = shown[0].id || 'toast-1';
+
+    broadcastRetry({ ...job, state: JOB_STATES.QUEUED });
+
+    // The failure notice describes a run the user has already replaced; leaving it up beside the
+    // re-running row is how a stale failure gets read as a fresh one.
+    expect(hidden).toEqual([failureToastId]);
+
+    broadcastState({ ...job, state: JOB_STATES.COMPLETED });
+    expect(shown).toHaveLength(2);
+    expect(shown[1].title).toBe('Study saved for offline use');
+  });
+
+  it('announces a re-run that fails again, rather than falling silent', () => {
+    const job = { ...JOB, id: 'dl-retried-twice', state: JOB_STATES.ERROR, error: 'Network error.' };
+
+    broadcastState(job);
+    broadcastRetry({ ...job, state: JOB_STATES.QUEUED });
+    broadcastState({ ...job, error: 'Network error, again.' });
+
+    expect(shown).toHaveLength(2);
+    expect(shown[1].message).toContain('Network error, again.');
+  });
+
+  it('is harmless for a job that was never announced', () => {
+    broadcastRetry({ ...JOB, id: 'dl-never-announced', state: JOB_STATES.QUEUED });
+    broadcastRetry(undefined);
+
+    expect(hidden).toHaveLength(0);
+    expect(shown).toHaveLength(0);
   });
 });
 

@@ -8,6 +8,8 @@
   "OfflineArchiveTransferLabel": "Transfer offline copies as per-series archives",
   "OfflineArchiveTransferSavedOff": "Offline copies will be transferred one image at a time. Transfers already in progress are not affected.",
   "OfflineArchiveTransferSavedOn": "Offline copies will be transferred as one archive per series. Transfers already in progress are not affected.",
+  "OfflineRetryAttemptsHelp": "How many times a single image is requested before it is reported as failed. Higher values ride out brief network problems at the cost of a slower report when something is genuinely wrong. Applies to the next transfer you start.",
+  "OfflineRetryAttemptsLabel": "Attempts per image before it counts as failed (1-5)",
   "Reset to Defaults": "$t(Buttons:Reset to Defaults)",
   "ResetDefaultMessage": "Preferences successfully reset to default. <br /> You must <strong>Save</strong> to perform this action.",
   "Save": "$t(Buttons:Save)",
