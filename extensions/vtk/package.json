@@ -55,7 +55,6 @@
     "@cornerstonejs/nifti-volume-loader": "~4.22.13",
     "@cornerstonejs/polymorphic-segmentation": "~4.22.13",
     "@cornerstonejs/tools": "~4.22.13",    
-    "@sonador/react-vtkjs-viewport": "~0.2.0",
     "lodash.throttle": "^4.1.1"
   },
   "devDependencies": {

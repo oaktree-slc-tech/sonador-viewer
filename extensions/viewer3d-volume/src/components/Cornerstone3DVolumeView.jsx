@@ -9,7 +9,6 @@ import {
   Enums as c3dEnums,
   init as c3dCoreInit,
   volumeLoader as c3dVolumeLoader,
-  cache as c3dCache,
   eventTarget as c3dEventTarget,
 
   getWebWorkerManager as c3dGetWebWorkerManager,
@@ -199,6 +198,29 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
     console.log('Initialize 3D viewport event listeners');
   }
 
+  onImageVolumeLoadingCompleted() {
+    // The 3D viewer's rendering presets read the volume's scalar range, and surface
+    // extraction walks the whole labelmap and competes with the load for the worker pool, so both
+    // wait for the streaming volume to finish rather than acting on a partly-filled one. The MPR
+    // slice views deliberately do not wait.
+
+    const component = this;
+    const { imageVolumeRenderingEnabled, defaultVolumeRenderPresetMR } = component.props;
+    const { viewport: _view3d } = component._checkViewportActive();
+
+    component._imageVolumeComplete = true;
+
+    if (_view3d && imageVolumeRenderingEnabled) {
+      _view3d.setProperties({ preset: defaultVolumeRenderPresetMR });
+      component.render3d();
+    }
+
+    if (component._surfaceRenderDeferred) {
+      component._surfaceRenderDeferred = false;
+      component.createSurfaceRepresentation();
+    }
+  }
+
   async _setImageVolume() {
     // Set the image volume for the view and apply default rendering preset
 
@@ -371,12 +393,24 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
     const component = this;
 
     const { surfaceModelInit } = component.state;
+
+    // Wait for the reference image volume; onImageVolumeLoadingCompleted re-drives this.
+    if (!component._imageVolumeComplete) {
+      component._surfaceRenderDeferred = true;
+      return;
+    }
+
     const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive();
 
     if (_view3d) {
       const { volumeId: labelmapInstanceUID } = component._segVol();
 
-      if (labelmapInstanceUID && !surfaceModelInit) {
+      if (labelmapInstanceUID && !surfaceModelInit && !component._surfaceCreateStarted) {
+
+        // Synchronous latch, set before the first await: setState({ surfaceModelInit }) lands too
+        // late to stop a re-render-driven re-entry, and two passes would attach the Surface
+        // representation twice and fan out duplicate marching-cubes jobs.
+        component._surfaceCreateStarted = true;
 
         // Increment epoch and capture it. Any async path that completes after the epoch has changed
         // (e.g. because the user toggled off mid-computation) will abort without updating state.
@@ -391,7 +425,10 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
         await component._activateSurfaceRepresentation();
 
         // Abort if the surface was toggled off (or the component unmounted) during the await
-        if (epoch !== component._surfaceEpoch || !component._isMounted) return;
+        if (epoch !== component._surfaceEpoch || !component._isMounted) {
+          component._surfaceCreateStarted = false;
+          return;
+        }
 
         component._applySurfaceColorLUT();
 
@@ -400,6 +437,7 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
         console.log('[Cornerstone3DVolumeViewport-createSurfaceRender] 3D seg', _seg, component.lutIdx);
 
         // Resume updates and mark surface as initialised
+        component._surfaceCreateStarted = false;
         component.setState({ surfaceModelInit: true, surfaceRendering: true, segRepUpdatePaused: false });
       }
     }
@@ -417,6 +455,7 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
       // Invalidate the current epoch so any in-flight async callbacks in createSurfaceRepresentation
       // abort before they update state or re-add the representation.
       component._surfaceEpoch += 1;
+      component._surfaceCreateStarted = false;
 
       c3dSegmentations.removeSurfaceRepresentation(_v3d_id, labelmapInstanceUID);
       component.setState({ surfaceModelInit: false, surfaceRendering: false, segRepUpdatePaused: false });
@@ -455,11 +494,11 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
       c3dSegmentations.removeSegmentation(labelmapInstanceUID);
     }
 
-    // 5. Purge the C3D volume cache. Both the image and segmentation volumes will be
-    //    re-fetched from source when the load lifecycle re-runs. This mirrors what
-    //    componentWillUnmount does, and is safe here because the viewer is a single-
-    //    viewport context and an immediate reload follows.
-    await c3dCache.purgeCache();
+    // 5. Release this view's hold on the image volume. The volume
+    //    and its derived labelmaps go only if nothing else is displaying them; the reload below
+    //    re-acquires or re-creates as needed. The global cache.purgeCache() this replaces also
+    //    destroyed M3D geometry and other subsystems' cache entries.
+    component.releaseImageVolume();
 
     // 6. Reset loading-state flags. Cornerstone3DBaseView.componentDidUpdate drives
     //    the entire load/render lifecycle from these flags, so clearing them is
@@ -584,7 +623,6 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
       component.props.onDestroyed();
     }
 
-    await c3dCache.purgeCache();
     console.log("VolumeViewer-componentWillUnmount: Cornerstone3D cleanup complete");
   }
 

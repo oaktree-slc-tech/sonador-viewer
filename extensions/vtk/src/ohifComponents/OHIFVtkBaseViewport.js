@@ -2,18 +2,11 @@ import _ from 'lodash';
 
 import { Component } from 'react';
 
-import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
-import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
-import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
-import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
-
-import { getImageData, loadImageData } from '@sonador/react-vtkjs-viewport';
-
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
 import PropTypes from 'prop-types';
 
-import OHIF from '@ohif/core';
+import OHIF, { uiNotificationService } from '@ohif/core';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 const { DicomMetadataStore: DcmMetaStore } = OHIF;
@@ -23,50 +16,34 @@ const { DisplaySetApi } = OHIF.display;
 const { StackManager } = OHIF.utils;
 
 
-// TODO: Find a long term (service based) location for the labelmap cache
-const labelmapCache = {};
-
-
-function _getRangeFromWindowLevels(width, center, Modality = undefined) {
-  /** Takes window levels and converts them to a range (lower/upper)
-   * for use with VTK RGBTransferFunction
-   *
-   * @private
-   * @param {number} [width] - the width of our window
-   * @param {number} [center] - the center of our window
-   * @param {string} [Modality] - 'PT', 'CT', etc.
-   * @returns { lower, upper } - range
-   */
-
-  // For PET just set the range to 0-5 SUV
-  if (Modality === 'PT') {
-    return { lower: 0, upper: 5 };
-  }
-
-  const levelsAreNotNumbers = isNaN(center) || isNaN(width);
-
-  if (levelsAreNotNumbers) {
-    return { lower: 0, upper: 512 };
-  }
-
-  return {
-    lower: center - width / 2.0,
-    upper: center + width / 2.0,
-  };
-}
-
-
 class OHIFVtkBaseViewport extends Component {
-  // Component base class which can be used to work with VTK based volumetric data
-  // in OHIF. Provides methods and state properties to download image stacks and convert
-  // them to volumetric representations.
+  // Component base class for the volumetric surfaces (MPR, the 3D viewer, the segmentation editor).
+  //
+  // This class resolves the display set's imageIds and its legacy labelmap and hands both to the
+  // Cornerstone3D view classes, which own volume creation and loading. It builds no vtkImageData
+  // volume and does not drive the legacy image-load pool: Cornerstone3D loads and renders.
+
+  constructor(props) {
+    super(props);
+
+    // Bound once here rather than declared as class fields: they are handed to the Cornerstone3D
+    // view as props AND overridden by the subclasses, and a class field would shadow the
+    // prototype -- the subclass override would never run.
+    this.onLoadProgress = this.onLoadProgress.bind(this);
+    this.onLoadError = this.onLoadError.bind(this);
+    this.onVolumeFit = this.onVolumeFit.bind(this);
+  }
 
   state = {
-    volumes: null,
+    imageIds: null,
     paintFilterLabelMapImageData: null,
-    paintFilterBackgroundImageData: null,
     percentComplete: 0,
     isLoaded: false,
+
+    // Streaming-volume state reported up by the view
+    loadProgress: null,
+    loadError: null,
+    fit: null,
   };
 
   static propTypes = {
@@ -149,7 +126,6 @@ class OHIFVtkBaseViewport extends Component {
       studies, StudyInstanceUID, displaySetInstanceUID, SOPClassUID, SOPInstanceUID, frameIndex);
     const { firstImageId, brushStackState } = component.getBrushStackState(stack);
 
-    const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
     let labelmapDataObject;
     let labelmapColorLUT;
     let labelmapInstanceUID;
@@ -189,165 +165,92 @@ class OHIFVtkBaseViewport extends Component {
         return { visible: !isHidden };
       });
 
-      const vtkLabelmapID = `${firstImageId}_${activeLabelmapIndex}`;
-      labelmapInstanceUID = vtkLabelmapID;
+      labelmapInstanceUID = `${firstImageId}_${activeLabelmapIndex}`;
 
-      if (labelmapCache[vtkLabelmapID]) {
-        labelmapDataObject = labelmapCache[vtkLabelmapID];
-      } else {
-        
-        // TODO -> We need an imageId based getter in cornerstoneTools
-        const labelmapBuffer = labelmap3D.buffer;
+      // The labelmap travels as its raw legacy buffer plus the stack it was drawn on. It is not
+      // turned into a vtkImageData here: the geometry belongs to the Cornerstone3D volume, and the
+      // buffer has to be re-ordered from stack order into the volume's slice order, which needs a
+      // volume that does not exist at this point. The derived labelmap volume in the Cornerstone3D
+      // cache is the only cache for it; this class keeps none of its own.
+      labelmapDataObject = {
+        buffer: labelmap3D.buffer,
+        stackImageIds: stack.imageIds,
+      };
 
-        // Create VTK Image Data with buffer as input, attach labelmap UID
-        labelmapDataObject = vtkImageData.newInstance();
-
-        const dataArray = vtkDataArray.newInstance({
-          numberOfComponents: 1, // labelmap with single component
-          values: new Uint16Array(labelmapBuffer),
-        });
-
-        labelmapDataObject.getPointData().setScalars(dataArray);
-        labelmapDataObject.setDimensions(...imageDataObject.dimensions);
-        labelmapDataObject.setSpacing(...imageDataObject.vtkImageData.getSpacing());
-        labelmapDataObject.setOrigin(...imageDataObject.vtkImageData.getOrigin());
-        labelmapDataObject.setDirection(...imageDataObject.vtkImageData.getDirection());
-
-        // Cache the labelmap volume.
-        labelmapCache[vtkLabelmapID] = labelmapDataObject;
-      }
-      
       labelmapColorLUT = state.colorLutTables[labelmap3D.colorLUTIndex];
     }
 
     return {
-      imageDataObject,
+      imageIds: stack.imageIds,
+      displaySet: component.props.viewportData?.displaySet,
       labelmapDataObject,
       labelmapColorLUT,
       labelmapDetails: { labelmapInstanceUID, metadata: labelmapMetadata },
     };
   };
 
-  getVolume(displaySetInstanceUID) {
-    // Retrieve volume for the provided display set instance UID
-    // @returns vtkVolumeActor or undefined (if a volume does not exist)
+  onLoadProgress(loadProgress) {
+    // Streaming-volume progress from the Cornerstone3D view.
 
-    throw new Error('getVolume must be implemented in child classes');
-  }
+    const { framesProcessed = 0, numberOfFrames = 0, complete } = loadProgress || {};
+    const percentComplete = numberOfFrames
+      ? Math.floor((framesProcessed * 100) / numberOfFrames)
+      : 0;
 
-  cacheVolume(displaySetInstanceUID, volumeActor) {
-    // Cache volume
-
-    throw new Error('cacheVolume must be implemented in child classes');
-  }
-
-  getOrCreateVolume(imageDataObject, displaySetInstanceUID) {
-    /**	Create volume from the provided image data object
-
-		* @param {object} imageDataObject
-		* @param {object} imageDataObject.vtkImageData
-		* @param {object} imageDataObject.imageMetaData0
-		* @param {number} [imageDataObject.imageMetaData0.WindowWidth] - The volume's initial WindowWidth
-		* @param {number} [imageDataObject.imageMetaData0.WindowCenter] - The volume's initial WindowCenter
-		* @param {string} imageDataObject.imageMetaData0.Modality - CT, MR, PT, etc
-		* @param {string} displaySetInstanceUID
-		*
-		* @returns vtkVolumeActor
-		* @memberof OHIFVtkBaseViewport
-		*/
-
-    // Retrieve volume instance from cache (if present)
-    let volumeActor = this.getVolume(displaySetInstanceUID);
-    if (volumeActor) {
-      return volumeActor;
+    if (percentComplete !== this.state.percentComplete || complete) {
+      this.setState({ loadProgress, percentComplete });
     }
-
-    const { vtkImageData, imageMetaData0 } = imageDataObject;
-    
-    // TODO -> Should update react-vtkjs-viewport and react-cornerstone-viewports
-    // internals to use naturalized DICOM JSON names.
-    const { windowWidth: WindowWidth, windowCenter: WindowCenter, modality: Modality } = imageMetaData0;
-
-    const { lower, upper } = _getRangeFromWindowLevels(WindowWidth, WindowCenter, Modality);
-    volumeActor = vtkVolume.newInstance();
-    const volumeMapper = vtkVolumeMapper.newInstance();
-
-    volumeActor.setMapper(volumeMapper);
-    volumeMapper.setInputData(vtkImageData);
-
-    // Apply VTK transforms for the volume
-    this.applyVolumeTransforms(vtkImageData, volumeActor, volumeMapper, {
-      lower,
-      upper,
-      windowWidth: WindowWidth,
-      windowCenter: WindowCenter,
-      modality: Modality,
-    });
-
-    // Cache the volume
-    this.cacheVolume(displaySetInstanceUID, volumeActor);
-    return volumeActor;
   }
 
-  applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
-    // Abstract Method: Apply transforms and VTK properties to VTK volume actor and mapper
+  onLoadError(error) {
+    // First load failure for the volume. Recorded once per volume,
+    // and from the first viewport only, so a three-pane MPR layout does not raise three identical
+    // messages for one failing series.
 
-    throw new Error('applyVolumeTransforms must be implemented in child classes');
-  }
+    const { LoggerService } = this.props.servicesManager.services;
 
-  loadProgressively(imageDataObject) {
-    // Load and render the image stack progressively as it is retrieved by the image service.
+    if (this.hasError) {
+      return;
+    }
+    this.hasError = true;
+    this.setState({ loadError: error });
 
-    loadImageData(imageDataObject);
-
-    const { isLoading, imageIds } = imageDataObject;
-
-    if (!isLoading) {
-      this.setState({ isLoaded: true });
+    if (this.props.viewportIndex !== 0) {
       return;
     }
 
-    const NumberOfFrames = imageIds.length;
+    // Logged without a toast, then notified separately: the unified logger cannot carry the
+    // "way out of this layout" action each surface needs, and going through both with notify:true
+    // would raise the condition to the user twice.
+    LoggerService.error({
+      error,
+      title: 'Image Load Error',
+      message: error.message,
+      notify: false,
+      studyInstanceUID: extractStudyIdFromURL(),
+    });
 
-    const onPixelDataInsertedCallback = (numberProcessed) => {
-      const percentComplete = Math.floor((numberProcessed * 100) / NumberOfFrames);
+    this.notifyLoadError(error);
+  }
 
-      if (percentComplete !== this.state.percentComplete) {
-        this.setState({
-          percentComplete,
-        });
-      }
-    };
+  notifyLoadError(error) {
+    // Raise the sticky toast for a load failure. Subclasses override this to attach the action
+    // that leaves their layout (Exit 2D MPR, Exit Volume Viewer, Exit Segmentation Editor).
 
-    const onPixelDataInsertedErrorCallback = (error) => {
-      const { LoggerService } = this.props.servicesManager.services;
+    uiNotificationService.show({
+      title: 'Failed to load image data.',
+      message: error.message,
+      type: 'error',
+      autoClose: false,
+      studyInstanceUID: extractStudyIdFromURL(),
+      error,
+    });
+  }
 
-      if (!this.hasError) {
-        if (this.props.viewportIndex === 0) {
-          // Only report from viewport 1 in multi-viewport layouts. One call: console, unified
-          // Issues list, and a sticky toast (ohif-viewers#84).
-          LoggerService.error({
-            error,
-            title: 'Image Load Error',
-            message: error.message,
-            notify: true,
-            studyInstanceUID: extractStudyIdFromURL(),
-          });
-        }
-
-        this.hasError = true;
-      }
-    };
-
-    const onAllPixelDataInsertedCallback = () => {
-      this.setState({
-        isLoaded: true,
-      });
-    };
-
-    imageDataObject.onPixelDataInserted(onPixelDataInsertedCallback);
-    imageDataObject.onAllPixelDataInserted(onAllPixelDataInsertedCallback);
-    imageDataObject.onPixelDataInsertedError(onPixelDataInsertedErrorCallback);
+  onVolumeFit(fit) {
+    // The pre-flight decision for this display set, recorded so the viewport can show the
+    // reduced-resolution notice.
+    this.setState({ fit });
   }
 }
 

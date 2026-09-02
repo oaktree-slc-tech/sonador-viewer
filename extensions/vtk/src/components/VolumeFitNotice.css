@@ -1,0 +1,32 @@
+.volumeFitNotice {
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.72);
+  bottom: 0;
+  color: #91b9cd;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  left: 0;
+  padding: 6px 10px;
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+}
+
+.volumeFitNoticeMessage {
+  flex: 1;
+}
+
+.volumeFitNoticeDismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.volumeFitNoticeDismiss:hover {
+  color: #ffffff;
+}

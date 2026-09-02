@@ -38,7 +38,6 @@
     "react-dom": "^18.3.0"
   },
   "dependencies": {
-    "@babel/runtime": "^7.5.5",
-    "@sonador/react-vtkjs-viewport": "^0.2.0"
+    "@babel/runtime": "^7.5.5"
   }
 }

@@ -9,8 +9,6 @@ import {
   getRenderingEngine as c3dGetRenderingEngine,
 } from "@cornerstonejs/core";
 
-import { cacheVtkImage } from './utils/cornerstone3d.js';
-
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import OHIF from '@ohif/core';
@@ -22,6 +20,7 @@ import vtkEnums from './enums';
 import Cornerstone3DSliceView from './components/Cornerstone3DSliceView';
 import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionView';
 import LoadingIndicator from './components/LoadingIndicator.js';
+import VolumeFitNotice, { getVolumeFitNoticeKey } from './components/VolumeFitNotice.js';
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import ConnectedVTKViewport from './connectedComponents/ConnectedVTKViewport';
 import { uiNotificationService } from '@ohif/core';
@@ -46,45 +45,6 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
     ...super.state,
     isInpsectionViewOpen: false,
   };
-
-  getVolume(displaySetInstanceUID) {
-    // Retrieve volume for the provided display set instance UID from C3D cache
-    const vol = c3dCache.getVolume(displaySetInstanceUID);
-    return vol?._vtkActor || null;
-  }
-
-  cacheVolume(displaySetInstanceUID, volumeActor) {
-    // Store volume actor in C3D cache for lifecycle management
-    let vol = c3dCache.getVolume(displaySetInstanceUID);
-    if (!vol) {
-      try {
-        vol = cacheVtkImage(displaySetInstanceUID, {}, volumeActor.getMapper().getInputData());
-      } catch (e) {
-        console.warn('[OHIFVTKViewport:cacheVolume] Failed to register volume in C3D cache:', e);
-      }
-    }
-    if (vol) {
-      vol._vtkActor = volumeActor;
-    }
-  }
-
-  applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
-    // Apply transforms and VTK properties to volume actor and mapper
-    options = options || {};
-
-    if (options.lower && options.upper) {
-      volumeActor.getProperty().getRGBTransferFunction(0).setRange(options.lower, options.upper);
-    }
-
-    // Set the sample distance to half the mean length of one side. This is where the divide by 6 comes from.
-    // https://github.com/Kitware/VTK/blob/6b559c65bb90614fb02eb6d1b9e3f0fca3fe4b0b/Rendering/VolumeOpenGL2/vtkSmartVolumeMapper.cxx#L344
-    const spacing = vtkImage.getSpacing();
-    const sampleDistance = (spacing[0] + spacing[1] + spacing[2]) / 6;
-    volumeMapper.setSampleDistance(sampleDistance);
-
-    // Be generous to suppress warnings, as the logging really hurts performance.
-    volumeMapper.setMaximumSamplesPerRay(4000);
-  }
 
   setStateFromProps() {
     const component = this;
@@ -111,22 +71,22 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
 
     try {
 
-      // Retrieve image and labelmap from viewport data
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
+      // Retrieve the display set's imageIds and its legacy labelmap. The Cornerstone3D view builds
+      // and streams the volume from these; nothing is decoded here.
+      const { imageIds, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
         studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
 
-      component.imageDataObject = imageDataObject;
-
-      const volumeActor = component.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
+      component.hasError = false;
 
       component.setState(
         {
           percentComplete: 0,
+          loadProgress: null,
+          loadError: null,
+          fit: null,
           dataDetails,
         },
         () => {
-          component.loadProgressively(imageDataObject);
-
           setTimeout(() => {
 
             const { displaySet } = component.props.viewportData;
@@ -144,46 +104,45 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
             }
 
             component.setState({
-              volumes: [volumeActor],
+              imageIds,
               paintFilterLabelMapImageData: labelmapDataObject,
               paintFilterLabelMapDetails: labelmapDetails,
-              paintFilterBackgroundImageData: imageDataObject.vtkImageData,
               labelmapColorLUT,
+              // The viewport is handed to the view as soon as the imageIds are known: it enables
+              // the element and calls setVolumes immediately, and planes appear as slices arrive.
+              isLoaded: true,
             });
           }, eventTimeout);
         }
       );
     } catch (error) {
-      // An error occurred while loading image data, log and notify user
-      const errorTitle = 'Failed to load image data.';
-      console.error(errorTitle, error);
-
-      // Retrieve UI notification, logging, and UIModalService
-      const { UIModalService } = this.props.servicesManager.services;
-
-      if (this.props.viewportIndex === 0) {
-        const message = error.message.includes('buffer') ? 'Dataset is too big to display in MPR' : error.message;
-        // One call: console, unified Issues list, and a sticky toast with a way out
-        // (ohif-viewers#84).
-        uiNotificationService.show({
-          title: errorTitle,
-          message,
-          type: 'error',
-          autoClose: false,
-          studyInstanceUID: extractStudyIdFromURL(),
-          error,
-          action: {
-            label: 'Exit 2D MPR',
-            onClick: ({ close }) => {
-              // context: 'ACTIVE_VIEWPORT::VTK',
-              close();
-              this.props.commandsManager.runCommand('setCornerstoneLayout');
-            },
-          },
-        });
-      }
+      // Resolving the stack failed, so there is nothing to render at all. Reported through the
+      // same one-per-volume path as a load failure.
+      console.error('Failed to load image data.', error);
+      component.onLoadError(error);
       this.setState({ isLoaded: true });
     }
+  }
+
+  notifyLoadError(error) {
+    // The MPR viewport's toast carries the way out of the layout: the message tells the user
+    // which viewer to switch to, not just that the load failed.
+
+    uiNotificationService.show({
+      title: 'Failed to load image data.',
+      message: error.message,
+      type: 'error',
+      autoClose: false,
+      studyInstanceUID: extractStudyIdFromURL(),
+      error,
+      action: {
+        label: 'Exit 2D MPR',
+        onClick: ({ close }) => {
+          close();
+          this.props.commandsManager.runCommand('setCornerstoneLayout');
+        },
+      },
+    });
   }
 
   resizeViewport() {
@@ -291,7 +250,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       
       const { viewportData, servicesManager } = component.props;
       const { 
-        isInpsectionViewOpen, isLoaded, paintFilterBackgroundImageData, 
+        isInpsectionViewOpen, isLoaded, imageIds,
         paintFilterLabelMapImageData, paintFilterLabelMapDetails
       } = component.state;
       const { displaySet } = component.props.viewportData;
@@ -305,10 +264,9 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       const WrappedSeriesInspectionView = function() {
         return (
           <Cornerstone3DInspectionView
-            viewportData={viewportData} isLoaded={isLoaded} volumes={component.state.volumes}
+            viewportData={viewportData} isLoaded={isLoaded} imageIds={imageIds}
             onClose={() => component.setState({ isInpsectionViewOpen: false })}
             servicesManager={servicesManager} orientation={component._getOrientation()}
-            paintFilterBackgroundImageData={paintFilterBackgroundImageData}
             paintFilterLabelMapImageData={paintFilterLabelMapImageData}
             paintFilterLabelMapDetails={paintFilterLabelMapDetails}
             labelmapRenderingOptions={{
@@ -359,18 +317,30 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
 
     const style = { width: '100%', height: '100%', position: 'relative' };
 
+    // The indicator clears when the volume finishes streaming, not when the stack resolves: the
+    // planes are already on screen and filling in before that.
+    const loadComplete = !!component.state.loadProgress?.complete;
+
     return (
       <>
         <div style={style}>
-          {!component.state.isLoaded && <LoadingIndicator percentComplete={component.state.percentComplete} />}
-          {component.state.volumes && (
+          {!loadComplete && (
+            <LoadingIndicator
+              percentComplete={component.state.percentComplete}
+              loadProgress={component.state.loadProgress}
+            />
+          )}
+          <VolumeFitNotice fit={component.state.fit} />
+          {component.state.imageIds && (
             <ConnectedVTKViewport 
               servicesManager={component.props.servicesManager} commandsManager={component.props.commandsManager}
               isLoaded={component.state.isLoaded}
-              viewportData={component.props.viewportData} volumes={component.state.volumes}
+              viewportData={component.props.viewportData} imageIds={component.state.imageIds}
               paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
-              paintFilterBackgroundImageData={component.state.paintFilterBackgroundImageData}
               paintFilterLabelMapDetails={component.state.paintFilterLabelMapDetails}
+              onLoadProgress={component.onLoadProgress}
+              onLoadError={component.onLoadError}
+              onVolumeFit={component.onVolumeFit}
               viewportIndex={component.props.viewportIndex} 
               orientation={component._getOrientation()}
               dataDetails={component.state.dataDetails}
@@ -390,7 +360,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
             />
           )}
         </div>
-        {component.state.isLoaded && (
+        {component.state.imageIds && (
           <div className="zoomButton" onClick={handleToggleInspectionView} >
             <Icon name="search-plus" width="18px" height="18px" />
           </div>

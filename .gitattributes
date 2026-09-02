@@ -1,0 +1,4 @@
+# patch-package output is a verbatim diff of a dependency's own source. Its "trailing whitespace"
+# is the single-space marker on an empty context line, which the patch format requires and which
+# must match the vendored file byte for byte -- so these files cannot be whitespace-cleaned.
+patches/*.patch -whitespace

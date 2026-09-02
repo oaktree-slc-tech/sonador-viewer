@@ -50,12 +50,15 @@ ToolbarButton.propTypes = {
   id: PropTypes.string,
   isActive: PropTypes.bool,
   
-  /** Display label for button */
-  label: PropTypes.string.isRequired,
+  /** Display label for button. Defaults to '' in the signature, so it is not required. */
+  label: PropTypes.string,
   
   /** Alternative text to show when button is active */
   labelWhenActive: PropTypes.string,
-  className: PropTypes.string.isRequired,
+  /** Defaults to 'toolbar-button' in the signature, so it is not required. Default parameters are
+   *  applied inside the function and are invisible to propTypes, which validates what the caller
+   *  passed -- marking these required warned on every render that relied on the default. */
+  className: PropTypes.string,
   icon: PropTypes.oneOfType([
     PropTypes.string,
     PropTypes.shape({

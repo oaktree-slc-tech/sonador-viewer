@@ -27,6 +27,49 @@ const getAvailableViewportModules = memoize((viewportModules) => {
 });
 
 
+// Hoisted out of the component and memoised on the values it derives from. Inline, this built a
+// new object on every call, so `useSelector` saw a change on every store notification and
+// re-rendered the whole viewport grid whether or not the layout had moved -- and react-redux's
+// stability check reported it once per mount.
+let _lastGridInputs = null;
+let _lastGridResult;
+
+const selectViewportGrid = (state) => {
+  const viewportModules = extensionManager.modules[MODULE_TYPES.VIEWPORT];
+  const availableViewportModules = getAvailableViewportModules(viewportModules);
+
+  // TODO: Use something like state.plugins.defaultPlugin[MODULE_TYPES.VIEWPORT]
+  let defaultPlugin;
+  if (viewportModules.length) {
+    defaultPlugin = viewportModules[0].extensionId;
+  }
+
+  const { numRows, numColumns, layout, activeViewportIndex } = state.viewports;
+
+  const inputs = [
+    numRows, numColumns, layout, activeViewportIndex, availableViewportModules, defaultPlugin,
+  ];
+
+  if (_lastGridInputs && _lastGridInputs.every((value, i) => value === inputs[i])) {
+    return _lastGridResult;
+  }
+
+  _lastGridInputs = inputs;
+  _lastGridResult = {
+    numRows,
+    numColumns,
+    layout,
+    activeViewportIndex,
+    // TODO: rename `availableViewportModules`
+    availablePlugins: availableViewportModules,
+    // TODO: rename `defaultViewportModule`
+    defaultPlugin,
+  };
+
+  return _lastGridResult;
+};
+
+
 function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStudyLoaded }) {
   const {
     numColumns = 1,
@@ -37,29 +80,7 @@ function ViewportGrid({ setViewportData, studies = [], viewportData = [], isStud
       DefaultViewport,
     },
     defaultPlugin: defaultPluginName = 'defaultViewportPlugin',
-  } = useSelector((state) => {
-    const viewportModules = extensionManager.modules[MODULE_TYPES.VIEWPORT];
-    const availableViewportModules = getAvailableViewportModules(viewportModules);
-
-    // TODO: Use something like state.plugins.defaultPlugin[MODULE_TYPES.VIEWPORT]
-    let defaultPlugin;
-    if (viewportModules.length) {
-      defaultPlugin = viewportModules[0].extensionId;
-    }
-
-    const { numRows, numColumns, layout, activeViewportIndex } = state.viewports;
-
-    return {
-      numRows,
-      numColumns,
-      layout,
-      activeViewportIndex,
-      // TODO: rename `availableViewportModules`
-      availablePlugins: availableViewportModules,
-      // TODO: rename `defaultViewportModule`
-      defaultPlugin,
-    };
-  });
+  } = useSelector(selectViewportGrid);
 
   const rowSize = 100 / numRows;
   const colSize = 100 / numColumns;
