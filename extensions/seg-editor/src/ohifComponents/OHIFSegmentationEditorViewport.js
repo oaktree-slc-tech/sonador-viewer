@@ -4,8 +4,6 @@ import React, { Component } from "react";
 import PropTypes from "prop-types";
 import cornerstoneTools from 'cornerstone-tools';
 
-import { cache as c3dCache } from "@cornerstonejs/core";
-
 import {
   Enums as c3dToolsEnums,
 
@@ -21,13 +19,11 @@ import { eventTypes as uiEvents } from "@ohif/ui";
 import {
   Enums as vtkEnums,
   LoadingIndicator,
+  VolumeFitNotice,
   OHIFVtkBaseViewport,
   vtkUtils,
-  cornerstone3dUtils,
 } from "@ohif/extension-vtk";
 import { eventTypes as segmentationEventTypes } from "@ohif/extension-dicom-segmentation";
-
-const { cacheVtkImage } = cornerstone3dUtils;
 
 import SegmentationEditorViewport from "../components/SegmentationEditorLayout.js";
 import { Enums as SegEditorEnums } from '../enums';
@@ -56,31 +52,6 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
   constructor() {
     super(...arguments);
-  }
-
-  getVolume(displayInstanceUID) {
-    // Retrieve volume for the provided display set instance UID from C3D cache
-    const vol = c3dCache.getVolume(displayInstanceUID);
-    return vol?._vtkActor || null;
-  }
-
-  cacheVolume(displayInstanceUID, volumeActor) {
-    // Store volume actor in C3D cache for lifecycle management
-    let vol = c3dCache.getVolume(displayInstanceUID);
-    if (!vol) {
-      try {
-        vol = cacheVtkImage(displayInstanceUID, {}, volumeActor.getMapper().getInputData());
-      } catch (e) {
-        console.warn('[OHIFSegmentationEditorViewport:cacheVolume] Failed to register volume in C3D cache:', e);
-      }
-    }
-    if (vol) {
-      vol._vtkActor = volumeActor;
-    }
-  }
-
-  applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
-    console.log("TODO: Apply volume transforms");
   }
 
   setStateFromProps() {
@@ -117,19 +88,17 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
     try {
 
-      // Retrieve image data, labelmaps, and color settings
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
+      // Retrieve the display set's imageIds, labelmap and colour settings. The Cornerstone3D view
+      // builds and streams the volume from the imageIds.
+      const { imageIds, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
           studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
 
-      this.imageDataObject = imageDataObject;
+      _component.hasError = false;
 
-      const volumeActor = this.getOrCreateVolume(imageDataObject, displaySetInstanceUID);
+      this.setState({
+        percentComplete: 0, loadProgress: null, loadError: null, fit: null, dataDetails,
+      }, () => {
 
-      // Begin progressively loading data
-      this.setState({ percentComplete: 0, dataDetails }, () => {
-        this.loadProgressively(imageDataObject);
-
-        // Update load progress every 200 milliseconds.
         setTimeout(() => {
 
           // Set displaySet API properties and trigger displaySet service
@@ -151,53 +120,20 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
           }
 
           this.setState({
-            volumes: [volumeActor],
+            imageIds,
             paintFilterLabelMapImageData: labelmapDataObject,
             paintFilterLabelMapDetails: labelmapDetails,
-            paintFilterBackgroundImageData: imageDataObject.vtkImageData,
             labelmapColorLUT,
+            isLoaded: true,
           });
         }, eventTimeout);
       });
     } catch (err) {
 
-      // An error occurred while loading
-      const errorTitle = "Failed to load image data.";
-      const errorOptions = {};
-
-      if (this.props.viewportIndex === 0) {
-
-        // Log to logger service
-        errorOptions.loggerService = true;
-
-        // Set user display message
-        errorOptions.message = err.message.includes("buffer")
-          ? "Dataset is too large to display in volume rendering view"
-          : err.message;
-
-        // Attempt to retrieve study ID from URL
-        errorOptions.studyId = extractStudyIdFromURL();
-        errorOptions.studyError = errorOptions.studyId ? true : false;
-
-        // User notification
-        errorOptions.userNotification = true;
-        errorOptions.userNotificationOptions = {
-          type: 'error',
-          autoClose: false,
-          action: {
-            label: 'Exit Segmentation Editor',
-            onClick: ({ close }) => {
-              close();
-              _component.props.commandsManager.runCommand('setCornerstoneLayout');
-            }
-          }
-        }
-      }
-
-      // Log Errors
-      vtkUtils.logVtkError(this.props.servicesManager, errorTitle, errorOptions);
-
-      // Set state to loaded to clear in-progress screens
+      // Resolving the stack failed, so there is nothing to render at all. Reported through the
+      // same one-per-volume path as a load failure.
+      console.error('Failed to load image data.', err);
+      _component.onLoadError(err);
       this.setState({ isLoaded: true });
     }
   }
@@ -235,6 +171,31 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
         DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
       }
     }
+  }
+
+  notifyLoadError(error) {
+    // The toast carries the way out of this layout: the message names the viewer to switch to,
+    // not just the fact that the load failed.
+
+    const _component = this;
+
+    vtkUtils.logVtkError(this.props.servicesManager, 'Failed to load image data.', {
+      message: error.message,
+      studyId: extractStudyIdFromURL(),
+      studyError: !!extractStudyIdFromURL(),
+      userNotification: true,
+      userNotificationOptions: {
+        type: 'error',
+        autoClose: false,
+        action: {
+          label: 'Exit Segmentation Editor',
+          onClick: ({ close }) => {
+            close();
+            _component.props.commandsManager.runCommand('setCornerstoneLayout');
+          },
+        },
+      },
+    });
   }
 
   resizeViewport() {
@@ -363,17 +324,20 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
     return (
       <>
       <div className='ohif-segmentation-editor' style={style}>
-        {!component.state.isLoaded && (
-          <LoadingIndicator percentComplete={percentComplete} />
+        {!component.state.loadProgress?.complete && (
+          <LoadingIndicator percentComplete={percentComplete} loadProgress={component.state.loadProgress} />
         )}
-        {isLoaded && component.state.volumes && (
+        <VolumeFitNotice fit={component.state.fit} />
+        {isLoaded && component.state.imageIds && (
 
           <SegmentationEditorViewport
             servicesManager={component.props.servicesManager}
-            volumes={component.state.volumes}
+            imageIds={component.state.imageIds}
             paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
             paintFilterLabelMapDetails={component.state.paintFilterLabelMapDetails}
-            paintFilterBackgroundImageData={component.state.paintFilterBackgroundImageData}
+            onLoadProgress={component.onLoadProgress}
+            onLoadError={component.onLoadError}
+            onVolumeFit={component.onVolumeFit}
             isLoaded={component.state.isLoaded}
             viewportData={component.props.viewportData}
             labelmapRenderingOptions={{

@@ -47,9 +47,8 @@ import { OHIFModal } from '@ohif/ui';
 import { Icon, ToolbarButton } from '@ohif/ui';
 
 import {
-  cacheVtkImage, 
   cacheVtkLabelmapImage,
-  purgeLocalVolume,
+  getVolumeIdForDisplaySet,
   inspectVtkLabelmapImage,
 } from '../utils/cornerstone3d.js';
 
@@ -99,22 +98,29 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     removeAllSegRepresentations: false,
   }
 
-  _getImageVolumeId(options) {
-    // Utilize a prefixed volumeId to prevent rendering issues with underlying view
-    options = options || {};
-    _.defaults(options, { prefix: 'inspection:' });
-
-    const volumeId = super._getImageVolumeId();
-    return options.prefix+volumeId;
+  _volumeIdOptions() {
+    // The inspection modal renders in its own rendering engine, and therefore its own WebGL
+    // context, so it needs its own volume: a Cornerstone3D volume owns one vtkOpenGLTexture and
+    // that texture can only be bound to one render window at a time. Sharing the MPR panes' volume
+    // made the modal draw black (the texture was rebound to the modal's context) and then, once the
+    // modal's engine was destroyed, left the panes rendering through a dead render window --
+    // `model._textureResourceIds is undefined` on the next MPR render.
+    //
+    // This is a deliberate departure from ohif-viewers#134 FR-1, which asks for one volume shared
+    // across every viewport AND rendering engine: the second half is not achievable at the pinned
+    // Cornerstone3D/vtk.js versions. It is cheap, though -- the streaming volume holds no CPU
+    // scalar array and the decoded slices stay shared in the image cache, so the cost is one more
+    // GPU texture rather than a second copy of the series.
+    return { view: 'inspection' };
   }
 
   _getSegImageVolumeId(options) {
-    // Retrieve the segmentation volumeId to be used by the view
+    // The labelmap derives from this view's own image volume, so it needs its own id too.
     options = options || {};
-    _.defaults(options, { prefix: 'inspection:' });
-    
+    _.defaults(options, { suffix: '::inspection' });
+
     const segVolumeId = super._getSegImageVolumeId();
-    return options.prefix+segVolumeId;
+    return segVolumeId ? segVolumeId + options.suffix : segVolumeId;
   }
 
   async loadSegImageVolume() {

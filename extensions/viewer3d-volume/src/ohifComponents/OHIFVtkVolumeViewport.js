@@ -3,19 +3,16 @@ import _ from "lodash";
 import React from "react";
 import PropTypes from "prop-types";
 
-import { cache as c3dCache } from "@cornerstonejs/core";
 import OHIF from '@ohif/core';
 import { extractStudyIdFromURL } from "@ohif/core/src/utils/extractStudyIdFromURL";
 import { eventTypes as segmentationEventTypes } from "@ohif/extension-dicom-segmentation";
 import {
   LoadingIndicator,
+  VolumeFitNotice,
   OHIFVtkBaseViewport,
   vtkUtils,
-  cornerstone3dUtils,
 } from "@ohif/extension-vtk";
 import { eventTypes as uiEvents } from "@ohif/ui";
-
-const { cacheVtkImage } = cornerstone3dUtils;
 
 import ConnectedVTKVolumeViewport from "../connectedComponents/ConnectedVTKVolumeViewport.js";
 import { TOOLS as VolViewerTools } from '../enums';
@@ -40,41 +37,15 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     super(...arguments);
   }
 
-  getVolume(displaySetInstanceUID) {
-    // Retrieve volume for the provided display set instance UID from C3D cache
-    const vol = c3dCache.getVolume(displaySetInstanceUID);
-    return vol?._vtkActor || null;
-  }
-
-  cacheVolume(displaySetInstanceUID, volumeActor) {
-    // Store volume actor in C3D cache for lifecycle management
-    let vol = c3dCache.getVolume(displaySetInstanceUID);
-    if (!vol) {
-      try {
-        vol = cacheVtkImage(displaySetInstanceUID, {}, volumeActor.getMapper().getInputData());
-      } catch (e) {
-        console.warn('[OHIFVtkVolumeViewport:cacheVolume] Failed to register volume in C3D cache:', e);
-      }
-    }
-    if (vol) {
-      vol._vtkActor = volumeActor;
-    }
-  }
-
   applyVolumeTransforms(vtkImage, volumeActor, volumeMapper, options) {
-    // Apply transforms and VTK properties to volume actor and mapper
+    // Volume rendering presets are applied to the Cornerstone3D volume actor by the view, not by
+    // this class, which does not build a vtkVolume actor of its own.
     options = options || {};
 
-    // Set color preset options
     const { activeColorPreset, defaultColorPreset } = this.state;
     options.vtkColorPreset = activeColorPreset || defaultColorPreset;
 
-    vtkUtils.applyVtkVolumeRenderOptions(
-      vtkImage,
-      volumeActor,
-      volumeMapper,
-      options,
-    );
+    vtkUtils.applyVtkVolumeRenderOptions(vtkImage, volumeActor, volumeMapper, options);
   }
 
   setStateFromProps() {
@@ -110,22 +81,17 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     };
 
     try {
-      // Retrieve image data, labelmaps, and color settings
-      const { imageDataObject, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(studies,
+      // Retrieve the display set's imageIds, labelmap and colour settings. The Cornerstone3D view
+      // builds and streams the volume from the imageIds.
+      const { imageIds, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(studies,
           StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
 
-      this.imageDataObject = imageDataObject;
+      _component.hasError = false;
 
-      const volumeActor = this.getOrCreateVolume(
-        imageDataObject,
-        displaySetInstanceUID,
-      );
+      this.setState({
+        percentComplete: 0, loadProgress: null, loadError: null, fit: null, dataDetails,
+      }, () => {
 
-      // Begin progressively loading data
-      this.setState({ percentComplete: 0, dataDetails }, () => {
-        this.loadProgressively(imageDataObject);
-
-        // Update load progress every 200 milliseconds.
         setTimeout(() => {
 
           // Set displaySet API properties and trigger displaySet service
@@ -152,56 +118,47 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
           }
 
           this.setState({
-            volumes: [volumeActor],
+            imageIds,
             paintFilterLabelMapImageData: labelmapDataObject,
             paintFilterLabelMapDetails: labelmapDetails,
-            paintFilterBackgroundImageData: imageDataObject.vtkImageData,
             labelmapColorLUT,
+            isLoaded: true,
           });
         }, eventTimeout);
       });
     } catch (err) {
 
-      // An error occurred while loading image data, notify user
-      const errorTitle = "Failed to load image data.";
-      const errorOptions = {};
-
-      // Log properties to study error list and display user notification
-      if (this.props.viewportIndex === 0) {
-
-        // Log to logger service
-        errorOptions.loggerService = true;
-
-        // Set user display message
-        errorOptions.message = err.message.includes("buffer")
-          ? "Dataset is too large to display in volume rendering view"
-          : err.message;
-
-        // Attempt to retrieve study ID from URL
-        errorOptions.studyId = extractStudyIdFromURL();
-        errorOptions.studyError = errorOptions.studyId ? true : false;
-
-        // User notification
-        errorOptions.userNotification = true;
-        errorOptions.userNotificationOptions = {
-          type: 'error',
-          autoClose: false,
-          action: {
-            label: 'Exit Volume Viewer',
-            onClick: ({ close }) => {
-              close();
-              _component.props.commandsManager.runCommand('setCornerstoneLayout');
-            }
-          }
-        }
-      }
-
-      // Log Errors
-      vtkUtils.logVtkError(this.props.servicesManager, errorTitle, errorOptions);
-
-      // Set state to loaded to clear in-progress screens
+      // Resolving the stack failed, so there is nothing to render at all. Reported through the
+      // same one-per-volume path as a load failure.
+      console.error('Failed to load image data.', err);
+      _component.onLoadError(err);
       this.setState({ isLoaded: true });
     }
+  }
+
+  notifyLoadError(error) {
+    // The toast carries the way out of this layout: the message names the viewer to switch to,
+    // not just the fact that the load failed.
+
+    const _component = this;
+
+    vtkUtils.logVtkError(this.props.servicesManager, 'Failed to load image data.', {
+      message: error.message,
+      studyId: extractStudyIdFromURL(),
+      studyError: !!extractStudyIdFromURL(),
+      userNotification: true,
+      userNotificationOptions: {
+        type: 'error',
+        autoClose: false,
+        action: {
+          label: 'Exit Volume Viewer',
+          onClick: ({ close }) => {
+            close();
+            _component.props.commandsManager.runCommand('setCornerstoneLayout');
+          },
+        },
+      },
+    });
   }
 
   resizeViewport() {
@@ -346,17 +303,23 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
     return (
       <>
         <div className="ohif-vtk-volume" style={style}>
-          {!component.state.isLoaded && (
-            <LoadingIndicator percentComplete={component.state.percentComplete} />
+          {!component.state.loadProgress?.complete && (
+            <LoadingIndicator
+              percentComplete={component.state.percentComplete}
+              loadProgress={component.state.loadProgress}
+            />
           )}
-          {component.state.volumes && (
+          <VolumeFitNotice fit={component.state.fit} />
+          {component.state.imageIds && (
             <ConnectedVTKVolumeViewport
               servicesManager={component.props.servicesManager}
               commandsManager={component.props.commandsManager}
-              volumes={component.state.volumes}
+              imageIds={component.state.imageIds}
               paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
               paintFilterLabelMapDetails={component.state.paintFilterLabelMapDetails}
-              paintFilterBackgroundImageData={component.state.paintFilterBackgroundImageData}
+              onLoadProgress={component.onLoadProgress}
+              onLoadError={component.onLoadError}
+              onVolumeFit={component.onVolumeFit}
               isLoaded={component.state.isLoaded}
               viewportData={component.props.viewportData}
               labelmapRenderingOptions={{

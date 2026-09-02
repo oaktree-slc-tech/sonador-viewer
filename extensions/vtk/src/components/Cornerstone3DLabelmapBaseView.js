@@ -43,10 +43,9 @@ import {
 import Cornerstone3DBaseView from './Cornerstone3DBaseView.js';
 
 import {
-  cacheVtkImage, 
   cacheVtkLabelmapImage,
-  purgeLocalVolume,
   inspectVtkLabelmapImage,
+  mapLabelmapBufferToVolumeOrder,
 } from '../utils/cornerstone3d.js';
 
 
@@ -89,7 +88,7 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
 
     // @input options
     //  - volumeId: the volumeId to retrieve. If no volume specified, the labelmapInstanceUID
-    //    provided in paintFilterBackgroundImageData will be used.
+    //    provided in paintFilterLabelMapDetails will be used.
 
     // @returns volumeId and segmentation labelmap volume
 
@@ -125,12 +124,52 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
 
       // Parse labelmapDetails from paintFilterLabelMapDetails and combine with labelmap metadata
       const { paintFilterLabelMapImageData } = component.props;
-      labelmapDetails = paintFilterLabelMapImageData ? inspectVtkLabelmapImage(paintFilterLabelMapImageData) : undefined;
+      labelmapDetails = paintFilterLabelMapImageData
+        ? inspectVtkLabelmapImage(component._labelmapScalarData())
+        : undefined;
     }
 
     return {
       volumeId: labelmapInstanceUID, segMeta: _segMeta, labelmapDetails, labelmapMetadata,
     }
+  }
+
+  _labelmapScalarData() {
+    // Build the labelmap scalars for the reference image volume, in the volume's slice order.
+    //
+    // `paintFilterLabelMapImageData` carries the legacy cornerstone-tools labelmap as
+    // `{ buffer, stackImageIds }` -- the raw `labelmap3D.buffer` plus the stack it was drawn on.
+    // The viewer does not build a vtkImageData for it: the geometry comes from the Cornerstone3D
+    // volume, and the slice order is mapped by imageId rather than assumed to be identity, because
+    // the stack is in display-set order while the streaming loader sorts by image position.
+
+    const component = this;
+    const { paintFilterLabelMapImageData } = component.props;
+
+    if (!paintFilterLabelMapImageData) {
+      return undefined;
+    }
+
+    // Memoised: this is called from both the metadata inspection and the volume creation, and the
+    // copy is the size of the labelmap.
+    if (component._labelmapScalars &&
+        component._labelmapScalarsSource === paintFilterLabelMapImageData) {
+      return component._labelmapScalars;
+    }
+
+    const { buffer, stackImageIds } = paintFilterLabelMapImageData;
+    const referenceVolume = c3dCache.getVolume(component._getImageVolumeId());
+
+    if (!referenceVolume) {
+      throw new Error(
+        'Unable to build the labelmap: its reference image volume is not in the cache yet.');
+    }
+
+    component._labelmapScalars = mapLabelmapBufferToVolumeOrder(
+      referenceVolume, stackImageIds, buffer);
+    component._labelmapScalarsSource = paintFilterLabelMapImageData;
+
+    return component._labelmapScalars;
   }
 
   async loadSegImageVolume(options) {
@@ -155,8 +194,10 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
       let { volumeId: labelmapInstanceUID, segVol } = component._segVol();
       if (!segVol) {
 
-        // Initialize and cache labelmap image from VTK data
-        segVol = await cacheVtkLabelmapImage(component._getImageVolumeId(), labelmapInstanceUID, paintFilterLabelMapImageData);
+        // Derive the labelmap from the Cornerstone3D image volume. The
+        // buffer is re-ordered from stack order to volume slice order first.
+        segVol = await cacheVtkLabelmapImage(
+          component._getImageVolumeId(), labelmapInstanceUID, component._labelmapScalarData());
       }
 
       // Inspect labelmap data to ensure that the segments will be populated correctly
@@ -444,7 +485,8 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
 
 Cornerstone3DLabelmapBaseView.propTypes = {
 	...Cornerstone3DBaseView.propTypes,
-	paintFilterBackgroundImageData: PropTypes.object,
+  // `{ buffer, stackImageIds }` -- the legacy cornerstone-tools labelmap3D buffer and the stack it
+  // was drawn on. Not a vtkImageData: the hosting viewport passes the raw buffer through.
   paintFilterLabelMapImageData: PropTypes.object,
   paintFilterLabelMapDetails: PropTypes.object,
   labelmapRenderingOptions: PropTypes.object,

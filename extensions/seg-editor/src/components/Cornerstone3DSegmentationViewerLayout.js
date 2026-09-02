@@ -622,7 +622,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const {
       t, uiMessageSurfaceInitializing, uiMessageSurfaceRendering, segEditorVolumeRenderingEnabled,
     } = component.props;
-    const { surfaceRendering, surfaceRenderProgress, surfaceModelInit, } = component.state;
+    const { surfaceRendering, surfaceRenderProgress, surfaceModelInit, loadProgress } = component.state;
 
     let loadingMessage;
     if (!surfaceModelInit) {
@@ -631,8 +631,15 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       loadingMessage = uiMessageSurfaceRendering;
     }
 
+    // Stagger the two overlays. The viewport-level indicator owns the streaming
+    // volume and clears when the last slice lands; only then does the surface indicator take over.
+    // Showing both at once put the 3D tab's status behind the volume's, which read as a glitch --
+    // and it was misleading, because surface extraction has not started yet: createSurfaceRender
+    // waits for a complete volume.
+    const volumeComplete = !!loadProgress?.complete;
+
     return (<>
-      {surfaceRendering && (
+      {surfaceRendering && volumeComplete && (
         <LoadingIndicator loadingMessage={t(loadingMessage)} percentageComplete={surfaceRenderProgress} />
       )}
       <div ref={component.tabRefs[tab]} style={{ width: "100%", height: "100%" }} />
@@ -757,7 +764,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         type: c3dToolsEnums.SegmentationRepresentations.Labelmap,
         data: {
           volumeId: labelmapInstance3dUID,
-          referenceVolumeId: displaySet?.displaySetInstanceUID,
+          // The reference is the Cornerstone3D streaming volume, addressed through the one helper
+          // that derives a volume id from a display set.
+          referenceVolumeId: component._getImageVolumeId(),
         }
       }
 
@@ -798,26 +807,34 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const { displaySet } = component.props.viewportData;
     const { imgViewportInit, imgRenderInit } = component.state;
 
-    if (imgViewportInit && !imgRenderInit) {
+    if (imgViewportInit && !imgRenderInit && !component._renderRequested) {
 
-      // Load image volume
-      component.loadImageVolume();
+      // Synchronous latch: componentDidUpdate re-enters before the await below resolves, and the
+      // imgRenderInit state flag lands too late to block it.
+      component._renderRequested = true;
 
-      // Set viewport volume references and render
-      _.each(views2d, (tab) => {
+      // Create the Cornerstone3D streaming volume and start it loading.
+      component.loadImageVolume().then(() => {
 
-        // Retrieve viewport instance
-        const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive({ tab });
-        if (_view3d) {
+        // Set viewport volume references and render. The volume is set as soon as it exists;
+        // slices fill in as they arrive.
+        _.each(views2d, (tab) => {
 
-          // Set volumes for viewport
-          _view3d.setVolumes([ { volumeId: displaySet.displaySetInstanceUID } ]);
-        }
+          // Retrieve viewport instance
+          const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive({ tab });
+          if (_view3d) {
+
+            // Set volumes for viewport
+            _view3d.setVolumes([ { volumeId: component._getImageVolumeId() } ]);
+          }
+        });
+
+        // Render all viewports
+        setTimeout(component.render3d.bind(component), eventTimeout);
+        component.setState({ imgRenderInit: true });
+      }).catch(() => {
+        component._renderRequested = false;
       });
-
-      // Render all viewports
-      setTimeout(component.render3d.bind(component), eventTimeout);
-      component.setState({ imgRenderInit: true });
     }
   }
 
@@ -1147,6 +1164,20 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     component.render3d();
   }
 
+  onImageVolumeLoadingCompleted() {
+    // Surface extraction walks the whole labelmap and competes with the volume load for the
+    // worker pool, so the editor's 3D tab waits for the streaming volume to finish. The 2D slice
+    // tabs are unaffected -- they display from the first slice that arrives.
+
+    const component = this;
+    component._imageVolumeComplete = true;
+
+    if (component._surfaceRenderDeferred) {
+      component._surfaceRenderDeferred = false;
+      component.createSurfaceRender();
+    }
+  }
+
   async createSurfaceRender(options) {
     // Create a surface representation of loaded labelmaps for display in the 3D viewport.
     // This method only creates the segmentation representation. The surface must be
@@ -1164,6 +1195,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
     const component = this;
     const { surfaceModelInit } = component.state;
+
+    // Wait for the reference image volume; onImageVolumeLoadingCompleted re-drives this.
+    if (!component._imageVolumeComplete) {
+      component._surfaceRenderDeferred = true;
+      return;
+    }
 
     const { viewportId: _v3d_id } = component._checkViewportActive({ tab: SonadorSegEnums.SEGVIEWER_3D });
     if (_v3d_id) {
@@ -1395,6 +1432,14 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component._surfaceRenderStatus();
     }
 
+    // Reveal check on every update. `_showSurfaceWhenReady` is idempotent and cheap (a state
+    // lookup behind the `_surfaceShown` latch), and this is what makes the overlay clear
+    // reliably: the poll only runs once `createSurfaceRender` reaches its tail, and that is
+    // skipped entirely whenever the 3D tab is not the active tab at the time. Without this the
+    // overlay could sit over a fully drawn surface until some unrelated interaction forced a
+    // re-render -- clicking a 2D viewport, which is exactly the reported symptom.
+    component._showSurfaceWhenReady();
+
     // Initialize image synchronizer
     if (isLoaded && imgToolsInit && !imgSyncInit) {
       component.initImageSync();
@@ -1477,7 +1522,6 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
     const component = this;
     const { renderId, toolGroupId, surfaceToolGroupId, voiSyncId, views2d, views3d } = component.props;
-    const { img, meta } = component.props.volumes[0];
 
     // Unsubscribe Events
     component.unsubscribeEvents();
@@ -1537,14 +1581,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component.props.onDestroyed();
     }
 
-    await c3dCache.purgeCache();
     console.log("SegViewer-componentWillUnmount: Cornerstone3D cleanup complete");
-  }
-
-  purgeLocalVolume() {
-    // Remove 2D and 3D volumes from cache
-    const component = this;
-    return super.purgeLocalVolume();
   }
 
   render() {

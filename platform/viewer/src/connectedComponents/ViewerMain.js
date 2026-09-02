@@ -332,7 +332,11 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
   useEffect(() => {
     return () => {
       dispatch(clearEntireViewportSpecificData());
-      cornerstone3dUtils.purgeVolumeCache();
+
+      // Release every image-volume lease this session took, rather than purging the whole
+      // Cornerstone3D cache. A global purge would also destroy cache entries other subsystems own
+      // -- M3D geometry, segmentations -- which have nothing to do with leaving the study viewer.
+      cornerstone3dUtils.volumeLease.releaseAll();
     };
   }, []);
 

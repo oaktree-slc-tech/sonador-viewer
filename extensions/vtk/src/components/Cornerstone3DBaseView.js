@@ -11,6 +11,7 @@ import {
   Enums as c3dEnums,
   volumeLoader as c3dVolumeLoader,
   cache as c3dCache,
+  eventTarget as c3dEventTarget,
 } from "@cornerstonejs/core";
 
 import {
@@ -26,14 +27,21 @@ import {
   addTool as c3dAddTool,
 } from '@cornerstonejs/tools';
 
-import { vtkImage2CornerstoneImageOptions, cacheVtkImage, purgeLocalVolume } from '../utils/cornerstone3d.js';
+import {
+  assessDisplaySetVolumeFit,
+  createImageVolumeForDisplaySet,
+  getVolumeIdForDisplaySet,
+  suggestDecimationAfterFailure,
+  volumeLease,
+} from '../utils/cornerstone3d.js';
 import styles from './Cornerstone3DBaseView.css';
 
 const { ViewportType, Events } = c3dEnums;
 
 
 class Cornerstone3DBaseView extends Component {
-  // Cornerstone 3D view which provides properties to initialize a render engine and load data from VTK volumes.
+  // Cornerstone 3D view which initializes a render engine and displays the Cornerstone3D streaming
+  // image volume built from a display set's imageIds.
   
   static id = 'Cornerstone3DBaseView';
 
@@ -51,14 +59,25 @@ class Cornerstone3DBaseView extends Component {
     imgRenderInit: false,
     imgToolsInit: false,
     toolMode: null,
+
+    // Cornerstone3D streaming volume state
+    volumeId: null,
+    fit: null,
+    loadProgress: null,
+    loadError: null,
   }
 
   static propTypes = {
     renderId: PropTypes.string,
     sep: PropTypes.string,
     viewportData: PropTypes.object.isRequired,
-    volumes: PropTypes.array.isRequired,
+    // Stack imageIds for the display set. The view builds the Cornerstone3D volume from these
+    // rather than receiving a prebuilt vtkVolume actor.
+    imageIds: PropTypes.array.isRequired,
     isLoaded: PropTypes.bool.isRequired,
+    onLoadProgress: PropTypes.func,
+    onLoadError: PropTypes.func,
+    onVolumeFit: PropTypes.func,
     cornerstone3dViewProps: PropTypes.object,
     eventTimeout: PropTypes.number,
     orientation: PropTypes.string,
@@ -169,12 +188,24 @@ class Cornerstone3DBaseView extends Component {
   }
 
   _getImageVolumeId() {
-    // Retrieve the volumeId
+    // Retrieve the volumeId of the image volume this view displays.
+    //
+    // Once the pre-flight has run this is the id actually in the cache, which may be the
+    // reduced-resolution navigation volume; before that it is the
+    // full-resolution id the display set would normally get.
 
     const component = this;
     const { displaySet } = component.props.viewportData;
 
-    return displaySet.displaySetInstanceUID; 
+    return component.state.volumeId
+      || getVolumeIdForDisplaySet(displaySet, component._volumeIdOptions());
+  }
+
+  _volumeIdOptions() {
+    // Extra options for `getVolumeIdForDisplaySet`. Views that render in their own rendering
+    // engine -- and so their own WebGL context -- override this with a `view` discriminator,
+    // because a Cornerstone3D volume's single vtkOpenGLTexture cannot be bound to two contexts.
+    return {};
   }
 
   _getImageVolumeMeta() {
@@ -185,45 +216,275 @@ class Cornerstone3DBaseView extends Component {
     return displaySet;
   }
 
-  _initImageVolume() {
-    // Retrieve and initialize the image volume to be used by the view
-    const component = this;
+  _reportLoadProgress(loadProgress) {
+    // Publish load progress to the view's own state and up to the hosting viewport, which owns the
+    // loading indicator.
+    //
+    // Throttled to one update per whole percentage point, and always on completion.
+    // IMAGE_VOLUME_MODIFIED fires once per SLICE -- 1,600 times for the series this phase targets,
+    // and once per view, so three MPR panes made ~4,800 setState calls for one series. Each one
+    // cascades a componentDidUpdate through every subclass in the chain (labelmap render checks,
+    // the surface reveal, tool/sync init guards), which is far more work than the indicator that
+    // consumes it needs. Cornerstone3D redraws the volume itself every 2% of frames, so nothing
+    // visible depends on the finer granularity.
 
-    if (component.props?.volumes && component.props?.volumes.length) {
-      return component.props.volumes[0];
+    const component = this;
+    const { onLoadProgress } = component.props;
+
+    if (!component._isViewMounted) {
+      return;
     }
 
-    return undefined;
+    const { framesProcessed = 0, numberOfFrames = 0, complete } = loadProgress || {};
+    const percentComplete = numberOfFrames
+      ? Math.floor((framesProcessed * 100) / numberOfFrames)
+      : 0;
+
+    if (!complete && percentComplete === component._lastLoadPercent) {
+      return;
+    }
+    component._lastLoadPercent = percentComplete;
+
+    component.setState({ loadProgress });
+    if (_.isFunction(onLoadProgress)) {
+      onLoadProgress(loadProgress);
+    }
+  }
+
+  _reportLoadError(error) {
+    // Surface a load failure once per volume.
+
+    const component = this;
+    const { onLoadError } = component.props;
+
+    if (component._loadErrorReported) {
+      return;
+    }
+    component._loadErrorReported = true;
+
+    if (component._isViewMounted) {
+      component.setState({ loadError: error });
+    }
+    if (_.isFunction(onLoadError)) {
+      onLoadError(error);
+    }
+  }
+
+  _subscribeVolumeEvents(volumeId, volume) {
+    // Watch the streaming volume's progress. IMAGE_VOLUME_MODIFIED and
+    // IMAGE_VOLUME_LOADING_COMPLETED carry the volumeId; IMAGE_LOAD_ERROR does not, so a failing
+    // imageId is matched against this volume's own imageId index instead.
+
+    const component = this;
+
+    component._onVolumeModified = ({ detail }) => {
+      if (detail?.volumeId !== volumeId) {
+        return;
+      }
+      component._reportLoadProgress({
+        framesProcessed: detail.framesProcessed,
+        numberOfFrames: detail.numberOfFrames,
+        complete: false,
+      });
+    };
+
+    component._onVolumeLoadingCompleted = ({ detail }) => {
+      if (detail?.volumeId !== volumeId) {
+        return;
+      }
+      component._reportLoadProgress({
+        framesProcessed: volume.imageIds.length,
+        numberOfFrames: volume.imageIds.length,
+        complete: true,
+      });
+      component.onImageVolumeLoadingCompleted({ volumeId, volume });
+    };
+
+    component._onImageLoadError = ({ detail }) => {
+      // IMAGE_LOAD_ERROR is global and carries no volumeId, so membership is decided by imageId.
+      // At this pin `getImageIdIndex` is a Map lookup and answers `undefined` for a miss, but a
+      // numeric -1 is the conventional "not found" and would read as truthy membership, so both
+      // are rejected -- attributing another volume's failure here would raise a sticky error and
+      // an exit prompt on an unrelated series.
+      if (!detail?.imageId) {
+        return;
+      }
+
+      const imageIdIndex = volume.getImageIdIndex(detail.imageId);
+      if (imageIdIndex === undefined || imageIdIndex === null || imageIdIndex < 0) {
+        return;
+      }
+
+      component._reportLoadError(detail.error || new Error(`Failed to load ${detail.imageId}`));
+    };
+
+    c3dEventTarget.addEventListener(Events.IMAGE_VOLUME_MODIFIED, component._onVolumeModified);
+    c3dEventTarget.addEventListener(
+      Events.IMAGE_VOLUME_LOADING_COMPLETED, component._onVolumeLoadingCompleted);
+    c3dEventTarget.addEventListener(Events.IMAGE_LOAD_ERROR, component._onImageLoadError);
+  }
+
+  _unsubscribeVolumeEvents() {
+    // Remove the streaming-volume listeners. addEventListener returns undefined, so the bound
+    // handlers are kept on the component; without that they leak across mounts.
+
+    const component = this;
+
+    if (component._onVolumeModified) {
+      c3dEventTarget.removeEventListener(Events.IMAGE_VOLUME_MODIFIED, component._onVolumeModified);
+      component._onVolumeModified = null;
+    }
+    if (component._onVolumeLoadingCompleted) {
+      c3dEventTarget.removeEventListener(
+        Events.IMAGE_VOLUME_LOADING_COMPLETED, component._onVolumeLoadingCompleted);
+      component._onVolumeLoadingCompleted = null;
+    }
+    if (component._onImageLoadError) {
+      c3dEventTarget.removeEventListener(Events.IMAGE_LOAD_ERROR, component._onImageLoadError);
+      component._onImageLoadError = null;
+    }
+  }
+
+  onImageVolumeLoadingCompleted() {
+    // Hook for work that needs a complete volume: surface extraction in
+    // the editor, and 3D presets that read the scalar range. Slice views need nothing here.
+  }
+
+  async _createImageVolume() {
+    // Pre-flight, create, and start loading the Cornerstone3D streaming volume for this display
+    // set.
+
+    const component = this;
+    const { imageIds, onImageLoad } = component.props;
+    const { displaySet } = component.props.viewportData;
+
+    // The fit assessment is made once, per display set, before anything is allocated. An
+    // over-size 3D texture is not reported by WebGL: it samples as zero and renders as a uniform
+    // grey field, so this decision cannot be made by trying and catching.
+    const fit = assessDisplaySetVolumeFit(imageIds);
+
+    if (fit.reason === 'no-webgl') {
+      throw new Error(
+        'This client has no WebGL2 context, so volumes cannot be rendered.');
+    }
+
+    const volumeIdOptions = component._volumeIdOptions();
+
+    let created;
+    // The assessment that actually describes what got built. It diverges from `fit` only when the
+    // pre-flight passed and the allocation then failed anyway, in which case the reduced-resolution
+    // volume below is what the user is looking at and the notice has to say so.
+    let effectiveFit = fit;
+
+    try {
+      created = await createImageVolumeForDisplaySet({ imageIds, displaySet, fit, volumeIdOptions });
+    } catch (error) {
+      // A cache or allocation failure (CACHE_SIZE_EXCEEDED among them) is retried ONCE at reduced
+      // resolution, never again at full resolution.
+      const attempted = fit.fits ? null : fit.suggestedDecimation;
+      const suggestedDecimation = suggestDecimationAfterFailure(fit) || fit.suggestedDecimation;
+
+      // Nothing smaller to try, or the only suggestion is the decimation that just failed.
+      const exhausted =
+        !suggestedDecimation ||
+        (attempted && attempted.every((factor, i) => factor === suggestedDecimation[i]));
+
+      if (exhausted) {
+        component._reportLoadError(error);
+        throw error;
+      }
+
+      effectiveFit = {
+        ...fit,
+        fits: false,
+        // The client refused the allocation, whatever the pre-flight predicted.
+        reason: fit.fits ? 'budget' : fit.reason,
+        suggestedDecimation,
+      };
+
+      try {
+        created = await createImageVolumeForDisplaySet({
+          imageIds, displaySet, fit: effectiveFit, volumeIdOptions,
+        });
+      } catch (retryError) {
+        // Only now is this a failure the user can do nothing about. Reporting the original error
+        // before the retry would have shown a hard failure over a working reduced-resolution view.
+        component._reportLoadError(error);
+        throw retryError;
+      }
+    }
+
+    const { volumeId, volume, decimated } = created;
+
+    if (!component._isViewMounted) {
+      // Unmounted while creation was in flight. componentWillUnmount has already run and found no
+      // lease to release, so the volume would sit in the cache owned by nobody. Take a lease and
+      // give it straight back: net zero for any other view still holding it, and eviction if this
+      // was the only claim. Nothing is subscribed and nothing is loaded.
+      volumeLease.acquire(volumeId);
+      volumeLease.release(volumeId);
+      return { volumeId, volume };
+    }
+
+    volumeLease.acquire(volumeId);
+    component._leasedVolumeId = volumeId;
+    component._volume = volume;
+
+    component._subscribeVolumeEvents(volumeId, volume);
+
+    const resolvedFit = { ...effectiveFit, decimated };
+    component.setState({ volumeId, fit: resolvedFit });
+
+    if (_.isFunction(component.props.onVolumeFit)) {
+      component.props.onVolumeFit(resolvedFit);
+    }
+
+    // Start streaming. The viewport is enabled and setVolumes is called without waiting for this
+    // to finish, so slices appear as they arrive.
+    try {
+      volume.load();
+    } catch (error) {
+      component._reportLoadError(error);
+    }
+
+    // A volume already in the cache from an earlier mount never fires the completion event, so the
+    // completion hook is called directly for it.
+    if (volume.loadStatus?.loaded) {
+      component._reportLoadProgress({
+        framesProcessed: volume.imageIds.length,
+        numberOfFrames: volume.imageIds.length,
+        complete: true,
+      });
+      component.onImageVolumeLoadingCompleted({ volumeId, volume });
+    }
+
+    if (_.isFunction(onImageLoad)) {
+      onImageLoad({ volumeId, meta: component._getImageVolumeMeta(), vol: volume });
+    }
+
+    return { volumeId, volume };
   }
 
   loadImageVolume() {
-    // Initialize Cornerstone volume and load image volume to Cornerstone3D
+    // Single-flight the volume creation for this view. `componentDidUpdate` can re-enter before the
+    // first await resolves, so the in-flight promise -- not an async state flag -- is the latch.
+
     const component = this;
-    const { onImageLoad } = component.props;
-    const { displaySet } = component.props.viewportData;
 
-    // Create volume
-    const vol = c3dCache.getVolume(component._getImageVolumeId());
-    if (!vol) {
-      if (component.props.volumes) {
-        const img = component._initImageVolume();
-        const meta = component._getImageVolumeMeta();
-
-        // Volume not yet initialized, create instance and add to cache
-        cacheVtkImage(component._getImageVolumeId(), displaySet, img);
-
-        // Trigger callback
-        if (_.isFunction(onImageLoad)) {
-          onImageLoad({ volumeId: component._getImageVolumeId(), meta, vol: img, });
-        }
-      }
+    if (!component._volumePromise) {
+      component._volumePromise = component._createImageVolume().catch((error) => {
+        component._volumePromise = null;
+        component._reportLoadError(error);
+        throw error;
+      });
     }
+
+    return component._volumePromise;
   }
 
   async _setImageVolume(options) {
     // Set the image volume for the view
     const component = this;
-    const { displaySet } = component.props.viewportData;
 
     const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive(options);
     if (_view3d) {
@@ -241,10 +502,20 @@ class Cornerstone3DBaseView extends Component {
     const { displaySet, eventTimeout } = component.props.viewportData;
     const { orientation } = component.props;
 
-    if (uiInit && !imgRenderInit) {
+    if (uiInit && !imgRenderInit && !component._renderRequested) {
 
-      // Load image volume
-      component.loadImageVolume();
+      // Synchronous latch: componentDidUpdate re-enters before the awaits below resolve, and the
+      // imgRenderInit state flag lands too late to block it.
+      component._renderRequested = true;
+
+      // Create the streaming volume and start it loading. Released on failure so a later update
+      // can retry.
+      try {
+        await component.loadImageVolume();
+      } catch (error) {
+        component._renderRequested = false;
+        return;
+      }
 
       // Set viewport instance
       const { viewportId: _v3d_id, viewport: _view3d } = component._checkViewportActive();
@@ -259,8 +530,9 @@ class Cornerstone3DBaseView extends Component {
         if (options.setState) {
           component.setState({ imgRenderInit: true });
         }
+      } else {
+        component._renderRequested = false;
       }
-      
     }
   }
 
@@ -272,6 +544,7 @@ class Cornerstone3DBaseView extends Component {
     const { imgRenderInit, imgToolsInit } = this.state;
     
     // Initialize render engine 
+    component._isViewMounted = true;
     component.renderEngine = c3dGetRenderingEngine(renderId) || new C3dRenderingEngine(renderId);
     component.initUi();
   }
@@ -321,14 +594,16 @@ class Cornerstone3DBaseView extends Component {
 
     // 1. Destroy tool groups and remove viewport references
     // 2. Destroy DOM references
-    // 3. Clear loaded volumes
+    // 3. Release this view's hold on the image volume
     // 4. Destroy the render engine (or just disable the viewport when engineCleanup=false)
 
     console.log('[Cornerstone3DBaseView-componentWillUnmount] begin cleanup');
 
     const component = this;
-    const { renderId, volumes, volumeCleanup, engineCleanup } = component.props;
-    const { displaySet } = component.props.viewportData;
+    const { renderId, volumeCleanup, engineCleanup } = component.props;
+
+    component._isViewMounted = false;
+    component._unsubscribeVolumeEvents();
 
     if (component.renderEngine) {
 
@@ -357,25 +632,51 @@ class Cornerstone3DBaseView extends Component {
       component.renderEngine = undefined;
     }
 
-    // Remove local volume from Cornerston3D cache
+    // Release this view's lease on the image volume. The volume is evicted only when the last
+    // view holding it lets go, so views sharing a rendering engine share one volume -- the three
+    // MPR panes take three leases on a single entry. The inspection modal renders in its own
+    // WebGL context and so holds, and releases, a volume of its own.
     if (volumeCleanup) {
-      component.purgeLocalVolume();
+      component.releaseImageVolume();
     }
 
     console.log('[Cornerstone3DBaseView-componentWillUnmount] cleanup complete');
   }
 
-  purgeLocalVolume() {
-    // Remove local volume from Cornerstone3D cache
-    const component = this;
-    const { displaySet } = this.props.viewportData;
+  releaseImageVolume() {
+    // Give up this view's hold on the image volume.
 
-    // Retrieve image volumeId
-    const imgVolumeId = component._getImageVolumeId();
-    
-    if (displaySet && displaySet.displaySetInstanceUID && c3dCache.getVolume(imgVolumeId)) {
-      purgeLocalVolume(imgVolumeId);
+    const component = this;
+    const volumeId = component._leasedVolumeId;
+
+    if (!volumeId) {
+      return;
     }
+    component._leasedVolumeId = null;
+    component._volumePromise = null;
+    // Cleared so a view that is reset in place (the 3D viewer's _resetVolumeViewerState) can run
+    // the load sequence again rather than sitting behind a stale latch.
+    component._renderRequested = false;
+    component._loadErrorReported = false;
+    component._lastLoadPercent = undefined;
+    // Subclasses gate work that needs a complete volume on this; a view that is reset in
+    // place must wait for the reloaded volume again.
+    component._imageVolumeComplete = false;
+    component._surfaceRenderDeferred = false;
+
+    // Stop streaming when this was the last holder and the volume never finished; the pool filters
+    // its queued requests by volumeId, so a partly-loaded volume does not keep the pool busy.
+    const incomplete = component._volume && !component._volume.loadStatus?.loaded;
+    if (incomplete && volumeLease.count(volumeId) <= 1) {
+      try {
+        component._volume.cancelLoading();
+      } catch (error) {
+        console.warn('[Cornerstone3DBaseView-releaseImageVolume] Failed to cancel volume load:', error);
+      }
+    }
+    component._volume = null;
+
+    volumeLease.release(volumeId);
   }
 
   render() {
