@@ -8,6 +8,7 @@ import {
   parseSonadorLocalImageId,
   registerRemoteFallback,
   loadCachedInstanceImage,
+  loadCachedInstanceImageObject,
 } from './sonadorLocalImageReader';
 
 // Node test environment: shim the DOM mirror inside PubSubService._broadcastEvent (see
@@ -36,7 +37,12 @@ function makeFakeWadoLoader() {
       add: jest.fn(() => `dicomfile:${nextIndex++}`),
       remove: jest.fn(),
     },
-    loadImage: jest.fn(() => ({ promise: Promise.resolve({ decoded: true }) })),
+    loadImage: jest.fn(() => ({
+      promise: Promise.resolve({ decoded: true }),
+      cancelFn: jest.fn(),
+      // The real wadouri loader's decache is dataSetCacheManager.unload(<dicomfile url>).
+      decache: jest.fn(),
+    })),
   };
 }
 
@@ -125,5 +131,222 @@ describe('sonadorLocalImageReader', () => {
     await expect(
       loadCachedInstanceImage(buildSonadorLocalImageId('sop-orphan-1'), {}, { version: 'v3', wadoImageLoader })
     ).rejects.toThrow('no remote fallback');
+  });
+});
+
+// The Cornerstone3D loader contract is `{ promise, cancelFn?, decache? }`.
+// `cache.removeImageLoadObject` calls decache() on eviction and `imageLoader.cancelLoadImage` calls
+// cancelFn(); without them the parsed DataSet the wadouri pipeline built stays in
+// dataSetCacheManager under its `dicomfile:` key for the life of the session.
+describe('sonadorLocalImageReader load object', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns promise, cancelFn and decache', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(new ArrayBuffer(16));
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-loadobj-1'),
+      {},
+      { version: 'v3', wadoImageLoader }
+    );
+
+    expect(typeof loadObject.promise.then).toBe('function');
+    expect(typeof loadObject.cancelFn).toBe('function');
+    expect(typeof loadObject.decache).toBe('function');
+    await expect(loadObject.promise).resolves.toMatchObject({ decoded: true });
+  });
+
+  it('decache releases the delegate DataSet exactly once, however often it is called', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(new ArrayBuffer(16));
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-decache-1'),
+      {},
+      { version: 'v3', wadoImageLoader }
+    );
+    await loadObject.promise;
+
+    const delegate = wadoImageLoader.loadImage.mock.results[0].value;
+
+    loadObject.decache();
+    loadObject.decache();
+
+    // dataSetCacheManager.unload() decrements a reference count upstream does not floor at zero.
+    expect(delegate.decache).toHaveBeenCalledTimes(1);
+    // The last holder of the File went away, so the fileManager slot is handed back too.
+    expect(wadoImageLoader.fileManager.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the shared File until the last frame of a multiframe instance is decached', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(new ArrayBuffer(16));
+    const wadoImageLoader = makeFakeWadoLoader();
+    const deps = { version: 'v3', wadoImageLoader };
+
+    const frame0 = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-mf-1', 0), {}, deps);
+    const frame1 = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-mf-1', 1), {}, deps);
+    await Promise.all([frame0.promise, frame1.promise]);
+
+    // One File, one fileManager slot, shared by both frames.
+    expect(wadoImageLoader.fileManager.add).toHaveBeenCalledTimes(1);
+
+    frame0.decache();
+    expect(wadoImageLoader.fileManager.remove).not.toHaveBeenCalled();
+
+    frame1.decache();
+    expect(wadoImageLoader.fileManager.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards cancelFn to the delegate load object', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(new ArrayBuffer(16));
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-cancel-1'),
+      {},
+      { version: 'v3', wadoImageLoader }
+    );
+    await loadObject.promise;
+
+    loadObject.cancelFn();
+
+    expect(wadoImageLoader.loadImage.mock.results[0].value.cancelFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases resources acquired after an early decache (deferred read)', async () => {
+    // The eviction arrives while the IndexedDB read is still pending, so there is no delegate and
+    // no File hold to act on. The load then resumes and acquires both. Without replaying the
+    // intent, the DataSet and the fileManager slot are retained for the session -- on exactly the
+    // pending-eviction path decache exists to handle.
+    let releaseBytes;
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockReturnValue(
+      new Promise(resolve => { releaseBytes = () => resolve(new ArrayBuffer(16)); })
+    );
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-deferred-decache'),
+      {},
+      { version: 'v3', wadoImageLoader }
+    );
+
+    // Evict before the bytes land.
+    loadObject.decache();
+
+    releaseBytes();
+    await loadObject.promise;
+
+    const delegate = wadoImageLoader.loadImage.mock.results[0].value;
+    expect(delegate.decache).toHaveBeenCalledTimes(1);
+    expect(wadoImageLoader.fileManager.remove).toHaveBeenCalledTimes(1);
+
+    // And still exactly once if the consumer calls again afterwards.
+    loadObject.decache();
+    expect(delegate.decache).toHaveBeenCalledTimes(1);
+    expect(wadoImageLoader.fileManager.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the remote delegate after an early decache (deferred read, cache miss)', async () => {
+    // The sibling of the test above, on the other branch. The eviction still arrives while the
+    // read is pending, but the read then resolves to a miss, so the resources acquired afterwards
+    // belong to the remote fallback rather than to a local File. That branch adopts the delegate
+    // and returns its promise in one step, so the release has to happen at adoption.
+    let releaseBytes;
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockReturnValue(
+      new Promise(resolve => { releaseBytes = () => resolve(null); })
+    );
+    const remoteLoadObject = {
+      promise: Promise.resolve({ fromRemote: true }),
+      cancelFn: jest.fn(),
+      decache: jest.fn(),
+    };
+    registerRemoteFallback('sop-deferred-miss', 'wadors:https://example/instances/sop-deferred-miss');
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-deferred-miss'),
+      {},
+      { version: 'v3', wadoImageLoader: makeFakeWadoLoader(), remoteLoad: () => remoteLoadObject }
+    );
+
+    // Evict before the read resolves, i.e. before the remote delegate exists.
+    loadObject.decache();
+
+    releaseBytes();
+    await loadObject.promise;
+
+    expect(remoteLoadObject.decache).toHaveBeenCalledTimes(1);
+
+    // And still exactly once if the consumer calls again afterwards.
+    loadObject.decache();
+    expect(remoteLoadObject.decache).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards a cancel raised before the delegate existed', async () => {
+    let releaseBytes;
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockReturnValue(
+      new Promise(resolve => { releaseBytes = () => resolve(new ArrayBuffer(16)); })
+    );
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-deferred-cancel'),
+      {},
+      { version: 'v3', wadoImageLoader }
+    );
+
+    loadObject.cancelFn();
+
+    releaseBytes();
+    await loadObject.promise;
+
+    expect(wadoImageLoader.loadImage.mock.results[0].value.cancelFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards cancel/decache to the remote fallback load object on a cache miss', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(null);
+    const wadoImageLoader = makeFakeWadoLoader();
+    const remoteLoadObject = {
+      promise: Promise.resolve({ fromRemote: true }),
+      cancelFn: jest.fn(),
+      decache: jest.fn(),
+    };
+
+    registerRemoteFallback('sop-fallback-obj', 'wadors:https://example/instances/sop-fallback-obj');
+    const loadObject = loadCachedInstanceImageObject(
+      buildSonadorLocalImageId('sop-fallback-obj'),
+      {},
+      { version: 'v3', wadoImageLoader, remoteLoad: () => remoteLoadObject }
+    );
+
+    await expect(loadObject.promise).resolves.toEqual({ fromRemote: true });
+
+    loadObject.cancelFn();
+    loadObject.decache();
+
+    expect(remoteLoadObject.cancelFn).toHaveBeenCalledTimes(1);
+    expect(remoteLoadObject.decache).toHaveBeenCalledTimes(1);
+    // No File was materialised, so no fileManager slot to release.
+    expect(wadoImageLoader.fileManager.remove).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a remoteLoad that resolves to a bare promise (legacy adapter shape)', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(null);
+    const wadoImageLoader = makeFakeWadoLoader();
+
+    registerRemoteFallback('sop-fallback-bare', 'wadors:https://example/instances/sop-fallback-bare');
+    const image = await loadCachedInstanceImage(
+      buildSonadorLocalImageId('sop-fallback-bare'),
+      {},
+      {
+        version: 'v2',
+        wadoImageLoader,
+        remoteLoad: () => Promise.resolve({ fromRemote: true }),
+      }
+    );
+
+    expect(image).toEqual({ fromRemote: true });
   });
 });

@@ -50,11 +50,17 @@ import getImageId from './getImageId';
 // Tools for Working with Cornerstone3D
 import { initCornerstone3d } from './cornerstone3d.js';
 
+// GPU capability report and volume-fit pre-flight.
+import * as gpuCapabilities from './gpuCapabilities';
+
 
 const cornerstone3dUtils = {
 
   // Initialize Cornerstone 3D tools within the Sonador viewer
   initCornerstone3d,
+
+  // GPU limits, volume-fit assessment, and the manual texture-allocation probe
+  gpuCapabilities,
 }
 
 
@@ -119,6 +125,7 @@ const utils = {
   describeStudyFilename,
   describeSeriesFilename,
   
+  gpuCapabilities,
   cornerstone3dUtils,
   cornerstoneUtils,
 };
@@ -163,6 +170,7 @@ export {
   describeStudyFilename,
   describeSeriesFilename,
 
+  gpuCapabilities,
   cornerstone3dUtils,
   cornerstoneUtils,
 };
