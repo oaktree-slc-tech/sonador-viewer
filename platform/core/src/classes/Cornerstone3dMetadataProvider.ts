@@ -5,7 +5,10 @@ import queryString from 'query-string';
 import dicomParser from 'dicom-parser';
 
 import { utilities as c3dUtils } from '@cornerstonejs/core';
-import { imageIdToURI } from '../utils';
+// Imported from the module rather than the `../utils` barrel: StackManager (a member of that
+// barrel) now imports this provider, and going through the barrel would
+// make that a cycle.
+import imageIdToURI from '../utils/imageIdToUri';
 
 import DicomMetadataStore from '../services/DicomMetadataStore';
 import fetchOverlayData from '../utils/metadataProvider/fetchOverlayData';
@@ -37,6 +40,14 @@ class MetadataProvider {
     // This method is a fallback for when you don't have WADO-URI or WADO-RS.
     // You can add instances fetched by any method by calling addInstance, and hook an imageId to point at it here.
     // An example would be dicom hosted at some random site.
+    //
+    // The key is `imageIdToURI(imageId)`, which is exactly what `getUIDsFromImageID` computes for
+    // any id it cannot parse structurally -- including `sonadorlocal:<SOP>` and
+    // `sonadorlocal:<SOP>?frame=N`. `imageIdToURI` strips only the
+    // scheme, and the `&frame=` strip in the lookup does not touch a `?frame=` query, so a
+    // multiframe local id is stored and read back under the same `<SOP>?frame=N` key. Callers that
+    // register such an id should pass `frameIndex` in `uids` so the frame survives the round trip
+    // (see `getUIDsFromImageID`).
     const imageURI = imageIdToURI(imageId);
     this.imageURIToUIDs.set(imageURI, uids);
   }
@@ -51,8 +62,16 @@ class MetadataProvider {
   }
 
   _getInstance(imageId) {
+    // No imageId, no answer -- but NOT an exception. Cornerstone3D's `metaData.get` walks its
+    // providers in priority order and takes the first non-undefined result
+    // (`getMetaData` in metaData.ts); it does not wrap those calls in a try/catch. A provider that
+    // throws therefore aborts the whole lookup: every lower-priority provider is skipped and the
+    // caller gets an exception instead of metadata. That is what broke SR tool-state generation --
+    // `MeasurementReport.getQualitativeEvaluationData` calls `metaData.get` with no imageId, which
+    // is a legitimate "nothing to look up here", and the throw turned it into
+    // "Unable to generate tool state for ...".
     if (!imageId) {
-      throw new Error('MetadataProvider::Empty imageId');
+      return;
     }
 
     const uids = this.getUIDsFromImageID(imageId);
@@ -78,7 +97,10 @@ class MetadataProvider {
 
   get(query, imageId, options = { fallback: false }) {
   
-    if (Array.isArray(imageId)) {
+    // Same contract as _getInstance: anything this provider cannot answer for is `undefined`, so
+    // the next provider gets its turn. Guarded here as well because the customMetadata lookup
+    // below calls imageIdToURI, which cannot take an empty id either.
+    if (Array.isArray(imageId) || !imageId) {
       return;
     }
     const instance = this._getInstance(imageId);
@@ -525,7 +547,18 @@ class MetadataProvider {
     imageURI = imageURI.split('&frame=')[0];
 
     const uids = this.imageURIToUIDs.get(imageURI);
-    const frameNumber = this.getFrameInformationFromURL(imageId) || '1';
+
+    // `getFrameInformationFromURL` only understands the wadors `/frames/N` and wadouri `&frame=N`
+    // delimiters. Ids that carry the frame some other way -- `sonadorlocal:<SOP>?frame=N`, whose
+    // format is fixed by two loaders and the offline reader -- record the
+    // frame at registration time instead, as a zero-based `frameIndex`. DICOM frame numbers are
+    // one-based (this is what `combineFrameInstance` and the wadors `/frames/N` id both use), so
+    // the registered index is converted here. The URL scan still wins where it applies, so nothing
+    // that resolved before resolves differently now.
+    const registeredFrameNumber = Number.isInteger(uids?.frameIndex)
+      ? String(uids.frameIndex + 1)
+      : undefined;
+    const frameNumber = this.getFrameInformationFromURL(imageId) || registeredFrameNumber || '1';
 
     if (uids && frameNumber !== undefined) {
       return { ...uids, frameNumber };

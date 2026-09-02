@@ -1,4 +1,5 @@
 import metadataProvider from '../classes/MetadataProvider';
+import c3dMetadataProvider from '../classes/Cornerstone3dMetadataProvider';
 import OHIFError from '../classes/OHIFError.js';
 
 import getImageId from './getImageId';
@@ -52,6 +53,18 @@ function createAndAddStack(stackMap, study, displaySet, stackUpdatedCallbacks) {
           SeriesInstanceUID,
           SOPInstanceUID,
         });
+
+        // Register with the Cornerstone3D provider too. Its own id parsing
+        // covers wadors and `?requestType=WADO` urls; every other scheme -- including the offline
+        // `sonadorlocal:` ids that getImageId() returns for cached instances -- resolves only
+        // through this map. `frameIndex` carries the frame for ids whose delimiter the provider's
+        // url scan does not understand.
+        c3dMetadataProvider.addImageIdToUIDs(imageId, {
+          StudyInstanceUID,
+          SeriesInstanceUID,
+          SOPInstanceUID,
+          frameIndex: i,
+        });
       }
     } else {
       metaData.frameNumber = 1;
@@ -61,6 +74,13 @@ function createAndAddStack(stackMap, study, displaySet, stackUpdatedCallbacks) {
       const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = naturalizedInstance;
 
       metadataProvider.addImageIdToUIDs(imageId, {
+        StudyInstanceUID,
+        SeriesInstanceUID,
+        SOPInstanceUID,
+      });
+
+      // Cornerstone3D provider; single-frame ids carry no frame index.
+      c3dMetadataProvider.addImageIdToUIDs(imageId, {
         StudyInstanceUID,
         SeriesInstanceUID,
         SOPInstanceUID,
