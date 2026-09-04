@@ -1,30 +1,34 @@
 diff --git a/node_modules/react-dates/lib/components/CalendarDay.js b/node_modules/react-dates/lib/components/CalendarDay.js
-index 0d54201..768c917 100644
+index 0d54201..fc9e8e3 100644
 --- a/node_modules/react-dates/lib/components/CalendarDay.js
 +++ b/node_modules/react-dates/lib/components/CalendarDay.js
-@@ -197,7 +197,16 @@ function (_ref) {
+@@ -197,7 +197,20 @@ function (_ref) {
  
  exports.PureCalendarDay = CalendarDay;
  CalendarDay.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarDay.defaultProps = defaultProps;
 +var _CalendarDay_defaultProps = defaultProps;
-+var _CalendarDay_impl = CalendarDay;
-+CalendarDay = function CalendarDay(props) {
-+  var _merged = Object.assign({}, _CalendarDay_defaultProps, props);
-+  for (var _k in _CalendarDay_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CalendarDay_defaultProps[_k];
-+  }
-+  return _CalendarDay_impl(_merged);
-+};
-+Object.assign(CalendarDay, _CalendarDay_impl);
++if (CalendarDay && CalendarDay.prototype && CalendarDay.prototype.isReactComponent) {
++  CalendarDay.defaultProps = _CalendarDay_defaultProps;
++} else {
++  var _CalendarDay_impl = CalendarDay;
++  CalendarDay = function CalendarDay(props) {
++    var _merged = Object.assign({}, _CalendarDay_defaultProps, props);
++    for (var _k in _CalendarDay_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CalendarDay_defaultProps[_k];
++    }
++    return _CalendarDay_impl(_merged);
++  };
++  Object.assign(CalendarDay, _CalendarDay_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/CalendarIcon.js b/node_modules/react-dates/lib/components/CalendarIcon.js
-index bf08a57..a7a695f 100644
+index bf08a57..e61513c 100644
 --- a/node_modules/react-dates/lib/components/CalendarIcon.js
 +++ b/node_modules/react-dates/lib/components/CalendarIcon.js
-@@ -15,9 +15,18 @@ var CalendarIcon = function CalendarIcon(props) {
+@@ -15,9 +15,22 @@ var CalendarIcon = function CalendarIcon(props) {
    }));
  };
  
@@ -33,67 +37,79 @@ index bf08a57..a7a695f 100644
    focusable: "false",
    viewBox: "0 0 1393.1 1500"
  };
-+var _CalendarIcon_impl = CalendarIcon;
-+CalendarIcon = function CalendarIcon(props) {
-+  var _merged = Object.assign({}, _CalendarIcon_defaultProps, props);
-+  for (var _k in _CalendarIcon_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CalendarIcon_defaultProps[_k];
-+  }
-+  return _CalendarIcon_impl(_merged);
-+};
-+Object.assign(CalendarIcon, _CalendarIcon_impl);
++if (CalendarIcon && CalendarIcon.prototype && CalendarIcon.prototype.isReactComponent) {
++  CalendarIcon.defaultProps = _CalendarIcon_defaultProps;
++} else {
++  var _CalendarIcon_impl = CalendarIcon;
++  CalendarIcon = function CalendarIcon(props) {
++    var _merged = Object.assign({}, _CalendarIcon_defaultProps, props);
++    for (var _k in _CalendarIcon_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CalendarIcon_defaultProps[_k];
++    }
++    return _CalendarIcon_impl(_merged);
++  };
++  Object.assign(CalendarIcon, _CalendarIcon_impl);
++}
  var _default = CalendarIcon;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CalendarMonth.js b/node_modules/react-dates/lib/components/CalendarMonth.js
-index 714e83c..0324fa7 100644
+index 714e83c..2c97fac 100644
 --- a/node_modules/react-dates/lib/components/CalendarMonth.js
 +++ b/node_modules/react-dates/lib/components/CalendarMonth.js
-@@ -247,7 +247,16 @@ function (_ref) {
+@@ -247,7 +247,20 @@ function (_ref) {
  }(_react["default"].PureComponent || _react["default"].Component);
  
  CalendarMonth.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarMonth.defaultProps = defaultProps;
 +var _CalendarMonth_defaultProps = defaultProps;
-+var _CalendarMonth_impl = CalendarMonth;
-+CalendarMonth = function CalendarMonth(props) {
-+  var _merged = Object.assign({}, _CalendarMonth_defaultProps, props);
-+  for (var _k in _CalendarMonth_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CalendarMonth_defaultProps[_k];
-+  }
-+  return _CalendarMonth_impl(_merged);
-+};
-+Object.assign(CalendarMonth, _CalendarMonth_impl);
++if (CalendarMonth && CalendarMonth.prototype && CalendarMonth.prototype.isReactComponent) {
++  CalendarMonth.defaultProps = _CalendarMonth_defaultProps;
++} else {
++  var _CalendarMonth_impl = CalendarMonth;
++  CalendarMonth = function CalendarMonth(props) {
++    var _merged = Object.assign({}, _CalendarMonth_defaultProps, props);
++    for (var _k in _CalendarMonth_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CalendarMonth_defaultProps[_k];
++    }
++    return _CalendarMonth_impl(_merged);
++  };
++  Object.assign(CalendarMonth, _CalendarMonth_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/CalendarMonthGrid.js b/node_modules/react-dates/lib/components/CalendarMonthGrid.js
-index 9bdc792..20513c2 100644
+index 9bdc792..27c7ab2 100644
 --- a/node_modules/react-dates/lib/components/CalendarMonthGrid.js
 +++ b/node_modules/react-dates/lib/components/CalendarMonthGrid.js
-@@ -380,7 +380,16 @@ function (_ref) {
+@@ -380,7 +380,20 @@ function (_ref) {
  }(_react["default"].PureComponent || _react["default"].Component);
  
  CalendarMonthGrid.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarMonthGrid.defaultProps = defaultProps;
 +var _CalendarMonthGrid_defaultProps = defaultProps;
-+var _CalendarMonthGrid_impl = CalendarMonthGrid;
-+CalendarMonthGrid = function CalendarMonthGrid(props) {
-+  var _merged = Object.assign({}, _CalendarMonthGrid_defaultProps, props);
-+  for (var _k in _CalendarMonthGrid_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CalendarMonthGrid_defaultProps[_k];
-+  }
-+  return _CalendarMonthGrid_impl(_merged);
-+};
-+Object.assign(CalendarMonthGrid, _CalendarMonthGrid_impl);
++if (CalendarMonthGrid && CalendarMonthGrid.prototype && CalendarMonthGrid.prototype.isReactComponent) {
++  CalendarMonthGrid.defaultProps = _CalendarMonthGrid_defaultProps;
++} else {
++  var _CalendarMonthGrid_impl = CalendarMonthGrid;
++  CalendarMonthGrid = function CalendarMonthGrid(props) {
++    var _merged = Object.assign({}, _CalendarMonthGrid_defaultProps, props);
++    for (var _k in _CalendarMonthGrid_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CalendarMonthGrid_defaultProps[_k];
++    }
++    return _CalendarMonthGrid_impl(_merged);
++  };
++  Object.assign(CalendarMonthGrid, _CalendarMonthGrid_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/ChevronDown.js b/node_modules/react-dates/lib/components/ChevronDown.js
-index 57e0b52..45d26a4 100644
+index 57e0b52..46c5c5d 100644
 --- a/node_modules/react-dates/lib/components/ChevronDown.js
 +++ b/node_modules/react-dates/lib/components/ChevronDown.js
-@@ -15,9 +15,18 @@ var ChevronDown = function ChevronDown(props) {
+@@ -15,9 +15,22 @@ var ChevronDown = function ChevronDown(props) {
    }));
  };
  
@@ -102,23 +118,27 @@ index 57e0b52..45d26a4 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+var _ChevronDown_impl = ChevronDown;
-+ChevronDown = function ChevronDown(props) {
-+  var _merged = Object.assign({}, _ChevronDown_defaultProps, props);
-+  for (var _k in _ChevronDown_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _ChevronDown_defaultProps[_k];
-+  }
-+  return _ChevronDown_impl(_merged);
-+};
-+Object.assign(ChevronDown, _ChevronDown_impl);
++if (ChevronDown && ChevronDown.prototype && ChevronDown.prototype.isReactComponent) {
++  ChevronDown.defaultProps = _ChevronDown_defaultProps;
++} else {
++  var _ChevronDown_impl = ChevronDown;
++  ChevronDown = function ChevronDown(props) {
++    var _merged = Object.assign({}, _ChevronDown_defaultProps, props);
++    for (var _k in _ChevronDown_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _ChevronDown_defaultProps[_k];
++    }
++    return _ChevronDown_impl(_merged);
++  };
++  Object.assign(ChevronDown, _ChevronDown_impl);
++}
  var _default = ChevronDown;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/ChevronUp.js b/node_modules/react-dates/lib/components/ChevronUp.js
-index aed8599..11bd544 100644
+index aed8599..7a07408 100644
 --- a/node_modules/react-dates/lib/components/ChevronUp.js
 +++ b/node_modules/react-dates/lib/components/ChevronUp.js
-@@ -15,9 +15,18 @@ var ChevronUp = function ChevronUp(props) {
+@@ -15,9 +15,22 @@ var ChevronUp = function ChevronUp(props) {
    }));
  };
  
@@ -127,23 +147,27 @@ index aed8599..11bd544 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+var _ChevronUp_impl = ChevronUp;
-+ChevronUp = function ChevronUp(props) {
-+  var _merged = Object.assign({}, _ChevronUp_defaultProps, props);
-+  for (var _k in _ChevronUp_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _ChevronUp_defaultProps[_k];
-+  }
-+  return _ChevronUp_impl(_merged);
-+};
-+Object.assign(ChevronUp, _ChevronUp_impl);
++if (ChevronUp && ChevronUp.prototype && ChevronUp.prototype.isReactComponent) {
++  ChevronUp.defaultProps = _ChevronUp_defaultProps;
++} else {
++  var _ChevronUp_impl = ChevronUp;
++  ChevronUp = function ChevronUp(props) {
++    var _merged = Object.assign({}, _ChevronUp_defaultProps, props);
++    for (var _k in _ChevronUp_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _ChevronUp_defaultProps[_k];
++    }
++    return _ChevronUp_impl(_merged);
++  };
++  Object.assign(ChevronUp, _ChevronUp_impl);
++}
  var _default = ChevronUp;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CloseButton.js b/node_modules/react-dates/lib/components/CloseButton.js
-index 010140d..e1f1ddb 100644
+index 010140d..f4c40c1 100644
 --- a/node_modules/react-dates/lib/components/CloseButton.js
 +++ b/node_modules/react-dates/lib/components/CloseButton.js
-@@ -16,9 +16,18 @@ var CloseButton = function CloseButton(props) {
+@@ -16,9 +16,22 @@ var CloseButton = function CloseButton(props) {
    }));
  };
  
@@ -152,280 +176,332 @@ index 010140d..e1f1ddb 100644
    focusable: "false",
    viewBox: "0 0 12 12"
  };
-+var _CloseButton_impl = CloseButton;
-+CloseButton = function CloseButton(props) {
-+  var _merged = Object.assign({}, _CloseButton_defaultProps, props);
-+  for (var _k in _CloseButton_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CloseButton_defaultProps[_k];
-+  }
-+  return _CloseButton_impl(_merged);
-+};
-+Object.assign(CloseButton, _CloseButton_impl);
++if (CloseButton && CloseButton.prototype && CloseButton.prototype.isReactComponent) {
++  CloseButton.defaultProps = _CloseButton_defaultProps;
++} else {
++  var _CloseButton_impl = CloseButton;
++  CloseButton = function CloseButton(props) {
++    var _merged = Object.assign({}, _CloseButton_defaultProps, props);
++    for (var _k in _CloseButton_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CloseButton_defaultProps[_k];
++    }
++    return _CloseButton_impl(_merged);
++  };
++  Object.assign(CloseButton, _CloseButton_impl);
++}
  var _default = CloseButton;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CustomizableCalendarDay.js b/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
-index b9e487b..0daf160 100644
+index b9e487b..a97986a 100644
 --- a/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
 +++ b/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
-@@ -379,7 +379,16 @@ function (_ref) {
+@@ -379,7 +379,20 @@ function (_ref) {
  
  exports.PureCustomizableCalendarDay = CustomizableCalendarDay;
  CustomizableCalendarDay.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CustomizableCalendarDay.defaultProps = defaultProps;
 +var _CustomizableCalendarDay_defaultProps = defaultProps;
-+var _CustomizableCalendarDay_impl = CustomizableCalendarDay;
-+CustomizableCalendarDay = function CustomizableCalendarDay(props) {
-+  var _merged = Object.assign({}, _CustomizableCalendarDay_defaultProps, props);
-+  for (var _k in _CustomizableCalendarDay_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _CustomizableCalendarDay_defaultProps[_k];
-+  }
-+  return _CustomizableCalendarDay_impl(_merged);
-+};
-+Object.assign(CustomizableCalendarDay, _CustomizableCalendarDay_impl);
++if (CustomizableCalendarDay && CustomizableCalendarDay.prototype && CustomizableCalendarDay.prototype.isReactComponent) {
++  CustomizableCalendarDay.defaultProps = _CustomizableCalendarDay_defaultProps;
++} else {
++  var _CustomizableCalendarDay_impl = CustomizableCalendarDay;
++  CustomizableCalendarDay = function CustomizableCalendarDay(props) {
++    var _merged = Object.assign({}, _CustomizableCalendarDay_defaultProps, props);
++    for (var _k in _CustomizableCalendarDay_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _CustomizableCalendarDay_defaultProps[_k];
++    }
++    return _CustomizableCalendarDay_impl(_merged);
++  };
++  Object.assign(CustomizableCalendarDay, _CustomizableCalendarDay_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var font = _ref2.reactDates.font;
 diff --git a/node_modules/react-dates/lib/components/DateInput.js b/node_modules/react-dates/lib/components/DateInput.js
-index 2723010..4253a67 100644
+index 2723010..4107d25 100644
 --- a/node_modules/react-dates/lib/components/DateInput.js
 +++ b/node_modules/react-dates/lib/components/DateInput.js
-@@ -266,7 +266,16 @@ function (_ref) {
+@@ -266,7 +266,20 @@ function (_ref) {
  }(_react["default"].PureComponent || _react["default"].Component);
  
  DateInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateInput.defaultProps = defaultProps;
 +var _DateInput_defaultProps = defaultProps;
-+var _DateInput_impl = DateInput;
-+DateInput = function DateInput(props) {
-+  var _merged = Object.assign({}, _DateInput_defaultProps, props);
-+  for (var _k in _DateInput_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DateInput_defaultProps[_k];
-+  }
-+  return _DateInput_impl(_merged);
-+};
-+Object.assign(DateInput, _DateInput_impl);
++if (DateInput && DateInput.prototype && DateInput.prototype.isReactComponent) {
++  DateInput.defaultProps = _DateInput_defaultProps;
++} else {
++  var _DateInput_impl = DateInput;
++  DateInput = function DateInput(props) {
++    var _merged = Object.assign({}, _DateInput_defaultProps, props);
++    for (var _k in _DateInput_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DateInput_defaultProps[_k];
++    }
++    return _DateInput_impl(_merged);
++  };
++  Object.assign(DateInput, _DateInput_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePicker.js b/node_modules/react-dates/lib/components/DateRangePicker.js
-index 25a6f61..92d2ebe 100644
+index 25a6f61..b655730 100644
 --- a/node_modules/react-dates/lib/components/DateRangePicker.js
 +++ b/node_modules/react-dates/lib/components/DateRangePicker.js
-@@ -641,7 +641,16 @@ function (_ref) {
+@@ -641,7 +641,20 @@ function (_ref) {
  
  exports.PureDateRangePicker = DateRangePicker;
  DateRangePicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateRangePicker.defaultProps = defaultProps;
 +var _DateRangePicker_defaultProps = defaultProps;
-+var _DateRangePicker_impl = DateRangePicker;
-+DateRangePicker = function DateRangePicker(props) {
-+  var _merged = Object.assign({}, _DateRangePicker_defaultProps, props);
-+  for (var _k in _DateRangePicker_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DateRangePicker_defaultProps[_k];
-+  }
-+  return _DateRangePicker_impl(_merged);
-+};
-+Object.assign(DateRangePicker, _DateRangePicker_impl);
++if (DateRangePicker && DateRangePicker.prototype && DateRangePicker.prototype.isReactComponent) {
++  DateRangePicker.defaultProps = _DateRangePicker_defaultProps;
++} else {
++  var _DateRangePicker_impl = DateRangePicker;
++  DateRangePicker = function DateRangePicker(props) {
++    var _merged = Object.assign({}, _DateRangePicker_defaultProps, props);
++    for (var _k in _DateRangePicker_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DateRangePicker_defaultProps[_k];
++    }
++    return _DateRangePicker_impl(_merged);
++  };
++  Object.assign(DateRangePicker, _DateRangePicker_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePickerInput.js b/node_modules/react-dates/lib/components/DateRangePickerInput.js
-index 92afd50..2b14c5e 100644
+index 92afd50..c4945cd 100644
 --- a/node_modules/react-dates/lib/components/DateRangePickerInput.js
 +++ b/node_modules/react-dates/lib/components/DateRangePickerInput.js
-@@ -256,7 +256,16 @@ function DateRangePickerInput(_ref) {
+@@ -256,7 +256,20 @@ function DateRangePickerInput(_ref) {
  }
  
  DateRangePickerInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateRangePickerInput.defaultProps = defaultProps;
 +var _DateRangePickerInput_defaultProps = defaultProps;
-+var _DateRangePickerInput_impl = DateRangePickerInput;
-+DateRangePickerInput = function DateRangePickerInput(props) {
-+  var _merged = Object.assign({}, _DateRangePickerInput_defaultProps, props);
-+  for (var _k in _DateRangePickerInput_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DateRangePickerInput_defaultProps[_k];
-+  }
-+  return _DateRangePickerInput_impl(_merged);
-+};
-+Object.assign(DateRangePickerInput, _DateRangePickerInput_impl);
++if (DateRangePickerInput && DateRangePickerInput.prototype && DateRangePickerInput.prototype.isReactComponent) {
++  DateRangePickerInput.defaultProps = _DateRangePickerInput_defaultProps;
++} else {
++  var _DateRangePickerInput_impl = DateRangePickerInput;
++  DateRangePickerInput = function DateRangePickerInput(props) {
++    var _merged = Object.assign({}, _DateRangePickerInput_defaultProps, props);
++    for (var _k in _DateRangePickerInput_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DateRangePickerInput_defaultProps[_k];
++    }
++    return _DateRangePickerInput_impl(_merged);
++  };
++  Object.assign(DateRangePickerInput, _DateRangePickerInput_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePickerInputController.js b/node_modules/react-dates/lib/components/DateRangePickerInputController.js
-index b492c37..8c99b73 100644
+index b492c37..5b80e5d 100644
 --- a/node_modules/react-dates/lib/components/DateRangePickerInputController.js
 +++ b/node_modules/react-dates/lib/components/DateRangePickerInputController.js
-@@ -373,4 +373,13 @@ function (_ref) {
+@@ -373,4 +373,17 @@ function (_ref) {
  
  exports["default"] = DateRangePickerInputController;
  DateRangePickerInputController.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateRangePickerInputController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DateRangePickerInputController_defaultProps = defaultProps;
-+var _DateRangePickerInputController_impl = DateRangePickerInputController;
-+DateRangePickerInputController = function DateRangePickerInputController(props) {
-+  var _merged = Object.assign({}, _DateRangePickerInputController_defaultProps, props);
-+  for (var _k in _DateRangePickerInputController_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DateRangePickerInputController_defaultProps[_k];
-+  }
-+  return _DateRangePickerInputController_impl(_merged);
-+};
-+Object.assign(DateRangePickerInputController, _DateRangePickerInputController_impl);
++if (DateRangePickerInputController && DateRangePickerInputController.prototype && DateRangePickerInputController.prototype.isReactComponent) {
++  DateRangePickerInputController.defaultProps = _DateRangePickerInputController_defaultProps;
++} else {
++  var _DateRangePickerInputController_impl = DateRangePickerInputController;
++  DateRangePickerInputController = function DateRangePickerInputController(props) {
++    var _merged = Object.assign({}, _DateRangePickerInputController_defaultProps, props);
++    for (var _k in _DateRangePickerInputController_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DateRangePickerInputController_defaultProps[_k];
++    }
++    return _DateRangePickerInputController_impl(_merged);
++  };
++  Object.assign(DateRangePickerInputController, _DateRangePickerInputController_impl);
++}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/DayPicker.js b/node_modules/react-dates/lib/components/DayPicker.js
-index ee2f635..c4766a6 100644
+index ee2f635..0670fdc 100644
 --- a/node_modules/react-dates/lib/components/DayPicker.js
 +++ b/node_modules/react-dates/lib/components/DayPicker.js
-@@ -216,7 +216,16 @@ var defaultProps = {
+@@ -216,7 +216,20 @@ var defaultProps = {
    phrases: _defaultPhrases.DayPickerPhrases,
    dayAriaLabelFormat: undefined
  };
 -exports.defaultProps = defaultProps;
 +var _exports_defaultProps = defaultProps;
-+var _exports_impl = exports;
-+exports = function exports(props) {
-+  var _merged = Object.assign({}, _exports_defaultProps, props);
-+  for (var _k in _exports_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _exports_defaultProps[_k];
-+  }
-+  return _exports_impl(_merged);
-+};
-+Object.assign(exports, _exports_impl);
++if (exports && exports.prototype && exports.prototype.isReactComponent) {
++  exports.defaultProps = _exports_defaultProps;
++} else {
++  var _exports_impl = exports;
++  exports = function exports(props) {
++    var _merged = Object.assign({}, _exports_defaultProps, props);
++    for (var _k in _exports_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _exports_defaultProps[_k];
++    }
++    return _exports_impl(_merged);
++  };
++  Object.assign(exports, _exports_impl);
++}
  
  var DayPicker =
  /*#__PURE__*/
-@@ -1208,7 +1217,16 @@ function (_ref) {
+@@ -1208,7 +1221,20 @@ function (_ref) {
  
  exports.PureDayPicker = DayPicker;
  DayPicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPicker.defaultProps = defaultProps;
 +var _DayPicker_defaultProps = defaultProps;
-+var _DayPicker_impl = DayPicker;
-+DayPicker = function DayPicker(props) {
-+  var _merged = Object.assign({}, _DayPicker_defaultProps, props);
-+  for (var _k in _DayPicker_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DayPicker_defaultProps[_k];
-+  }
-+  return _DayPicker_impl(_merged);
-+};
-+Object.assign(DayPicker, _DayPicker_impl);
++if (DayPicker && DayPicker.prototype && DayPicker.prototype.isReactComponent) {
++  DayPicker.defaultProps = _DayPicker_defaultProps;
++} else {
++  var _DayPicker_impl = DayPicker;
++  DayPicker = function DayPicker(props) {
++    var _merged = Object.assign({}, _DayPicker_defaultProps, props);
++    for (var _k in _DayPicker_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DayPicker_defaultProps[_k];
++    }
++    return _DayPicker_impl(_merged);
++  };
++  Object.assign(DayPicker, _DayPicker_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref4) {
    var _ref4$reactDates = _ref4.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js b/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
-index 786e743..390e9da 100644
+index 786e743..c60f9ba 100644
 --- a/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
 +++ b/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
-@@ -265,7 +265,16 @@ function (_ref) {
+@@ -265,7 +265,20 @@ function (_ref) {
  }(_react["default"].PureComponent || _react["default"].Component);
  
  DayPickerKeyboardShortcuts.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerKeyboardShortcuts.defaultProps = defaultProps;
 +var _DayPickerKeyboardShortcuts_defaultProps = defaultProps;
-+var _DayPickerKeyboardShortcuts_impl = DayPickerKeyboardShortcuts;
-+DayPickerKeyboardShortcuts = function DayPickerKeyboardShortcuts(props) {
-+  var _merged = Object.assign({}, _DayPickerKeyboardShortcuts_defaultProps, props);
-+  for (var _k in _DayPickerKeyboardShortcuts_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DayPickerKeyboardShortcuts_defaultProps[_k];
-+  }
-+  return _DayPickerKeyboardShortcuts_impl(_merged);
-+};
-+Object.assign(DayPickerKeyboardShortcuts, _DayPickerKeyboardShortcuts_impl);
++if (DayPickerKeyboardShortcuts && DayPickerKeyboardShortcuts.prototype && DayPickerKeyboardShortcuts.prototype.isReactComponent) {
++  DayPickerKeyboardShortcuts.defaultProps = _DayPickerKeyboardShortcuts_defaultProps;
++} else {
++  var _DayPickerKeyboardShortcuts_impl = DayPickerKeyboardShortcuts;
++  DayPickerKeyboardShortcuts = function DayPickerKeyboardShortcuts(props) {
++    var _merged = Object.assign({}, _DayPickerKeyboardShortcuts_defaultProps, props);
++    for (var _k in _DayPickerKeyboardShortcuts_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DayPickerKeyboardShortcuts_defaultProps[_k];
++    }
++    return _DayPickerKeyboardShortcuts_impl(_merged);
++  };
++  Object.assign(DayPickerKeyboardShortcuts, _DayPickerKeyboardShortcuts_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref3) {
    var _ref3$reactDates = _ref3.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerNavigation.js b/node_modules/react-dates/lib/components/DayPickerNavigation.js
-index d0f63ae..5ecd822 100644
+index d0f63ae..bffae30 100644
 --- a/node_modules/react-dates/lib/components/DayPickerNavigation.js
 +++ b/node_modules/react-dates/lib/components/DayPickerNavigation.js
-@@ -235,7 +235,16 @@ function (_ref) {
+@@ -235,7 +235,20 @@ function (_ref) {
  }(_react["default"].PureComponent || _react["default"].Component);
  
  DayPickerNavigation.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerNavigation.defaultProps = defaultProps;
 +var _DayPickerNavigation_defaultProps = defaultProps;
-+var _DayPickerNavigation_impl = DayPickerNavigation;
-+DayPickerNavigation = function DayPickerNavigation(props) {
-+  var _merged = Object.assign({}, _DayPickerNavigation_defaultProps, props);
-+  for (var _k in _DayPickerNavigation_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DayPickerNavigation_defaultProps[_k];
-+  }
-+  return _DayPickerNavigation_impl(_merged);
-+};
-+Object.assign(DayPickerNavigation, _DayPickerNavigation_impl);
++if (DayPickerNavigation && DayPickerNavigation.prototype && DayPickerNavigation.prototype.isReactComponent) {
++  DayPickerNavigation.defaultProps = _DayPickerNavigation_defaultProps;
++} else {
++  var _DayPickerNavigation_impl = DayPickerNavigation;
++  DayPickerNavigation = function DayPickerNavigation(props) {
++    var _merged = Object.assign({}, _DayPickerNavigation_defaultProps, props);
++    for (var _k in _DayPickerNavigation_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DayPickerNavigation_defaultProps[_k];
++    }
++    return _DayPickerNavigation_impl(_merged);
++  };
++  Object.assign(DayPickerNavigation, _DayPickerNavigation_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerRangeController.js b/node_modules/react-dates/lib/components/DayPickerRangeController.js
-index c950e19..670e8c9 100644
+index c950e19..4260088 100644
 --- a/node_modules/react-dates/lib/components/DayPickerRangeController.js
 +++ b/node_modules/react-dates/lib/components/DayPickerRangeController.js
-@@ -1403,4 +1403,13 @@ function (_ref) {
+@@ -1403,4 +1403,17 @@ function (_ref) {
  
  exports["default"] = DayPickerRangeController;
  DayPickerRangeController.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerRangeController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DayPickerRangeController_defaultProps = defaultProps;
-+var _DayPickerRangeController_impl = DayPickerRangeController;
-+DayPickerRangeController = function DayPickerRangeController(props) {
-+  var _merged = Object.assign({}, _DayPickerRangeController_defaultProps, props);
-+  for (var _k in _DayPickerRangeController_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DayPickerRangeController_defaultProps[_k];
-+  }
-+  return _DayPickerRangeController_impl(_merged);
-+};
-+Object.assign(DayPickerRangeController, _DayPickerRangeController_impl);
++if (DayPickerRangeController && DayPickerRangeController.prototype && DayPickerRangeController.prototype.isReactComponent) {
++  DayPickerRangeController.defaultProps = _DayPickerRangeController_defaultProps;
++} else {
++  var _DayPickerRangeController_impl = DayPickerRangeController;
++  DayPickerRangeController = function DayPickerRangeController(props) {
++    var _merged = Object.assign({}, _DayPickerRangeController_defaultProps, props);
++    for (var _k in _DayPickerRangeController_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DayPickerRangeController_defaultProps[_k];
++    }
++    return _DayPickerRangeController_impl(_merged);
++  };
++  Object.assign(DayPickerRangeController, _DayPickerRangeController_impl);
++}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/DayPickerSingleDateController.js b/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
-index 127d7bb..32af5a5 100644
+index 127d7bb..3294854 100644
 --- a/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
 +++ b/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
-@@ -753,4 +753,13 @@ function (_ref) {
+@@ -753,4 +753,17 @@ function (_ref) {
  
  exports["default"] = DayPickerSingleDateController;
  DayPickerSingleDateController.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerSingleDateController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DayPickerSingleDateController_defaultProps = defaultProps;
-+var _DayPickerSingleDateController_impl = DayPickerSingleDateController;
-+DayPickerSingleDateController = function DayPickerSingleDateController(props) {
-+  var _merged = Object.assign({}, _DayPickerSingleDateController_defaultProps, props);
-+  for (var _k in _DayPickerSingleDateController_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _DayPickerSingleDateController_defaultProps[_k];
-+  }
-+  return _DayPickerSingleDateController_impl(_merged);
-+};
-+Object.assign(DayPickerSingleDateController, _DayPickerSingleDateController_impl);
++if (DayPickerSingleDateController && DayPickerSingleDateController.prototype && DayPickerSingleDateController.prototype.isReactComponent) {
++  DayPickerSingleDateController.defaultProps = _DayPickerSingleDateController_defaultProps;
++} else {
++  var _DayPickerSingleDateController_impl = DayPickerSingleDateController;
++  DayPickerSingleDateController = function DayPickerSingleDateController(props) {
++    var _merged = Object.assign({}, _DayPickerSingleDateController_defaultProps, props);
++    for (var _k in _DayPickerSingleDateController_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _DayPickerSingleDateController_defaultProps[_k];
++    }
++    return _DayPickerSingleDateController_impl(_merged);
++  };
++  Object.assign(DayPickerSingleDateController, _DayPickerSingleDateController_impl);
++}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/KeyboardShortcutRow.js b/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
-index 7950f6d..30678c2 100644
+index 7950f6d..5212f54 100644
 --- a/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
 +++ b/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
-@@ -47,7 +47,16 @@ function KeyboardShortcutRow(_ref) {
+@@ -47,7 +47,20 @@ function KeyboardShortcutRow(_ref) {
  }
  
  KeyboardShortcutRow.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -KeyboardShortcutRow.defaultProps = defaultProps;
 +var _KeyboardShortcutRow_defaultProps = defaultProps;
-+var _KeyboardShortcutRow_impl = KeyboardShortcutRow;
-+KeyboardShortcutRow = function KeyboardShortcutRow(props) {
-+  var _merged = Object.assign({}, _KeyboardShortcutRow_defaultProps, props);
-+  for (var _k in _KeyboardShortcutRow_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _KeyboardShortcutRow_defaultProps[_k];
-+  }
-+  return _KeyboardShortcutRow_impl(_merged);
-+};
-+Object.assign(KeyboardShortcutRow, _KeyboardShortcutRow_impl);
++if (KeyboardShortcutRow && KeyboardShortcutRow.prototype && KeyboardShortcutRow.prototype.isReactComponent) {
++  KeyboardShortcutRow.defaultProps = _KeyboardShortcutRow_defaultProps;
++} else {
++  var _KeyboardShortcutRow_impl = KeyboardShortcutRow;
++  KeyboardShortcutRow = function KeyboardShortcutRow(props) {
++    var _merged = Object.assign({}, _KeyboardShortcutRow_defaultProps, props);
++    for (var _k in _KeyboardShortcutRow_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _KeyboardShortcutRow_defaultProps[_k];
++    }
++    return _KeyboardShortcutRow_impl(_merged);
++  };
++  Object.assign(KeyboardShortcutRow, _KeyboardShortcutRow_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var color = _ref2.reactDates.color;
 diff --git a/node_modules/react-dates/lib/components/LeftArrow.js b/node_modules/react-dates/lib/components/LeftArrow.js
-index e3c11c4..2c61beb 100644
+index e3c11c4..4bbd45c 100644
 --- a/node_modules/react-dates/lib/components/LeftArrow.js
 +++ b/node_modules/react-dates/lib/components/LeftArrow.js
-@@ -15,9 +15,18 @@ var LeftArrow = function LeftArrow(props) {
+@@ -15,9 +15,22 @@ var LeftArrow = function LeftArrow(props) {
    }));
  };
  
@@ -434,23 +510,27 @@ index e3c11c4..2c61beb 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+var _LeftArrow_impl = LeftArrow;
-+LeftArrow = function LeftArrow(props) {
-+  var _merged = Object.assign({}, _LeftArrow_defaultProps, props);
-+  for (var _k in _LeftArrow_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _LeftArrow_defaultProps[_k];
-+  }
-+  return _LeftArrow_impl(_merged);
-+};
-+Object.assign(LeftArrow, _LeftArrow_impl);
++if (LeftArrow && LeftArrow.prototype && LeftArrow.prototype.isReactComponent) {
++  LeftArrow.defaultProps = _LeftArrow_defaultProps;
++} else {
++  var _LeftArrow_impl = LeftArrow;
++  LeftArrow = function LeftArrow(props) {
++    var _merged = Object.assign({}, _LeftArrow_defaultProps, props);
++    for (var _k in _LeftArrow_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _LeftArrow_defaultProps[_k];
++    }
++    return _LeftArrow_impl(_merged);
++  };
++  Object.assign(LeftArrow, _LeftArrow_impl);
++}
  var _default = LeftArrow;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/RightArrow.js b/node_modules/react-dates/lib/components/RightArrow.js
-index 9590490..d399446 100644
+index 9590490..2e17a89 100644
 --- a/node_modules/react-dates/lib/components/RightArrow.js
 +++ b/node_modules/react-dates/lib/components/RightArrow.js
-@@ -15,9 +15,18 @@ var RightArrow = function RightArrow(props) {
+@@ -15,9 +15,22 @@ var RightArrow = function RightArrow(props) {
    }));
  };
  
@@ -459,80 +539,96 @@ index 9590490..d399446 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+var _RightArrow_impl = RightArrow;
-+RightArrow = function RightArrow(props) {
-+  var _merged = Object.assign({}, _RightArrow_defaultProps, props);
-+  for (var _k in _RightArrow_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _RightArrow_defaultProps[_k];
-+  }
-+  return _RightArrow_impl(_merged);
-+};
-+Object.assign(RightArrow, _RightArrow_impl);
++if (RightArrow && RightArrow.prototype && RightArrow.prototype.isReactComponent) {
++  RightArrow.defaultProps = _RightArrow_defaultProps;
++} else {
++  var _RightArrow_impl = RightArrow;
++  RightArrow = function RightArrow(props) {
++    var _merged = Object.assign({}, _RightArrow_defaultProps, props);
++    for (var _k in _RightArrow_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _RightArrow_defaultProps[_k];
++    }
++    return _RightArrow_impl(_merged);
++  };
++  Object.assign(RightArrow, _RightArrow_impl);
++}
  var _default = RightArrow;
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/SingleDatePicker.js b/node_modules/react-dates/lib/components/SingleDatePicker.js
-index 7e44587..0d011b2 100644
+index 7e44587..cd88d9b 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePicker.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePicker.js
-@@ -597,7 +597,16 @@ function (_ref) {
+@@ -597,7 +597,20 @@ function (_ref) {
  
  exports.PureSingleDatePicker = SingleDatePicker;
  SingleDatePicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -SingleDatePicker.defaultProps = defaultProps;
 +var _SingleDatePicker_defaultProps = defaultProps;
-+var _SingleDatePicker_impl = SingleDatePicker;
-+SingleDatePicker = function SingleDatePicker(props) {
-+  var _merged = Object.assign({}, _SingleDatePicker_defaultProps, props);
-+  for (var _k in _SingleDatePicker_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _SingleDatePicker_defaultProps[_k];
-+  }
-+  return _SingleDatePicker_impl(_merged);
-+};
-+Object.assign(SingleDatePicker, _SingleDatePicker_impl);
++if (SingleDatePicker && SingleDatePicker.prototype && SingleDatePicker.prototype.isReactComponent) {
++  SingleDatePicker.defaultProps = _SingleDatePicker_defaultProps;
++} else {
++  var _SingleDatePicker_impl = SingleDatePicker;
++  SingleDatePicker = function SingleDatePicker(props) {
++    var _merged = Object.assign({}, _SingleDatePicker_defaultProps, props);
++    for (var _k in _SingleDatePicker_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _SingleDatePicker_defaultProps[_k];
++    }
++    return _SingleDatePicker_impl(_merged);
++  };
++  Object.assign(SingleDatePicker, _SingleDatePicker_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref3) {
    var _ref3$reactDates = _ref3.reactDates,
 diff --git a/node_modules/react-dates/lib/components/SingleDatePickerInput.js b/node_modules/react-dates/lib/components/SingleDatePickerInput.js
-index 06bcc65..2723453 100644
+index 06bcc65..30f54b5 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePickerInput.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePickerInput.js
-@@ -192,7 +192,16 @@ function SingleDatePickerInput(_ref) {
+@@ -192,7 +192,20 @@ function SingleDatePickerInput(_ref) {
  }
  
  SingleDatePickerInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -SingleDatePickerInput.defaultProps = defaultProps;
 +var _SingleDatePickerInput_defaultProps = defaultProps;
-+var _SingleDatePickerInput_impl = SingleDatePickerInput;
-+SingleDatePickerInput = function SingleDatePickerInput(props) {
-+  var _merged = Object.assign({}, _SingleDatePickerInput_defaultProps, props);
-+  for (var _k in _SingleDatePickerInput_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _SingleDatePickerInput_defaultProps[_k];
-+  }
-+  return _SingleDatePickerInput_impl(_merged);
-+};
-+Object.assign(SingleDatePickerInput, _SingleDatePickerInput_impl);
++if (SingleDatePickerInput && SingleDatePickerInput.prototype && SingleDatePickerInput.prototype.isReactComponent) {
++  SingleDatePickerInput.defaultProps = _SingleDatePickerInput_defaultProps;
++} else {
++  var _SingleDatePickerInput_impl = SingleDatePickerInput;
++  SingleDatePickerInput = function SingleDatePickerInput(props) {
++    var _merged = Object.assign({}, _SingleDatePickerInput_defaultProps, props);
++    for (var _k in _SingleDatePickerInput_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _SingleDatePickerInput_defaultProps[_k];
++    }
++    return _SingleDatePickerInput_impl(_merged);
++  };
++  Object.assign(SingleDatePickerInput, _SingleDatePickerInput_impl);
++}
  
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/SingleDatePickerInputController.js b/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
-index e5ad4a4..445c642 100644
+index e5ad4a4..fcb6255 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
-@@ -293,4 +293,13 @@ function (_ref) {
+@@ -293,4 +293,17 @@ function (_ref) {
  
  exports["default"] = SingleDatePickerInputController;
  SingleDatePickerInputController.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -SingleDatePickerInputController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _SingleDatePickerInputController_defaultProps = defaultProps;
-+var _SingleDatePickerInputController_impl = SingleDatePickerInputController;
-+SingleDatePickerInputController = function SingleDatePickerInputController(props) {
-+  var _merged = Object.assign({}, _SingleDatePickerInputController_defaultProps, props);
-+  for (var _k in _SingleDatePickerInputController_defaultProps) {
-+    if (_merged[_k] === undefined) _merged[_k] = _SingleDatePickerInputController_defaultProps[_k];
-+  }
-+  return _SingleDatePickerInputController_impl(_merged);
-+};
-+Object.assign(SingleDatePickerInputController, _SingleDatePickerInputController_impl);
++if (SingleDatePickerInputController && SingleDatePickerInputController.prototype && SingleDatePickerInputController.prototype.isReactComponent) {
++  SingleDatePickerInputController.defaultProps = _SingleDatePickerInputController_defaultProps;
++} else {
++  var _SingleDatePickerInputController_impl = SingleDatePickerInputController;
++  SingleDatePickerInputController = function SingleDatePickerInputController(props) {
++    var _merged = Object.assign({}, _SingleDatePickerInputController_defaultProps, props);
++    for (var _k in _SingleDatePickerInputController_defaultProps) {
++      if (_merged[_k] === undefined) _merged[_k] = _SingleDatePickerInputController_defaultProps[_k];
++    }
++    return _SingleDatePickerInputController_impl(_merged);
++  };
++  Object.assign(SingleDatePickerInputController, _SingleDatePickerInputController_impl);
++}
 \ No newline at end of file
