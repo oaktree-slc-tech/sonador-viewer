@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-dates/lib/components/CalendarDay.js b/node_modules/react-dates/lib/components/CalendarDay.js
-index 0d54201..fc9e8e3 100644
+index 0d54201..fc93aae 100644
 --- a/node_modules/react-dates/lib/components/CalendarDay.js
 +++ b/node_modules/react-dates/lib/components/CalendarDay.js
 @@ -197,7 +197,20 @@ function (_ref) {
@@ -8,7 +8,7 @@ index 0d54201..fc9e8e3 100644
  CalendarDay.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarDay.defaultProps = defaultProps;
 +var _CalendarDay_defaultProps = defaultProps;
-+if (CalendarDay && CalendarDay.prototype && CalendarDay.prototype.isReactComponent) {
++if (typeof CalendarDay !== 'function' || (CalendarDay.prototype && CalendarDay.prototype.isReactComponent)) {
 +  CalendarDay.defaultProps = _CalendarDay_defaultProps;
 +} else {
 +  var _CalendarDay_impl = CalendarDay;
@@ -25,7 +25,7 @@ index 0d54201..fc9e8e3 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/CalendarIcon.js b/node_modules/react-dates/lib/components/CalendarIcon.js
-index bf08a57..e61513c 100644
+index bf08a57..21f059e 100644
 --- a/node_modules/react-dates/lib/components/CalendarIcon.js
 +++ b/node_modules/react-dates/lib/components/CalendarIcon.js
 @@ -15,9 +15,22 @@ var CalendarIcon = function CalendarIcon(props) {
@@ -37,7 +37,7 @@ index bf08a57..e61513c 100644
    focusable: "false",
    viewBox: "0 0 1393.1 1500"
  };
-+if (CalendarIcon && CalendarIcon.prototype && CalendarIcon.prototype.isReactComponent) {
++if (typeof CalendarIcon !== 'function' || (CalendarIcon.prototype && CalendarIcon.prototype.isReactComponent)) {
 +  CalendarIcon.defaultProps = _CalendarIcon_defaultProps;
 +} else {
 +  var _CalendarIcon_impl = CalendarIcon;
@@ -54,7 +54,7 @@ index bf08a57..e61513c 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CalendarMonth.js b/node_modules/react-dates/lib/components/CalendarMonth.js
-index 714e83c..2c97fac 100644
+index 714e83c..4381a18 100644
 --- a/node_modules/react-dates/lib/components/CalendarMonth.js
 +++ b/node_modules/react-dates/lib/components/CalendarMonth.js
 @@ -247,7 +247,20 @@ function (_ref) {
@@ -63,7 +63,7 @@ index 714e83c..2c97fac 100644
  CalendarMonth.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarMonth.defaultProps = defaultProps;
 +var _CalendarMonth_defaultProps = defaultProps;
-+if (CalendarMonth && CalendarMonth.prototype && CalendarMonth.prototype.isReactComponent) {
++if (typeof CalendarMonth !== 'function' || (CalendarMonth.prototype && CalendarMonth.prototype.isReactComponent)) {
 +  CalendarMonth.defaultProps = _CalendarMonth_defaultProps;
 +} else {
 +  var _CalendarMonth_impl = CalendarMonth;
@@ -80,7 +80,7 @@ index 714e83c..2c97fac 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/CalendarMonthGrid.js b/node_modules/react-dates/lib/components/CalendarMonthGrid.js
-index 9bdc792..27c7ab2 100644
+index 9bdc792..0da5371 100644
 --- a/node_modules/react-dates/lib/components/CalendarMonthGrid.js
 +++ b/node_modules/react-dates/lib/components/CalendarMonthGrid.js
 @@ -380,7 +380,20 @@ function (_ref) {
@@ -89,7 +89,7 @@ index 9bdc792..27c7ab2 100644
  CalendarMonthGrid.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CalendarMonthGrid.defaultProps = defaultProps;
 +var _CalendarMonthGrid_defaultProps = defaultProps;
-+if (CalendarMonthGrid && CalendarMonthGrid.prototype && CalendarMonthGrid.prototype.isReactComponent) {
++if (typeof CalendarMonthGrid !== 'function' || (CalendarMonthGrid.prototype && CalendarMonthGrid.prototype.isReactComponent)) {
 +  CalendarMonthGrid.defaultProps = _CalendarMonthGrid_defaultProps;
 +} else {
 +  var _CalendarMonthGrid_impl = CalendarMonthGrid;
@@ -106,7 +106,7 @@ index 9bdc792..27c7ab2 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/ChevronDown.js b/node_modules/react-dates/lib/components/ChevronDown.js
-index 57e0b52..46c5c5d 100644
+index 57e0b52..97e0901 100644
 --- a/node_modules/react-dates/lib/components/ChevronDown.js
 +++ b/node_modules/react-dates/lib/components/ChevronDown.js
 @@ -15,9 +15,22 @@ var ChevronDown = function ChevronDown(props) {
@@ -118,7 +118,7 @@ index 57e0b52..46c5c5d 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+if (ChevronDown && ChevronDown.prototype && ChevronDown.prototype.isReactComponent) {
++if (typeof ChevronDown !== 'function' || (ChevronDown.prototype && ChevronDown.prototype.isReactComponent)) {
 +  ChevronDown.defaultProps = _ChevronDown_defaultProps;
 +} else {
 +  var _ChevronDown_impl = ChevronDown;
@@ -135,7 +135,7 @@ index 57e0b52..46c5c5d 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/ChevronUp.js b/node_modules/react-dates/lib/components/ChevronUp.js
-index aed8599..7a07408 100644
+index aed8599..632f467 100644
 --- a/node_modules/react-dates/lib/components/ChevronUp.js
 +++ b/node_modules/react-dates/lib/components/ChevronUp.js
 @@ -15,9 +15,22 @@ var ChevronUp = function ChevronUp(props) {
@@ -147,7 +147,7 @@ index aed8599..7a07408 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+if (ChevronUp && ChevronUp.prototype && ChevronUp.prototype.isReactComponent) {
++if (typeof ChevronUp !== 'function' || (ChevronUp.prototype && ChevronUp.prototype.isReactComponent)) {
 +  ChevronUp.defaultProps = _ChevronUp_defaultProps;
 +} else {
 +  var _ChevronUp_impl = ChevronUp;
@@ -164,7 +164,7 @@ index aed8599..7a07408 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CloseButton.js b/node_modules/react-dates/lib/components/CloseButton.js
-index 010140d..f4c40c1 100644
+index 010140d..d6dd2e6 100644
 --- a/node_modules/react-dates/lib/components/CloseButton.js
 +++ b/node_modules/react-dates/lib/components/CloseButton.js
 @@ -16,9 +16,22 @@ var CloseButton = function CloseButton(props) {
@@ -176,7 +176,7 @@ index 010140d..f4c40c1 100644
    focusable: "false",
    viewBox: "0 0 12 12"
  };
-+if (CloseButton && CloseButton.prototype && CloseButton.prototype.isReactComponent) {
++if (typeof CloseButton !== 'function' || (CloseButton.prototype && CloseButton.prototype.isReactComponent)) {
 +  CloseButton.defaultProps = _CloseButton_defaultProps;
 +} else {
 +  var _CloseButton_impl = CloseButton;
@@ -193,7 +193,7 @@ index 010140d..f4c40c1 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/CustomizableCalendarDay.js b/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
-index b9e487b..a97986a 100644
+index b9e487b..1040379 100644
 --- a/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
 +++ b/node_modules/react-dates/lib/components/CustomizableCalendarDay.js
 @@ -379,7 +379,20 @@ function (_ref) {
@@ -202,7 +202,7 @@ index b9e487b..a97986a 100644
  CustomizableCalendarDay.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -CustomizableCalendarDay.defaultProps = defaultProps;
 +var _CustomizableCalendarDay_defaultProps = defaultProps;
-+if (CustomizableCalendarDay && CustomizableCalendarDay.prototype && CustomizableCalendarDay.prototype.isReactComponent) {
++if (typeof CustomizableCalendarDay !== 'function' || (CustomizableCalendarDay.prototype && CustomizableCalendarDay.prototype.isReactComponent)) {
 +  CustomizableCalendarDay.defaultProps = _CustomizableCalendarDay_defaultProps;
 +} else {
 +  var _CustomizableCalendarDay_impl = CustomizableCalendarDay;
@@ -219,7 +219,7 @@ index b9e487b..a97986a 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var font = _ref2.reactDates.font;
 diff --git a/node_modules/react-dates/lib/components/DateInput.js b/node_modules/react-dates/lib/components/DateInput.js
-index 2723010..4107d25 100644
+index 2723010..60d4242 100644
 --- a/node_modules/react-dates/lib/components/DateInput.js
 +++ b/node_modules/react-dates/lib/components/DateInput.js
 @@ -266,7 +266,20 @@ function (_ref) {
@@ -228,7 +228,7 @@ index 2723010..4107d25 100644
  DateInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateInput.defaultProps = defaultProps;
 +var _DateInput_defaultProps = defaultProps;
-+if (DateInput && DateInput.prototype && DateInput.prototype.isReactComponent) {
++if (typeof DateInput !== 'function' || (DateInput.prototype && DateInput.prototype.isReactComponent)) {
 +  DateInput.defaultProps = _DateInput_defaultProps;
 +} else {
 +  var _DateInput_impl = DateInput;
@@ -245,7 +245,7 @@ index 2723010..4107d25 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePicker.js b/node_modules/react-dates/lib/components/DateRangePicker.js
-index 25a6f61..b655730 100644
+index 25a6f61..7b68292 100644
 --- a/node_modules/react-dates/lib/components/DateRangePicker.js
 +++ b/node_modules/react-dates/lib/components/DateRangePicker.js
 @@ -641,7 +641,20 @@ function (_ref) {
@@ -254,7 +254,7 @@ index 25a6f61..b655730 100644
  DateRangePicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateRangePicker.defaultProps = defaultProps;
 +var _DateRangePicker_defaultProps = defaultProps;
-+if (DateRangePicker && DateRangePicker.prototype && DateRangePicker.prototype.isReactComponent) {
++if (typeof DateRangePicker !== 'function' || (DateRangePicker.prototype && DateRangePicker.prototype.isReactComponent)) {
 +  DateRangePicker.defaultProps = _DateRangePicker_defaultProps;
 +} else {
 +  var _DateRangePicker_impl = DateRangePicker;
@@ -271,7 +271,7 @@ index 25a6f61..b655730 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePickerInput.js b/node_modules/react-dates/lib/components/DateRangePickerInput.js
-index 92afd50..c4945cd 100644
+index 92afd50..23ce4b0 100644
 --- a/node_modules/react-dates/lib/components/DateRangePickerInput.js
 +++ b/node_modules/react-dates/lib/components/DateRangePickerInput.js
 @@ -256,7 +256,20 @@ function DateRangePickerInput(_ref) {
@@ -280,7 +280,7 @@ index 92afd50..c4945cd 100644
  DateRangePickerInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DateRangePickerInput.defaultProps = defaultProps;
 +var _DateRangePickerInput_defaultProps = defaultProps;
-+if (DateRangePickerInput && DateRangePickerInput.prototype && DateRangePickerInput.prototype.isReactComponent) {
++if (typeof DateRangePickerInput !== 'function' || (DateRangePickerInput.prototype && DateRangePickerInput.prototype.isReactComponent)) {
 +  DateRangePickerInput.defaultProps = _DateRangePickerInput_defaultProps;
 +} else {
 +  var _DateRangePickerInput_impl = DateRangePickerInput;
@@ -297,7 +297,7 @@ index 92afd50..c4945cd 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DateRangePickerInputController.js b/node_modules/react-dates/lib/components/DateRangePickerInputController.js
-index b492c37..5b80e5d 100644
+index b492c37..833fd90 100644
 --- a/node_modules/react-dates/lib/components/DateRangePickerInputController.js
 +++ b/node_modules/react-dates/lib/components/DateRangePickerInputController.js
 @@ -373,4 +373,17 @@ function (_ref) {
@@ -307,7 +307,7 @@ index b492c37..5b80e5d 100644
 -DateRangePickerInputController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DateRangePickerInputController_defaultProps = defaultProps;
-+if (DateRangePickerInputController && DateRangePickerInputController.prototype && DateRangePickerInputController.prototype.isReactComponent) {
++if (typeof DateRangePickerInputController !== 'function' || (DateRangePickerInputController.prototype && DateRangePickerInputController.prototype.isReactComponent)) {
 +  DateRangePickerInputController.defaultProps = _DateRangePickerInputController_defaultProps;
 +} else {
 +  var _DateRangePickerInputController_impl = DateRangePickerInputController;
@@ -322,7 +322,7 @@ index b492c37..5b80e5d 100644
 +}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/DayPicker.js b/node_modules/react-dates/lib/components/DayPicker.js
-index ee2f635..0670fdc 100644
+index ee2f635..31b8d72 100644
 --- a/node_modules/react-dates/lib/components/DayPicker.js
 +++ b/node_modules/react-dates/lib/components/DayPicker.js
 @@ -216,7 +216,20 @@ var defaultProps = {
@@ -331,7 +331,7 @@ index ee2f635..0670fdc 100644
  };
 -exports.defaultProps = defaultProps;
 +var _exports_defaultProps = defaultProps;
-+if (exports && exports.prototype && exports.prototype.isReactComponent) {
++if (typeof exports !== 'function' || (exports.prototype && exports.prototype.isReactComponent)) {
 +  exports.defaultProps = _exports_defaultProps;
 +} else {
 +  var _exports_impl = exports;
@@ -353,7 +353,7 @@ index ee2f635..0670fdc 100644
  DayPicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPicker.defaultProps = defaultProps;
 +var _DayPicker_defaultProps = defaultProps;
-+if (DayPicker && DayPicker.prototype && DayPicker.prototype.isReactComponent) {
++if (typeof DayPicker !== 'function' || (DayPicker.prototype && DayPicker.prototype.isReactComponent)) {
 +  DayPicker.defaultProps = _DayPicker_defaultProps;
 +} else {
 +  var _DayPicker_impl = DayPicker;
@@ -370,7 +370,7 @@ index ee2f635..0670fdc 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref4) {
    var _ref4$reactDates = _ref4.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js b/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
-index 786e743..c60f9ba 100644
+index 786e743..87ccd9a 100644
 --- a/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
 +++ b/node_modules/react-dates/lib/components/DayPickerKeyboardShortcuts.js
 @@ -265,7 +265,20 @@ function (_ref) {
@@ -379,7 +379,7 @@ index 786e743..c60f9ba 100644
  DayPickerKeyboardShortcuts.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerKeyboardShortcuts.defaultProps = defaultProps;
 +var _DayPickerKeyboardShortcuts_defaultProps = defaultProps;
-+if (DayPickerKeyboardShortcuts && DayPickerKeyboardShortcuts.prototype && DayPickerKeyboardShortcuts.prototype.isReactComponent) {
++if (typeof DayPickerKeyboardShortcuts !== 'function' || (DayPickerKeyboardShortcuts.prototype && DayPickerKeyboardShortcuts.prototype.isReactComponent)) {
 +  DayPickerKeyboardShortcuts.defaultProps = _DayPickerKeyboardShortcuts_defaultProps;
 +} else {
 +  var _DayPickerKeyboardShortcuts_impl = DayPickerKeyboardShortcuts;
@@ -396,7 +396,7 @@ index 786e743..c60f9ba 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref3) {
    var _ref3$reactDates = _ref3.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerNavigation.js b/node_modules/react-dates/lib/components/DayPickerNavigation.js
-index d0f63ae..bffae30 100644
+index d0f63ae..6935ccd 100644
 --- a/node_modules/react-dates/lib/components/DayPickerNavigation.js
 +++ b/node_modules/react-dates/lib/components/DayPickerNavigation.js
 @@ -235,7 +235,20 @@ function (_ref) {
@@ -405,7 +405,7 @@ index d0f63ae..bffae30 100644
  DayPickerNavigation.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -DayPickerNavigation.defaultProps = defaultProps;
 +var _DayPickerNavigation_defaultProps = defaultProps;
-+if (DayPickerNavigation && DayPickerNavigation.prototype && DayPickerNavigation.prototype.isReactComponent) {
++if (typeof DayPickerNavigation !== 'function' || (DayPickerNavigation.prototype && DayPickerNavigation.prototype.isReactComponent)) {
 +  DayPickerNavigation.defaultProps = _DayPickerNavigation_defaultProps;
 +} else {
 +  var _DayPickerNavigation_impl = DayPickerNavigation;
@@ -422,7 +422,7 @@ index d0f63ae..bffae30 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/DayPickerRangeController.js b/node_modules/react-dates/lib/components/DayPickerRangeController.js
-index c950e19..4260088 100644
+index c950e19..81cef24 100644
 --- a/node_modules/react-dates/lib/components/DayPickerRangeController.js
 +++ b/node_modules/react-dates/lib/components/DayPickerRangeController.js
 @@ -1403,4 +1403,17 @@ function (_ref) {
@@ -432,7 +432,7 @@ index c950e19..4260088 100644
 -DayPickerRangeController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DayPickerRangeController_defaultProps = defaultProps;
-+if (DayPickerRangeController && DayPickerRangeController.prototype && DayPickerRangeController.prototype.isReactComponent) {
++if (typeof DayPickerRangeController !== 'function' || (DayPickerRangeController.prototype && DayPickerRangeController.prototype.isReactComponent)) {
 +  DayPickerRangeController.defaultProps = _DayPickerRangeController_defaultProps;
 +} else {
 +  var _DayPickerRangeController_impl = DayPickerRangeController;
@@ -447,7 +447,7 @@ index c950e19..4260088 100644
 +}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/DayPickerSingleDateController.js b/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
-index 127d7bb..3294854 100644
+index 127d7bb..97716aa 100644
 --- a/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
 +++ b/node_modules/react-dates/lib/components/DayPickerSingleDateController.js
 @@ -753,4 +753,17 @@ function (_ref) {
@@ -457,7 +457,7 @@ index 127d7bb..3294854 100644
 -DayPickerSingleDateController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _DayPickerSingleDateController_defaultProps = defaultProps;
-+if (DayPickerSingleDateController && DayPickerSingleDateController.prototype && DayPickerSingleDateController.prototype.isReactComponent) {
++if (typeof DayPickerSingleDateController !== 'function' || (DayPickerSingleDateController.prototype && DayPickerSingleDateController.prototype.isReactComponent)) {
 +  DayPickerSingleDateController.defaultProps = _DayPickerSingleDateController_defaultProps;
 +} else {
 +  var _DayPickerSingleDateController_impl = DayPickerSingleDateController;
@@ -472,7 +472,7 @@ index 127d7bb..3294854 100644
 +}
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/KeyboardShortcutRow.js b/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
-index 7950f6d..5212f54 100644
+index 7950f6d..95c826c 100644
 --- a/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
 +++ b/node_modules/react-dates/lib/components/KeyboardShortcutRow.js
 @@ -47,7 +47,20 @@ function KeyboardShortcutRow(_ref) {
@@ -481,7 +481,7 @@ index 7950f6d..5212f54 100644
  KeyboardShortcutRow.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -KeyboardShortcutRow.defaultProps = defaultProps;
 +var _KeyboardShortcutRow_defaultProps = defaultProps;
-+if (KeyboardShortcutRow && KeyboardShortcutRow.prototype && KeyboardShortcutRow.prototype.isReactComponent) {
++if (typeof KeyboardShortcutRow !== 'function' || (KeyboardShortcutRow.prototype && KeyboardShortcutRow.prototype.isReactComponent)) {
 +  KeyboardShortcutRow.defaultProps = _KeyboardShortcutRow_defaultProps;
 +} else {
 +  var _KeyboardShortcutRow_impl = KeyboardShortcutRow;
@@ -498,7 +498,7 @@ index 7950f6d..5212f54 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var color = _ref2.reactDates.color;
 diff --git a/node_modules/react-dates/lib/components/LeftArrow.js b/node_modules/react-dates/lib/components/LeftArrow.js
-index e3c11c4..4bbd45c 100644
+index e3c11c4..f858b11 100644
 --- a/node_modules/react-dates/lib/components/LeftArrow.js
 +++ b/node_modules/react-dates/lib/components/LeftArrow.js
 @@ -15,9 +15,22 @@ var LeftArrow = function LeftArrow(props) {
@@ -510,7 +510,7 @@ index e3c11c4..4bbd45c 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+if (LeftArrow && LeftArrow.prototype && LeftArrow.prototype.isReactComponent) {
++if (typeof LeftArrow !== 'function' || (LeftArrow.prototype && LeftArrow.prototype.isReactComponent)) {
 +  LeftArrow.defaultProps = _LeftArrow_defaultProps;
 +} else {
 +  var _LeftArrow_impl = LeftArrow;
@@ -527,7 +527,7 @@ index e3c11c4..4bbd45c 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/RightArrow.js b/node_modules/react-dates/lib/components/RightArrow.js
-index 9590490..2e17a89 100644
+index 9590490..4c5ef68 100644
 --- a/node_modules/react-dates/lib/components/RightArrow.js
 +++ b/node_modules/react-dates/lib/components/RightArrow.js
 @@ -15,9 +15,22 @@ var RightArrow = function RightArrow(props) {
@@ -539,7 +539,7 @@ index 9590490..2e17a89 100644
    focusable: "false",
    viewBox: "0 0 1000 1000"
  };
-+if (RightArrow && RightArrow.prototype && RightArrow.prototype.isReactComponent) {
++if (typeof RightArrow !== 'function' || (RightArrow.prototype && RightArrow.prototype.isReactComponent)) {
 +  RightArrow.defaultProps = _RightArrow_defaultProps;
 +} else {
 +  var _RightArrow_impl = RightArrow;
@@ -556,7 +556,7 @@ index 9590490..2e17a89 100644
  exports["default"] = _default;
 \ No newline at end of file
 diff --git a/node_modules/react-dates/lib/components/SingleDatePicker.js b/node_modules/react-dates/lib/components/SingleDatePicker.js
-index 7e44587..cd88d9b 100644
+index 7e44587..0787c36 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePicker.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePicker.js
 @@ -597,7 +597,20 @@ function (_ref) {
@@ -565,7 +565,7 @@ index 7e44587..cd88d9b 100644
  SingleDatePicker.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -SingleDatePicker.defaultProps = defaultProps;
 +var _SingleDatePicker_defaultProps = defaultProps;
-+if (SingleDatePicker && SingleDatePicker.prototype && SingleDatePicker.prototype.isReactComponent) {
++if (typeof SingleDatePicker !== 'function' || (SingleDatePicker.prototype && SingleDatePicker.prototype.isReactComponent)) {
 +  SingleDatePicker.defaultProps = _SingleDatePicker_defaultProps;
 +} else {
 +  var _SingleDatePicker_impl = SingleDatePicker;
@@ -582,7 +582,7 @@ index 7e44587..cd88d9b 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref3) {
    var _ref3$reactDates = _ref3.reactDates,
 diff --git a/node_modules/react-dates/lib/components/SingleDatePickerInput.js b/node_modules/react-dates/lib/components/SingleDatePickerInput.js
-index 06bcc65..30f54b5 100644
+index 06bcc65..ec0a4ed 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePickerInput.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePickerInput.js
 @@ -192,7 +192,20 @@ function SingleDatePickerInput(_ref) {
@@ -591,7 +591,7 @@ index 06bcc65..30f54b5 100644
  SingleDatePickerInput.propTypes = process.env.NODE_ENV !== "production" ? propTypes : {};
 -SingleDatePickerInput.defaultProps = defaultProps;
 +var _SingleDatePickerInput_defaultProps = defaultProps;
-+if (SingleDatePickerInput && SingleDatePickerInput.prototype && SingleDatePickerInput.prototype.isReactComponent) {
++if (typeof SingleDatePickerInput !== 'function' || (SingleDatePickerInput.prototype && SingleDatePickerInput.prototype.isReactComponent)) {
 +  SingleDatePickerInput.defaultProps = _SingleDatePickerInput_defaultProps;
 +} else {
 +  var _SingleDatePickerInput_impl = SingleDatePickerInput;
@@ -608,7 +608,7 @@ index 06bcc65..30f54b5 100644
  var _default = (0, _reactWithStyles.withStyles)(function (_ref2) {
    var _ref2$reactDates = _ref2.reactDates,
 diff --git a/node_modules/react-dates/lib/components/SingleDatePickerInputController.js b/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
-index e5ad4a4..fcb6255 100644
+index e5ad4a4..7ae7554 100644
 --- a/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
 +++ b/node_modules/react-dates/lib/components/SingleDatePickerInputController.js
 @@ -293,4 +293,17 @@ function (_ref) {
@@ -618,7 +618,7 @@ index e5ad4a4..fcb6255 100644
 -SingleDatePickerInputController.defaultProps = defaultProps;
 \ No newline at end of file
 +var _SingleDatePickerInputController_defaultProps = defaultProps;
-+if (SingleDatePickerInputController && SingleDatePickerInputController.prototype && SingleDatePickerInputController.prototype.isReactComponent) {
++if (typeof SingleDatePickerInputController !== 'function' || (SingleDatePickerInputController.prototype && SingleDatePickerInputController.prototype.isReactComponent)) {
 +  SingleDatePickerInputController.defaultProps = _SingleDatePickerInputController_defaultProps;
 +} else {
 +  var _SingleDatePickerInputController_impl = SingleDatePickerInputController;
