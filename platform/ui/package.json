@@ -36,6 +36,7 @@
   "dependencies": {
     "@floating-ui/react": "^0.26.4",
     "@ohif/i18n": "^0.53.0",
+    "@ohif/ui-next": "~0.1.0-a1",
     "@radix-ui/react-accessible-icon": "^1.1.8",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",

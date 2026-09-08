@@ -39,7 +39,7 @@
     "radix": "^0.0.0",
     "radix-ui": "^1.4.2",
     "react": "18.3.1",
-    "react-day-picker": "8.10.1",
+    "react-day-picker": "^9.6.7",
     "react-resizable-panels": "2.1.9",
     "react-shepherd": "6.1.1",
     "shepherd.js": "13.0.3",
