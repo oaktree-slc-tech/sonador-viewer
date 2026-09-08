@@ -1,4 +1,8 @@
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+// Local upload decodes through Cornerstone3D like every other path: the legacy
+// cornerstone-wado-image-loader is no longer configured or started, so its wadouri pipeline would
+// not resolve a file here. The two packages expose the same `wadouri` surface (`fileManager.add`,
+// `loadFileRequest`), so this is a change of provider rather than of behaviour.
+import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 import dcmjs from 'dcmjs';
 
 import OHIF from '@ohif/core';
@@ -10,7 +14,7 @@ const metadataProvider = OHIF.cornerstone.metadataProvider;
 const DICOMFileLoader = new (class extends FileLoader {
   fileType = 'application/dicom';
   loadFile(file, imageId) {
-    return cornerstoneWADOImageLoader.wadouri.loadFileRequest(imageId);
+    return dicomImageLoader.wadouri.loadFileRequest(imageId);
   }
 
   getDataset(image, imageId) {

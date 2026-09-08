@@ -53,10 +53,6 @@ module.exports = (env, argv) => {
       },
     },
     resolve: {
-      alias: {
-        'cornerstone-wado-image-loader':
-          'cornerstone-wado-image-loader/dist/dynamic-import/cornerstoneWADOImageLoader.min.js',
-      },
       modules: [
         // Modules specific to this package
         path.resolve(__dirname, '../node_modules'),
@@ -87,10 +83,6 @@ module.exports = (env, argv) => {
           {
             from: `${PUBLIC_DIR}/${APP_CONFIG}`,
             to: `${DIST_DIR}/app-config.js`,
-          },
-          {
-            from: '../../../node_modules/cornerstone-wado-image-loader/dist/dynamic-import',
-            to: DIST_DIR,
           },
         ],
       }),

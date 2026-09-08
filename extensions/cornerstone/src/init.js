@@ -69,9 +69,9 @@ export default function init({ servicesManager, commandsManager, configuration }
       maxSimultaneousRequests: 20,
     },
   } = configuration;
-  const metadataProvider = OHIF.cornerstone.metadataProvider;
-
-  cornerstone.metaData.addProvider(metadataProvider.get.bind(metadataProvider), 9999);
+  // The legacy metadata provider is registered by the bridge (installLegacyBridge, called from
+  // setConfiguration), together with the Cornerstone3D delegate that now sits above it. Keeping
+  // both registrations in one place is what makes the priority ordering between them legible.
 
   // ~~
   const defaultCsToolsConfig = csToolsConfig || {

@@ -21,6 +21,8 @@ import { SystemContextProvider, useSystem } from './contextProviders/SystemProvi
 import { fileLoader } from './store';
 import IWebApiDataSource from './DataSources/IWebApiDataSource';
 import sonadorLocalImageReader from './loaders/sonadorLocalImageReader';
+import { installLegacyBridge } from './loaders/legacyBridge';
+import { releaseRetainedInstances } from './loaders/instanceRetrieval';
 
 import measurements from './measurements';
 
@@ -102,6 +104,8 @@ const io = {
   fileLoader,
   IWebApiDataSource,
   sonadorLocalImageReader,
+  installLegacyBridge,
+  releaseRetainedInstances,
 }
 
 
@@ -145,6 +149,8 @@ const OHIF = {
   io,
   IWebApiDataSource,
   sonadorLocalImageReader,
+  installLegacyBridge,
+  releaseRetainedInstances,
 
   // Services
   PubSubService,
@@ -212,6 +218,8 @@ export {
   io,
   IWebApiDataSource,
   sonadorLocalImageReader,
+  installLegacyBridge,
+  releaseRetainedInstances,
 
   // Services
   PubSubService,

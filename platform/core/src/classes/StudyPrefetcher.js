@@ -1,6 +1,9 @@
 import cornerstone from 'cornerstone-core';
+import { cache as c3dCache } from '@cornerstonejs/core';
 
 import getImageId from '../utils/getImageId.js';
+import log from '../log.js';
+import estimateDecodedImageBytes, { CONSERVATIVE_DECODED_IMAGE_BYTES } from '../utils/estimateDecodedImageBytes.js';
 
 const noop = () => {};
 
@@ -14,7 +17,33 @@ export class StudyPrefetcher {
     prefetchDisplaySetsTimeout: 300,
     maxNumPrefetchRequests: 100,
     includeActiveDisplaySet: false,
+
+    // Cache bytes prefetching will not consume, leaving room for the interaction and thumbnail
+    // requests that a user is actually waiting on. Tunable: the right value depends on the cache
+    // ceiling and on how large the deployment's series are, and wants measuring against a
+    // large-volume study.
+    prefetchCacheReserveBytes: 128 * 1024 * 1024,
+
+    // Assumed decoded size when an image's pixel module cannot be read.
+    unknownImageSizeBytes: CONSERVATIVE_DECODED_IMAGE_BYTES,
   };
+
+  // Estimated decoded bytes for prefetch requests that have been dispatched but have not settled.
+  // Counted because the cache does not know about them yet: without it a whole pool's worth of
+  // requests would each be admitted against the same free space and collectively overrun it.
+  //
+  // A reservation belongs to the request, not to the batch it came from. `stopPrefetching` empties
+  // the queue, but a request already dispatched is not cancelled by that -- it runs on through
+  // Cornerstone3D and will populate the cache -- so its reservation has to outlive its batch, or
+  // the next batch is admitted against space the previous one is still going to use. Every
+  // reservation is released exactly once, when its request settles; the loader's retrieval timeout
+  // is what guarantees that it does. See utils/loaderRequestTimeout.js.
+  _prefetchInFlightBytes = 0;
+
+  // Set when the gate closes, cleared when a viewport or study triggers prefetching again. Held
+  // rather than re-evaluated per eviction so that prefetching does not oscillate back on as
+  // individual images are removed.
+  _prefetchGateClosed = false;
 
   constructor(studies, options) {
     this.studies = studies || [];
@@ -25,6 +54,10 @@ export class StudyPrefetcher {
     }
 
     cornerstone.events.addEventListener('cornerstoneimagecachefull.StudyPrefetcher', this.cacheFullHandler);
+
+    // That event cannot fire while the legacy cache is a mirror whose ceiling tracks the
+    // Cornerstone3D one, so its LRU never runs. Cache pressure is decided per request at dispatch
+    // instead, in `hasPrefetchHeadroom`.
   }
 
   /**
@@ -102,6 +135,9 @@ export class StudyPrefetcher {
    * Stop prefetching images.
    */
   stopPrefetching() {
+    // Empties the queue only. Requests already handed to the loader keep running and keep their
+    // reservations: they are still going to put images in the cache, and releasing their bytes
+    // here would let the next batch be admitted against space they are about to consume.
     cornerstone.imageLoadPoolManager.clearRequestStack('prefetch');
   }
 
@@ -145,6 +181,9 @@ export class StudyPrefetcher {
     const nonCachedImageIds = this.filterCachedImageIds(imageIds);
     const imageLoadPoolManager = cornerstone.imageLoadPoolManager;
 
+    // A viewport or study trigger reaching here is what reopens the gate after it has closed.
+    this._prefetchGateClosed = false;
+
     imageLoadPoolManager.maxNumRequests = {
       ...imageLoadPoolManager.maxNumRequests,
       prefetch: this.options.maxNumPrefetchRequests,
@@ -157,8 +196,49 @@ export class StudyPrefetcher {
       requestFn = (id) => cornerstone.loadAndCacheImage(id);
     }
 
+    // Admission is decided when the pool dispatches the request, not when the batch is queued: a
+    // batch is queued all at once and drains over a long time, so a decision made up front is
+    // already stale by the time most of it runs.
+    const dispatch = (imageId) => {
+      if (this._prefetchGateClosed) {
+        return Promise.resolve();
+      }
+
+      const imageBytes = this.estimateImageBytes(imageId);
+
+      if (!this.hasPrefetchHeadroom(imageBytes)) {
+        this.closePrefetchGate();
+        return Promise.resolve();
+      }
+
+      this._prefetchInFlightBytes += imageBytes;
+
+      // Latched rather than trusted to be called once: `finally` is, but the synchronous-throw
+      // path below releases directly, and a reservation released twice would understate what is
+      // outstanding -- which is the failure this accounting exists to prevent.
+      let released = false;
+      const release = () => {
+        if (released) {
+          return;
+        }
+
+        released = true;
+        this._prefetchInFlightBytes -= imageBytes;
+      };
+
+      let request;
+      try {
+        request = requestFn(imageId);
+      } catch (error) {
+        release();
+        throw error;
+      }
+
+      return Promise.resolve(request).finally(release);
+    };
+
     nonCachedImageIds.forEach((imageId) => {
-      imageLoadPoolManager.addRequest(requestFn.bind(this, imageId), this.options.requestType, {
+      imageLoadPoolManager.addRequest(() => dispatch(imageId), this.options.requestType, {
         imageId,
       });
     });
@@ -475,6 +555,57 @@ export class StudyPrefetcher {
   isImageCached(imageId) {
     const image = cornerstone.imageCache.imageCache[imageId];
     return image && image.sizeInBytes;
+  }
+
+  /**
+   * Free cache bytes, minus what already-dispatched prefetch requests will occupy.
+   *
+   * Comparing `getCacheSize()` with `getMaxCacheSize()` is not enough on its own: Cornerstone3D
+   * frees LRU entries *before* accounting an incoming image, so the reported size sits at or below
+   * the maximum even while the cache evicts steadily, and a gate built on that comparison alone
+   * would almost never close.
+   */
+  prefetchHeadroomBytes() {
+    const available =
+      typeof c3dCache.getBytesAvailable === 'function'
+        ? c3dCache.getBytesAvailable()
+        : c3dCache.getMaxCacheSize() - c3dCache.getCacheSize();
+
+    if (!Number.isFinite(available)) {
+      return Infinity;
+    }
+
+    return available - this._prefetchInFlightBytes - this.options.prefetchCacheReserveBytes;
+  }
+
+  /** Estimated decoded size of an image, for admission control. */
+  estimateImageBytes(imageId) {
+    return estimateDecodedImageBytes(
+      (type, id) => cornerstone.metaData.get(type, id),
+      imageId,
+      this.options.unknownImageSizeBytes
+    );
+  }
+
+  /** Whether this image can be prefetched without eating into the reserve. */
+  hasPrefetchHeadroom(imageBytes) {
+    return this.prefetchHeadroomBytes() >= imageBytes;
+  }
+
+  /**
+   * Stop prefetching until the next viewport or study trigger.
+   *
+   * Only background prefetch is affected: `clearRequestStack('prefetch')` leaves the interaction
+   * and thumbnail pools alone, which are the requests a user is waiting on.
+   */
+  closePrefetchGate() {
+    if (this._prefetchGateClosed) {
+      return;
+    }
+
+    this._prefetchGateClosed = true;
+    log.warn('Prefetch stopped: image cache headroom exhausted');
+    this.stopPrefetching();
   }
 
   /**

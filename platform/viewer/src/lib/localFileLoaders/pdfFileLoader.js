@@ -1,11 +1,15 @@
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+// Local upload decodes through Cornerstone3D like every other path: the legacy
+// cornerstone-wado-image-loader is no longer configured or started, so its wadouri pipeline would
+// not resolve a file here. The two packages expose the same `wadouri` surface (`fileManager.add`,
+// `loadFileRequest`), so this is a change of provider rather than of behaviour.
+import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 
 import FileLoader from './fileLoader';
 
 const PDFFileLoader = new (class extends FileLoader {
   fileType = 'application/pdf';
   loadFile(file, imageId) {
-    return cornerstoneWADOImageLoader.wadouri.loadFileRequest(imageId);
+    return dicomImageLoader.wadouri.loadFileRequest(imageId);
   }
 
   getDataset(image, imageId) {

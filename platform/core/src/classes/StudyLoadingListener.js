@@ -1,5 +1,5 @@
 import cornerstone from 'cornerstone-core';
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 import debounce from 'lodash.debounce';
 
 import StackManager from '../utils/StackManager';
@@ -107,7 +107,7 @@ class DICOMFileLoadingListener extends BaseLoadingListener {
   }
 
   _checkCachedData() {
-    const dataSet = cornerstoneWADOImageLoader.wadouri.dataSetCacheManager.get(this._dataSetUrl);
+    const dataSet = dicomImageLoader.wadouri.dataSetCacheManager.get(this._dataSetUrl);
 
     if (dataSet) {
       const dataSetLength = dataSet.byteArray.length;

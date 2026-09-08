@@ -7,7 +7,6 @@ import {
   buildSonadorLocalImageId,
   parseSonadorLocalImageId,
   registerRemoteFallback,
-  loadCachedInstanceImage,
   loadCachedInstanceImageObject,
 } from './sonadorLocalImageReader';
 
@@ -67,8 +66,8 @@ describe('sonadorLocalImageReader', () => {
     const wadoImageLoader = makeFakeWadoLoader();
     const imageId = buildSonadorLocalImageId('sop-memo-1');
 
-    const image = await loadCachedInstanceImage(imageId, {}, { version: 'v3', wadoImageLoader });
-    await loadCachedInstanceImage(imageId, {}, { version: 'v3', wadoImageLoader });
+    const image = await loadCachedInstanceImageObject(imageId, {}, { wadoImageLoader }).promise;
+    await loadCachedInstanceImageObject(imageId, {}, { wadoImageLoader }).promise;
 
     expect(wadoImageLoader.fileManager.add).toHaveBeenCalledTimes(1);
     // The decoded image is presented under the requested sonadorlocal: id.
@@ -80,7 +79,7 @@ describe('sonadorLocalImageReader', () => {
     const wadoImageLoader = makeFakeWadoLoader();
     const imageId = buildSonadorLocalImageId('sop-evict-1');
 
-    await loadCachedInstanceImage(imageId, {}, { version: 'v3', wadoImageLoader });
+    await loadCachedInstanceImageObject(imageId, {}, { wadoImageLoader }).promise;
     expect(wadoImageLoader.fileManager.add).toHaveBeenCalledTimes(1);
 
     // Broadcasts INSTANCE_REMOVED, which the reader module subscribes to at module scope.
@@ -89,7 +88,7 @@ describe('sonadorLocalImageReader', () => {
     // The fileManager slot was handed back...
     expect(wadoImageLoader.fileManager.remove).toHaveBeenCalledTimes(1);
     // ...and the next load materialises a fresh File instead of serving the stale memo.
-    await loadCachedInstanceImage(imageId, {}, { version: 'v3', wadoImageLoader });
+    await loadCachedInstanceImageObject(imageId, {}, { wadoImageLoader }).promise;
     expect(wadoImageLoader.fileManager.add).toHaveBeenCalledTimes(2);
   });
 
@@ -99,8 +98,8 @@ describe('sonadorLocalImageReader', () => {
     await LocalCacheService.clearAll();
     const wadoImageLoader = makeFakeWadoLoader();
 
-    await loadCachedInstanceImage(buildSonadorLocalImageId('sop-clear-1'), {}, { version: 'v3', wadoImageLoader });
-    await loadCachedInstanceImage(buildSonadorLocalImageId('sop-clear-2'), {}, { version: 'v3', wadoImageLoader });
+    await loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-clear-1'), {}, { wadoImageLoader }).promise;
+    await loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-clear-2'), {}, { wadoImageLoader }).promise;
 
     await LocalCacheService.clearAll();
 
@@ -113,11 +112,11 @@ describe('sonadorLocalImageReader', () => {
     const remoteLoad = jest.fn().mockResolvedValue({ fromRemote: true });
 
     registerRemoteFallback('sop-fallback-1', 'wadors:https://example/instances/sop-fallback-1');
-    const result = await loadCachedInstanceImage(
+    const result = await loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-fallback-1'),
       { opt: 1 },
-      { version: 'v3', wadoImageLoader, remoteLoad }
-    );
+      { wadoImageLoader, remoteLoad }
+    ).promise;
 
     expect(remoteLoad).toHaveBeenCalledWith('wadors:https://example/instances/sop-fallback-1', { opt: 1 });
     expect(result).toEqual({ fromRemote: true });
@@ -129,7 +128,8 @@ describe('sonadorLocalImageReader', () => {
     const wadoImageLoader = makeFakeWadoLoader();
 
     await expect(
-      loadCachedInstanceImage(buildSonadorLocalImageId('sop-orphan-1'), {}, { version: 'v3', wadoImageLoader })
+      loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-orphan-1'), {}, { wadoImageLoader })
+        .promise
     ).rejects.toThrow('no remote fallback');
   });
 });
@@ -150,7 +150,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-loadobj-1'),
       {},
-      { version: 'v3', wadoImageLoader }
+      { wadoImageLoader }
     );
 
     expect(typeof loadObject.promise.then).toBe('function');
@@ -166,7 +166,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-decache-1'),
       {},
-      { version: 'v3', wadoImageLoader }
+      { wadoImageLoader }
     );
     await loadObject.promise;
 
@@ -184,7 +184,7 @@ describe('sonadorLocalImageReader load object', () => {
   it('keeps the shared File until the last frame of a multiframe instance is decached', async () => {
     jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(new ArrayBuffer(16));
     const wadoImageLoader = makeFakeWadoLoader();
-    const deps = { version: 'v3', wadoImageLoader };
+    const deps = { wadoImageLoader };
 
     const frame0 = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-mf-1', 0), {}, deps);
     const frame1 = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-mf-1', 1), {}, deps);
@@ -207,7 +207,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-cancel-1'),
       {},
-      { version: 'v3', wadoImageLoader }
+      { wadoImageLoader }
     );
     await loadObject.promise;
 
@@ -230,7 +230,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-deferred-decache'),
       {},
-      { version: 'v3', wadoImageLoader }
+      { wadoImageLoader }
     );
 
     // Evict before the bytes land.
@@ -268,7 +268,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-deferred-miss'),
       {},
-      { version: 'v3', wadoImageLoader: makeFakeWadoLoader(), remoteLoad: () => remoteLoadObject }
+      { wadoImageLoader: makeFakeWadoLoader(), remoteLoad: () => remoteLoadObject }
     );
 
     // Evict before the read resolves, i.e. before the remote delegate exists.
@@ -294,7 +294,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-deferred-cancel'),
       {},
-      { version: 'v3', wadoImageLoader }
+      { wadoImageLoader }
     );
 
     loadObject.cancelFn();
@@ -318,7 +318,7 @@ describe('sonadorLocalImageReader load object', () => {
     const loadObject = loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-fallback-obj'),
       {},
-      { version: 'v3', wadoImageLoader, remoteLoad: () => remoteLoadObject }
+      { wadoImageLoader, remoteLoad: () => remoteLoadObject }
     );
 
     await expect(loadObject.promise).resolves.toEqual({ fromRemote: true });
@@ -337,15 +337,14 @@ describe('sonadorLocalImageReader load object', () => {
     const wadoImageLoader = makeFakeWadoLoader();
 
     registerRemoteFallback('sop-fallback-bare', 'wadors:https://example/instances/sop-fallback-bare');
-    const image = await loadCachedInstanceImage(
+    const image = await loadCachedInstanceImageObject(
       buildSonadorLocalImageId('sop-fallback-bare'),
       {},
       {
-        version: 'v2',
         wadoImageLoader,
         remoteLoad: () => Promise.resolve({ fromRemote: true }),
       }
-    );
+    ).promise;
 
     expect(image).toEqual({ fromRemote: true });
   });

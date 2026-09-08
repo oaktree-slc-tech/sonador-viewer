@@ -337,6 +337,11 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
       // Cornerstone3D cache. A global purge would also destroy cache entries other subsystems own
       // -- M3D geometry, segmentations -- which have nothing to do with leaving the study viewer.
       cornerstone3dUtils.volumeLease.releaseAll();
+
+      // The payload retrieval module holds a DataSet reference per instance it resolved, so a
+      // second consumer of the same instance reuses the parse instead of fetching again. Released
+      // here so that retention is bounded by the study rather than by the session.
+      OHIF.io.releaseRetainedInstances();
     };
   }, []);
 

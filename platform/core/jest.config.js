@@ -12,6 +12,14 @@ module.exports = {
     '^.+\\.(js|ts|tsx)$': 'babel-jest',
   },
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
+  transformIgnorePatterns: ['/node_modules/(?!@cornerstonejs/dicom-image-loader/)'],
+  moduleNameMapper: {
+    ...base.moduleNameMapper,
+    '^@cornerstonejs/dicom-image-loader/xhrRequest$':
+      '<rootDir>/../../node_modules/@cornerstonejs/dicom-image-loader/dist/esm/imageLoader/internal/xhrRequest.js',
+    '^@cornerstonejs/dicom-image-loader/loaderOptions$':
+      '<rootDir>/../../node_modules/@cornerstonejs/dicom-image-loader/dist/esm/imageLoader/internal/options.js',
+  },
   // rootDir: "../.."
   // testMatch: [
   //   //`<rootDir>/platform/${pack.name}/**/*.spec.js`

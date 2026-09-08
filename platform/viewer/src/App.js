@@ -64,7 +64,7 @@ import OHIFStandaloneViewer from './OHIFStandaloneViewer';
 import { createViewerStore } from './store';
 
 /** Utils */
-import { getUserManagerForOpenIdConnectClient, initWebWorkers } from './utils';
+import { getUserManagerForOpenIdConnectClient } from './utils';
 
 
 // Initialize servicesManager and Redux store
@@ -213,7 +213,6 @@ class App extends Component {
      */
     _initHotkeys(appConfigHotkeys);
     _initServers(servers);
-    initWebWorkers();
   }
 
   render() {
