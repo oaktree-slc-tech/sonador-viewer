@@ -1,11 +1,8 @@
 import cornerstone from 'cornerstone-core';
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
-import dicomParser from 'dicom-parser';
 
 import OHIF from '@ohif/core';
 
 import version from './version.js';
-import { registerLegacySonadorLocalImageLoader } from './lib/sonadorLocalImageLoaderV2.js';
 
 export function setConfiguration(appConfig) {
   let homepage;
@@ -22,11 +19,7 @@ export function setConfiguration(appConfig) {
   // For debugging
   //if (process.env.node_env === 'development') {
   window.cornerstone = cornerstone;
-  window.cornerstoneWADOImageLoader = cornerstoneWADOImageLoader;
   //}
-
-  cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
-  cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
 
   // Kick off Cornerstone3D initialisation with the app configuration.
   // This is the first call site in the boot sequence -- App.js calls setConfiguration() before it
@@ -56,11 +49,16 @@ export function setConfiguration(appConfig) {
     };
   }
 
-  // Register the local/offline cache image loader with legacy cornerstone-core (ohif-viewers#125,
-  // AR-3) before cornerstoneWADOImageLoader self-registers its wadouri/wadors handlers via
-  // .configure() below. The `sonadorlocal:` scheme is distinct, so there is no ordering conflict —
-  // it just needs to exist before any component tries to load a `sonadorlocal:` imageId.
-  registerLegacySonadorLocalImageLoader();
+  // Install the legacy-facing bridge. Legacy cornerstone-core has no decoder of its own, so every
+  // scheme it is asked for resolves through Cornerstone3D. Must run after initCornerstone3d above,
+  // which configures the pools, the cache ceiling and the loader the bridge calls.
+  //
+  // Deleting this call and platform/core/src/loaders/legacyBridge/ is the whole of the bridge's
+  // removal when the legacy stack is retired.
+  OHIF.installLegacyBridge({
+    cornerstone,
+    legacyMetadataProvider: OHIF.cornerstone.metadataProvider,
+  });
 
   OHIF.user.getAccessToken = () => {
     // TODO: Get the Redux store from somewhere else
@@ -77,21 +75,4 @@ export function setConfiguration(appConfig) {
 
     return appConfig.httpErrorHandler;
   };
-
-  cornerstoneWADOImageLoader.configure({
-    beforeSend: function (xhr) {
-      const headers = OHIF.DICOMWeb.getAuthorizationHeader();
-
-      if (headers.Authorization) {
-        xhr.setRequestHeader('Authorization', headers.Authorization);
-      }
-    },
-    errorInterceptor: (error) => {
-      // const { appConfig = {} } = AppContext;
-
-      if (typeof appConfig.httpErrorHandler === 'function') {
-        appConfig.httpErrorHandler(error);
-      }
-    },
-  });
 }

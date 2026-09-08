@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
 import { utils } from '@ohif/core';
+import loadThumbnailImage from '@ohif/core/src/utils/loadThumbnailImage.js';
 
 import ViewportErrorIndicator from '../../viewer/ViewportErrorIndicator';
 import ViewportLoadingIndicator from '../../viewer/ViewportLoadingIndicator';
@@ -54,7 +55,7 @@ function ImageThumbnail({ active = false, width = 217, height = 123, imageSrc, i
 
   const setImagePromise = () => {
     if (shouldRenderToCanvas) {
-      cancelablePromise = utils.makeCancelable(cornerstone.loadAndCacheImage(imageId));
+      cancelablePromise = utils.makeCancelable(loadThumbnailImage(imageId));
     }
   };
 

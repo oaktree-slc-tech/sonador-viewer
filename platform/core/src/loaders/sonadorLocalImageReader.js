@@ -2,7 +2,7 @@
 //
 // This module is the SINGLE place that knows how to (a) build/parse a `sonadorlocal:` imageId and
 // (b) turn a cached instance's Part10 bytes into a decoded Cornerstone image. Both the
-// Cornerstone3D (v3) and legacy cornerstone-core (v2) loader registrations delegate here, passing in
+// The Cornerstone3D loader registration delegates here, passing in
 // their own package's WADO image loader so the ONLY thing that differs between the two is the thin
 // adapter that satisfies each package's exact return-object shape — the storage-read logic is not
 // duplicated (AR-2).
@@ -65,54 +65,43 @@ export function getRemoteFallback(SOPInstanceUID) {
   return _remoteFallbackBySop.get(SOPInstanceUID);
 }
 
-// SOPInstanceUID -> ephemeral `dicomfile:` imageId produced by a wado fileManager. Keyed per wado
-// package (v2 vs v3 fileManagers are independent) so both adapters can memoise safely.
-const _fileImageIdCache = {
-  v2: new Map(),
-  v3: new Map(),
-};
+// SOPInstanceUID -> ephemeral `dicomfile:` imageId produced by the wado fileManager. One memo:
+// Cornerstone3D is the only decoder, so there is only one fileManager to memoise against.
+const _fileImageIdCache = new Map();
 
-// The wado loader namespace each version's adapter last passed in, captured so eviction can hand
-// the memoised File slot back to that package's fileManager. A memo entry can only exist after
-// `loadCachedInstanceImage` ran (which captures the loader), so eviction always finds it here.
-const _wadoLoaderByVersion = {
-  v2: null,
-  v3: null,
-};
+// The wado loader namespace the adapter last passed in, captured so eviction can hand the memoised
+// File slot back to its fileManager. A memo entry can only exist after a load ran (which captures
+// the loader), so eviction always finds it here.
+let _wadoLoader = null;
 
-// (version -> SOPInstanceUID -> count) of live load objects that are holding the memoised File for
-// an instance. A multiframe instance produces one load object per frame, all sharing one File, so
-// the fileManager slot is handed back only when the last of them is decached.
-const _fileHolders = {
-  v2: new Map(),
-  v3: new Map(),
-};
+// SOPInstanceUID -> count of live load objects holding the memoised File for an instance. A
+// multiframe instance produces one load object per frame, all sharing one File, so the fileManager
+// slot is handed back only when the last of them is decached.
+const _fileHolders = new Map();
 
-function _acquireFileHold(version, SOPInstanceUID) {
-  const holders = _fileHolders[version];
-  holders.set(SOPInstanceUID, (holders.get(SOPInstanceUID) || 0) + 1);
+function _acquireFileHold(SOPInstanceUID) {
+  _fileHolders.set(SOPInstanceUID, (_fileHolders.get(SOPInstanceUID) || 0) + 1);
 }
 
-function _releaseFileHold(version, SOPInstanceUID) {
-  const holders = _fileHolders[version];
-  const remaining = (holders.get(SOPInstanceUID) || 0) - 1;
+function _releaseFileHold(SOPInstanceUID) {
+  const remaining = (_fileHolders.get(SOPInstanceUID) || 0) - 1;
 
   if (remaining > 0) {
-    holders.set(SOPInstanceUID, remaining);
+    _fileHolders.set(SOPInstanceUID, remaining);
     return;
   }
 
-  holders.delete(SOPInstanceUID);
+  _fileHolders.delete(SOPInstanceUID);
 
-  const fileImageId = _fileImageIdCache[version].get(SOPInstanceUID);
+  const fileImageId = _fileImageIdCache.get(SOPInstanceUID);
   if (fileImageId) {
-    _releaseFileImageId(version, fileImageId);
-    _fileImageIdCache[version].delete(SOPInstanceUID);
+    _releaseFileImageId(fileImageId);
+    _fileImageIdCache.delete(SOPInstanceUID);
   }
 }
 
-function _releaseFileImageId(version, fileImageId) {
-  const fileManager = _wadoLoaderByVersion[version]?.fileManager;
+function _releaseFileImageId(fileImageId) {
+  const fileManager = _wadoLoader?.fileManager;
   if (!fileManager || typeof fileManager.remove !== 'function') {
     return;
   }
@@ -124,7 +113,7 @@ function _releaseFileImageId(version, fileImageId) {
   }
 }
 
-function _releaseLoadObjectResources(state, version, SOPInstanceUID) {
+function _releaseLoadObjectResources(state, SOPInstanceUID) {
   // Release whatever this load object currently holds. Idempotent per resource rather than behind
   // one latch, because a decache can arrive BEFORE the resources exist: the IndexedDB read is
   // still pending, there is no delegate and no File hold, and the call has nothing to act on. The
@@ -145,7 +134,7 @@ function _releaseLoadObjectResources(state, version, SOPInstanceUID) {
 
   if (state.holdsFile) {
     state.holdsFile = false;
-    _releaseFileHold(version, SOPInstanceUID);
+    _releaseFileHold(SOPInstanceUID);
   }
 }
 
@@ -154,8 +143,8 @@ function _releaseLoadObjectResources(state, version, SOPInstanceUID) {
  * `cancelFn`/`decache` to it, and hand back its promise.
  *
  * Both shapes are accepted: the wado loaders and the Cornerstone3D image loader return a
- * `{ promise, cancelFn?, decache? }` load object, while the legacy v2 adapter passes a `remoteLoad`
- * that resolves to a bare promise. A bare promise simply leaves the delegate slot empty.
+ * `{ promise, cancelFn?, decache? }` load object, but a caller may supply a `remoteLoad` that
+ * resolves to a bare promise. A bare promise simply leaves the delegate slot empty.
  */
 function _adoptDelegate(result, state) {
   if (result && typeof result.then !== 'function' && typeof result.promise?.then === 'function') {
@@ -175,7 +164,7 @@ function _adoptDelegate(result, state) {
       // after the load settles is what covers the cache-miss path: that branch adopts the remote
       // delegate and returns its promise in one step, so it never reaches a later release point.
       if (state.decached) {
-        _releaseLoadObjectResources(state, state.version, state.SOPInstanceUID);
+        _releaseLoadObjectResources(state, state.SOPInstanceUID);
       }
     }
     return result.promise;
@@ -192,13 +181,12 @@ function _adoptDelegate(result, state) {
  * @param {string} imageId - the `sonadorlocal:` imageId being requested
  * @param {object} options - Cornerstone image-load options, passed through to the wado loader
  * @param {object} deps
- * @param {'v2'|'v3'} deps.version - which fileManager cache to use
  * @param {object} deps.wadoImageLoader - the package's `wadouri` namespace (fileManager + loadImage)
  * @param {(remoteImageId: string, options: object) => Promise<any>} [deps.remoteLoad] - fallback
  * @param {object} [state] - mutable slot for the delegate load object and the File hold
  * @returns {Promise<any>} decoded image
  */
-async function _loadCachedInstanceImage(imageId, options, { version, wadoImageLoader, remoteLoad }, state) {
+async function _loadCachedInstanceImage(imageId, options, { wadoImageLoader, remoteLoad }, state) {
   const { SOPInstanceUID, frame } = parseSonadorLocalImageId(imageId);
 
   let bytes = null;
@@ -220,9 +208,9 @@ async function _loadCachedInstanceImage(imageId, options, { version, wadoImageLo
     );
   }
 
-  _wadoLoaderByVersion[version] = wadoImageLoader;
+  _wadoLoader = wadoImageLoader;
 
-  const fileCache = _fileImageIdCache[version];
+  const fileCache = _fileImageIdCache;
   let fileImageId = fileCache.get(SOPInstanceUID);
   if (!fileImageId) {
     const file = new File([bytes], SOPInstanceUID, { type: 'application/dicom' });
@@ -232,12 +220,12 @@ async function _loadCachedInstanceImage(imageId, options, { version, wadoImageLo
 
   if (state && !state.holdsFile) {
     state.holdsFile = true;
-    _acquireFileHold(version, SOPInstanceUID);
+    _acquireFileHold(SOPInstanceUID);
 
     // Evicted while the read was in flight: hand the hold straight back rather than leaving it
     // acquired with no remaining path to release it.
     if (state.decached) {
-      _releaseLoadObjectResources(state, version, SOPInstanceUID);
+      _releaseLoadObjectResources(state, SOPInstanceUID);
     }
   }
 
@@ -274,7 +262,6 @@ export function loadCachedInstanceImageObject(imageId, options, deps) {
   const { SOPInstanceUID } = parseSonadorLocalImageId(imageId);
   const state = {
     // Carried on the state so a release can be replayed from wherever the delegate is adopted.
-    version: deps.version,
     SOPInstanceUID,
     delegate: null,
     holdsFile: false,
@@ -305,16 +292,9 @@ export function loadCachedInstanceImageObject(imageId, options, deps) {
       // IndexedDB read is pending has no DataSet and no File hold to release, and the load will
       // acquire both moments later.
       state.decached = true;
-      _releaseLoadObjectResources(state, deps.version, SOPInstanceUID);
+      _releaseLoadObjectResources(state, SOPInstanceUID);
     },
   };
-}
-
-/**
- * Promise-only form, kept for the legacy (v2) adapter, whose loader contract is a bare promise.
- */
-export function loadCachedInstanceImage(imageId, options, deps) {
-  return loadCachedInstanceImageObject(imageId, options, deps).promise;
 }
 
 /**
@@ -325,21 +305,18 @@ export function loadCachedInstanceImage(imageId, options, deps) {
  * the remote fallback (AC-5).
  */
 export function evictFileImageId(SOPInstanceUID) {
-  ['v2', 'v3'].forEach(version => {
-    const fileImageId = _fileImageIdCache[version].get(SOPInstanceUID);
-    if (fileImageId) {
-      _releaseFileImageId(version, fileImageId);
-      _fileImageIdCache[version].delete(SOPInstanceUID);
-    }
-  });
+  const fileImageId = _fileImageIdCache.get(SOPInstanceUID);
+
+  if (fileImageId) {
+    _releaseFileImageId(fileImageId);
+    _fileImageIdCache.delete(SOPInstanceUID);
+  }
 }
 
 /** Bulk eviction for LocalCacheService.clearAll(), which does not emit per-instance events. */
 export function evictAllFileImageIds() {
-  ['v2', 'v3'].forEach(version => {
-    _fileImageIdCache[version].forEach(fileImageId => _releaseFileImageId(version, fileImageId));
-    _fileImageIdCache[version].clear();
-  });
+  _fileImageIdCache.forEach(fileImageId => _releaseFileImageId(fileImageId));
+  _fileImageIdCache.clear();
 }
 
 // Keep the File memos honest with the persistent cache. Subscribed at module scope: this module is
@@ -356,7 +333,6 @@ export default {
   parseSonadorLocalImageId,
   registerRemoteFallback,
   getRemoteFallback,
-  loadCachedInstanceImage,
   loadCachedInstanceImageObject,
   evictFileImageId,
   evictAllFileImageIds,

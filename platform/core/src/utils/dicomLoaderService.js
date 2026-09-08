@@ -1,15 +1,9 @@
 // Utility methods for downloading DICOMweb data
 
-import cornerstone from 'cornerstone-core';
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
-import { api } from 'dicomweb-client';
-
-import DICOMWeb from '../DICOMWeb';
-import errorHandler from '../errorHandler';
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
+import retrieveInstanceBytes from '../loaders/instanceRetrieval';
 
 import { isUsablePart10 } from './dicomPart10';
-import getXHRRetryRequestHook from './xhrRetryRequestHook';
 
 const getImageId = (imageObj) => {
   if (!imageObj) {
@@ -48,39 +42,6 @@ const getImageInstanceId = (imageInstance) => {
   return getImageId(imageInstance);
 };
 
-const fetchIt = (url, headers = DICOMWeb.getAuthorizationHeader()) => {
-  return fetch(url, headers).then((response) => response.arrayBuffer());
-};
-
-const cornerstoneRetriever = (imageId) => {
-  return cornerstone.loadAndCacheImage(imageId).then((image) => {
-    return image && image.data && image.data.byteArray.buffer;
-  });
-};
-
-const wadorsRetriever = (
-  url,
-  studyInstanceUID,
-  seriesInstanceUID,
-  sopInstanceUID,
-  headers = DICOMWeb.getAuthorizationHeader(),
-  errorInterceptor = errorHandler.getHTTPErrorHandler()
-) => {
-  const config = {
-    url,
-    headers,
-    errorInterceptor,
-    requestHooks: [getXHRRetryRequestHook()],
-  };
-  const dicomWeb = new api.DICOMwebClient(config);
-
-  return dicomWeb.retrieveInstance({
-    studyInstanceUID,
-    seriesInstanceUID,
-    sopInstanceUID,
-  });
-};
-
 const getImageLoaderType = (imageId) => {
   const loaderRegExp = /^\w+\:/;
   const loaderType = loaderRegExp.exec(imageId);
@@ -104,7 +65,9 @@ class DicomLoaderService {
       }
 
       if (!someInvalidStrings(imageId)) {
-        return cornerstoneWADOImageLoader.wadouri.loadFileRequest(imageId);
+        // Through the same retrieval as everything else, so an uploaded instance is read and
+        // parsed once whether it is asked for as pixels or as a payload.
+        return retrieveInstanceBytes({ imageId });
       }
     }
   }
@@ -186,55 +149,75 @@ class DicomLoaderService {
   }
 
   getDataByImageType(dataset) {
+    // Retrieval by the instance's own imageId. Every scheme here resolves through the shared
+    // Cornerstone3D DataSet cache, so an instance already fetched and parsed for display is not
+    // fetched or parsed a second time for its payload.
     const imageInstance = getImageInstance(dataset);
 
-    if (imageInstance) {
-      const imageId = getImageInstanceId(imageInstance);
-      let getDicomDataMethod = fetchIt;
-      const loaderType = getImageLoaderType(imageId);
+    if (!imageInstance) {
+      return;
+    }
 
-      switch (loaderType) {
-        case 'sonadorlocal':
-          // Local-cache imageIds are not fetchable URLs; the cache stage handles these instances,
-          // so let the iterator fall through to the dataset-based retriever instead.
+    const imageId = getImageInstanceId(imageInstance);
+    const loaderType = getImageLoaderType(imageId);
+
+    switch (loaderType) {
+      case 'sonadorlocal':
+        // Local-cache imageIds are not fetchable URLs; the cache stage handles these instances,
+        // so let the iterator fall through to the dataset-based retriever instead.
+        return;
+
+      case 'wadors': {
+        const url = imageInstance.getData().wadoRoot;
+        const StudyInstanceUID = imageInstance.getStudyInstanceUID();
+        const SeriesInstanceUID = imageInstance.getSeriesInstanceUID();
+        const SOPInstanceUID = imageInstance.getSOPInstanceUID();
+
+        if (someInvalidStrings([url, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID])) {
           return;
-        case 'dicomfile':
-          getDicomDataMethod = cornerstoneRetriever.bind(this, imageId);
-          break;
-        case 'wadors':
-          const url = imageInstance.getData().wadoRoot;
-          const studyInstanceUID = imageInstance.getStudyInstanceUID();
-          const seriesInstanceUID = imageInstance.getSeriesInstanceUID();
-          const sopInstanceUID = imageInstance.getSOPInstanceUID();
-          const invalidParams = someInvalidStrings([url, studyInstanceUID, seriesInstanceUID, sopInstanceUID]);
-          if (invalidParams) {
-            return;
-          }
+        }
 
-          getDicomDataMethod = wadorsRetriever.bind(this, url, studyInstanceUID, seriesInstanceUID, sopInstanceUID);
-          break;
-        case 'wadouri':
-          // Strip out the image loader specifier
-          imageId = imageId.substring(imageId.indexOf(':') + 1);
-
-          if (someInvalidStrings(imageId)) {
-            return;
-          }
-          getDicomDataMethod = fetchIt.bind(this, imageId);
-          break;
+        return retrieveInstanceBytes({
+          dicomweb: { url, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID },
+        });
       }
 
-      return getDicomDataMethod();
+      case 'dicomfile':
+      case 'wadouri':
+      case 'dicomweb':
+        if (someInvalidStrings(imageId)) {
+          return;
+        }
+
+        return retrieveInstanceBytes({ imageId });
+
+      default:
+        return;
     }
   }
 
   getDataByDatasetType(dataset) {
+    // Retrieval from the display set's own DICOMweb roots, for instances with no usable imageId.
     const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, authorizationHeaders, wadoRoot, wadoUri } = dataset;
-    // Retrieve wadors or just try to fetch wadouri
+
     if (!someInvalidStrings(wadoRoot)) {
-      return wadorsRetriever(wadoRoot, StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, authorizationHeaders);
-    } else if (!someInvalidStrings(wadoUri)) {
-      return fetchIt(wadoUri, { headers: authorizationHeaders });
+      return retrieveInstanceBytes({
+        dicomweb: {
+          url: wadoRoot,
+          StudyInstanceUID,
+          SeriesInstanceUID,
+          SOPInstanceUID,
+          headers: authorizationHeaders,
+        },
+      });
+    }
+
+    if (!someInvalidStrings(wadoUri)) {
+      // A direct WADO-URI instance URL, under the same key the image loader would use for
+      // `wadouri:<url>`. The display set's own credentials are passed through: this branch
+      // supplied them before, and a private or multi-server source needs them rather than the
+      // loader's global ones.
+      return retrieveInstanceBytes({ imageId: `wadouri:${wadoUri}`, headers: authorizationHeaders });
     }
   }
 

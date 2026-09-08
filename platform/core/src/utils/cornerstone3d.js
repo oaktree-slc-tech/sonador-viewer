@@ -18,6 +18,7 @@ import { init as c3dPolySegInit } from '@cornerstonejs/polymorphic-segmentation'
 import { createSingleFlightPolySeg } from './polySegSingleFlight';
 import { configureGpuCapabilities } from './gpuCapabilities';
 import getAuthorizationHeader from '../DICOMWeb/getAuthorizationHeader';
+import { createLoaderBeforeSend, resolveRequestTimeoutMs } from './loaderRequestTimeout';
 
 
 // Track init state of Cornerstone3D. The promise (not just the boolean) is the latch: init is
@@ -117,7 +118,15 @@ async function runInit() {
     // NOTE the contract differs from the legacy loader's: v2's `beforeSend(xhr)` set headers on
     // the request itself, while this one RETURNS a header object that the loader merges over its
     // own defaults. Setting them on the xhr here would be overwritten by that merge.
-    beforeSend: () => getAuthorizationHeader(),
+    //
+    // The hook also bounds the request, because it is the only place with the XHR in hand before
+    // it is sent. See loaderRequestTimeout.js for why an unbounded request is worse than a failed
+    // one. The XHR transport is the part this can reach: `internal/streamRequest` calls the same
+    // hook with a null xhr, and a fetch cannot be bounded from here.
+    beforeSend: createLoaderBeforeSend({
+      timeoutMs: resolveRequestTimeoutMs(c3dConfig),
+      getHeaders: getAuthorizationHeader,
+    }),
 
     // Mirrors the legacy loader's errorInterceptor so both stacks report transport failures the
     // same way.
@@ -166,7 +175,9 @@ async function runInit() {
  * extension registers, so the arg-less call sites inherit it.
  *
  * @param {object} [appConfig] - the viewer app configuration; `appConfig.cornerstone3d` holds
- *   `maxNumRequests`, `maxCacheSizeBytes`, `maxWebWorkers` and `volumeTextureBudgetBytes`.
+ *   `maxNumRequests`, `maxCacheSizeBytes`, `maxWebWorkers`, `volumeTextureBudgetBytes` and
+ *   `requestTimeoutMs` (retrieval timeout for the loader's XHR transport; must be positive, and a
+ *   value that is not falls back to the default -- see utils/loaderRequestTimeout.js).
  * @returns {Promise<boolean>}
  */
 export function initCornerstone3d(appConfig) {

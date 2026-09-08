@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 
 import metadataProvider from '../../../classes/MetadataProvider';
 import DICOMWeb from '../../../DICOMWeb';
@@ -155,10 +155,11 @@ async function makeSOPInstance(server, study, instance) {
   // Add instance to Cornerstone Tools/Classic Metadata Store
   if (sopInstance.thumbnailRendering === 'wadors' || sopInstance.imageRendering === 'wadors') {
     
-    // If using WADO-RS for either images or thumbnails,
-    // Need to add this to cornerstoneWADOImageLoader's provider
-    // (it won't be hit on cornerstone.metaData.get, but cornerstoneWADOImageLoader
-    // will cry if you don't add data to cornerstoneWADOImageLoader.wadors.metaDataManager).
+    // If using WADO-RS for either images or thumbnails, the instance is registered with the
+    // Cornerstone3D loader's own wadors metadata manager. That loader builds its frame header from
+    // `metaData.get('imagePixelModule', imageId)`, which the store-backed provider already
+    // answers, so this is not what makes loading work -- it is what gives the loader the transfer
+    // syntax and the multiframe helpers it reads directly from the manager.
 
     const wadoRSMetadata = Object.assign(instance);
 
@@ -169,7 +170,7 @@ async function makeSOPInstance(server, study, instance) {
 
         // Generate WadoRS instance with multiple frames, register with Legacy/Classic metadata service
         const wadorsImageId = getWADORSImageId(sopInstance, i);
-        cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
+        dicomImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
 
         svcInstance = Object.assign({}, naturalizedInstance);
         svcInstance.imageId = wadorsImageId;
@@ -179,7 +180,7 @@ async function makeSOPInstance(server, study, instance) {
 
       // Generate WadoRS instance with single frame, register with Legacy/Classic metadata service
       const wadorsImageId = getWADORSImageId(sopInstance);
-      cornerstoneWADOImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
+      dicomImageLoader.wadors.metaDataManager.add(wadorsImageId, wadoRSMetadata);
 
       svcInstance = Object.assign({}, naturalizedInstance);
       svcInstance.imageId = wadorsImageId;
