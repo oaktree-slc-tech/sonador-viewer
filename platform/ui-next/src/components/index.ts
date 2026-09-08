@@ -31,6 +31,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select';
 import { HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal } from './HoverCard';
 import { Popover, PopoverTrigger, PopoverAnchor, PopoverContent, PopoverPortal } from './Popover';
+import { Calendar, CalendarDayButton } from './Calendar';
+import { DateRangePicker } from './DateRange';
 import { Toaster, toast } from './Sonner';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
@@ -64,6 +66,8 @@ export {
   ScrollArea, ScrollBar,
   HoverCard, HoverCardTrigger, HoverCardContent, HoverCardPortal,
   Popover, PopoverTrigger, PopoverAnchor, PopoverContent, PopoverPortal,
+  Calendar, CalendarDayButton,
+  DateRangePicker,
   SegmentationTable,
   InputDialog, PresetDialog,
   FooterAction,

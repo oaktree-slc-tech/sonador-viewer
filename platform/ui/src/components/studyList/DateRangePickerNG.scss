@@ -64,10 +64,20 @@
     padding-right: 0;
   }
 
+  // A fixed box with the icon centred, so neither the border react-dates adds to a disabled
+  // button nor inline baseline can shift one arrow relative to the other. `top` positions the
+  // 20px box so its centre falls on the month name's row.
   .DayPickerNavigation_button {
-    width: fit-content;
     position: absolute;
-    top: 128px;
+    top: 141px;
+    box-sizing: border-box;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .DayPickerNavigation_button:first-of-type {
@@ -77,19 +87,26 @@
   .DayPickerNavigation_button:last-of-type {
     right: 20px;
   }
-
+  // Both arrows rotate the SAME way, so their vertical geometry is identical by construction;
+  // the right-hand one is mirrored horizontally, which cannot move it vertically. Opposite
+  // rotations would displace the glyphs in opposite directions unless the origin is exactly
+  // shared.
+  //
+  // `transform` rather than the individual `rotate`/`scale` properties: those compose in a
+  // fixed order (rotate, then scale), so the scale would act on the rotated axes and flip the
+  // icon vertically instead of horizontally.
   .nav-prev-date,
   .nav-next-date {
+    display: block;
     width: 14px;
     height: 10px;
-  }
-
-  .nav-prev-date {
-    rotate: 90deg;
+    transform-box: fill-box;
+    transform-origin: center;
+    transform: rotate(90deg);
   }
 
   .nav-next-date {
-    rotate: -90deg;
+    transform: scaleX(-1) rotate(90deg);
   }
 
   .DayPicker__horizontal,
@@ -155,16 +172,24 @@
   }
 
   .DayPicker_transitionContainer {
-    height: 394px !important;
+    // A floor, not a fixed height. react-dates measures the rendered month and sets this inline;
+    // forcing a constant clipped the sixth week row -- which months beginning late in the week
+    // have -- against the container's `overflow: hidden`, leaving those days invisible and
+    // unclickable. `height: auto` is not an option: .CalendarMonthGrid__horizontal is absolutely
+    // positioned, so the container would collapse to nothing.
+    min-height: 394px;
   }
 
   .calendar-month-year-title {
     color: #ffffff;
+    padding-bottom: 6px;
   }
 
+  // The caption holds the whole custom header: title, close, the two date fields and the month
+  // name. Its bottom padding is the gap before the first week row.
   .CalendarMonth_caption {
     padding-top: 20px;
-    padding-bottom: 5px;
+    padding-bottom: 10px;
   }
 
   .CalendarDay__default,
@@ -203,7 +228,7 @@
   .date-range-picker-reset-container {
     display: flex;
     justify-content: flex-end;
-    padding: 0 20px 20px 0;
+    padding: 14px 20px 20px 0;
   }
 
   .date-range-picker-reset {
@@ -219,6 +244,7 @@
     column-gap: 20px;
     align-items: center;
     padding: 0 20px;
+    margin-bottom: 12px;
   }
 
   .start-date-wrapper,
@@ -233,6 +259,7 @@
       color: #d3d3d3;
       font-size: 12px;
       line-height: 14px;
+      margin-bottom: 6px;
     }
 
     input {
@@ -244,6 +271,13 @@
       font-size: 16px;
       color: #d3d3d3;
       outline: none;
+
+      // `outline: none` above removes the default indication, and these are typable, so focus
+      // needs to remain visible.
+      &:focus {
+        border-color: #ffffff;
+        color: #ffffff;
+      }
     }
   }
 }

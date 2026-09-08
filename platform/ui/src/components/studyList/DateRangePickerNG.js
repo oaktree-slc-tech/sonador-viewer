@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { DateRangePicker } from 'react-dates';
 import { useTranslation } from 'react-i18next';
 import moment from 'moment';
@@ -12,6 +12,8 @@ import { ReactComponent as ChevronDown } from '../../elements/Svg/svgs/chevron-d
 import { ReactComponent as CloseIcon } from '../../elements/Svg/svgs/close.svg';
 
 import 'react-dates/lib/css/_datepicker.css';
+import applyTypedDate, { DEFAULT_MINIMUM_NIGHTS, DISPLAY_FORMAT } from './typedDateRange';
+
 import './DateRangePickerNG.scss';
 
 export default function DateRangePickerNG({
@@ -22,9 +24,44 @@ export default function DateRangePickerNG({
   onFocusChange,
   focusedInput,
   isRightAnchor,
+  isOutsideRange,
+  minimumNights = DEFAULT_MINIMUM_NIGHTS,
   ...dateRangePickerProps
 }) {
   const { t } = useTranslation('DatePicker');
+
+  // Each field holds its own text while it is being edited and reports a date only once that text
+  // denotes a real one, so a half-typed value does not reset the range.
+  const [startText, setStartText] = useState('');
+  const [endText, setEndText] = useState('');
+
+  const asText = (value) => (value ? moment(value).format(DISPLAY_FORMAT) : '');
+
+  useEffect(() => setStartText(asText(startDate)), [startDate]);
+  useEffect(() => setEndText(asText(endDate)), [endDate]);
+
+  const handleTypedDate = (which, text) => {
+    if (which === 'start') {
+      setStartText(text);
+    } else {
+      setEndText(text);
+    }
+
+    // The fields here are ours, so they bypass react-dates' own input controller and have to apply
+    // its ordering and minimum-nights rules themselves.
+    const range = applyTypedDate({
+      which,
+      text,
+      startDate,
+      endDate,
+      minimumNights,
+      isOutsideRange,
+    });
+
+    if (range) {
+      onDatesChange(range);
+    }
+  };
 
   const addRemoveBodyClassName = (value) => {
     const body = document.getElementById('body');
@@ -72,9 +109,10 @@ export default function DateRangePickerNG({
             <input
               id="start-date"
               type="text"
-              placeholder="MM/DD/YYYY"
-              value={startDate ? moment(startDate).format('MM/DD/YYYY') : ''}
-              disabled
+              placeholder={DISPLAY_FORMAT}
+              value={startText}
+              onChange={(event) => handleTypedDate('start', event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
             />
           </div>
           <div className="end-date-wrapper">
@@ -82,9 +120,10 @@ export default function DateRangePickerNG({
             <input
               id="end-date"
               type="text"
-              placeholder="MM/DD/YYYY"
-              value={endDate ? moment(endDate).format('MM/DD/YYYY') : ''}
-              disabled
+              placeholder={DISPLAY_FORMAT}
+              value={endText}
+              onChange={(event) => handleTypedDate('end', event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
             />
           </div>
         </div>
@@ -99,6 +138,8 @@ export default function DateRangePickerNG({
         <CalendarIcon className="rangeDateCalendarIcon" onClick={handleClickCalendarIcon} />
         <DateRangePicker
           {...dateRangePickerProps}
+          isOutsideRange={isOutsideRange}
+          minimumNights={minimumNights}
           focusedInput={focusedInput}
           onFocusChange={(updateVal) => {
             addRemoveBodyClassName(updateVal);
@@ -133,4 +174,8 @@ DateRangePickerNG.propTypes = {
   onFocusChange: PropTypes.func.isRequired,
   focusedInput: PropTypes.string,
   isRightAnchor: PropTypes.bool,
+  /** Predicate receiving a moment; true means the day cannot be picked. */
+  isOutsideRange: PropTypes.func,
+  /** Nights that must separate the two ends, as react-dates defines it. */
+  minimumNights: PropTypes.number,
 };
