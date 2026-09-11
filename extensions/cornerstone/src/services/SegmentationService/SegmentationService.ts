@@ -116,6 +116,19 @@ class SegmentationService extends PubSubService {
 
   private _segmentationIdToColorLUTIndexMap: Map<string, number>;
   private _segmentationGroupStatsMap: Map<string, any>;
+
+  /**
+   * Display-only segmentation entries. The labelmap bridge materialises one per extra rendering
+   * engine (the inspection modal) so a second WebGL context can carry its own labelmap volume,
+   * flagged with `cachedStats.sonadorDerivedFromSegmentation` at registration time. They are
+   * presentation state, not part of the application's segmentation roster: `getSegmentations()`
+   * filters them, and their source add/remove/modified events are absorbed here rather than
+   * rebroadcast as domain events. Ids are remembered so the REMOVED event -- which fires after
+   * the state entry is gone and can no longer be classified from `cachedStats` -- is still
+   * recognised.
+   */
+  private _displayOnlySegmentationIds: Set<string> = new Set();
+
   readonly servicesManager: AppTypes.ServicesManager;
   highlightIntervalId = null;
   readonly EVENTS = EVENTS;
@@ -164,7 +177,41 @@ class SegmentationService extends PubSubService {
    * segmentation objects without any additional processing or filtering.
    */
   public getSegmentations(): cstTypes.Segmentation[] | [] {
-    return cstSegmentation.state.getSegmentations();
+    return cstSegmentation.state
+      .getSegmentations()
+      .filter(
+        segmentation =>
+          !this._isDisplayOnlySegmentation(segmentation.segmentationId) &&
+          !this._isEditorWorkingCopy(segmentation.segmentationId)
+      );
+  }
+
+  /**
+   * A Seg-Editor working segmentation (flagged `sonadorEditorWorkingCopyOf`) is a session-scoped
+   * copy of a canonical segmentation. It stays out of the application roster -- other surfaces
+   * must not list or act on it -- but unlike display-only entries its service events still flow,
+   * because the editor's own UI operates on it through this service.
+   */
+  private _isEditorWorkingCopy(segmentationId: string): boolean {
+    const segmentation = cstSegmentation.state.getSegmentation(segmentationId);
+    const cachedStats = (segmentation && segmentation.cachedStats) || {};
+    return !!cachedStats['sonadorEditorWorkingCopyOf'];
+  }
+
+  private _isDisplayOnlySegmentation(segmentationId: string): boolean {
+    if (this._displayOnlySegmentationIds.has(segmentationId)) {
+      return true;
+    }
+
+    const segmentation = cstSegmentation.state.getSegmentation(segmentationId);
+    const cachedStats = (segmentation && segmentation.cachedStats) || {};
+    if (cachedStats['sonadorDerivedFromSegmentation']) {
+      // Any sighting of the flag is retained, so a later removal -- which can no longer be
+      // classified from the (deleted) state entry -- is still recognised.
+      this._displayOnlySegmentationIds.add(segmentationId);
+      return true;
+    }
+    return false;
   }
 
   public getPresentation(viewportId: string): SegmentationPresentation {
@@ -287,6 +334,7 @@ class SegmentationService extends PubSubService {
       this._onSegmentationAddedFromSource
     );
 
+    this._displayOnlySegmentationIds.clear();
     this.reset();
   };
 
@@ -1885,6 +1933,16 @@ class SegmentationService extends PubSubService {
   }
 
   private _initSegmentationService() {
+    // Remember any display-only entry that already exists: a service initialized after the
+    // lightbox opened would otherwise classify the entry correctly while it is in state, but
+    // broadcast a domain SEGMENTATION_REMOVED for it on close -- the removal event fires after
+    // the state entry (and its flag) are gone.
+    cstSegmentation.state.getSegmentations().forEach(segmentation => {
+      if (this._isDisplayOnlySegmentation(segmentation.segmentationId)) {
+        this._displayOnlySegmentationIds.add(segmentation.segmentationId);
+      }
+    });
+
     eventTarget.addEventListener(
       csToolsEnums.Events.SEGMENTATION_MODIFIED,
       this._onSegmentationModifiedFromSource
@@ -2138,6 +2196,9 @@ class SegmentationService extends PubSubService {
 
   private _onSegmentationDataModifiedFromSource = evt => {
     const { segmentationId } = evt.detail;
+    if (this._isDisplayOnlySegmentation(segmentationId)) {
+      return;
+    }
     this._broadcastEvent(this.EVENTS.SEGMENTATION_DATA_MODIFIED, {
       segmentationId,
     });
@@ -2145,6 +2206,9 @@ class SegmentationService extends PubSubService {
 
   private _onSegmentationRepresentationModifiedFromSource = evt => {
     const { segmentationId, viewportId } = evt.detail;
+    if (this._isDisplayOnlySegmentation(segmentationId)) {
+      return;
+    }
     this._broadcastEvent(this.EVENTS.SEGMENTATION_REPRESENTATION_MODIFIED, {
       segmentationId,
       viewportId,
@@ -2153,6 +2217,9 @@ class SegmentationService extends PubSubService {
 
   private _onSegmentationRepresentationRemovedFromSource = evt => {
     const { segmentationId, viewportId } = evt.detail;
+    if (this._isDisplayOnlySegmentation(segmentationId)) {
+      return;
+    }
     this._broadcastEvent(this.EVENTS.SEGMENTATION_REPRESENTATION_REMOVED, {
       segmentationId,
       viewportId,
@@ -2164,6 +2231,10 @@ class SegmentationService extends PubSubService {
   ) => {
     const { segmentationId } = evt.detail;
 
+    if (this._isDisplayOnlySegmentation(segmentationId)) {
+      return;
+    }
+
     this._broadcastEvent(this.EVENTS.SEGMENTATION_MODIFIED, {
       segmentationId,
     });
@@ -2174,6 +2245,13 @@ class SegmentationService extends PubSubService {
   ) => {
     const { segmentationId } = evt.detail;
 
+    // A display-only entry is remembered and absorbed: opening a lightbox is not a domain
+    // segmentation-added, and its later removal must be recognisable after the entry is gone.
+    if (this._isDisplayOnlySegmentation(segmentationId)) {
+      this._displayOnlySegmentationIds.add(segmentationId);
+      return;
+    }
+
     this._broadcastEvent(this.EVENTS.SEGMENTATION_ADDED, {
       segmentationId,
     });
@@ -2183,6 +2261,11 @@ class SegmentationService extends PubSubService {
     evt: cstTypes.EventTypes.SegmentationRemovedEventType
   ) => {
     const { segmentationId } = evt.detail;
+
+    if (this._displayOnlySegmentationIds.has(segmentationId)) {
+      this._displayOnlySegmentationIds.delete(segmentationId);
+      return;
+    }
 
     this._broadcastEvent(this.EVENTS.SEGMENTATION_REMOVED, {
       segmentationId,

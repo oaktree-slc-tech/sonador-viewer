@@ -30,6 +30,7 @@ import { M3DViewerSidebarPanel, } from '@ohif/extension-viewerm3d';
 
 import DICOMSegTempCrosshairsTool from '../../tools/DICOMSegTempCrosshairsTool';
 import refreshViewports from '../../utils/refreshViewports';
+import notifyLabelmapMetadataModified from '../../utils/notifyLabelmapMetadataModified';
 import setActiveLabelmap from '../../utils/setActiveLabelMap';
 import { BrushColorSelector, BrushRadius, SegmentItem } from '../index';
 import SegmentationSettings from '../SegmentationSettings/SegmentationSettings';
@@ -255,6 +256,9 @@ const SegmentationPanel = ({
       setState((state) => ({ ...state, selectedSegmentation }));
     }
 
+    // The active segment was written straight into the legacy module; tell anything rendering the
+    // same labelmap through Cornerstone3D.
+    notifyLabelmapMetadataModified();
     refreshViewports();
 
     return segmentIndex;
@@ -286,6 +290,11 @@ const SegmentationPanel = ({
     document.addEventListener('extensiondicomsegmentationsegloaded', refreshSegmentations);
     document.addEventListener('extensiondicomsegmentationsegselected', updateSegmentationComboBox);
 
+    // Raised by the labelmap bridge after a Cornerstone3D-side edit reaches the legacy labelmap.
+    // Separate from 'segloaded', which means "a SEG finished loading" and carries a load payload
+    // that other subscribers dereference.
+    document.addEventListener('extensiondicomsegmentationlabelmapstatemodified', refreshSegmentations);
+
     /*
      * These are specific to each element;
      * Need to iterate cornerstone-tools tracked enabled elements?
@@ -298,6 +307,7 @@ const SegmentationPanel = ({
     return () => {
       document.removeEventListener('extensiondicomsegmentationsegloaded', refreshSegmentations);
       document.removeEventListener('extensiondicomsegmentationsegselected', updateSegmentationComboBox);
+      document.removeEventListener('extensiondicomsegmentationlabelmapstatemodified', refreshSegmentations);
       cornerstoneTools.store.state.enabledElements.forEach((enabledElement) =>
         enabledElement.removeEventListener('cornerstonetoolslabelmapmodified', labelmapModifiedHandler)
       );
@@ -450,6 +460,7 @@ const SegmentationPanel = ({
             });
 
             // Render pass after ghost suppression so the canvas is clean.
+            notifyLabelmapMetadataModified();
             refreshViewports();
           }
 
@@ -564,6 +575,7 @@ const SegmentationPanel = ({
 
     setState((state) => ({ ...state, segmentsHidden }));
 
+    notifyLabelmapMetadataModified();
     refreshSegmentations();
     refreshViewports();
 
@@ -617,13 +629,23 @@ const SegmentationPanel = ({
       const color = colorLutTable[segmentIndex] ?? [255, 255, 255, 255];
       let label = '(unlabeled)';
       let segmentNumber = segmentIndex;
+      let originalSegmentNumber;
 
       if (hasLabelmapMeta) {
         const meta = labelmap3D.metadata.data[segmentIndex];
         if (meta) {
+          // `SegmentNumber` here is the CANONICAL voxel value -- the labelmap bridge rewrites a
+          // remapped entry so the panel's operational key always matches the voxels and
+          // `segmentsOnLabelmap`. A segment whose DICOM number was above 255 carries the original
+          // in `OriginalSegmentNumber`, surfaced for display only.
           segmentNumber = meta.SegmentNumber;
           label = meta.SegmentLabel;
+          originalSegmentNumber = meta.OriginalSegmentNumber;
         }
+      }
+
+      if (originalSegmentNumber !== undefined && originalSegmentNumber !== segmentNumber) {
+        label = `${label} (DICOM segment ${originalSegmentNumber})`;
       }
 
       segmentNumbers.push(segmentNumber);
@@ -633,6 +655,7 @@ const SegmentationPanel = ({
         color,
         visible: !aggregatedHidden[segmentIndex],
         active: state.selectedSegment === segmentNumber,
+        originalSegmentNumber,
       };
     });
 
@@ -763,6 +786,7 @@ const SegmentationPanel = ({
 
     setState((state) => ({ ...state, segmentsHidden }));
 
+    notifyLabelmapMetadataModified();
     refreshSegmentations();
     refreshViewports();
   };

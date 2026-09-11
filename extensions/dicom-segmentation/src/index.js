@@ -118,7 +118,14 @@ const segmentationExtension = {
     };
 
     const onSegmentationsLoaded = ({ detail }) => {
-      const { segDisplaySet, segMetadata } = detail;
+      const { segDisplaySet, segMetadata } = detail || {};
+
+      // This is a document-level event, so anything can dispatch it. Only a real SEG load carries
+      // the payload below; a dispatch without it is not one, and must not take the panel tab down.
+      if (!segDisplaySet || !segMetadata) {
+        return;
+      }
+
       const studyMetadata = studyMetadataManager.get(segDisplaySet.StudyInstanceUID);
       const referencedDisplaysets = studyMetadata.getDerivedDatasets({
         referencedSeriesInstanceUID: segMetadata.seriesInstanceUid,

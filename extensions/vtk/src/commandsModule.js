@@ -202,28 +202,86 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
 
     initMprImageSync: ({ voiSyncId, component }) => {
-      // Initialize MPR image sync tools for the provided component. The VTK MPR view spans multiple
-      // cells in the layout manager but utilizes a single VOI group instance. To prevent race conditions
-      // during initalization, this central management method should be used for init of sync groups.
+      // Enroll one MPR pane in the shared VOI synchronizer. The VTK MPR view spans multiple
+      // cells in the layout manager but utilizes a single VOI group instance. To prevent race
+      // conditions during initialization, this central management method should be used for init
+      // of sync groups.
+      //
+      // Returns true only when the pane's viewport is live and its element holds a VOI_MODIFIED
+      // listener; the caller retries until then. Two failure modes make a fire-and-forget add()
+      // unreliable here:
+      //   1. The pane's viewport may not be enabled yet when the caller's init cycle first runs.
+      //   2. Synchronizer.add() silently skips a {renderingEngineId, viewportId} it has already
+      //      seen, and the listener lives on the viewport's DOM element. Nothing destroys the
+      //      synchronizer when the MPR closes (the library's ELEMENT_DISABLED cleanup registers
+      //      on the element while the event fires on eventTarget, so it never runs for
+      //      element-sourced synchronizers), so after a remount the stale enrollment blocks the
+      //      new element from getting a listener: the pane still receives VOI changes (it stays
+      //      a target) but its own changes never propagate anywhere.
+
+      const { viewportId, viewport } = component._checkViewportActive();
+      if (!viewportId || !viewport) {
+        return false;
+      }
 
       let mprVoi = C3dSynchronizerManager.getSynchronizer(voiSyncId);
-      const { viewportId, viewport } = component._checkViewportActive();
-
-      if (!mprVoi && viewportId) {
-
-        // Initialize synchronizer and attach to the viewport
+      if (!mprVoi) {
         mprVoi = c3dCreateVOISynchronizer(voiSyncId);
-        component.imgSync = mprVoi;
-        mprVoi.add({ renderingEngineId: component.props.renderId, viewportId });
-
         console.log('[VTK:MPR] initialize VOI sync viewportId='+viewportId);
-      } else if (mprVoi && !component.imgSync && viewportId) {
+      }
 
-        // Synchronizer already initialized, but not referenced by component. Activate and add reference.
-        component.imgSync = mprVoi;
-        mprVoi.add({ renderingEngineId: component.props.renderId, viewportId });
+      const renderingEngineId = component.props.renderId;
+      const viewportInfo = { renderingEngineId, viewportId };
 
-        console.log('[VTK:MPR] add VOI sync reference for viewportId='+viewportId);
+      // Drop any enrollment left over from a previous mount of this pane so add() attaches a
+      // listener to the element that exists now instead of skipping the pane as a duplicate.
+      if (mprVoi.hasSourceViewport(renderingEngineId, viewportId) ||
+          mprVoi.hasTargetViewport(renderingEngineId, viewportId)) {
+        try {
+          mprVoi.remove(viewportInfo);
+        } catch (e) {
+          // removeSource resolves a stale entry's element to null and throws after the entry has
+          // already been spliced out; the enrollment state is clean regardless.
+        }
+      }
+
+      mprVoi.add(viewportInfo);
+
+      // add() warns and skips the source half when the viewport cannot be resolved; only a pane
+      // in the source list has a live listener and counts as enrolled.
+      if (!mprVoi.hasSourceViewport(renderingEngineId, viewportId)) {
+        return false;
+      }
+
+      component.imgSync = mprVoi;
+      console.log('[VTK:MPR] add VOI sync reference for viewportId='+viewportId);
+      return true;
+    },
+
+    clearMprImageSync: ({ voiSyncId, component }) => {
+      // Withdraw one MPR pane from the shared VOI synchronizer at teardown. Enrollment is
+      // per-DOM-element (see initMprImageSync); a stale entry from this mount would block the
+      // pane's next mount from attaching a listener. The last pane out destroys the
+      // synchronizer, mirroring the segmentation editor's teardown of its own sync group.
+
+      const mprVoi = C3dSynchronizerManager.getSynchronizer(voiSyncId);
+      component.imgSync = undefined;
+      if (!mprVoi) {
+        return;
+      }
+
+      try {
+        mprVoi.remove({
+          renderingEngineId: component.props.renderId,
+          viewportId: component.getViewportId(),
+        });
+      } catch (e) {
+        // A stale entry whose element no longer resolves throws after the entry is spliced out.
+      }
+
+      if (!mprVoi.getSourceViewports().length && !mprVoi.getTargetViewports().length) {
+        C3dSynchronizerManager.destroySynchronizer(voiSyncId);
+        console.log('[VTK:MPR] destroyed VOI sync');
       }
     },
 
@@ -481,6 +539,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     initMprImageSync: {
       commandFn: actions.initMprImageSync,
+      options: {},
+      context: vtkEnums.VIEWPORT,
+    },
+    clearMprImageSync: {
+      commandFn: actions.clearMprImageSync,
       options: {},
       context: vtkEnums.VIEWPORT,
     },

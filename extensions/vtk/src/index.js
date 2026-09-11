@@ -37,9 +37,9 @@ import { init as c3dPolySegInit } from '@cornerstonejs/polymorphic-segmentation'
 // Cornerstone 3D utilities
 import {
   initCornerstone3d,
-  cacheVtkLabelmapImage,
   getVolumeAnnotations,
   getVolumeSegmentations,
+  isCanonicalSegmentation,
   inspectVtkLabelmapImage,
   vtkVolume2vtkImage,
   forceClearSegment,
@@ -57,8 +57,34 @@ import {
   createImageVolumeForDisplaySet,
   suggestDecimationAfterFailure,
   mapLabelmapBufferToVolumeOrder,
+  planSegmentValueRemap,
   volumeLease,
 } from './utils/cornerstone3d.js';
+
+// The Cornerstone3D-owned segmentation store and its legacy compatibility view. Replaces the old
+// one-way copy (`cacheVtkLabelmapImage`) and, since !87 note 37485, the legacy-owns direction with
+// it: Cornerstone3D owns the segmentation and the legacy `labelmap3D` is a view of it.
+import {
+  attachDerivedSegmentationDisplay,
+  attachSegmentationDisplay,
+  attachSegmentationService as attachLabelmapSegmentationService,
+  detachDerivedSegmentationDisplay,
+  forkSegmentationForEditor,
+  releaseEditorWorkingCopy,
+  ensureLegacyLabelmapView,
+  getCanonicalSegmentationsForSeries,
+  getSegmentationVoxels,
+  createCanonicalSegmentation,
+  detachSegmentationDisplay,
+  getCanonicalSegmentation,
+  getLabelmapRegistration,
+  mirrorLegacyMetadataToCornerstone3d,
+  noteReferencedVolume,
+  pullCornerstone3dLabelmapModified,
+  pushLegacyLabelmapModified,
+  removeCanonicalSegmentation,
+  resolveLegacyViewPlacement,
+} from './utils/labelmapBridge.js';
 
 // Tools for working with VTK data
 import OHIFVTKViewport from './OHIFVTKViewport';
@@ -131,12 +157,34 @@ const cornerstone3dUtils = {
   createImageVolumeForDisplaySet,
   suggestDecimationAfterFailure,
   mapLabelmapBufferToVolumeOrder,
+  planSegmentValueRemap,
   volumeLease,
 
+  // Cornerstone3D-owned segmentations, and the legacy compatibility view of them
+  createCanonicalSegmentation,
+  getCanonicalSegmentation,
+  attachSegmentationDisplay,
+  detachSegmentationDisplay,
+  attachDerivedSegmentationDisplay,
+  detachDerivedSegmentationDisplay,
+  forkSegmentationForEditor,
+  releaseEditorWorkingCopy,
+  ensureLegacyLabelmapView,
+  getCanonicalSegmentationsForSeries,
+  getSegmentationVoxels,
+  noteReferencedVolume,
+  removeCanonicalSegmentation,
+  resolveLegacyViewPlacement,
+  mirrorLegacyMetadataToCornerstone3d,
+  attachLabelmapSegmentationService,
+  pushLegacyLabelmapModified,
+  pullCornerstone3dLabelmapModified,
+  getLabelmapRegistration,
+
   // Convert vtk data to Cornerstone data
-  cacheVtkLabelmapImage,
   getVolumeAnnotations,
   getVolumeSegmentations,
+  isCanonicalSegmentation,
   inspectVtkLabelmapImage,
   vtkVolume2vtkImage,
   forceClearSegment,

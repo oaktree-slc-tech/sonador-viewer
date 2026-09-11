@@ -26,6 +26,11 @@ export function setConfiguration(appConfig) {
   // registers any extension -- and initCornerstone3d is idempotent, so the request-pool ceilings,
   // cache ceiling and web-worker count configured here are the ones the arg-less call sites in the
   // cornerstone and vtk extensions inherit.
+  //
+  // The whole `appConfig.cornerstone3d` section is kept for the same reason: subsystems registered
+  // later read it through `OHIF.utils.cornerstone3dUtils.getCornerstone3dConfig()` rather than
+  // being handed the app configuration -- the vtk extension's labelmap bridge reads
+  // `lazyLegacyLabelmap` that way.
   OHIF.utils.cornerstone3dUtils.initCornerstone3d(appConfig);
 
   if (appConfig.debug) {

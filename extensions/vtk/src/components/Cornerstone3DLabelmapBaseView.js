@@ -42,11 +42,18 @@ import {
 
 import Cornerstone3DBaseView from './Cornerstone3DBaseView.js';
 
+import { inspectVtkLabelmapImage } from '../utils/cornerstone3d.js';
+
 import {
-  cacheVtkLabelmapImage,
-  inspectVtkLabelmapImage,
-  mapLabelmapBufferToVolumeOrder,
-} from '../utils/cornerstone3d.js';
+  attachDerivedSegmentationDisplay,
+  attachSegmentationDisplay,
+  attachSegmentationService,
+  detachDerivedSegmentationDisplay,
+  detachSegmentationDisplay,
+  getCanonicalSegmentation,
+  mirrorLegacyMetadataToCornerstone3d,
+  noteReferencedVolume,
+} from '../utils/labelmapBridge.js';
 
 
 
@@ -107,8 +114,37 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
     }
     
     return _.extend(_.pick(options, 'volumeId', 'metadata'), {
-      segVol: options.volumeId ? c3dCache.getVolume(options.volumeId) : undefined,
+      segVol: options.volumeId ? component._resolveSegVolume(options.volumeId) : undefined,
     });
+  }
+
+  _resolveSegVolume(volumeOrSegmentationId) {
+    // Resolve the Cornerstone3D volume behind a segmentation identifier.
+    //
+    // A segmentation's display volume carries a per-generation volumeId (`<id>::display-N`), so a
+    // cache lookup by segmentationId alone finds nothing. Resolution order: a direct cache hit
+    // (explicit ids like the editor's `vol3d:` volumes), then the segmentation entry's own
+    // `representationData.Labelmap.volumeId` -- the same route Cornerstone3D's internals take --
+    // then the bridge's record.
+
+    const direct = c3dCache.getVolume(volumeOrSegmentationId);
+    if (direct) {
+      return direct;
+    }
+
+    const _seg = c3dSegmentations.state.getSegmentation(volumeOrSegmentationId);
+    const _labelmapData = _seg && _seg.representationData
+      && _seg.representationData[c3dToolsEnums.SegmentationRepresentations.Labelmap];
+
+    if (_labelmapData && _labelmapData.volumeId) {
+      const viaRepresentation = c3dCache.getVolume(_labelmapData.volumeId);
+      if (viaRepresentation) {
+        return viaRepresentation;
+      }
+    }
+
+    const record = getCanonicalSegmentation(volumeOrSegmentationId);
+    return record ? record.volume : undefined;
   }
 
   _segMeta(options) {
@@ -135,123 +171,126 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
   }
 
   _labelmapScalarData() {
-    // Build the labelmap scalars for the reference image volume, in the volume's slice order.
+    // The canonical labelmap scalars, straight from the Cornerstone3D segmentation.
     //
-    // `paintFilterLabelMapImageData` carries the legacy cornerstone-tools labelmap as
-    // `{ buffer, stackImageIds }` -- the raw `labelmap3D.buffer` plus the stack it was drawn on.
-    // The viewer does not build a vtkImageData for it: the geometry comes from the Cornerstone3D
-    // volume, and the slice order is mapped by imageId rather than assumed to be identity, because
-    // the stack is in display-set order while the streaming loader sorts by image position.
+    // The view no longer derives, re-orders or copies anything: the segmentation was created by
+    // the importer and Cornerstone3D owns its voxel store. Read by the CANONICAL id, not
+    // `_getSegImageVolumeId()` -- a derived-display view (the inspection modal) reads the same
+    // voxels; only its volume and segmentation entry are its own.
 
     const component = this;
-    const { paintFilterLabelMapImageData } = component.props;
+    const { paintFilterLabelMapDetails } = component.props;
+    const { labelmapInstanceUID } = paintFilterLabelMapDetails || {};
+    const record = labelmapInstanceUID ? getCanonicalSegmentation(labelmapInstanceUID) : undefined;
 
-    if (!paintFilterLabelMapImageData) {
+    return record ? record.scalarData : undefined;
+  }
+
+  _ensureLabelmapRegistration() {
+    // Take this view's hold on a display materialisation.
+    //
+    // The segmentation itself was created by the importer and lives in Cornerstone3D state. A view
+    // only attaches. A view whose `_getSegImageVolumeId()` is the segmentationId shares the
+    // canonical display; a view that derives its own id (the inspection modal appends
+    // `::inspection` because it renders in its own rendering engine, and a Cornerstone3D volume's
+    // one GL texture cannot serve two WebGL contexts) gets a DERIVED display: its own segmentation
+    // entry and volume over the same durable stack images.
+
+    // @returns this view's display volume
+
+    const component = this;
+    const { paintFilterLabelMapImageData, paintFilterLabelMapDetails } = component.props;
+
+    const { labelmapInstanceUID } = paintFilterLabelMapDetails || {};
+    if (!paintFilterLabelMapImageData || !labelmapInstanceUID) {
       return undefined;
     }
 
-    // Memoised: this is called from both the metadata inspection and the volume creation, and the
-    // copy is the size of the labelmap.
-    if (component._labelmapScalars &&
-        component._labelmapScalarsSource === paintFilterLabelMapImageData) {
-      return component._labelmapScalars;
+    if (component._labelmapRegistered === labelmapInstanceUID) {
+      return component._labelmapDisplayVolume;
     }
 
-    const { buffer, stackImageIds } = paintFilterLabelMapImageData;
-    const referenceVolume = c3dCache.getVolume(component._getImageVolumeId());
+    const displayId = component._getSegImageVolumeId();
+    let volume;
 
-    if (!referenceVolume) {
-      throw new Error(
-        'Unable to build the labelmap: its reference image volume is not in the cache yet.');
+    if (displayId && displayId !== labelmapInstanceUID) {
+      volume = attachDerivedSegmentationDisplay(labelmapInstanceUID, displayId, {
+        referencedVolumeId: component._getImageVolumeId(),
+      });
+      component._derivedDisplayId = volume ? displayId : undefined;
+    } else {
+      volume = attachSegmentationDisplay(labelmapInstanceUID);
+      if (volume) {
+        // Report the image volume this segmentation overlays, now that a viewport exists to know
+        // it. Only for the canonical display: a derived view's own image volume dies with the
+        // view, and stamping it onto the canonical representation would dangle.
+        noteReferencedVolume(labelmapInstanceUID, component._getImageVolumeId());
+      }
     }
 
-    component._labelmapScalars = mapLabelmapBufferToVolumeOrder(
-      referenceVolume, stackImageIds, buffer);
-    component._labelmapScalarsSource = paintFilterLabelMapImageData;
+    if (!volume) {
+      return undefined;
+    }
 
-    return component._labelmapScalars;
+    component._labelmapRegistered = labelmapInstanceUID;
+    component._labelmapDisplayVolume = volume;
+
+    return volume;
   }
 
   async loadSegImageVolume(options) {
-    // Load image volume and segmentation data
-
-    // @input options
-    //  - volumeId: the volumeId for which the metadata should be retrieved
+    // Attach this view to the segmentation's display materialisation.
+    //
+    // The segmentation itself was created by the importer. Attaching takes this view's hold; the
+    // first hold materialises a fresh display generation, and the reference image volume is
+    // reported so the record and representation know what they overlay.
 
     options = options || {};
     _.defaults(options, { setState: true });
 
     const component = this;
-    const { paintFilterLabelMapImageData, labelmapRenderingOptions, onLabelmapImageLoad } = component.props;
+    const {
+      paintFilterLabelMapImageData, paintFilterLabelMapDetails, onLabelmapImageLoad,
+    } = component.props;
 
     if (paintFilterLabelMapImageData) {
+      const { labelmapInstanceUID, metadata: labelmapMetadata } = paintFilterLabelMapDetails;
+      const segVol = component._ensureLabelmapRegistration();
 
-      // Retrieve display set and segmentation UIDs
-      const { displaySet } = component.props.viewportData;
-      const { colorLUT, segmentsDefaultProperties } = labelmapRenderingOptions;
+      // `attachSegmentationDisplay` (inside `_ensureLabelmapRegistration`) has already reported the
+      // reference volume through `noteReferencedVolume`, which stamps the record, the display
+      // volume and the representation together.
+      const _imageVolume = c3dCache.getVolume(component._getImageVolumeId());
 
-      // Create segmentation volume
-      let { volumeId: labelmapInstanceUID, segVol } = component._segVol();
-      if (!segVol) {
+      // A labelmap overlays an image volume, so the two geometries have to agree. They can fail to:
+      // the segmentation is built at import from the referenced series' metadata (full resolution),
+      // while the image volume in the viewport may be the reduced-resolution navigation volume the
+      // phase-0 pre-flight substitutes, or may be built from a different set of imageIds. Rendering
+      // a mismatched pair produces a shifted, garbled overlay rather than an error, so say so.
+      if (segVol && _imageVolume) {
+        const _mismatch = _.some(segVol.dimensions, (d, i) => d !== _imageVolume.dimensions[i]);
 
-        // Derive the labelmap from the Cornerstone3D image volume. The
-        // buffer is re-ordered from stack order to volume slice order first.
-        segVol = await cacheVtkLabelmapImage(
-          component._getImageVolumeId(), labelmapInstanceUID, component._labelmapScalarData());
+        if (_mismatch) {
+          console.error(
+            '[vtk:Cornerstone3DLabelmapBaseView] Segmentation and image volume geometries disagree; '
+            + 'the overlay will be misregistered.',
+            {
+              segmentationId: labelmapInstanceUID,
+              segmentation: _.pick(segVol, 'dimensions', 'spacing', 'origin', 'direction'),
+              imageVolumeId: component._getImageVolumeId(),
+              imageVolume: _.pick(_imageVolume, 'dimensions', 'spacing', 'origin', 'direction'),
+            });
+        }
       }
 
-      // Inspect labelmap data to ensure that the segments will be populated correctly
-      const { labelmapDetails, labelmapMetadata } = component._segMeta();
-
-      // Add segmentation to display state
-      let segments;
-      if (labelmapDetails && labelmapDetails.uniqueLabels) {
-
-        // Create segments object from unique labels
-        segments = _.reduce(labelmapDetails.uniqueLabels, (acc, i) => {
-
-          // Parse segment label from labelmapMetadata (if available)
-          let segmentLabel;
-          if (labelmapMetadata && labelmapMetadata.data && labelmapMetadata.data.length == labelmapDetails.uniqueLabels.length) {            
-            segmentLabel = (_.find(labelmapMetadata.data, (s) => s.SegmentNumber == i) || {}).SegmentLabel;
-          }
-
-          acc[i] = { segmentIndex: i, label: segmentLabel || `Segment ${i}`, isVisible: true, active: true };
-          return acc;
-        }, {});
-      }      
-      
-      // Create representation structure
-      const _rep = {
-        type: c3dToolsEnums.SegmentationRepresentations.Labelmap,
-        data: {
-          volumeId: labelmapInstanceUID, 
-          referenceVolumeId: component._getImageVolumeId(),
-        },
-      }
-
-      // Create config structure
-      const _config = { label: labelmapMetadata?.SeriesDescription ? labelmapMetadata.SeriesDescription : undefined, }
-      if (segments) {
-        _config['segments'] = segments;
-      }
-
-      const _seg = {
-        segmentationId: labelmapInstanceUID,
-        representation: _rep,
-        config: _config,
-      }      
-
-      await c3dSegmentations.state.addSegmentations([_seg]);
-
-      // Set state flags to trigger next step in loading workflow
       if (options.setState) {
         component.setState({ segInit: true });
       }
 
       if (_.isFunction(onLabelmapImageLoad)) {
         onLabelmapImageLoad({
-          volumeId: labelmapInstanceUID, segmentationId: labelmapInstanceUID, meta: labelmapMetadata, vol: segVol,
+          volumeId: labelmapInstanceUID, segmentationId: labelmapInstanceUID,
+          meta: labelmapMetadata, vol: segVol,
         });
       }
     }
@@ -273,6 +312,18 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
 
         // Set segmentation volume to viewport
         await c3dSegmentations.addSegmentationRepresentations(_v3d_id, [_rep]);
+
+        // Legacy -> Cornerstone3D metadata (FR-4). Only possible now: the active segment and the
+        // hidden-segment flags are written onto the representation, which did not exist until the
+        // call above.
+        const { labelmapInstanceUID } = paintFilterLabelMapDetails;
+        mirrorLegacyMetadataToCornerstone3d(labelmapInstanceUID);
+
+        // The colour half of the metadata mirror has no Cornerstone3D event of its own -- a
+        // segment's colour lives in the per-viewport LUT -- so it is driven from the
+        // SegmentationService where a view has one.
+        const { segmentationService } = component.props.servicesManager?.services || {};
+        attachSegmentationService(labelmapInstanceUID, segmentationService);
       }
     }
   }
@@ -368,12 +419,20 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
   }
 
   triggerSegmentationUpdate(options) {
-    // Trigger an update on the provided segmentation
+    // Trigger a redraw of the provided segmentation.
+    //
+    // The empty slice list is deliberate. Cornerstone3D reads it as "no slice was named", so it
+    // re-uploads every frame exactly as it did before -- but the labelmap bridge reads it as "no
+    // voxel changed on the Cornerstone3D side", so it does not recompute `segmentsOnLabelmap` for
+    // the whole series. This is a redraw, not an edit: it fires when the viewport hands the view a
+    // new labelmap object, and the legacy module is the one that already has the voxels.
+
     const component = this;
 
     const { volumeId: labelmapInstanceUID } = component._segVol(options);
-    if (labelmapInstanceUID) {        
-      c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(labelmapInstanceUID);
+    if (labelmapInstanceUID) {
+      c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(
+        labelmapInstanceUID, []);
     }
   }
 
@@ -393,8 +452,13 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
       if (labelmapInstanceUID) {
         const { segVol } = component._segVol();
 
-        // Load segmentation data
-        if (isLoaded && imgRenderInit && !segInit && !segVol) {
+        // Attach to the canonical segmentation.
+        //
+        // Gated on `!segInit`, NOT on `!segVol`. Since the ownership inversion the importer creates
+        // the segmentation before any view mounts, so the volume is already cached on the first
+        // update; gating on its absence meant this never ran, `segInit` never became true, and the
+        // render branch below could never fire for the normal import path.
+        if (isLoaded && imgRenderInit && !segInit) {
           await component.loadSegImageVolume();
         }
 
@@ -475,6 +539,22 @@ class Cornerstone3DLabelmapBaseView extends Cornerstone3DBaseView {
       if (segVolumeCleanup) component.purgeSegmentationRepresentations(labelmapInstanceUID);
     }
 
+    // Give up this view's hold on the display materialisation. The last holder retires it
+    // completely -- representations, segmentation entry, volume, texture, slice images -- after
+    // syncing its voxels into the primary record. The record and the legacy view persist (FR-8);
+    // only an explicit `removeCanonicalSegmentation` destroys those.
+    if (component._labelmapRegistered) {
+      if (component._derivedDisplayId) {
+        detachDerivedSegmentationDisplay(
+          component._labelmapRegistered, component._derivedDisplayId);
+        component._derivedDisplayId = undefined;
+      } else {
+        detachSegmentationDisplay(component._labelmapRegistered);
+      }
+      component._labelmapRegistered = undefined;
+      component._labelmapDisplayVolume = undefined;
+    }
+
     await super.componentWillUnmount();
     component._clearColorLUT();
 
@@ -488,6 +568,8 @@ Cornerstone3DLabelmapBaseView.propTypes = {
   // `{ buffer, stackImageIds }` -- the legacy cornerstone-tools labelmap3D buffer and the stack it
   // was drawn on. Not a vtkImageData: the hosting viewport passes the raw buffer through.
   paintFilterLabelMapImageData: PropTypes.object,
+  // `{ labelmapInstanceUID, labelmapIndex, firstImageId, metadata }` -- the identity of the
+  // labelmap in both state stores, which is what the bridge registers against.
   paintFilterLabelMapDetails: PropTypes.object,
   labelmapRenderingOptions: PropTypes.object,
   onLabelmapImageLoad: PropTypes.func,

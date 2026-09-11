@@ -278,10 +278,37 @@ export async function createImageVolumeForDisplaySet({ imageIds, displaySet, fit
 const _volumeLeases = new Map();
 
 
+export function isCanonicalSegmentation(segmentation) {
+  // True for a segmentation the viewer owns as CANONICAL state -- the record the labelmap bridge
+  // created at import and that `SegmentationService` hands out -- as opposed to a derived or
+  // disposable one (the editor's `vol3d:`, anything a viewport built for itself).
+  //
+  // The flag lives on the Cornerstone3D segmentation's `cachedStats`, so this reads it out of
+  // Cornerstone3D state rather than importing the bridge.
+
+  // @input segmentation (object|str): a segmentation record, or a segmentationId
+
+  const record = _.isString(segmentation)
+    ? c3dSegmentations.state.getSegmentation(segmentation)
+    : segmentation;
+
+  return !!(record && (record.cachedStats || {}).sonadorCanonicalSegmentation);
+}
+
+
 function _releaseDerivedSegmentations(volumeUid) {
-  // Remove the segmentations (and their labelmap volumes) derived from this image volume.
+  // Remove the segmentations (and their labelmap volumes) DERIVED from this image volume.
+  //
+  // A canonical segmentation is never one of them. It outlives every view of it and every image
+  // volume lease (#136 FR-8): closing the last MPR pane must not destroy the segmentation the
+  // classic viewport, the panel and a future serializer still read. Only an explicit product-level
+  // removal (`removeCanonicalSegmentation` / `SegmentationService`) destroys one.
 
   _.each(getVolumeSegmentations(volumeUid), (s) => {
+    if (isCanonicalSegmentation(s)) {
+      return;
+    }
+
     c3dSegmentations.state.removeSegmentation(s.segmentationId);
 
     const _segvol_id = s.representationData?.Labelmap?.volumeId;
@@ -416,81 +443,14 @@ export const volumeLease = {
 };
 
 
-export function mapLabelmapBufferToVolumeOrder(referenceVolume, stackImageIds, labelmapBuffer) {
-  // Re-order a legacy cornerstone-tools `labelmap3D.buffer` (stack order) into the slice order of a
-  // Cornerstone3D volume.
-  //
-  // The two orders are NOT necessarily the same: `StackManager` holds imageIds in display-set order
-  // while the streaming loader re-sorts by image position. Mapping by imageId rather than by
-  // position in the stack is what keeps a segment on the slice it was drawn on.
-
-  // @input referenceVolume (ImageVolume): the image volume the labelmap is derived from
-  // @input stackImageIds (str[]): the legacy stack's imageIds, in buffer order
-  // @input labelmapBuffer (ArrayBuffer|TypedArray): the legacy labelmap buffer
-  // @returns Uint16Array in volume slice order
-
-  const [columns, rows, slices] = referenceVolume.dimensions;
-  const sliceLength = columns * rows;
-
-  const source = labelmapBuffer instanceof Uint16Array
-    ? labelmapBuffer
-    : new Uint16Array(labelmapBuffer);
-  const target = new Uint16Array(sliceLength * slices);
-
-  _.each(stackImageIds, (imageId, stackIndex) => {
-    const volumeIndex = referenceVolume.getImageIdIndex(imageId);
-
-    // A slice the volume does not contain (a decimated navigation volume drops slices) has
-    // nowhere to go; the labelmap simply has no data at that position.
-    if (volumeIndex === undefined || volumeIndex < 0 || volumeIndex >= slices) {
-      return;
-    }
-
-    const from = stackIndex * sliceLength;
-    if (from + sliceLength > source.length) {
-      return;
-    }
-
-    target.set(source.subarray(from, from + sliceLength), volumeIndex * sliceLength);
-  });
-
-  return target;
-}
-
-
-export async function cacheVtkLabelmapImage(refUid, labelmapUid, labelmapData, options) {
-  // Create the derived labelmap volume for a segmentation and place it in the Cornerstone3D cache.
-  //
-  // Geometry (dimensions, spacing, origin, direction) comes from the reference image volume, which
-  // `createAndCacheDerivedLabelmapVolume` reads out of the cache -- the Cornerstone3D streaming
-  // volume, not a vtkImageData the viewer built itself.
-
-  // @input refUid (str): volumeId of the reference image volume
-  // @input labelmapUid (str): volumeId of the labelmap volume to create
-  // @input labelmapData (vtkImage|TypedArray): labelmap scalars, already in volume slice order
-  // @input options (object): options
-
-  options = options || {};
-
-  // Accept either a raw scalar array (a legacy `labelmap3D.buffer` re-ordered by
-  // `mapLabelmapBufferToVolumeOrder`) or a vtkImage, for callers that still build one.
-  const segScalarData = ArrayBuffer.isView(labelmapData)
-    ? labelmapData
-    : vtkVolume2vtkImage(labelmapData).getPointData().getScalars().getData();
-
-  // Create the volume and link to the reference, cache labelmap volume
-  const segVol = await c3dVolumeLoader.createAndCacheDerivedLabelmapVolume(refUid, {
-    volumeId: labelmapUid,
-    scalarData: segScalarData,
-  });
-
-  // Ensure that the scalar data was populated
-  if (segVol && !segVol.voxelManager.scalarData) {
-    segVol.voxelManager.setCompleteScalarDataArray(segScalarData);
-  }
-
-  return segVol;
-}
+// The stack-order/volume-order arithmetic lives in `labelmapOrder.js`, which the labelmap bridge
+// also needs. Re-exported here because this module was its first home and the extension's public
+// surface names it.
+//
+// `cacheVtkLabelmapImage` -- the one-way copy that turned a legacy labelmap into a Cornerstone3D
+// Uint8 volume -- is gone (AR-6). The labelmap bridge supersedes it: Cornerstone3D holds the
+// canonical stack-backed labelmap and the bridge derives the legacy compatibility copy from it.
+export { mapLabelmapBufferToVolumeOrder, planSegmentValueRemap } from './labelmapOrder.js';
 
 
 export function getVolumeAnnotations(volumeUid, options) {
@@ -512,9 +472,19 @@ export function getVolumeSegmentations(volumeUid, options) {
 
   return _.filter(c3dSegmentations.state.getSegmentations(), (s) => {
 
-    // Filter segmentation by reference volume UID within the representation data
+    // Filter segmentation by reference volume UID within the representation data.
+    //
+    // Both spellings are accepted: this viewer has always written `referenceVolumeId`, while
+    // Cornerstone3D's own `LabelmapSegmentationData` names the field `referencedVolumeId` (which is
+    // what its GrowCut tools read). The bridge writes both, so a segmentation registered either way
+    // is found here and released with its image volume (FR-8).
     const r = s.representationData || {};
-    return r.referenceVolumeId == volumeUid || (r.Labelmap || {}).referenceVolumeId == volumeUid;
+    const labelmap = r.Labelmap || {};
+
+    return r.referenceVolumeId == volumeUid
+      || r.referencedVolumeId == volumeUid
+      || labelmap.referenceVolumeId == volumeUid
+      || labelmap.referencedVolumeId == volumeUid;
   });
 }
 
@@ -523,12 +493,14 @@ export function inspectVtkLabelmapImage(labelmapData) {
   // Inspect a labelmap. Determine the segment count, number of unique labels, and the length of
   // the data. Accepts a vtkImage, or the raw labelmap scalars the viewport carries instead.
 
-  const scalarData = ArrayBuffer.isView(labelmapData)
+  // An absent labelmap is a caller error, but it must produce the clear message below rather than a
+  // `getClassName of undefined` from the vtkImage branch.
+  const scalarData = !labelmapData || ArrayBuffer.isView(labelmapData)
     ? labelmapData
     : vtkVolume2vtkImage(labelmapData).getPointData().getScalars().getData();
 
   if (!scalarData || scalarData.length === 0) {
-    throw new Error('Segmentation ${segmentationVolumeId} scalar data is empty.')
+    throw new Error('Unable to inspect the labelmap: its scalar data is absent or empty.');
   }
 
   // // Get unique labels (excluding 0 = background)
@@ -548,7 +520,15 @@ export function inspectVtkLabelmapImage(labelmapData) {
 
 
 export async function forceClearSegment(segmentationId, segmentIndex, options) {
-  // Forcibly clear a segmentIndex from the provided segmentation. Utilizes 
+  // Forcibly clear a segmentIndex from the provided segmentation, then verify that every slice is
+  // actually clear of it and zero the ones that are not.
+
+  // @input segmentationId (str): the segmentation to clear the segment from
+  // @input segmentIndex (num): the segment to clear
+  // @input options.checkOnly (bool): only verify and repair; the caller has already cleared
+  // @input options.triggerEvent (bool): raise SEGMENTATION_DATA_MODIFIED for the changed slices
+  // @returns the volume slice indices this call zeroed
+
   options = options || {};
   _.defaults(options, { checkOnly: false, recordHistory: true, triggerEvent: true, });
 
@@ -557,36 +537,49 @@ export async function forceClearSegment(segmentationId, segmentIndex, options) {
     await c3dSegmentations.helpers.clearSegmentValue(segmentationId, segmentIndex, options);
   }
 
-  // Ensure that the segmentation was cleared
-  const segVol = c3dCache.getVolume(segmentationId);
+  // Ensure that the segmentation was cleared. The volume behind a segmentation carries a
+  // per-generation volumeId, so it is resolved through the segmentation entry's own
+  // representation data -- the route Cornerstone3D's internals take -- with a direct cache
+  // lookup for callers that pass a literal volumeId (the editor's `vol3d:`).
+  const _seg = c3dSegmentations.state.getSegmentation(segmentationId);
+  const _labelmapVolumeId =
+    (_seg && _seg.representationData && _seg.representationData.Labelmap
+      && _seg.representationData.Labelmap.volumeId) || segmentationId;
+  const segVol = c3dCache.getVolume(_labelmapVolumeId);
+  const modifiedSlices = [];
+
   if (segVol) {
     const scalarData = segVol.voxelManager.getCompleteScalarDataArray();
 
     // Count pixels for the segment index
     const _segment = Array.from(scalarData).filter(v => v === segmentIndex);
     if (_segment.length) {
-    console.warn(`[vtk:cornerstone3d:utils] Found non-zero voxels for segmentIndex=${segmentIndex} count=${_segment.length}. `
-      + 'Force zero segment layer.');
+      console.warn(`[vtk:cornerstone3d:utils] Found non-zero voxels for segmentIndex=${segmentIndex} count=${_segment.length}. `
+        + 'Force zero segment layer.');
 
-    segVol.imageIds.forEach(async (imageId, sliceIndex) => {
-      // Iterate through all images of the volume and zero slicces with non-zero segment values
+      segVol.imageIds.forEach((imageId, sliceIndex) => {
+        // Iterate through all images of the volume and zero slices with non-zero segment values
 
-      // Retrieve image/slice from cache
-      const image = c3dCache.getImage(imageId);
-      if (!image) {
+        // Retrieve image/slice from cache
+        const image = c3dCache.getImage(imageId);
+        if (!image) {
           console.warn(`[vtk:cornerstone3d:utils] No cached image for slice segmentationId=${segmentationId} sliceIdx=${sliceIndex} imageId=${imageId}`);
           return;
-      }
+        }
 
-      // Retrieve slice scalar data
-      const sliceData = image.voxelManager.getScalarData();
-      const hits = Array.from(sliceData).filter(v => v === segmentIndex);
-      if (hits.length > 0) {
-          for (let i = 0; i < sliceData.length; i++) {
-            if (sliceData[i] == segmentIndex) {
-              sliceData[i] = 0;
-            }
+        // Retrieve slice scalar data
+        const sliceData = image.voxelManager.getScalarData();
+        let cleared = false;
+
+        for (let i = 0; i < sliceData.length; i++) {
+          if (sliceData[i] == segmentIndex) {
+            sliceData[i] = 0;
+            cleared = true;
           }
+        }
+
+        if (cleared) {
+          modifiedSlices.push(sliceIndex);
         }
       });
     }
@@ -594,9 +587,17 @@ export async function forceClearSegment(segmentationId, segmentIndex, options) {
     // Invalidate the image volume (forces re-load and re-render)
     segVol.invalidate();
     if (options.triggerEvent) {
-      c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(segmentationId);
+      // Slice-scoped (AR-4): the list names exactly the slices this repair pass zeroed. An empty
+      // list is deliberate and is not the same as omitting one -- `invalidate()` above has already
+      // marked every frame for re-upload, and an empty list tells the labelmap bridge there is
+      // nothing to write back into the legacy labelmap rather than making it recompute
+      // `segmentsOnLabelmap` for the whole series.
+      c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(
+        segmentationId, modifiedSlices);
     }
   }
+
+  return modifiedSlices;
 }
 
 

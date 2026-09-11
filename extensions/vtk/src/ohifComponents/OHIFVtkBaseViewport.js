@@ -7,6 +7,8 @@ import cornerstoneTools from 'cornerstone-tools';
 import PropTypes from 'prop-types';
 
 import OHIF, { uiNotificationService } from '@ohif/core';
+
+import { getCanonicalSegmentationsForSeries } from '../utils/labelmapBridge.js';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 const { DicomMetadataStore: DcmMetaStore } = OHIF;
@@ -130,21 +132,36 @@ class OHIFVtkBaseViewport extends Component {
     let labelmapColorLUT;
     let labelmapInstanceUID;
     let labelmapMetadata;
-    
-    // Retrieve segmentations
-    if (brushStackState) {
-      const { activeLabelmapIndex } = brushStackState;
-      const labelmap3D = brushStackState.labelmaps3D[activeLabelmapIndex] || {};
+    let labelmapIndex;
 
-      // Unpack labelmap metata
-      const { metadata: activeLabelmapMetata } = labelmap3D;
+    // Identity comes from the BRIDGE RECORDS, not from the legacy segmentation module: the
+    // volumetric path must work whether or not a legacy `labelmap3D` is installed (the
+    // `lazyLegacyLabelmap` deployments past #92 have none until a classic consumer asks). The
+    // legacy module is consulted only for the state that genuinely lives there -- the panel's
+    // active-labelmap selection and per-segment visibility -- when it is present.
+    const seriesRecords = getCanonicalSegmentationsForSeries(firstImageId);
+
+    if (seriesRecords.length) {
+      const activeIndex = brushStackState
+        ? brushStackState.activeLabelmapIndex
+        : undefined;
+      const record = _.find(seriesRecords,
+        (r) => activeIndex === undefined || r.labelmapIndex === activeIndex)
+        || seriesRecords[0];
+
+      labelmapInstanceUID = record.segmentationId;
+      labelmapIndex = record.labelmapIndex;
+
+      // Unpack labelmap metadata from the record's SEG metadata (the same object the legacy view
+      // carries when installed).
+      const activeLabelmapMetata = record.segMetadata;
       if (activeLabelmapMetata) {
 
         // Retrieve series and segmentation series identifiers
         labelmapMetadata = _.pick(activeLabelmapMetata, 'seriesInstanceUid', 'segmentationSeriesInstanceUID');
         labelmapMetadata.data = _.filter(activeLabelmapMetata.data, (s) => s && s.SegmentLabel);
 
-        // Add additional properties from the series metadata        
+        // Add additional properties from the series metadata
         const _labelmapDcmMeta = DcmMetaStore.getSeries(StudyInstanceUID, labelmapMetadata.segmentationSeriesInstanceUID);
         if (_labelmapDcmMeta?.instances?.length) {
           const _dcm0 = _labelmapDcmMeta.instances[0];
@@ -152,8 +169,8 @@ class OHIFVtkBaseViewport extends Component {
         }
       }
 
-      if (brushStackState.labelmaps3D.length > 1 && this.props.viewportIndex === 0) {
-        
+      if (seriesRecords.length > 1 && this.props.viewportIndex === 0) {
+
         UINotificationService.show({
           title: 'Overlapping Segmentation Found',
           message: 'Overlapping segmentations cannot be displayed when in MPR mode',
@@ -161,23 +178,30 @@ class OHIFVtkBaseViewport extends Component {
         });
       }
 
-      this.segmentsDefaultProperties = labelmap3D.segmentsHidden.map((isHidden) => {
-        return { visible: !isHidden };
-      });
+      // Per-segment visibility is panel UI state and lives on the legacy view when one is
+      // installed; without one, everything is visible.
+      const legacyLabelmap3D = brushStackState
+        ? brushStackState.labelmaps3D[labelmapIndex]
+        : undefined;
+      this.segmentsDefaultProperties = legacyLabelmap3D
+        ? legacyLabelmap3D.segmentsHidden.map((isHidden) => ({ visible: !isHidden }))
+        : _.map(_.filter((activeLabelmapMetata && activeLabelmapMetata.data) || [], Boolean),
+            () => ({ visible: true }));
 
-      labelmapInstanceUID = `${firstImageId}_${activeLabelmapIndex}`;
+      // What a view needs to attach to the canonical Cornerstone3D segmentation: the classic stack
+      // (the bridge checks the legacy compatibility view against it) and the colour LUT index from
+      // the record. The labelmap's voxels are NOT carried -- Cornerstone3D owns them, and a view
+      // reads them through `getCanonicalSegmentation`.
+      const colorLUTIndex = legacyLabelmap3D
+        ? legacyLabelmap3D.colorLUTIndex
+        : record.colorLUTIndex;
 
-      // The labelmap travels as its raw legacy buffer plus the stack it was drawn on. It is not
-      // turned into a vtkImageData here: the geometry belongs to the Cornerstone3D volume, and the
-      // buffer has to be re-ordered from stack order into the volume's slice order, which needs a
-      // volume that does not exist at this point. The derived labelmap volume in the Cornerstone3D
-      // cache is the only cache for it; this class keeps none of its own.
       labelmapDataObject = {
-        buffer: labelmap3D.buffer,
         stackImageIds: stack.imageIds,
+        colorLUTIndex,
       };
 
-      labelmapColorLUT = state.colorLutTables[labelmap3D.colorLUTIndex];
+      labelmapColorLUT = state.colorLutTables[colorLUTIndex];
     }
 
     return {
@@ -185,7 +209,16 @@ class OHIFVtkBaseViewport extends Component {
       displaySet: component.props.viewportData?.displaySet,
       labelmapDataObject,
       labelmapColorLUT,
-      labelmapDetails: { labelmapInstanceUID, metadata: labelmapMetadata },
+      // `labelmapIndex` and `firstImageId` are the address of the labelmap3D inside the legacy
+      // segmentation module (`state.series[firstImageId].labelmaps3D[labelmapIndex]`). The bridge
+      // needs them to write an edit made in Cornerstone3D back into the legacy state, and cannot
+      // recover them from `labelmapInstanceUID` -- a firstImageId can itself contain underscores.
+      labelmapDetails: {
+        labelmapInstanceUID,
+        labelmapIndex,
+        firstImageId,
+        metadata: labelmapMetadata,
+      },
     };
   };
 
