@@ -488,10 +488,18 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
     const { volumeId: labelmapInstanceUID } = component._segVol();
     component._pendingSurfaceRestore = component.props.segmentationSurfaceEnabled && !!labelmapInstanceUID;
 
-    // 4. Remove all C3D segmentation representations and state for this volume
+    // 4. Remove this view's segmentation representations.
+    //
+    //    The segmentation STATE is only removed when it is a derived one. A canonical segmentation
+    //    (#136 FR-8) is created once by the SEG importer and is read by the classic viewport, the
+    //    panel and a serializer; destroying it here would leave nothing to reload, because the
+    //    importer does not run again on a viewer reset.
     if (labelmapInstanceUID) {
       component.purgeSegmentationRepresentations(labelmapInstanceUID);
-      c3dSegmentations.removeSegmentation(labelmapInstanceUID);
+
+      if (!c3dUtils.isCanonicalSegmentation(labelmapInstanceUID)) {
+        c3dSegmentations.removeSegmentation(labelmapInstanceUID);
+      }
     }
 
     // 5. Release this view's hold on the image volume. The volume

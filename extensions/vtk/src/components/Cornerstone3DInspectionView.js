@@ -47,7 +47,6 @@ import { OHIFModal } from '@ohif/ui';
 import { Icon, ToolbarButton } from '@ohif/ui';
 
 import {
-  cacheVtkLabelmapImage,
   getVolumeIdForDisplaySet,
   inspectVtkLabelmapImage,
 } from '../utils/cornerstone3d.js';

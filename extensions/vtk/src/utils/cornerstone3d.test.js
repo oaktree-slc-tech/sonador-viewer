@@ -414,6 +414,56 @@ describe('volumeLease', () => {
     expect(volumeLease.count(volumeId)).toBe(1);
   });
 
+  it('does NOT remove a canonical segmentation when the last lease is released (#136 FR-8)', () => {
+    // The canonical segmentation outlives every view of it and every image-volume lease: closing the
+    // last MPR pane must not destroy the record the classic viewport, the panel and a serializer
+    // still read. Only an explicit product-level removal does that.
+    mockGetSegmentations.mockReturnValue([
+      {
+        segmentationId: 'canonical-seg',
+        cachedStats: { sonadorCanonicalSegmentation: true },
+        representationData: { Labelmap: { referenceVolumeId: volumeId, volumeId: 'canonical-seg' } },
+      },
+      {
+        segmentationId: 'vol3d:derived',
+        representationData: { Labelmap: { referenceVolumeId: volumeId, volumeId: 'vol3d:derived' } },
+      },
+    ]);
+    mockCache.loadObjects.set('canonical-seg', { promise: Promise.resolve({}) });
+    mockCache.loadObjects.set('vol3d:derived', { promise: Promise.resolve({}) });
+
+    volumeLease.acquire(volumeId);
+    expect(volumeLease.release(volumeId)).toBe(0);
+
+    // The derived one goes ...
+    expect(mockRemoveSegmentation).toHaveBeenCalledWith('vol3d:derived');
+    expect(mockCache.removeVolumeLoadObject).toHaveBeenCalledWith('vol3d:derived');
+
+    // ... the canonical one, and its volume, stay.
+    expect(mockRemoveSegmentation).not.toHaveBeenCalledWith('canonical-seg');
+    expect(mockCache.removeVolumeLoadObject).not.toHaveBeenCalledWith('canonical-seg');
+
+    // The image volume itself is still evicted -- that is what the lease is for.
+    expect(mockCache.removeVolumeLoadObject).toHaveBeenCalledWith(volumeId);
+  });
+
+  it('leaves canonical segmentations alone when releaseAll runs', () => {
+    mockGetSegmentations.mockReturnValue([
+      {
+        segmentationId: 'canonical-seg',
+        cachedStats: { sonadorCanonicalSegmentation: true },
+        representationData: { Labelmap: { referenceVolumeId: volumeId, volumeId: 'canonical-seg' } },
+      },
+    ]);
+    mockCache.loadObjects.set('canonical-seg', { promise: Promise.resolve({}) });
+
+    volumeLease.acquire(volumeId);
+    volumeLease.releaseAll();
+
+    expect(mockRemoveSegmentation).not.toHaveBeenCalledWith('canonical-seg');
+    expect(mockCache.removeVolumeLoadObject).not.toHaveBeenCalledWith('canonical-seg');
+  });
+
   it('evicts the volume, its annotations and its derived labelmaps on the last release', () => {
     mockGetAllAnnotations.mockReturnValue([
       { annotationUID: 'a1', metadata: { volumeId } },

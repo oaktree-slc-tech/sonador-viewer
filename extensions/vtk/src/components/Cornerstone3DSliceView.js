@@ -82,11 +82,17 @@ class Cornerstone3DSliceView extends Cornerstone3DLabelmapBaseView{
   }
 
   initImageSync() {
+    // Enroll this pane in the shared VOI synchronizer. The command reports whether the pane's
+    // viewport was live enough to take a VOI_MODIFIED listener; only then does the latch close.
+    // A pane that raced ahead of enableElement retries on the next update cycle instead of being
+    // silently excluded from synchronization for the rest of the session.
     const component = this;
     const { commandsManager, voiSyncId } = component.props;
 
-    commandsManager.runCommand('initMprImageSync', { voiSyncId, component, }, vtkEnums.VIEWPORT);
-    component.setState({ imgSyncInit: true });
+    const enrolled = commandsManager.runCommand('initMprImageSync', { voiSyncId, component, }, vtkEnums.VIEWPORT);
+    if (enrolled) {
+      component.setState({ imgSyncInit: true });
+    }
   }
 
   async componentDidMount() {
@@ -129,6 +135,14 @@ class Cornerstone3DSliceView extends Cornerstone3DLabelmapBaseView{
     // Unsubscribe events prior to component unmount
 
     const component = this;
+    const { commandsManager, voiSyncId } = component.props;
+
+    // Withdraw from the VOI synchronizer before the base class tears the rendering engine down,
+    // while the pane's viewport still resolves. A leftover enrollment would make the synchronizer
+    // skip this pane's next mount (Synchronizer.add() ignores ids it has seen before), leaving
+    // the remounted element without a VOI_MODIFIED listener.
+    commandsManager.runCommand('clearMprImageSync', { voiSyncId, component, }, vtkEnums.VIEWPORT);
+
     await super.componentWillUnmount();
 
     // displaySet API events

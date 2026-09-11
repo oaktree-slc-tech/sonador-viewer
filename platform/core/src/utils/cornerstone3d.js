@@ -168,6 +168,21 @@ async function runInit() {
 
 
 /**
+ * The `cornerstone3d` section of the app configuration the viewer booted with.
+ *
+ * `initCornerstone3d` keeps the first caller's `appConfig` (see the note on C3D_APP_CONFIG), and
+ * several subsystems outside this module read settings from the same section -- the labelmap bridge
+ * in the vtk extension reads `lazyLegacyLabelmap` from it. They have no other route to the app
+ * configuration: extensions are registered after `setConfiguration` runs and are not handed it.
+ *
+ * @returns {object} the section, or an empty object before the viewer has configured Cornerstone3D
+ */
+export function getCornerstone3dConfig() {
+  return C3D_APP_CONFIG.cornerstone3d || {};
+}
+
+
+/**
  * Initialize Cornerstone3D core, the DICOM image loader, polymorphic segmentation and tools.
  *
  * Idempotent: repeat calls return the same promise, so the first caller's `appConfig` is the one
@@ -177,7 +192,9 @@ async function runInit() {
  * @param {object} [appConfig] - the viewer app configuration; `appConfig.cornerstone3d` holds
  *   `maxNumRequests`, `maxCacheSizeBytes`, `maxWebWorkers`, `volumeTextureBudgetBytes` and
  *   `requestTimeoutMs` (retrieval timeout for the loader's XHR transport; must be positive, and a
- *   value that is not falls back to the default -- see utils/loaderRequestTimeout.js).
+ *   value that is not falls back to the default -- see utils/loaderRequestTimeout.js) and
+ *   `lazyLegacyLabelmap` (read by the vtk extension's labelmap bridge; see
+ *   extensions/vtk/src/utils/labelmapBridge.js).
  * @returns {Promise<boolean>}
  */
 export function initCornerstone3d(appConfig) {

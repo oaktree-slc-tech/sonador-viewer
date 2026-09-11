@@ -21,6 +21,7 @@ import {
   LoadingIndicator,
   VolumeFitNotice,
   OHIFVtkBaseViewport,
+  cornerstone3dUtils,
   vtkUtils,
 } from "@ohif/extension-vtk";
 import { eventTypes as segmentationEventTypes } from "@ohif/extension-dicom-segmentation";
@@ -90,8 +91,27 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
       // Retrieve the display set's imageIds, labelmap and colour settings. The Cornerstone3D view
       // builds and streams the volume from the imageIds.
-      const { imageIds, labelmapDataObject, labelmapColorLUT, labelmapDetails } = this.getViewportData(
+      const { imageIds, labelmapDataObject, labelmapColorLUT, labelmapDetails: sourceLabelmapDetails } = this.getViewportData(
           studies, StudyInstanceUID, displaySetInstanceUID, SOPInstanceUID, frameIndex);
+
+      // The editor's editing model is copy-based (#136 fifth amendment, note 37810): entering
+      // Seg-Editor forks the canonical segmentation into a distinct Cornerstone3D-owned WORKING
+      // segmentation, initialised one way from a snapshot. Every editor view, panel operation and
+      // command below receives the WORKING id, so nothing the editor does can reach the
+      // PACS-loaded canonical segmentation or, through the bridge, the legacy view and other
+      // displays. Released on unmount; save/export (#95) will persist it as a NEW DICOM instance.
+      let labelmapDetails = sourceLabelmapDetails;
+      if (sourceLabelmapDetails && sourceLabelmapDetails.labelmapInstanceUID) {
+        const fork = cornerstone3dUtils.forkSegmentationForEditor(
+          sourceLabelmapDetails.labelmapInstanceUID);
+        if (fork) {
+          labelmapDetails = {
+            ...sourceLabelmapDetails,
+            labelmapInstanceUID: fork.workingSegmentationId,
+            sourceSegmentationId: fork.sourceSegmentationId,
+          };
+        }
+      }
 
       _component.hasError = false;
 
@@ -298,6 +318,12 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
             _component.props.commandsManager.runCommand('setRenderOutlineInactive', {
               value: _component.labelmapStyleDefaults.renderOutlineInactive, segmentationId: _ds.segmentationId
             }, vtkEnums.VIEWPORT);
+          }
+
+          // Release the editor's working segmentation: its displays, state entry and stack go;
+          // the source canonical segmentation and its legacy view are untouched.
+          if (_ds.segmentationId) {
+            cornerstone3dUtils.releaseEditorWorkingCopy(_ds.segmentationId);
           }
 
           // Clear segmentationId and the editor 3D rendering toggles from the displaySet
