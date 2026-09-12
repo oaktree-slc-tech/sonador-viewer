@@ -57,6 +57,7 @@
   "dependencies": {
     "@babel/runtime": "^7.5.5",
     "classnames": "^2.2.6",
+    "cornerstone-wado-image-loader": "^4.13.2",
     "lodash.debounce": "^4.0.8",
     "lodash.merge": "^4.6.2",
     "lodash.throttle": "^4.1.1",
