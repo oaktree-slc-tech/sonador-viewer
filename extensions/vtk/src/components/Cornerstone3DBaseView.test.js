@@ -399,6 +399,38 @@ describe('volume creation lifecycle', () => {
     expect(volume.load).toHaveBeenCalled();
   });
 
+  it('hands the decimated id to the viewport before the batched state update lands', async () => {
+    // Under React 18 `setState` is batched even after an await, so `state.volumeId` is still unset
+    // when `renderImageData` continues from `loadImageVolume()` into `_setImageVolume`. Falling
+    // back to the full-resolution id there asks the viewport for a volume that was never created:
+    // "imageVolume with id ... does not exist", and a black MPR under the reduced-resolution notice.
+    const DECIMATED_ID = 'cornerstoneStreamingDecimatedImageVolume:ds-1::decimated';
+    const volume = makeVolume(DECIMATED_ID);
+    mockAssessFit.mockReturnValue({ ...OK_FIT, fits: false, reason: 'budget', suggestedDecimation: [1, 1, 2] });
+    mockCreateVolume.mockResolvedValueOnce({ volumeId: DECIMATED_ID, volume, decimated: true });
+
+    const view = makeView();
+
+    // Defer state updates the way the React 18 scheduler does.
+    const pendingState = [];
+    view.setState = updates => { pendingState.push(updates); };
+
+    await view.loadImageVolume();
+
+    expect(view.state.volumeId).toBeFalsy();
+    expect(view._getImageVolumeId()).toBe(DECIMATED_ID);
+
+    const setVolumes = jest.fn().mockResolvedValue();
+    view._checkViewportActive = () => ({ viewportId: 'vp', viewport: { setVolumes } });
+    await view._setImageVolume();
+    expect(setVolumes).toHaveBeenCalledWith([{ volumeId: DECIMATED_ID }]);
+
+    // The answer is the same once the batch flushes.
+    pendingState.forEach(updates => Object.assign(view.state, updates));
+    expect(view.state.volumeId).toBe(DECIMATED_ID);
+    expect(view._getImageVolumeId()).toBe(DECIMATED_ID);
+  });
+
   it('reports the original failure when the decimated retry also fails', async () => {
     const original = new Error('CACHE_SIZE_EXCEEDED');
     mockCreateVolume
