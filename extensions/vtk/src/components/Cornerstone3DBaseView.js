@@ -190,14 +190,20 @@ class Cornerstone3DBaseView extends Component {
   _getImageVolumeId() {
     // Retrieve the volumeId of the image volume this view displays.
     //
-    // Once the pre-flight has run this is the id actually in the cache, which may be the
-    // reduced-resolution navigation volume; before that it is the
-    // full-resolution id the display set would normally get.
+    // Once the volume exists this is the id actually in the cache, which may be the
+    // reduced-resolution navigation volume; before that it is the full-resolution id the display
+    // set would normally get.
+    //
+    // `_leasedVolumeId` is assigned synchronously when the volume is created; `state.volumeId` is
+    // set at the same moment but React 18 batches the update, so a caller continuing straight
+    // after `loadImageVolume()` (as `_setImageVolume` does) would otherwise fall through to the
+    // full-resolution id and, for a decimated volume, ask the viewport for one that does not exist.
 
     const component = this;
     const { displaySet } = component.props.viewportData;
 
-    return component.state.volumeId
+    return component._leasedVolumeId
+      || component.state.volumeId
       || getVolumeIdForDisplaySet(displaySet, component._volumeIdOptions());
   }
 
