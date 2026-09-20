@@ -1,0 +1,49 @@
+// Per-comment actions menu. Same surface as the series Actions menus (radixUi's shared .Content /
+// .DropdownItem), so "Actions" looks and means the same thing wherever it appears in the drawer.
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  border-radius: 3px;
+  color: #91b9cd;
+  flex: 0 0 auto;
+
+  &:hover,
+  &[data-state='open'] {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.content {
+  background-color: white;
+  min-width: 180px;
+  // Above the study drawer; Radix copies the content's z-index onto the popper wrapper.
+  z-index: 1100;
+}
+
+.item {
+  cursor: pointer;
+}
+
+// Destructive item: the removal confirmation's red, kept on hover instead of the shared violet
+// highlight.
+.itemDestructive {
+  color: #e0574a;
+
+  svg {
+    fill: #e0574a;
+  }
+
+  &[data-highlighted] {
+    background-color: #e0574a;
+    color: #ffffff;
+
+    svg {
+      fill: #ffffff;
+    }
+  }
+}

@@ -7,7 +7,7 @@ import Metadata from '../Metadata/Metadata';
 
 import styles from './TabletMobileTabs.module.scss';
 
-export default function TabletMobileTabs({ study, series, studyId, commentsEdit = false }) {
+export default function TabletMobileTabs({ study, series, studyId, studyInstanceUID }) {
   const [selectedTab, setSelectedTab] = useState('comments');
 
   const handleChangeTab = (tab) => {
@@ -19,7 +19,9 @@ export default function TabletMobileTabs({ study, series, studyId, commentsEdit 
   // Comments needs the study context when no series is selected (drawer opens with the STUDY
   // item active): without it both comment queries are disabled and the loader spins forever.
   const TAB_CONTENT = {
-    comments: () => <Comments series={series} studyId={studyId} commentsEdit={commentsEdit} />,
+    comments: () => (
+      <Comments series={series} studyId={studyId} studyInstanceUID={studyInstanceUID} />
+    ),
     metadata: () => <Metadata study={study} />,
   };
 
@@ -53,5 +55,5 @@ TabletMobileTabs.propTypes = {
   study: PropTypes.object.isRequired,
   series: PropTypes.object,
   studyId: PropTypes.string,
-  commentsEdit: PropTypes.bool,
+  studyInstanceUID: PropTypes.string,
 };

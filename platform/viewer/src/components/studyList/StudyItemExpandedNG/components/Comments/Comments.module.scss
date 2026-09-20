@@ -20,23 +20,70 @@
       margin-bottom: 10px;
     }
 
-    .commentItemAvatar {
-      width: 30px;
-      height: 30px;
-      background-color: #d9d9d9;
-      border-radius: 50%;
-      flex-shrink: 0;
+    // Per-comment actions menu, pinned to the end of the header row.
+    .commentItemActions {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
     }
 
-    .commentItemAuthor {
-      margin: 0 15px 0 0;
-      color: #ffffff;
+    // Inline edit form, in place of the rendered comment text.
+    .commentEditForm {
+      margin: 0 0 0 18px;
+      display: flex;
+      flex-direction: column;
+      row-gap: 10px;
+    }
+
+    .commentEditTextarea {
+      width: 100%;
+      min-height: 90px;
+      background-color: #000000;
       font-size: 16px;
       line-height: 18.75px;
-      font-weight: 600;
+      color: #d3d3d3;
+      border: 1px solid #3a3d44;
+      padding: 12px 15px;
+      border-radius: 10px;
+      outline: none;
+      resize: vertical;
     }
 
+    .commentEditActions {
+      display: flex;
+      column-gap: 10px;
+    }
 
+    .commentEditSave {
+      background-color: #2e46e9;
+      padding: 8px 16px;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      border: none;
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+    }
+
+    .commentEditCancel {
+      background: transparent;
+      padding: 7px 16px;
+      color: #b0b3ba;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid #3a3d44;
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+    }
 
     .commentItemText {
       margin: 0 0 0 18px;

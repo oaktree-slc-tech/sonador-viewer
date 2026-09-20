@@ -131,7 +131,9 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
     
     const _fetchAcl = async () => {
       const resourcePerms = await fetchStudyAclPermissions(activeServer, studyId);
-      DicomMetadataStore.updateStudyMetadata(_.omit(resourcePerms, 'Level'));
+      // `permsServer` marks which imaging server these grants came from; the same study UID can
+      // exist on more than one, and readers only trust an entry fetched from their own server.
+      DicomMetadataStore.updateStudyMetadata({ ..._.omit(resourcePerms, 'Level'), permsServer: activeServer?.wadoRoot });
     }
 
     if (activeServer && studyMeta && !aclView && !studyMeta.perms) {
@@ -495,12 +497,12 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
             />
             
             {aclView && aclComments && (
-              <Comments  series={selectedThumbnail} studyId={selectedStudy} commentsEdit={aclCommentEdit} />
+              <Comments series={selectedThumbnail} studyId={selectedStudy} studyInstanceUID={studyId} />
             )}
           </div>
         ) : (
           <TabletMobileTabs study={study} series={selectedThumbnail} studyId={selectedStudy}
-            commentsEdit={aclCommentEdit} />
+            studyInstanceUID={studyId} />
         )}
       </div>
 

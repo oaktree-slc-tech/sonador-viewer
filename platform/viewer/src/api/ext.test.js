@@ -20,7 +20,15 @@ jest.mock('@ohif/core/src/utils', () => ({
   urlUtil: { urlJoin: (...parts) => parts.join('/') },
 }));
 
-import { fetchSeriesAclPermissions, removeSeries, removeStudy } from './ext';
+import {
+  fetchSeriesAclPermissions,
+  removeSeries,
+  removeSeriesComment,
+  removeStudy,
+  removeStudyComment,
+  updateSeriesComment,
+  updateStudyComment,
+} from './ext';
 
 const SERVER = { wadoRoot: 'https://orthanc.test/dicom-web' };
 const STUDY_UID = '1.2.826.0.1.3680043.8.1055.1.20111102150758591.92402465.76095170';
@@ -141,5 +149,103 @@ describe('effective series permission', () => {
     ['both grants', true, true, true],
   ])('%s grants the action: %p || %p === %p', (_label, studyGrant, seriesGrant, expected) => {
     expect(effective(studyGrant, seriesGrant)).toBe(expected);
+  });
+});
+
+
+describe.each([
+  ['removeSeriesComment', (server, id) => removeSeriesComment(server, { SeriesInstanceUID: SERIES_UID }, id), 'series', SERIES_UID],
+  ['removeStudyComment', (server, id) => removeStudyComment(server, STUDY_UID, id), 'studies', STUDY_UID],
+])('%s', (_name, remove, resourceType, uid) => {
+  const COMMENT_ID = '0f3c5c2e-1d7a-4b9c-9a1e-5d2f6b8c4a10';
+  const expectedUrl = () => `https://orthanc.test/dicom-web/${resourceType}/${uid}/comments/${COMMENT_ID}`;
+
+  it('issues a DELETE to the comment route with a bearer token', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ ID: COMMENT_ID, status: 'success' }));
+
+    await remove(SERVER, COMMENT_ID);
+
+    const [url, init] = global.fetch.mock.calls[0];
+    expect(url).toBe(expectedUrl());
+    expect(init.method).toBe('DELETE');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    // No redirect option: the request must follow the gateway's redirect the way the resource
+    // removal does.
+    expect(init.redirect).toBeUndefined();
+  });
+
+  it('resolves on 2xx', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ ID: COMMENT_ID, status: 'success' }));
+
+    await expect(remove(SERVER, COMMENT_ID)).resolves.toEqual({
+      url: expectedUrl(),
+      status: 200,
+      alreadyRemoved: false,
+    });
+  });
+
+  it('treats 404 as already removed rather than as a failure', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ error: 'gone' }, { ok: false, status: 404 }));
+
+    await expect(remove(SERVER, COMMENT_ID)).resolves.toEqual({
+      url: expectedUrl(),
+      status: 404,
+      alreadyRemoved: true,
+    });
+  });
+
+  it('rejects other failures with the status and body attached', async () => {
+    // A 400 is what the server answers when the request user may not remove the comment.
+    global.fetch.mockResolvedValue(jsonResponse({ status: 'fail', errors: { User: [] } }, { ok: false, status: 400 }));
+
+    let caught;
+    try {
+      await remove(SERVER, COMMENT_ID);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.status).toBe(400);
+    expect(caught.url).toBe(expectedUrl());
+    expect(caught.body).toContain('"User"');
+    expect(caught.message).toContain(COMMENT_ID);
+  });
+});
+
+
+describe.each([
+  ['updateSeriesComment', (server, id, text) => updateSeriesComment(server, { SeriesInstanceUID: SERIES_UID }, id, text), 'series', SERIES_UID],
+  ['updateStudyComment', (server, id, text) => updateStudyComment(server, STUDY_UID, id, text), 'studies', STUDY_UID],
+])('%s', (_name, update, resourceType, uid) => {
+  const COMMENT_ID = '0f3c5c2e-1d7a-4b9c-9a1e-5d2f6b8c4a10';
+  const expectedUrl = () => `https://orthanc.test/dicom-web/${resourceType}/${uid}/comments/${COMMENT_ID}`;
+
+  it('issues a PUT with the new text and a bearer token, resolving to the response body', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ ID: COMMENT_ID, status: 'success' }));
+
+    await expect(update(SERVER, COMMENT_ID, 'Revised.')).resolves.toEqual({ ID: COMMENT_ID, status: 'success' });
+
+    const [url, init] = global.fetch.mock.calls[0];
+    expect(url).toBe(expectedUrl());
+    expect(init.method).toBe('PUT');
+    expect(init.headers.Authorization).toBe('Bearer test-token');
+    expect(JSON.parse(init.body)).toEqual({ Text: 'Revised.' });
+  });
+
+  it('rejects a refusal with the status and body attached', async () => {
+    global.fetch.mockResolvedValue(jsonResponse({ status: 'fail', errors: { User: [] } }, { ok: false, status: 400 }));
+
+    let caught;
+    try {
+      await update(SERVER, COMMENT_ID, 'Revised.');
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.status).toBe(400);
+    expect(caught.url).toBe(expectedUrl());
+    expect(caught.body).toContain('"User"');
   });
 });
