@@ -22,6 +22,8 @@ jest.mock('@ohif/core/src/utils', () => ({
 
 import {
   duplicateAclPolicyId,
+  getAclGroups,
+  getAclUsers,
   isDuplicateAclError,
   upsertAclGroup,
   upsertAclUser,
@@ -200,5 +202,48 @@ describe('upsertAclGroup', () => {
     expect(global.fetch.mock.calls[1][1].method).toBe('PUT');
     expect(global.fetch.mock.calls[1][0]).toContain('grp-uuid');
     expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toMatchObject({ Group: 3, ID: 'grp-uuid' });
+  });
+});
+
+
+describe('policy principals', () => {
+  // The gateway names a policy's principal as an object (`Group: { id, name }`); when Sonador
+  // cannot describe the principal it still names it by id. Both shapes have to map to a usable row.
+  const policies = (rows) => Promise.resolve({ ok: true, json: () => Promise.resolve(rows) });
+
+  afterEach(() => {
+    delete global.fetch;
+  });
+
+  it('flattens a described group onto the row', async () => {
+    global.fetch = jest.fn(() => policies([{ ID: 'p1', Group: { id: 26, name: 'consult' }, View: true }]));
+
+    const [row] = await getAclGroups(SERVER, STUDY);
+
+    expect(row.Group).toBe(26);
+    expect(row.name).toBe('consult');
+    expect(row.View).toBe(true);
+  });
+
+  it('keeps the group id, and no name, when the gateway could only name the group by id', async () => {
+    global.fetch = jest.fn(() => policies([{ ID: 'p1', Group: { id: 14 }, View: true }, { ID: 'p2', Group: 15 }]));
+
+    const [byObject, byId] = await getAclGroups(SERVER, STUDY);
+
+    expect(byObject.Group).toBe(14);
+    expect(byObject.name).toBeUndefined();
+    expect(byId.Group).toBe(15);
+    expect(byId.name).toBeUndefined();
+  });
+
+  it('does the same for users', async () => {
+    global.fetch = jest.fn(() => policies([{ ID: 'p1', User: { id: 13, username: 'dev01' } }, { ID: 'p2', User: 99 }]));
+
+    const [described, bare] = await getAclUsers(SERVER, STUDY);
+
+    expect(described.User).toBe(13);
+    expect(described.username).toBe('dev01');
+    expect(bare.User).toBe(99);
+    expect(bare.username).toBeUndefined();
   });
 });

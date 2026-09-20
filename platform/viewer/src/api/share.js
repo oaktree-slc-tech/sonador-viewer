@@ -81,6 +81,17 @@ export const isDuplicateAclError = (err) => {
 export const duplicateAclPolicyId = (err) => err?.json?.['object-data']?.ID;
 
 
+const _principal = (value) => {
+  // The gateway names a policy's user or group as an object with at least `id`. A bare id is
+  // accepted too, for a policy whose principal Sonador could not describe.
+  if (value && typeof value === 'object') {
+    return value;
+  }
+
+  return value === undefined || value === null ? {} : { id: value };
+};
+
+
 export const getAclUsers = (server, studyId) => {
   // Retrieve user authorization policies for provided server and study UID via
   // Orthanc DICOMweb ext API.
@@ -93,7 +104,7 @@ export const getAclUsers = (server, studyId) => {
       // Modify API response so that rather than a nested object, user details are
       // available at the root of JSON.
       return res.map((p) => {
-        p.user = p.user || p.User || {};
+        p.user = _principal(p.user || p.User);
 
         // Move user properties to root of response
         p.User = p.user.id;
@@ -167,7 +178,7 @@ export const getAclGroups = (server, studyId) => {
       // Modify API response so that rather than a nested object, group name is at the
       // root of the JSON.
       return res.map((p) => {
-        p.group = p.group || p.Group || {};
+        p.group = _principal(p.group || p.Group);
 
         // Move group properties to root of response
         p.Group = p.group.id;
