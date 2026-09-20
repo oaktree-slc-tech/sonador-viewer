@@ -45,7 +45,7 @@
     "link-list": "npm ls --depth=0 --link=true",
     "remove:modules": "npm exec --workspaces -- npx rimraf node_modules && npx rimraf node_modules",
     "prepare": "husky install",
-  "postinstall": "patch-package"
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "idb-keyval": "^6.2.1",
@@ -60,10 +60,9 @@
     "@babel/plugin-transform-class-properties": "^7.23.3",
     "@babel/plugin-transform-runtime": "^7.5.0",
     "@babel/plugin-transform-typescript": "^7.13.0",
-    "@babel/preset-typescript": "^7.13.0",
     "@babel/preset-env": "^7.23.3",
     "@babel/preset-react": "^7.0.0",
-    "ts-node": "^10.9.2",
+    "@babel/preset-typescript": "^7.13.0",
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
@@ -88,6 +87,7 @@
     "html-webpack-plugin": "^5.5.3",
     "husky": "^8.0.3",
     "jest": "^29.7.0",
+    "jest-environment-jsdom": "29.7.0",
     "jest-junit": "^16.0.0",
     "lerna": "^7.4.2",
     "lint-staged": "^13.0.3",
@@ -109,6 +109,7 @@
     "stylus": "^0.54.5",
     "stylus-loader": "^3.0.2",
     "terser-webpack-plugin": "^5.3.9",
+    "ts-node": "^10.9.2",
     "webpack": "^5.89.0",
     "webpack-bundle-analyzer": "^4.10.1",
     "webpack-cli": "^5.1.4",

@@ -7,6 +7,8 @@
 
 import moment from 'moment';
 
+import { getDisplayName } from '../../../../../lib/getDisplayName';
+
 
 export const formatStudyDate = (StudyDate) => {
   // Study dates arrive as DICOM DA (YYYYMMDD). Anything else is passed through rather than
@@ -87,4 +89,56 @@ export const summariseBulkRemoval = ({ removed = 0, total = 0 } = {}) => {
   // omits.
 
   return `${removed} of ${total} ${total === 1 ? 'study' : 'studies'} removed`;
+};
+
+
+export const formatCommentDate = (value) => {
+  // Comment timestamps arrive as ISO date-times with microseconds; the header row shows them
+  // trimmed to the second, and the confirmation matches it. Anything unparseable passes through.
+
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = String(value).split('.')[0];
+  const parsed = moment(trimmed, moment.ISO_8601, true);
+
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : trimmed;
+};
+
+
+export const commentExcerpt = (text, maxLength = 160) => {
+  // One line of the comment, so the reader can check it is the one they meant. Whitespace is
+  // collapsed (comments are Markdown and often multi-line) and long text is cut with an ellipsis.
+
+  const flat = String(text || '').replace(/\s+/g, ' ').trim();
+
+  if (flat.length <= maxLength) {
+    return flat;
+  }
+
+  return `${flat.slice(0, maxLength).trimEnd()}…`;
+};
+
+
+export const describeComment = (descriptor = {}) => {
+  // Identify a comment to a reader by its author and when it was posted. A comment with no
+  // resolvable author still needs a name the sentence can carry.
+
+  const author = descriptor.User ? getDisplayName(descriptor.User) : undefined;
+
+  return {
+    title: author || 'an unknown user',
+    subtitle: formatCommentDate(descriptor.LastUpdate || descriptor.Created) || '',
+  };
+};
+
+
+export const commentDetailLines = (descriptor = {}) => {
+  // Attribute lines for a comment removal: when it was posted and what it says.
+
+  return [
+    _line('Posted', formatCommentDate(descriptor.LastUpdate || descriptor.Created)),
+    _line('Comment', commentExcerpt(descriptor.Text)),
+  ].filter(Boolean);
 };

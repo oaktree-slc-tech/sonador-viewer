@@ -5,8 +5,12 @@
 // will be destroyed — lives in describeRemoval.js and is tested here.
 
 import {
+  commentDetailLines,
+  commentExcerpt,
+  describeComment,
   describeSeries,
   describeStudy,
+  formatCommentDate,
   formatStudyDate,
   seriesDetailLines,
   studyDetailLines,
@@ -116,5 +120,71 @@ describe('summariseBulkRemoval', () => {
 
   it('singularises a one-study selection', () => {
     expect(summariseBulkRemoval({ removed: 1, total: 1 })).toBe('1 of 1 study removed');
+  });
+});
+
+
+describe('formatCommentDate', () => {
+  it('trims the microseconds and renders to the second', () => {
+    expect(formatCommentDate('2026-09-19T14:03:27.123456')).toBe('2026-09-19 14:03:27');
+  });
+
+  it('passes an unparseable value through rather than rendering "Invalid date"', () => {
+    expect(formatCommentDate('yesterday')).toBe('yesterday');
+  });
+
+  it('is undefined for a missing value', () => {
+    expect(formatCommentDate(undefined)).toBeUndefined();
+    expect(formatCommentDate('')).toBeUndefined();
+  });
+});
+
+
+describe('commentExcerpt', () => {
+  it('collapses whitespace so a multi-line comment reads as one line', () => {
+    expect(commentExcerpt('First line\n\n  second   line ')).toBe('First line second line');
+  });
+
+  it('cuts long text with an ellipsis at the requested length', () => {
+    const text = 'x'.repeat(200);
+
+    expect(commentExcerpt(text, 160)).toBe(`${'x'.repeat(160)}…`);
+    expect(commentExcerpt('short', 160)).toBe('short');
+  });
+
+  it('is an empty string for a missing comment', () => {
+    expect(commentExcerpt(undefined)).toBe('');
+  });
+});
+
+
+describe('describeComment', () => {
+  it('names the author by display name and the posting time', () => {
+    const descriptor = {
+      ID: '0f3c5c2e-1d7a-4b9c-9a1e-5d2f6b8c4a10',
+      User: { first_name: 'Ada', last_name: 'Lovelace', username: 'ada' },
+      LastUpdate: '2026-09-19T14:03:27.123456',
+      Text: 'Looks fine.',
+    };
+
+    expect(describeComment(descriptor)).toEqual({ title: 'Ada Lovelace', subtitle: '2026-09-19 14:03:27' });
+  });
+
+  it('falls back to the username or email, then to a placeholder, when no name is set', () => {
+    expect(describeComment({ User: { username: 'ada' } }).title).toBe('ada');
+    expect(describeComment({ User: { email: 'ada@example.org' } }).title).toBe('ada@example.org');
+    expect(describeComment({}).title).toBe('an unknown user');
+  });
+});
+
+
+describe('commentDetailLines', () => {
+  it('lists the posting time and an excerpt of the text, dropping absent values', () => {
+    expect(commentDetailLines({ LastUpdate: '2026-09-19T14:03:27.1', Text: 'Looks fine.' })).toEqual([
+      { label: 'Posted', value: '2026-09-19 14:03:27' },
+      { label: 'Comment', value: 'Looks fine.' },
+    ]);
+
+    expect(commentDetailLines({})).toEqual([]);
   });
 });

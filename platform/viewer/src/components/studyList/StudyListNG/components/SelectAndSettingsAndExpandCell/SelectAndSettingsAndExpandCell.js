@@ -243,7 +243,9 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
     // a per-study `remove` grant would stay invisible (FR-8). Same single fetch, one more reader.
     if (activeServer && StudyInstanceUID && !resourceAclLoaded && (!aclDownload || !aclShare || !aclRemove)) {
       const resourcePerms = await fetchStudyAclPermissions(activeServer, StudyInstanceUID);
-      DicomMetadataStore.updateStudyMetadata(_.omit(resourcePerms, 'Level'));
+      // `permsServer` marks which imaging server these grants came from; the same study UID can
+      // exist on more than one, and readers only trust an entry fetched from their own server.
+      DicomMetadataStore.updateStudyMetadata({ ..._.omit(resourcePerms, 'Level'), permsServer: activeServer?.wadoRoot });
 
       // Set permission for download
       if (!aclDownload && resourcePerms?.perms?.View) {

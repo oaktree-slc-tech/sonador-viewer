@@ -53,6 +53,97 @@ export const createStudyComment = (server, studyId, text) => {
 };
 
 
+const _readFailure = async (response) => {
+  // Body captured as text: the authorization plugin and the gateway do not agree on a content
+  // type for errors, and a parse failure would replace a diagnosable error with a useless one.
+  try {
+    return await response.text();
+  } catch (err) {
+    return undefined;
+  }
+};
+
+
+const _updateComment = async (server, resourceType, resourceId, commentId, text) => {
+  // Change the text of a study or series comment. The server permits this to the comment's author
+  // only; a refusal is a 400 naming the User field.
+  const url = urlUtil.urlJoin(server.wadoRoot, resourceType, resourceId, 'comments', commentId);
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+    body: JSON.stringify({ Text: text }),
+  });
+
+  if (response.ok) {
+    return response.json();
+  }
+
+  const error = new Error(`Unable to update comment=${commentId} on ${resourceType}=${resourceId} (HTTP ${response.status})`);
+  error.url = url;
+  error.status = response.status;
+  error.body = await _readFailure(response);
+
+  throw error;
+};
+
+
+export const updateSeriesComment = (server, series, commentId, text) => {
+  // Change the text of a comment on the provided series
+
+  return _updateComment(server, 'series', series.SeriesInstanceUID, commentId, text);
+};
+
+
+export const updateStudyComment = (server, studyId, commentId, text) => {
+  // Change the text of a comment on the provided study
+
+  return _updateComment(server, 'studies', studyId, commentId, text);
+};
+
+
+const _removeComment = async (server, resourceType, resourceId, commentId) => {
+  // Permanently remove a study or series comment from the imaging server. Hard delete: comments
+  // are rows in the imaging server's database with no soft-delete or undo.
+  //
+  // removeStudyComment and removeSeriesComment below are the only entry points; the error and
+  // 404 handling mirror _removeResource so a comment removal reports the same way a resource
+  // removal does.
+  const url = urlUtil.urlJoin(server.wadoRoot, resourceType, resourceId, 'comments', commentId);
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+
+  // 404 is success: the comment is already gone and the caller's terminal state is the same.
+  if (response.ok || response.status === 404) {
+    return { url, status: response.status, alreadyRemoved: response.status === 404 };
+  }
+
+  const error = new Error(`Unable to remove comment=${commentId} from ${resourceType}=${resourceId} (HTTP ${response.status})`);
+  error.url = url;
+  error.status = response.status;
+  error.body = await _readFailure(response);
+
+  throw error;
+};
+
+
+export const removeSeriesComment = (server, series, commentId) => {
+  // Permanently remove a comment from the provided series
+
+  return _removeComment(server, 'series', series.SeriesInstanceUID, commentId);
+};
+
+
+export const removeStudyComment = (server, studyId, commentId) => {
+  // Permanently remove a comment from the provided study
+
+  return _removeComment(server, 'studies', studyId, commentId);
+};
+
+
 export const fetchDownloadStudies = (server, studyId, descriptor) => {
   // Queue a zip-archive export of a DICOM study for download to the user's computer.
   //
