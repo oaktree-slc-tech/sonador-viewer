@@ -295,6 +295,8 @@ const mockAddSegmentations = jest.fn(segmentations => {
   segmentations.forEach(seg => {
     mockC3dSegmentationState.set(seg.segmentationId, {
       segmentationId: seg.segmentationId,
+      // As `normalizeSegmentationInput` at 4.22.13: `label: config?.label ?? null`
+      label: (seg.config && seg.config.label) ?? null,
       segments: (seg.config && seg.config.segments) || {},
       // As `normalizeSegmentationInput` at 4.22.13: `cachedStats: config?.cachedStats ?? {}` --
       // which is what lets a display-only flag be ON the entry when SEGMENTATION_ADDED fires.
@@ -441,6 +443,8 @@ const {
   noteReferencedVolume,
   removeCanonicalSegmentation,
   resolveLegacyViewPlacement,
+  markInMemorySegmentation,
+  getInMemorySegmentationInfo,
 } = require('./labelmapBridge.js');
 
 
@@ -2807,5 +2811,109 @@ describe('lazy legacy install (post-#92 deployments)', () => {
   it('is eager by default', async () => {
     importSegmentation();
     expect(mockSegmentationModuleState.series[FIRST_IMAGE_ID].labelmaps3D[0]).toBeDefined();
+  });
+});
+
+
+describe('segmentations created in the viewer (ohif-viewers#143)', () => {
+  const WORKING_ID = `${SEGMENTATION_ID}::edit`;
+
+  it('names the segmentation, and the editor working copy keeps the name', () => {
+    importSegmentation({ canonical: { labelmapBuffer: undefined, label: 'Segmentation – CT Abdomen' } });
+
+    expect(mockC3dSegmentationState.get(SEGMENTATION_ID).label).toBe('Segmentation – CT Abdomen');
+    expect(getSegmentationVoxels(SEGMENTATION_ID).every(v => v === 0)).toBe(true);
+
+    forkSegmentationForEditor(SEGMENTATION_ID);
+    expect(mockC3dSegmentationState.get(WORKING_ID).label).toBe('Segmentation – CT Abdomen');
+    releaseEditorWorkingCopy(WORKING_ID);
+  });
+
+  it('leaves an imported SEG unnamed, as before', () => {
+    importSegmentation();
+    expect(mockC3dSegmentationState.get(SEGMENTATION_ID).label).toBeNull();
+  });
+
+  it('marks an in-memory segmentation, and finds the mark through its working copy', () => {
+    importSegmentation({ canonical: { labelmapBuffer: undefined } });
+    expect(getInMemorySegmentationInfo(SEGMENTATION_ID)).toBeUndefined();
+
+    expect(markInMemorySegmentation(SEGMENTATION_ID, { origin: 'blank' })).toBe(true);
+    expect(getInMemorySegmentationInfo(SEGMENTATION_ID))
+      .toEqual(expect.objectContaining({ segmentationId: SEGMENTATION_ID, origin: 'blank' }));
+
+    forkSegmentationForEditor(SEGMENTATION_ID);
+    expect(getInMemorySegmentationInfo(WORKING_ID))
+      .toEqual(expect.objectContaining({ segmentationId: SEGMENTATION_ID, origin: 'blank' }));
+    releaseEditorWorkingCopy(WORKING_ID);
+
+    expect(markInMemorySegmentation('missing', { origin: 'blank' })).toBe(false);
+  });
+
+  it('a working copy of a loaded SEG is not in memory', () => {
+    importSegmentation();
+    forkSegmentationForEditor(SEGMENTATION_ID);
+    expect(getInMemorySegmentationInfo(WORKING_ID)).toBeUndefined();
+    releaseEditorWorkingCopy(WORKING_ID);
+  });
+});
+
+
+describe('removing the active segmentation of a series', () => {
+  // ohif-viewers#143: a segmentation created in the viewer becomes the series' active labelmap;
+  // when the editor closes it is removed, and the panel must list the series' segmentations again.
+  const NEW_ID = `${FIRST_IMAGE_ID}_1`;
+
+  function createSecond() {
+    createCanonicalSegmentation({
+      segmentationId: NEW_ID,
+      imageIds: stackImageIds,
+      segMetadata: { seriesInstanceUid: '1.2.3', data: [undefined, { SegmentNumber: 1, SegmentLabel: 'Segment 1' }] },
+      firstImageId: FIRST_IMAGE_ID,
+      labelmapIndex: 1,
+      colorLUTIndex: 0,
+      referencedVolumeId: IMAGE_VOLUME_ID,
+    });
+  }
+
+  it('hands the active labelmap back to the one active before, and tells the panel', () => {
+    importSegmentation();
+    createSecond();
+    const series = mockSegmentationModuleState.series[FIRST_IMAGE_ID];
+    expect(series.activeLabelmapIndex).toBe(1);
+    const panelEvents = [];
+    const onPanelEvent = event => panelEvents.push(event.detail);
+    document.addEventListener('extensiondicomsegmentationlabelmapstatemodified', onPanelEvent);
+
+    removeCanonicalSegmentation(NEW_ID);
+    document.removeEventListener('extensiondicomsegmentationlabelmapstatemodified', onPanelEvent);
+
+    expect(series.labelmaps3D[1]).toBeUndefined();
+    expect(series.activeLabelmapIndex).toBe(0);
+    expect(series.labelmaps3D[0]).toBeDefined();
+    expect(panelEvents).toEqual([expect.objectContaining({ segmentationId: NEW_ID })]);
+  });
+
+  it('leaves the active labelmap alone when an inactive one is removed', () => {
+    importSegmentation();
+    createSecond();
+    const series = mockSegmentationModuleState.series[FIRST_IMAGE_ID];
+    series.activeLabelmapIndex = 0;
+
+    removeCanonicalSegmentation(NEW_ID);
+
+    expect(series.activeLabelmapIndex).toBe(0);
+  });
+
+  it('falls back to the first remaining labelmap', () => {
+    createSecond();
+    importSegmentation({ canonical: {} });
+    const series = mockSegmentationModuleState.series[FIRST_IMAGE_ID];
+    // SEGMENTATION_ID (slot 0) was installed after, taking the active slot from slot 1
+    expect(series.activeLabelmapIndex).toBe(0);
+
+    removeCanonicalSegmentation(SEGMENTATION_ID);
+
+    expect(series.activeLabelmapIndex).toBe(1);
   });
 });

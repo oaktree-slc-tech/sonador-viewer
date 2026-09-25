@@ -22,8 +22,10 @@ import { TOOLBAR_BUTTON_TYPES, TOOLBAR_BUTTON_BEHAVIORS } from '@ohif/ui';
 import { SeriesTagToolbarButton } from './toolbarComponents/SeriesTagToolbarButton.js';
 import { DistortionFilterToolbarButton } from './toolbarComponents/DistortionFilterToolbarButton.js';
 import { LocalCacheToolbarButton } from './toolbarComponents/LocalCacheToolbarButton.js';
+import { CreateSegmentationToolbarButton } from './toolbarComponents/CreateSegmentationToolbarButton.js';
 import { DownloadStudyToolbarButton } from './toolbarComponents/DownloadStudyToolbarButton.js';
 import { RemoveStudyToolbarButton } from './toolbarComponents/RemoveStudyToolbarButton.js';
+import toolbarUITypes from './toolbarUITypes';
 
 /* TODO: Export enums through a extension manager. */
 const enums = {
@@ -227,6 +229,17 @@ const definitions = [
         commandName: 'flipViewportVertical',
       },
       {
+        // Blank segmentation on the active CT/MR series, opened in the Segmentation Editor
+        // (ohif-viewers#143); the command belongs to the segmentation extension
+        id: 'CreateSegmentation',
+        label: 'Create Seg',
+        icon: 'brush',
+        CustomComponent: CreateSegmentationToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'createSegmentation',
+        uiOptions: { layoutButtonVisible: false },
+      },
+      {
         // Captures the CURRENTLY DISPLAYED IMAGE off the viewport canvas as a PNG/JPEG. It was
         // labelled "Download", which described neither the scope (one image, not the study) nor
         // the action (a screen capture, not a DICOM export) -- and it now sits in the same menu as
@@ -301,4 +314,7 @@ const definitions = [
 export default {
   definitions,
   defaultContext: 'ACTIVE_VIEWPORT::CORNERSTONE',
+
+  // OHIF v3 button UI types for the ToolbarService (ohif-viewers#142)
+  uiTypes: toolbarUITypes,
 };

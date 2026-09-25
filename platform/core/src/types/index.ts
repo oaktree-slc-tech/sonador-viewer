@@ -5,6 +5,7 @@ import type { DataSourceDefinition } from './DataSource';
 export type * from './Command';
 export type * from './DisplaySet';
 export type * from './StudyMetadata';
+export type * from '../services/ToolBarService/types';
 
 
 export {  

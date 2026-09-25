@@ -3,28 +3,7 @@ import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 import { redux } from '@ohif/core';
-import { ToolbarButton, viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from '@ohif/ui';
-
-
-const isCTVolumeReconstructable = (viewportSpecificData = {}, activeViewportIndex) => {
-  // Determine if the series instance supports 3D volume reconstruction
-
-  try {
-    // Determine if the displayset supports 3D reconstruction
-    const isVisible = viewerbaseDisplaySetReconstructable(viewportSpecificData, activeViewportIndex);
-
-    if (isVisible) {
-      const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
-
-      // Check if the modality is CT
-      return displaySet && (displaySet.Modality === 'CT' || displaySet.Modality === 'MR');
-    }
-  } catch (err) {
-    console.error('Unable to retrieve study or displayset due to an error.', err);
-  }
-
-  return false;
-};
+import { ToolbarButton, viewerbaseDisplaySetIsCTOrMRVolume } from '@ohif/ui';
 
 
 function Viewer3DCTToolbarButton({ toolbarClickCallback, button, isActive }) {
@@ -40,7 +19,7 @@ function Viewer3DCTToolbarButton({ toolbarClickCallback, button, isActive }) {
 
   // Should the 3D volume rendering button be visible
   const isVisible = numColumns == 1 && numRows == 1
-    && isCTVolumeReconstructable(viewportSpecificData, activeViewportIndex);
+    && viewerbaseDisplaySetIsCTOrMRVolume(viewportSpecificData, activeViewportIndex);
 
   return (
     <>

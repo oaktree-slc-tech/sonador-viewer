@@ -29,6 +29,7 @@ import {
 } from '@ohif/extension-viewer3d-volume';
 
 import { Enums as SegEditorEnums } from '../../enums';
+import SegEditorToolPalette from './SegEditorToolPalette';
 import { Enums as vtkEnums } from '@ohif/extension-vtk';
 
 const { DisplaySetApi } = OHIF.display;
@@ -464,6 +465,8 @@ export default function SonadorSegmentationEditorPanel({
 
           </SegmentationTable.Expanded>
         </SegmentationTable>
+
+        <SegEditorToolPalette commandsManager={commandsManager} displaySetInstanceUID={displaySetInstanceUID} />
       </TooltipProvider>
 
     </div>

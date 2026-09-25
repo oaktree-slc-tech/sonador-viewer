@@ -12,7 +12,14 @@
 //        cached template (memory-light); only the node graph is duplicated. AnimationClips are
 //        immutable and safe to share; each viewport binds them to its own AnimationMixer.
 
-import { Color, Mesh, MeshStandardMaterial } from 'three';
+import {
+  Color,
+  DoubleSide,
+  LinearSRGBColorSpace,
+  Mesh,
+  MeshLambertMaterial,
+  MeshStandardMaterial,
+} from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 import { M3D_GEOMETRY_TYPE } from './m3dGeometryLoader.js';
@@ -29,6 +36,32 @@ function resolveColor(color) {
     return DEFAULT_GEOMETRY_COLOR;
   }
   return new Color(color).getHex();
+}
+
+// The per-instance material of a single-mesh model (STL, and the Segmentation Editor's surfaces),
+// so every M3D view renders meshes with the same appearance.
+//
+// lightingModel 'vtk' (M3DModelView lightingModel="vtk"): VTK's default surface look, i.e.
+// diffuse-only (ambient 0, specular 0), lit on both sides (VTK's two-sided lighting), with the
+// colour taken as a display-space value, as VTK uses it.
+export function createModelMaterial(color, { lightingModel = 'm3d' } = {}) {
+  if (lightingModel === 'vtk') {
+    const displayColor = new Color();
+    if (color === undefined || color === null) {
+      displayColor.setHex(DEFAULT_GEOMETRY_COLOR, LinearSRGBColorSpace);
+    } else if (typeof color === 'number') {
+      displayColor.setHex(color, LinearSRGBColorSpace);
+    } else {
+      displayColor.setStyle(color, LinearSRGBColorSpace);
+    }
+    return new MeshLambertMaterial({ color: displayColor, side: DoubleSide });
+  }
+
+  return new MeshStandardMaterial({
+    color: resolveColor(color),
+    envMapIntensity: 0.0,
+    roughness: 0.9,
+  });
 }
 
 // Returns:
@@ -48,13 +81,7 @@ export function hydrateM3DInstance(payload) {
   }
 
   // STL
-  const color = resolveColor(payload.meta && payload.meta.color);
-  const material = new MeshStandardMaterial({
-    color,
-    envMapIntensity: 0.0,
-    roughness: 0.9,
-  });
-  return new Mesh(payload.parsed, material);
+  return new Mesh(payload.parsed, createModelMaterial(payload.meta && payload.meta.color));
 }
 
 // Dispose only the resources OWNED by this per-viewport instance. The shared, cached data

@@ -1,0 +1,92 @@
+// The tool palette renders OHIF v3 toolbox components (ToolButton, ToolSettings, Numeric, Tabs),
+// which were written for OHIF v3's Tailwind setup. Two differences in the viewer are corrected here
+// for the palette subtree only. (The panel theme's button and popover rules skip the palette: see
+// the `seg-editor-palette` exclusions in SonadorSegmentationPanelTheme.module.scss.) The palette
+// keeps the viewer's type scale, so its controls match the rest of the segmentation panel.
+//
+// Note on precedence: in the viewer build the Tailwind utilities are emitted UNLAYERED, so any
+// layered rule loses to them, and any unlayered rule competes with them on specificity.
+
+// 1. Preflight. Tailwind's preflight is not loaded in the viewer and the v3 components rely on it.
+//    This is the subset that applies to the palette's elements. It sits in a layer so that every
+//    utility (unlayered) still overrides it.
+@layer base {
+  .palette {
+    *,
+    ::before,
+    ::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      border: 0 solid;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      font-size: inherit;
+      font-weight: inherit;
+    }
+
+    ol,
+    ul,
+    menu {
+      list-style: none;
+    }
+
+    img,
+    svg,
+    video,
+    canvas {
+      display: block;
+      vertical-align: middle;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      font-feature-settings: inherit;
+      letter-spacing: inherit;
+      color: inherit;
+      border-radius: 0;
+      background-color: transparent;
+      opacity: 1;
+    }
+
+    button {
+      appearance: button;
+      cursor: pointer;
+    }
+
+    ::placeholder {
+      opacity: 1;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  }
+}
+
+// 2. The viewer's global stylesheet (platform/ui global.styl, unlayered) gives h1/h3 top and
+//    bottom margins, weight 500 and line-height 1.1, which beat the layered reset above. The
+//    Toolbox's section header is an <h3> (Radix Accordion header).
+.palette h3 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+// 3. Space between the tool buttons and the active tool's options. The Toolbox is kept verbatim
+//    from OHIF v3, where the options container sits 4px (`mt-1`) below the buttons; that reads as
+//    one block in the palette. The selector repeats the container's utility classes so it beats
+//    the (unlayered) `mt-1`.
+.palette :global(.bg-muted.mt-1.h-auto) {
+  margin-top: 0.75rem;
+}

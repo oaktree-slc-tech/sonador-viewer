@@ -44,6 +44,12 @@ import {
   stopArchiveNotifications,
 } from './ArchiveDownloadService';
 
+// OHIF v3 toolbar state. ToolbarService.ts is kept verbatim; the Sonador subclass resolves
+// button UI types from both v2 and v3 toolbar modules.
+import ToolbarService from './ToolBarService/SonadorToolbarService';
+import { TOOLBAR_SECTIONS } from './ToolBarService';
+import { getToolbarUITypeEntries } from './ToolBarService/toolbarModuleEntries';
+
 import ServicesManager from './ServicesManager.js';
 import pubSubServiceInterface, { PubSubService } from './_shared/pubSubServiceInterface';
 
@@ -88,4 +94,7 @@ export {
   stopArchiveNotifications,
   pubSubServiceInterface,
   PubSubService,
+  ToolbarService,
+  TOOLBAR_SECTIONS,
+  getToolbarUITypeEntries,
 };

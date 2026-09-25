@@ -3,3 +3,4 @@ export {
   useNotification,
   withNotification,
 } from './NotificationProvider';
+export { IconPresentationProvider, useIconPresentation } from './IconPresentationProvider';

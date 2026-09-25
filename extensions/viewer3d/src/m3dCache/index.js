@@ -8,5 +8,6 @@
 export { M3D_GEOMETRY_SCHEME, getM3DGeometryId, isM3DGeometryId, getSopInstanceUIDFromGeometryId } from './m3dGeometryId.js';
 export { M3D_GEOMETRY_TYPE, m3dGeometryLoader, registerM3DGeometryLoader, disposeM3DPayload } from './m3dGeometryLoader.js';
 export { acquireGeometry, releaseGeometry, getSourceBlob, getReferenceCount } from './m3dCacheService.js';
-export { hydrateM3DInstance, disposeM3DInstance, DEFAULT_GEOMETRY_COLOR, DEFAULT_GEOMETRY_COLOR_HEX } from './hydrateM3DInstance.js';
+export { hydrateM3DInstance, disposeM3DInstance, createModelMaterial, DEFAULT_GEOMETRY_COLOR, DEFAULT_GEOMETRY_COLOR_HEX } from './hydrateM3DInstance.js';
+export { C3D_SURFACE_MODEL_TYPE, createSurfaceModel, disposeSurfaceModel, polysToTriangleIndices, surfaceToBufferGeometry } from './cornerstoneSurfaceModels.js';
 export { M3D_SEGMENTATION_SCHEME, getM3DSegmentationId, registerM3DSegmentation, releaseM3DSegmentation } from './m3dSegmentationState.js';

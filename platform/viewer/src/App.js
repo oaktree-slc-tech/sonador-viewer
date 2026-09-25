@@ -24,6 +24,7 @@ import {
   UINotificationService,
   NotificationLogService,
   ViewportGridService,
+  ToolbarService,
   LocalCacheService,
   DownloadManagerService,
   ArchiveDownloadService,
@@ -91,6 +92,7 @@ const commandsManagerConfig = {
 
 /** Managers */
 const commandsManager = new CommandsManager(commandsManagerConfig);
+servicesManager.setCommandsManager(commandsManager);
 const hotkeysManager = new HotkeysManager(commandsManager, servicesManager);
 let extensionManager;
 /** ~~~~~~~~~~~~~ End Application Setup */
@@ -336,6 +338,11 @@ function _initExtensions(extensions, cornerstoneExtensionConfig, appConfig) {
     contexts: CONTEXTS,
     hooks: { useAppContext,},
   }});
+  servicesManager.setExtensionManager(extensionManager);
+
+  // OHIF v3 toolbar state (ohif-viewers#142). Registered before the extensions so that their
+  // toolbar modules can register evaluate functions with it.
+  servicesManager.registerService(ToolbarService.REGISTRATION);
 
   // Sonador viewer required extensions
   const requiredExtensions = [GenericViewerCommands, [OHIFCornerstoneExtension, cornerstoneExtensionConfig]];

@@ -84,6 +84,8 @@ import {
   pushLegacyLabelmapModified,
   removeCanonicalSegmentation,
   resolveLegacyViewPlacement,
+  markInMemorySegmentation,
+  getInMemorySegmentationInfo,
 } from './utils/labelmapBridge.js';
 
 // Tools for working with VTK data
@@ -175,6 +177,8 @@ const cornerstone3dUtils = {
   noteReferencedVolume,
   removeCanonicalSegmentation,
   resolveLegacyViewPlacement,
+  markInMemorySegmentation,
+  getInMemorySegmentationInfo,
   mirrorLegacyMetadataToCornerstone3d,
   attachLabelmapSegmentationService,
   pushLegacyLabelmapModified,

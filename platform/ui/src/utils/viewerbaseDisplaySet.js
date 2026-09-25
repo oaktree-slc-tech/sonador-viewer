@@ -40,4 +40,22 @@ const viewerbaseDisplaySetReconstructable = (viewportSpecificData = {}, activeVi
   return false;
 };
 
-export { viewerbaseGetDisplaySet, viewerbaseDisplaySetReconstructable };
+// Modalities the volume viewers and the Segmentation Editor treat as 3D volumes
+const VOLUME_MODALITIES = ['CT', 'MR'];
+
+const viewerbaseDisplaySetIsCTOrMRVolume = (viewportSpecificData = {}, activeViewportIndex) => {
+  // Determine if the active viewport shows a CT or MR series that supports 3D reconstruction
+
+  try {
+    if (viewerbaseDisplaySetReconstructable(viewportSpecificData, activeViewportIndex)) {
+      const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
+      return !!displaySet && VOLUME_MODALITIES.includes(displaySet.Modality);
+    }
+  } catch (err) {
+    console.error('Unable to retrieve study or displayset due to an error.', err);
+  }
+
+  return false;
+};
+
+export { viewerbaseGetDisplaySet, viewerbaseDisplaySetReconstructable, viewerbaseDisplaySetIsCTOrMRVolume };

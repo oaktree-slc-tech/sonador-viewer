@@ -30,6 +30,7 @@
   "peerDependencies": {
     "@kitware/vtk.js": "34.15.1",
     "@ohif/core": "^0.50.0",
+    "@ohif/extension-viewerm3d": "^0.1.0",
     "@ohif/extension-vtk": "^2.0.0",
     "@ohif/ui": "^0.50.0",
     "@ohif/ui-next": "~0.1.0-a1",
@@ -42,8 +43,12 @@
     "@cornerstonejs/dicom-image-loader": "~4.22.13",
     "@cornerstonejs/nifti-volume-loader": "~4.22.13",
     "@cornerstonejs/polymorphic-segmentation": "~4.22.13",
-    "@icr/polyseg-wasm": "^0.4.0",
     "@cornerstonejs/tools": "~4.22.13",
-    "flexlayout-react": "^0.7.15"
+    "@icr/polyseg-wasm": "^0.4.0",
+    "comlink": "4.4.2",
+    "flexlayout-react": "^0.7.15",
+    "opencascade.js": "github:zalo/opencascade.js#cascadestudio-v3-occt801",
+    "three": "^0.183.2",
+    "three-mesh-bvh": "^0.9.15"
   }
 }

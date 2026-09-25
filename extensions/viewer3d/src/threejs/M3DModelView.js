@@ -34,6 +34,9 @@ import {
   Vector3,
   ACESFilmicToneMapping,
   SRGBColorSpace,
+  LinearSRGBColorSpace,
+  NoToneMapping,
+  OrthographicCamera,
   PCFSoftShadowMap,
 } from 'three';
 
@@ -44,6 +47,16 @@ import CameraControls from 'camera-controls';
 CameraControls.install({ THREE });
 
 import { MIMETYPE_GLB, MIMETYPE_STL } from '../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
+import { accumulateOrthographicZoom } from './cameraControlsFixes.js';
+
+// Camera actions a mouse button can be bound to (setMouseActions) -> camera-controls ACTION names
+export const MOUSE_ACTIONS = {
+  none: 'NONE',
+  rotate: 'ROTATE',
+  pan: 'TRUCK',
+  dolly: 'DOLLY',
+  zoom: 'ZOOM',
+};
 
 export default class M3DModelView extends Component {
   // OHIF model view class (wraps a Three.js scene). Models are loaded from the modelFileUrl
@@ -73,6 +86,16 @@ export default class M3DModelView extends Component {
     onInteractionChange: PropTypes.func,
     onInteractionStart: PropTypes.func,
     onInteractionEnd: PropTypes.func,
+    // 'perspective' (M3D default) or 'orthographic' (parallel projection, as Cornerstone3D's 3D
+    // viewports use)
+    projection: PropTypes.oneOf(['perspective', 'orthographic']),
+    // 'm3d': the M3D viewer's lighting (tone mapping, shadows, hemisphere + directional lights).
+    // 'vtk': VTK's default look, so the view can stand in for a Cornerstone3D 3D viewport: a
+    // single headlight, Lambertian shading in display colour space, no tone mapping or shadows.
+    lightingModel: PropTypes.oneOf(['m3d', 'vtk']),
+    // Follow the container's size (ResizeObserver): needed where the view's container can change
+    // size without a window or sidebar event, e.g. a flexlayout tab being resized
+    observeResize: PropTypes.bool,
   };
 
   state = {
@@ -117,6 +140,9 @@ export default class M3DModelView extends Component {
     },
     cine: {},
     deviceRenderDefault: 60,
+    projection: 'perspective',
+    lightingModel: 'm3d',
+    observeResize: false,
   };
 
   initRenderer() {
@@ -125,6 +151,17 @@ export default class M3DModelView extends Component {
     const { renderOptions: roptions } = this.props;
 
     const renderer = new WebGLRenderer(roptions);
+    renderer.setClearColor(0x000000, 1);
+
+    if (this.props.lightingModel === 'vtk') {
+      // VTK shades in display colour space: no output encoding, tone mapping or shadows
+      renderer.outputColorSpace = LinearSRGBColorSpace;
+      renderer.toneMapping = NoToneMapping;
+      renderer.toneMappingExposure = 1;
+      renderer.shadowMap.enabled = false;
+      return renderer;
+    }
+
     renderer.outputEncoding;
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
@@ -164,10 +201,14 @@ export default class M3DModelView extends Component {
     // Camera aspect ratio
     const aspect = this.container.current.clientWidth / this.container.current.clientHeight;
 
+    if (this.props.projection === 'orthographic') {
+      return this.initOrthographicCamera(model, aspect, options);
+    }
+
     // Placeholder variables for calculating the camera settings based on
     const camera = new PerspectiveCamera(options.fov, aspect, options.near, options.far);
     if (!model) {
-      camera.position.set(...cameraStart);
+      camera.position.set(...defaultCameraStart);
       return camera;
     }
 
@@ -197,9 +238,48 @@ export default class M3DModelView extends Component {
     return camera;
   }
 
+  initOrthographicCamera(model, aspect, options) {
+    // Parallel-projection camera framing the model (the frustum's half height is the equivalent
+    // of Cornerstone3D's parallelScale)
+    const fit = this.getModelFit(model);
+    const halfHeight = fit ? Math.max(fit.size.y, fit.size.x / aspect) * 0.6 : 1;
+    const camera = new OrthographicCamera(
+      -halfHeight * aspect, halfHeight * aspect, halfHeight, -halfHeight, options.near, options.far);
+
+    if (!fit) {
+      camera.position.set(...this.props.cameraStart);
+      return camera;
+    }
+
+    const distance = fit.radius * 3;
+    camera.position.set(fit.center.x, fit.center.y, fit.center.z + distance);
+    this._setClippingPlanes(camera, distance, fit.radius);
+    camera.lookAt(fit.center);
+    return camera;
+  }
+
+  _setClippingPlanes(camera, distance, radius) {
+    // Keep the whole model between the clipping planes wherever the camera is placed
+    camera.near = Math.max(0.01, distance - radius * 2);
+    camera.far = distance + radius * 2;
+    camera.updateProjectionMatrix();
+  }
+
   lightScene(model, scene) {
     // Add lignts to the scene
     const { lightOptions } = this.props;
+
+    if (this.props.lightingModel === 'vtk') {
+      // VTK's automatic light: a white headlight at the camera, shining at the focal point.
+      // three's Lambert BRDF divides by pi, so intensity pi gives VTK's colour * max(N.L, 0).
+      const headlight = new DirectionalLight(0xffffff, Math.PI);
+      headlight.position.set(0, 0, 0);
+      headlight.target.position.set(0, 0, -1);
+      this.camera.add(headlight);
+      this.camera.add(headlight.target);
+      scene.add(this.camera);
+      return;
+    }
 
     // Create ambient light to provide some degree of lighting in case of no model.
     if (lightOptions.ambient) {
@@ -315,6 +395,11 @@ export default class M3DModelView extends Component {
     const controls = new CameraControls(camera, renderer.domElement);
     controls.dollyToCursor = dollyToCursor
 
+    // Orthographic wheel zoom must accumulate like perspective dolly does (see cameraControlsFixes)
+    if (camera.isOrthographicCamera) {
+      accumulateOrthographicZoom(controls);
+    }
+
     // Set controls orbit preferentially from the model center
     if (model) {
       const fit = this.getModelFit(model);
@@ -362,6 +447,14 @@ export default class M3DModelView extends Component {
         'Unable to create scene, only a single GLB file is supported per series by the viewer'
       );
     }
+
+    // Models by geometryId: the props' models, plus any added later through addModel()
+    this._models = new Map();
+    _.each(models, (m) => {
+      if (m && m.geometryId) {
+        this._models.set(m.geometryId, m);
+      }
+    });
 
     let sceneData;
     _.each(models, function (m) {
@@ -416,6 +509,7 @@ export default class M3DModelView extends Component {
       if (!this.model) {
         this.model = mgroup;
       }
+      this.modelGroup = mgroup;
 
       // Add the group to the scene
       this.scene.add(mgroup);
@@ -424,8 +518,125 @@ export default class M3DModelView extends Component {
 
   getModelInstance(geometryId) {
     // Resolve the per-viewport Three.js instance (STL: Mesh) for an M3D geometry-cache id
-    const model = _.find(this.props.models, (m) => m.geometryId == geometryId);
+    const model = this._models
+      ? this._models.get(geometryId)
+      : _.find(this.props.models, (m) => m.geometryId == geometryId);
     return model ? model.instance : undefined;
+  }
+
+  addModel(model) {
+    // Add a single-mesh model to the scene after creation (e.g. a segment surface computed after
+    // the view opened). The camera is not re-fitted.
+    if (!model || !model.geometryId || !model.instance || !this.modelGroup) {
+      return false;
+    }
+    this.removeModel(model.geometryId);
+    this._models.set(model.geometryId, model);
+    this.modelGroup.add(model.instance);
+    return true;
+  }
+
+  removeModel(geometryId) {
+    // Remove a model from the scene. Disposing its resources is the caller's responsibility.
+    const model = this._models && this._models.get(geometryId);
+    if (!model) {
+      return undefined;
+    }
+    if (model.instance && model.instance.parent) {
+      model.instance.parent.remove(model.instance);
+    }
+    this._models.delete(geometryId);
+    return model;
+  }
+
+  getModels() {
+    return this._models ? [...this._models.values()] : [];
+  }
+
+  setCameraLookAt({ position, target, up, fov, parallelScale }) {
+    // Place the camera explicitly (e.g. to match another 3D view of the same world coordinates).
+    // `parallelScale` (half the visible height, in world units) sets an orthographic camera's
+    // zoom; `fov` (degrees) a perspective camera's.
+    if (!this.camera || !this.controls || !position || !target) {
+      return;
+    }
+
+    if (this.camera.isOrthographicCamera && _.isNumber(parallelScale) && parallelScale > 0) {
+      const aspect = (this.camera.right - this.camera.left) / (this.camera.top - this.camera.bottom);
+      this.camera.top = parallelScale;
+      this.camera.bottom = -parallelScale;
+      this.camera.left = -parallelScale * aspect;
+      this.camera.right = parallelScale * aspect;
+      this.controls.zoomTo(1, false);
+    } else if (!this.camera.isOrthographicCamera && _.isNumber(fov) && fov > 0) {
+      this.camera.fov = fov;
+    }
+
+    const fit = this.getModelFit(this.model);
+    if (fit) {
+      const distance = new Vector3(...position).distanceTo(fit.center);
+      this._setClippingPlanes(this.camera, distance, fit.radius);
+    }
+    this.camera.updateProjectionMatrix();
+
+    if (up) {
+      this.camera.up.set(...up);
+      this.controls.updateCameraUp();
+    }
+    this.controls.setLookAt(...position, ...target, false);
+    this.controls.update(0);
+  }
+
+  getCameraLookAt() {
+    // The camera as { position, target, up, fov | parallelScale }. `up` is the camera's screen
+    // up in world space (orthogonal to the view direction), not the orbit axis.
+    if (!this.camera || !this.controls) {
+      return undefined;
+    }
+    const position = this.controls.getPosition(new Vector3()).toArray();
+    const target = this.controls.getTarget(new Vector3()).toArray();
+    const up = new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion).normalize().toArray();
+
+    if (this.camera.isOrthographicCamera) {
+      return { position, target, up, parallelScale: (this.camera.top - this.camera.bottom) / 2 / this.camera.zoom };
+    }
+    return { position, target, up, fov: this.camera.fov };
+  }
+
+  setMouseActions(actions) {
+    // Rebind the camera controls' mouse buttons, e.g. to free the left button for an editing tool.
+    // `actions` maps left / middle / right / wheel to a camera action name (MOUSE_ACTIONS); a
+    // button left out keeps its binding. Pass null to restore the bindings the view started with.
+    if (!this.controls) {
+      return;
+    }
+    if (!this._defaultMouseButtons) {
+      this._defaultMouseButtons = { ...this.controls.mouseButtons };
+    }
+    if (!actions) {
+      Object.assign(this.controls.mouseButtons, this._defaultMouseButtons);
+      return;
+    }
+    _.each(_.pick(actions, 'left', 'middle', 'right', 'wheel'), (name, button) => {
+      const action = CameraControls.ACTION[MOUSE_ACTIONS[name]];
+      if (!_.isUndefined(action)) {
+        this.controls.mouseButtons[button] = action;
+      }
+    });
+  }
+
+  getCamera() {
+    return this.camera;
+  }
+
+  setRenderingPaused(paused) {
+    // Stop the render loop while the view is hidden, and restart it when shown
+    const wasPaused = !!this._renderingPaused;
+    this._renderingPaused = !!paused;
+    if (wasPaused && !paused) {
+      this.clock.getDelta();
+      this.animate();
+    }
   }
 
   setModelVisibility(geometryId, visible) {
@@ -449,7 +660,14 @@ export default class M3DModelView extends Component {
     // Set the material colour of a single model (accepts hex strings or numeric colours)
     const instance = this.getModelInstance(geometryId);
     if (instance && instance.material && instance.material.color) {
-      instance.material.color.set(color);
+      if (this.props.lightingModel === 'vtk') {
+        // Display-space colours, as VTK uses them (no sRGB -> linear conversion)
+        typeof color === 'number'
+          ? instance.material.color.setHex(color, LinearSRGBColorSpace)
+          : instance.material.color.setStyle(color, LinearSRGBColorSpace);
+      } else {
+        instance.material.color.set(color);
+      }
     }
   }
 
@@ -475,9 +693,24 @@ export default class M3DModelView extends Component {
       );
     }
 
+    // A hidden container (display: none) measures 0 x 0; sizing to it would leave the camera with
+    // an invalid aspect. Keep the last size until the container is shown again.
+    const { clientWidth, clientHeight } = this.container.current;
+    if (!clientWidth || !clientHeight) {
+      return false;
+    }
+    this._lastSize = { width: clientWidth, height: clientHeight };
+
     // Set camera's apsect ratio and update the viewing frustrum
-    this.camera.aspect =
-      this.container.current.clientWidth / this.container.current.clientHeight;
+    const aspect = clientWidth / clientHeight;
+    if (this.camera.isOrthographicCamera) {
+      // Keep the visible height; widen or narrow the frustum to the new aspect
+      const halfHeight = (this.camera.top - this.camera.bottom) / 2;
+      this.camera.left = -halfHeight * aspect;
+      this.camera.right = halfHeight * aspect;
+    } else {
+      this.camera.aspect = aspect;
+    }
     this.camera.updateProjectionMatrix();
 
     // Set renderer size and ratio
@@ -486,6 +719,35 @@ export default class M3DModelView extends Component {
       this.container.current.clientHeight
     );
     this.renderer.setPixelRatio(window.devicePixelRatio);
+    return true;
+  }
+
+  observeContainerResize() {
+    // Resize (and redraw at once, since resizing clears the canvas) whenever the container changes
+    // size, at most once per animation frame
+    if (typeof ResizeObserver === 'undefined' || !this.container.current) {
+      return;
+    }
+
+    this._resizeObserver = new ResizeObserver(() => {
+      if (this._resizeFrame) {
+        return;
+      }
+      this._resizeFrame = window.requestAnimationFrame(() => {
+        this._resizeFrame = null;
+        if (this._unmounted || !this.renderer) {
+          return;
+        }
+        const { clientWidth, clientHeight } = this.container.current;
+        if (this._lastSize && this._lastSize.width === clientWidth && this._lastSize.height === clientHeight) {
+          return;
+        }
+        if (this.resize()) {
+          this.renderScene();
+        }
+      });
+    });
+    this._resizeObserver.observe(this.container.current);
   }
 
   renderScene() {
@@ -553,7 +815,7 @@ export default class M3DModelView extends Component {
 
   animate() {
     // Begin scene playback: animation, interaction, and render loop
-    if (this.model) {
+    if (this.model && !this._renderingPaused && !this._unmounted) {
       const { cinePlaying } = this.state;
 
       // Animate the model
@@ -630,6 +892,14 @@ export default class M3DModelView extends Component {
         setModelWireframe: this.setModelWireframe.bind(this),
         setModelColor: this.setModelColor.bind(this),
         getModelPresentation: this.getModelPresentation.bind(this),
+        addModel: this.addModel.bind(this),
+        removeModel: this.removeModel.bind(this),
+        getModels: this.getModels.bind(this),
+        setCameraLookAt: this.setCameraLookAt.bind(this),
+        getCameraLookAt: this.getCameraLookAt.bind(this),
+        setRenderingPaused: this.setRenderingPaused.bind(this),
+        setMouseActions: this.setMouseActions.bind(this),
+        getCamera: this.getCamera.bind(this),
         _component: _component,
       };
 
@@ -638,11 +908,34 @@ export default class M3DModelView extends Component {
       // Begin interaction loop
       this.animate();
     }
+
+    if (this.props.observeResize) {
+      this.observeContainerResize();
+    }
   }
 
   componentWillUnmount() {
-    // Component is set to unmount, disable animation loop and undefine model
+    // Component is set to unmount: stop the animation loop, then release the controls and the
+    // WebGL context (browsers cap the number of live contexts, so views that come and go must not
+    // leak them). Models are released by their owners.
+    this._unmounted = true;
     this.model = undefined;
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    if (this._resizeFrame) {
+      window.cancelAnimationFrame(this._resizeFrame);
+      this._resizeFrame = null;
+    }
+    if (this.controls) {
+      this.controls.dispose();
+    }
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+      this.renderer.domElement?.remove();
+    }
   }
 
   render() {
@@ -651,7 +944,7 @@ export default class M3DModelView extends Component {
 
     return (
       <div style={style}>
-        <div ref={this.container} style={style} />
+        <div ref={this.container} style={{ ...style, overflow: 'hidden' }} />
       </div>
     );
   }

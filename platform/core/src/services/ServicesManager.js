@@ -1,9 +1,24 @@
 import log from './../log.js';
 
 export default class ServicesManager {
-  constructor() {
+  constructor(commandsManager = null) {
+    this._commandsManager = commandsManager;
+    this._extensionManager = null;
     this.services = {};
     this.registeredServiceNames = [];
+  }
+
+  /**
+   * The viewer creates the services manager before the commands and extension managers
+   * exist, so both are attached once they are constructed. OHIF v3 services (e.g. the
+   * ToolbarService) receive them in their `create` factory.
+   */
+  setCommandsManager(commandsManager) {
+    this._commandsManager = commandsManager;
+  }
+
+  setExtensionManager(extensionManager) {
+    this._extensionManager = extensionManager;
   }
 
   /**
@@ -31,6 +46,9 @@ export default class ServicesManager {
     if (service.create) {
       this.services[service.name] = service.create({
         configuration,
+        extensionManager: this._extensionManager,
+        commandsManager: this._commandsManager,
+        servicesManager: this,
       });
 
       // OHIF v3 registers services under a camelCase key (`uiNotificationService`) while the

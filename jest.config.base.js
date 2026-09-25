@@ -8,7 +8,7 @@ module.exports = {
   testPathIgnorePatterns: ['<rootDir>/node_modules/'],
   moduleFileExtensions: ['js', 'jsx'],
   moduleNameMapper: {
-    '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
+    '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga|wasm)$':
       '<rootDir>/src/__mocks__/fileMock.js',
     // Stylesheets resolve to the same stub as other static assets. scss/sass/styl are included
     // alongside css/less because CSS-module imports are ubiquitous in the viewer's components and

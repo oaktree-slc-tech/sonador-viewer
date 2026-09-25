@@ -14,6 +14,7 @@ import {
 } from '@cornerstonejs/tools';
 
 import M3DModelView from '../threejs/M3DModelView.js';
+import { getM3DStatus, subscribeM3DStatus } from '../m3dStatus.js';
 import { MIMETYPE_STL } from '../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
 import {
   getM3DGeometryId,
@@ -400,6 +401,17 @@ class OHIFDicomM3DViewport extends Component {
     // Retrieve 3D model and initialize component
     const component = this;
     this.fetchModel();
+
+    // Status of an action on the series started from the side panel
+    this.unsubscribeStatus = subscribeM3DStatus((displaySetInstanceUID, message) => {
+      if (displaySetInstanceUID === this.props.viewportData?.displaySet?.displaySetInstanceUID) {
+        this.setState({ statusMessage: message });
+      }
+    });
+    const statusMessage = getM3DStatus(this.props.viewportData?.displaySet?.displaySetInstanceUID);
+    if (statusMessage) {
+      this.setState({ statusMessage });
+    }
   }
 
   bindDomEvents() {
@@ -507,6 +519,7 @@ class OHIFDicomM3DViewport extends Component {
 
     // Remove event hnadlers
     this.removeDomEvents();
+    this.unsubscribeStatus?.();
     this.api = null;
   }
 
@@ -519,6 +532,9 @@ class OHIFDicomM3DViewport extends Component {
         <div className="ohif-m3d-model-container" style={style} onClick={this.onInteractionStart}>
           {!this.state.isLoaded && (
             <LoadingIndicator percentComplete={modelCount && modelCount > 1 ? percentComplete : undefined} />
+          )}
+          {this.state.isLoaded && this.state.statusMessage && (
+            <LoadingIndicator loadingMessage={this.state.statusMessage} />
           )}
           {this.state.modelType && this.state.percentComplete == 100 && (
             <M3DModelView

@@ -80,6 +80,10 @@ const cornerstoneUtils = {
 
 
 
+// OHIF v3 toolbar: expands a button's item and option commands for ToolbarService
+import { buildButtonCommands } from './buildButtonCommands';
+
+
 // General OHIF / Sonador Viewer Tools
 
 const utils = {
@@ -131,6 +135,7 @@ const utils = {
   gpuCapabilities,
   cornerstone3dUtils,
   cornerstoneUtils,
+  buildButtonCommands,
 };
 
 
@@ -176,6 +181,7 @@ export {
   gpuCapabilities,
   cornerstone3dUtils,
   cornerstoneUtils,
+  buildButtonCommands,
 };
 
 

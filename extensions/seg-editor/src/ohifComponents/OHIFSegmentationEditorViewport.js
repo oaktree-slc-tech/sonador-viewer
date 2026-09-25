@@ -49,6 +49,8 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
     // volume viewer's attributes carry side-panel semantics elsewhere.
     segEditorVolumeRenderingEnabled: false,
     segEditorSurfaceRenderingEnabled: true,
+    // 3D tab shows the Three.js editing canvas (set by the tool palette's 3D tab)
+    segEditor3dEditingEnabled: false,
   };
 
   constructor() {
@@ -135,6 +137,7 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
             // the non-nil guard in the toggle commands and seeds the toolbar state indicators.
             displaySet.segEditorVolumeRenderingEnabled = _component.state.segEditorVolumeRenderingEnabled;
             displaySet.segEditorSurfaceRenderingEnabled = _component.state.segEditorSurfaceRenderingEnabled;
+            displaySet.segEditor3dEditingEnabled = _component.state.segEditor3dEditingEnabled;
 
             DisplaySetApi.Instance.displaySetService.addDisplaySets([displaySet]);
           }
@@ -234,7 +237,8 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
     const { displaySetInstanceUID: viewportDisplaySetInstanceUID } = _component.props.viewportData.displaySet;
 
     if (displaySetInstanceUID == viewportDisplaySetInstanceUID) {
-      _component.setState(_.pick(displaySet, 'segEditorVolumeRenderingEnabled', 'segEditorSurfaceRenderingEnabled'));
+      _component.setState(_.pick(displaySet,
+        'segEditorVolumeRenderingEnabled', 'segEditorSurfaceRenderingEnabled', 'segEditor3dEditingEnabled'));
     }
   }
 
@@ -322,16 +326,25 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
           // Release the editor's working segmentation: its displays, state entry and stack go;
           // the source canonical segmentation and its legacy view are untouched.
+          // A segmentation created in the viewer (ohif-viewers#143) exists only for this session
+          // of the editor: once closed, it is removed rather than left behind on the series.
+          const inMemory = _ds.segmentationId
+            && cornerstone3dUtils.getInMemorySegmentationInfo(_ds.segmentationId);
           if (_ds.segmentationId) {
             cornerstone3dUtils.releaseEditorWorkingCopy(_ds.segmentationId);
+          }
+          if (inMemory) {
+            cornerstone3dUtils.removeCanonicalSegmentation(inMemory.segmentationId);
           }
 
           // Clear segmentationId and the editor 3D rendering toggles from the displaySet
           // (mirrors the attribute lifecycle in OHIFVtkVolumeViewport.componentWillUnmount)
           _ds.segmentationId = undefined;
+          _ds.segEditorSegmentationId = undefined;
           _ds.volumeSegmentationId = undefined;
           _ds.segEditorVolumeRenderingEnabled = undefined;
           _ds.segEditorSurfaceRenderingEnabled = undefined;
+          _ds.segEditor3dEditingEnabled = undefined;
           _ds.stableViewport = false;
 
           DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
@@ -358,6 +371,7 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
           <SegmentationEditorViewport
             servicesManager={component.props.servicesManager}
+            commandsManager={component.props.commandsManager}
             imageIds={component.state.imageIds}
             paintFilterLabelMapImageData={component.state.paintFilterLabelMapImageData}
             paintFilterLabelMapDetails={component.state.paintFilterLabelMapDetails}
@@ -381,6 +395,7 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
             onVolumeLabelmapImageLoad={component.onVolumeLabelmapImageLoad.bind(component)}
             segEditorVolumeRenderingEnabled={component.state.segEditorVolumeRenderingEnabled}
             segEditorSurfaceRenderingEnabled={component.state.segEditorSurfaceRenderingEnabled}
+            segEditor3dEditingEnabled={!!component.state.segEditor3dEditingEnabled}
           />
         )}
       </div>

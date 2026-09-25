@@ -35,6 +35,25 @@
  *   cornerstoneTools.init({ addons: { polySeg } }).
  * @returns {object} A drop-in replacement addon with a single-flight computeSurfaceData.
  */
+// Last failed surface computation per segmentation. A failed computation stores no surface, so
+// the lazy render path would otherwise retry it on every render with no end; callers that wait
+// for a surface (the Segmentation Editor's reveal poll) consult this to stop and report instead.
+const surfaceComputeFailures = new Map();
+
+/**
+ * @param {string} segmentationId
+ * @returns {{ error: unknown, at: number } | undefined} the most recent failed surface
+ *   computation for the segmentation, cleared by a later successful one
+ */
+export function getSurfaceComputeFailure(segmentationId) {
+  return surfaceComputeFailures.get(segmentationId);
+}
+
+/** Forget a recorded failure, e.g. before deliberately retrying the computation. */
+export function clearSurfaceComputeFailure(segmentationId) {
+  surfaceComputeFailures.delete(segmentationId);
+}
+
 export function createSingleFlightPolySeg(polySeg) {
   // Keyed by `${segmentationId}::${segmentIndices}` so distinct per-segment requests do not
   // incorrectly share a job, while the common "compute the whole surface" calls (no indices)
@@ -63,13 +82,22 @@ export function createSingleFlightPolySeg(polySeg) {
     const job = Promise.resolve(polySeg.computeSurfaceData(segmentationId, options));
 
     inFlight.set(key, job);
+    job.then(
+      () => surfaceComputeFailures.delete(segmentationId),
+      error => surfaceComputeFailures.set(segmentationId, { error, at: Date.now() })
+    );
     // Clear once settled (success or failure) so a later legitimate recompute — e.g. after the
     // surface is removed and needs regeneration — is not blocked by a stale entry.
-    job.finally(() => {
-      if (inFlight.get(key) === job) {
-        inFlight.delete(key);
-      }
-    });
+    // `.finally()` returns a new promise that rejects when the job does; that branch is only
+    // bookkeeping (callers receive `job` itself), so its rejection is handled here rather than
+    // surfacing as an unhandled rejection on every failed computation.
+    job
+      .finally(() => {
+        if (inFlight.get(key) === job) {
+          inFlight.delete(key);
+        }
+      })
+      .catch(() => {});
 
     return job;
   };

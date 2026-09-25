@@ -1,3 +1,5 @@
+import { getToolbarUITypeEntries } from '../services/ToolBarService/toolbarModuleEntries';
+
 import log from './../log.js';
 import MODULE_TYPES from './MODULE_TYPES.js';
 
@@ -199,6 +201,20 @@ export default class ExtensionManager {
           return;
         }
         this._initCommandsModule(definitions, defaultContext);
+        break;
+      }
+      case 'toolbarModule': {
+        // Register the evaluate functions of OHIF v3 button UI types with the ToolbarService
+        const toolbarService = this._servicesManager?.services?.toolbarService;
+        if (!toolbarService) {
+          break;
+        }
+
+        getToolbarUITypeEntries(extensionModule).forEach(toolbarButton => {
+          if (toolbarButton.evaluate) {
+            toolbarService.registerEvaluateFunction(toolbarButton.name, toolbarButton.evaluate);
+          }
+        });
         break;
       }
       default:

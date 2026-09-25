@@ -97,7 +97,7 @@ const DoubleSlider = React.forwardRef<HTMLDivElement, DoubleSliderProps>(
             value={formatValue(value[0])}
             onChange={e => handleInputChange(0, e.target.value)}
             onBlur={() => handleInputChange(0, value[0].toString())}
-            className="w-14"
+            className="w-14 text-center"
             min={min}
             max={max}
             step={step}
@@ -123,7 +123,7 @@ const DoubleSlider = React.forwardRef<HTMLDivElement, DoubleSliderProps>(
             value={formatValue(value[1])}
             onChange={e => handleInputChange(1, e.target.value)}
             onBlur={() => handleInputChange(1, value[1].toString())}
-            className="w-14"
+            className="w-14 text-center"
             min={min}
             max={max}
             step={step}

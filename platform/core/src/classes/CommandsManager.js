@@ -116,7 +116,14 @@ export class CommandsManager {
   getCommand(commandName, contextName) {
     let contexts = [];
 
-    if (contextName) {
+    if (Array.isArray(contextName)) {
+      contextName.forEach((name) => {
+        const context = this.getContext(name);
+        if (context) {
+          contexts.push(context);
+        }
+      });
+    } else if (contextName) {
       const context = this.getContext(contextName);
       if (context) {
         contexts.push(context);
@@ -153,7 +160,12 @@ export class CommandsManager {
    * @param {String} [contextName]
    */
   runCommand(commandName, options = {}, contextName) {
-    const definition = this.getCommand(commandName, contextName);    
+    // OHIF v3 toolbar definitions may carry inline functions in place of a command name
+    if (typeof commandName === 'function') {
+      return commandName(options);
+    }
+
+    const definition = this.getCommand(commandName, contextName);
     if (!definition) {
       log.warn(`Command "${commandName}" not found in context "${contextName}"`);
       return;
@@ -181,6 +193,86 @@ export class CommandsManager {
     } else {
       return commandFn(commandParams);
     }
+  }
+
+  /**
+   * Normalizes the command specifications accepted by `run` into a list of
+   * `{ commandName, commandOptions, context }` objects. Ported from OHIF v3.
+   *
+   * @param {string|Function|Object|Array} toRun
+   * @returns {Object[]}
+   */
+  static convertCommands(toRun) {
+    if (typeof toRun === 'string') {
+      return [{ commandName: toRun }];
+    }
+    if (typeof toRun === 'function') {
+      return [{ commandName: toRun }];
+    }
+    if (Array.isArray(toRun)) {
+      return toRun.map((command) => CommandsManager.convertCommands(command)[0]);
+    }
+    if (toRun && typeof toRun === 'object') {
+      if ('commandName' in toRun) {
+        return [toRun];
+      }
+      if ('commands' in toRun) {
+        return CommandsManager.convertCommands(toRun.commands);
+      }
+    }
+
+    return [];
+  }
+
+  _validate(input, options = {}) {
+    if (!input) {
+      log.debug('No command to run');
+      return [];
+    }
+
+    const converted = CommandsManager.convertCommands(input).filter(Boolean);
+    if (!converted.length) {
+      log.debug('Command is not runnable', input);
+      return [];
+    }
+
+    return converted.map((command) => ({
+      commandName: command.commandName,
+      commandOptions: { ...options, ...command.commandOptions },
+      context: command.context,
+    }));
+  }
+
+  /**
+   * Run one or more commands with extra options (OHIF v3 API, used by the ported
+   * ToolbarService). Returns the command's result, or an array of results when more than
+   * one command ran. Accepted forms:
+   * `'name'`, `{ commandName, commandOptions, context }`, `{ commands: ... }`, a
+   * function, or an array of any of these.
+   *
+   * @param {string|Function|Object|Array} input
+   * @param {Object} [options={}] - merged beneath each command's own commandOptions
+   */
+  run(input, options = {}) {
+    const commands = this._validate(input, options);
+
+    const results = commands.map(({ commandName, commandOptions, context }) =>
+      this.runCommand(commandName, commandOptions, context)
+    );
+
+    return results.length === 1 ? results[0] : results;
+  }
+
+  /** Like `run`, but awaits each command before starting the next. */
+  async runAsync(input, options = {}) {
+    const commands = this._validate(input, options);
+
+    const results = [];
+    for (const { commandName, commandOptions, context } of commands) {
+      results.push(await this.runCommand(commandName, commandOptions, context));
+    }
+
+    return results.length === 1 ? results[0] : results;
   }
 }
 

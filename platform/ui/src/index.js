@@ -1,7 +1,11 @@
 import { ScrollableArea } from './ScrollableArea/ScrollableArea.js';
 import setLayoutAndViewportData from './utils/setLayoutAndViewportData.js';
 import setMultiPanelLayout from './utils/setMultiPanelLayout.js';
-import { viewerbaseDisplaySetReconstructable, viewerbaseGetDisplaySet } from './utils/viewerbaseDisplaySet.js';
+import {
+  viewerbaseDisplaySetIsCTOrMRVolume,
+  viewerbaseDisplaySetReconstructable,
+  viewerbaseGetDisplaySet,
+} from './utils/viewerbaseDisplaySet.js';
 import ViewerbaseDragDropContext from './utils/viewerbaseDragDropContext.js';
 import ExpandableToolMenu from './viewer/ExpandableToolMenu.js';
 import PlayClipButton from './viewer/PlayClipButton.js';
@@ -184,6 +188,7 @@ export {
   ViewerbaseDragDropContext,
   viewerbaseGetDisplaySet,
   viewerbaseDisplaySetReconstructable,
+  viewerbaseDisplaySetIsCTOrMRVolume,
   setLayoutAndViewportData,
   setMultiPanelLayout,
 

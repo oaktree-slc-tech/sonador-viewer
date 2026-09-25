@@ -135,6 +135,11 @@ const DURABLE_IMAGE_SCHEME = 'sonadorseglabel:';
 // it as a NEW DICOM instance.
 const EDITOR_COPY_OF_KEY = 'sonadorEditorWorkingCopyOf';
 
+// Marks a segmentation that exists only in memory: created in the viewer (a blank segmentation,
+// or 3D models voxelized onto a series; ohif-viewers#143) rather than loaded from a DICOM SEG.
+// Value: { origin: 'blank' | 'models', createdAt }.
+const IN_MEMORY_KEY = 'sonadorInMemory';
+
 // One LABELMAP_MODIFIED listener per enabled element. The legacy event is an element event and
 // cornerstone-core dispatches it without bubbling, so there is nowhere central to listen; elements
 // come and go with the layout, hence the ELEMENT_ENABLED/ELEMENT_DISABLED subscriptions.
@@ -716,11 +721,12 @@ export function createCanonicalSegmentation(params) {
   // @input params.labelmapIndex (num): the slot within that series
   // @input params.colorLUTIndex (num): the legacy colour LUT index for this labelmap
   // @input params.referencedVolumeId (str): the image volume id, when one is already known
+  // @input params.label (str): the segmentation's name, for segmentations created in the viewer
   // @returns the canonical read-model (see `getCanonicalSegmentation`)
 
   const {
     segmentationId, imageIds, labelmapBuffer, segMetadata, segmentValueMap, layerSegments,
-    firstImageId, labelmapIndex, colorLUTIndex, referencedVolumeId,
+    firstImageId, labelmapIndex, colorLUTIndex, referencedVolumeId, label,
   } = params;
 
   if (_registrations.has(segmentationId)
@@ -781,7 +787,10 @@ export function createCanonicalSegmentation(params) {
           referencedVolumeId: referencedVolumeId,
         },
       },
-      config: _canonicalSegmentConfig(segMetadata, layerSegments, segmentValueMap),
+      config: {
+        ..._canonicalSegmentConfig(segMetadata, layerSegments, segmentValueMap),
+        ...(label ? { label } : {}),
+      },
     }]);
 
     _writeCanonicalProvenance(segmentationId, segMetadata, {
@@ -966,6 +975,8 @@ export function forkSegmentationForEditor(sourceSegmentationId, options) {
       },
       config: {
         ...(_.size(segments) ? { segments } : {}),
+        // The source's name, when it has one (segmentations created in the viewer are named)
+        label: c3dSegmentations.state.getSegmentation(sourceSegmentationId)?.label ?? undefined,
         cachedStats: { [EDITOR_COPY_OF_KEY]: sourceSegmentationId },
       },
     }]);
@@ -1633,7 +1644,8 @@ function _installLegacyView(registration) {
       canonicalIndex * sliceLength, (canonicalIndex + 1) * sliceLength));
   });
 
-  _installLegacyLabelmap3D(registration.firstImageId, registration.labelmapIndex, labelmap3D);
+  registration.previousActiveLabelmapIndex = _installLegacyLabelmap3D(
+    registration.firstImageId, registration.labelmapIndex, labelmap3D);
 
   registration.labelmap3D = labelmap3D;
   registration.buffer = buffer;
@@ -1732,14 +1744,39 @@ function _legacySegMetadata(registration) {
 
 
 function _installLegacyLabelmap3D(firstImageId, labelmapIndex, labelmap3D) {
+  // Install the view as the series' active labelmap. Returns the labelmap that was active before,
+  // so a removal can hand the active slot back (see _releaseActiveLabelmap).
   const state = segmentationModule.state;
 
   if (!state.series[firstImageId]) {
     state.series[firstImageId] = { activeLabelmapIndex: labelmapIndex, labelmaps3D: [] };
   }
 
+  const previousActiveLabelmapIndex = state.series[firstImageId].activeLabelmapIndex;
   state.series[firstImageId].labelmaps3D[labelmapIndex] = labelmap3D;
   state.series[firstImageId].activeLabelmapIndex = labelmapIndex;
+  return previousActiveLabelmapIndex !== labelmapIndex ? previousActiveLabelmapIndex : undefined;
+}
+
+
+function _releaseActiveLabelmap(series, removedLabelmapIndex, previousActiveLabelmapIndex) {
+  // After a legacy view is removed: if it was the series' active labelmap, make another one active
+  // -- the one that was active before it, else the first remaining. `SegmentationPanel` lists
+  // nothing while the active slot is empty, so leaving it pointing at the removed view emptied the
+  // panel for every segmentation of the series (ohif-viewers#143: exiting the editor on a
+  // segmentation created in the viewer). Returns true when the active labelmap changed.
+  if (!series || series.activeLabelmapIndex !== removedLabelmapIndex) {
+    return false;
+  }
+  const remaining = series.labelmaps3D;
+  const next = Number.isInteger(previousActiveLabelmapIndex) && remaining[previousActiveLabelmapIndex]
+    ? previousActiveLabelmapIndex
+    : _.findIndex(remaining, labelmap => !!labelmap);
+  if (next < 0) {
+    return false;
+  }
+  series.activeLabelmapIndex = next;
+  return true;
 }
 
 
@@ -1775,6 +1812,33 @@ export function noteReferencedVolume(segmentationId, imageVolumeId) {
 }
 
 
+/** Mark a canonical segmentation as existing only in memory (see IN_MEMORY_KEY). */
+export function markInMemorySegmentation(segmentationId, { origin } = {}) {
+  const segmentation = c3dSegmentations.state.getSegmentation(segmentationId);
+  if (!segmentation) {
+    return false;
+  }
+  segmentation.cachedStats = segmentation.cachedStats || {};
+  segmentation.cachedStats[IN_MEMORY_KEY] = { origin, createdAt: Date.now() };
+  return true;
+}
+
+/**
+ * The in-memory marker of a segmentation, or of the segmentation an editor working copy was
+ * forked from; undefined for a segmentation loaded from DICOM.
+ */
+export function getInMemorySegmentationInfo(segmentationId) {
+  const segmentation = c3dSegmentations.state.getSegmentation(segmentationId);
+  const cachedStats = segmentation?.cachedStats || {};
+  if (cachedStats[IN_MEMORY_KEY]) {
+    return { segmentationId, ...cachedStats[IN_MEMORY_KEY] };
+  }
+  const sourceId = cachedStats[EDITOR_COPY_OF_KEY];
+  const source = sourceId && c3dSegmentations.state.getSegmentation(sourceId);
+  const info = source?.cachedStats?.[IN_MEMORY_KEY];
+  return info ? { segmentationId: sourceId, ...info } : undefined;
+}
+
 export function removeCanonicalSegmentation(segmentationId) {
   // Destroy a segmentation. This is the ONLY thing that does (FR-8) -- not closing a viewport, not
   // releasing an image volume's lease, not detaching the display. Reached directly, or through the
@@ -1793,6 +1857,7 @@ export function removeCanonicalSegmentation(segmentationId) {
   }
 
   registration.retiring = true;
+  let activeLabelmapChanged = false;
   try {
     detachSegmentationDisplay(segmentationId, { force: true });
     _.each([...registration.derivedDisplays.keys()], (derivedSegmentationId) => {
@@ -1808,6 +1873,8 @@ export function removeCanonicalSegmentation(segmentationId) {
     const series = segmentationModule.state.series[registration.firstImageId];
     if (series && series.labelmaps3D[registration.labelmapIndex] === registration.labelmap3D) {
       delete series.labelmaps3D[registration.labelmapIndex];
+      activeLabelmapChanged = _releaseActiveLabelmap(
+        series, registration.labelmapIndex, registration.previousActiveLabelmapIndex);
     }
 
     // The logical segmentation, unless the caller's own removal already took it out of state.
@@ -1830,6 +1897,11 @@ export function removeCanonicalSegmentation(segmentationId) {
 
   if (!_registrations.size) {
     _teardownGlobalListeners();
+  }
+
+  // An open panel re-reads the series' state (its active labelmap moved)
+  if (activeLabelmapChanged) {
+    _notifyLegacyPanel(registration);
   }
 
   return true;
@@ -2255,8 +2327,9 @@ function _notifyLegacyPanel(registration) {
   // per-element listener cannot help -- it is bound to a misspelling the library never emits (#140)
   // -- so a document-level event is the only route to an already-open panel.
   //
-  // Only ever raised while `inBridge` is set, so a panel refresh cannot be read back as a legacy
-  // edit. The panel's own handler re-reads state and calls setState; it raises nothing further.
+  // Raised while `inBridge` is set (after an edit), so a panel refresh cannot be read back as a
+  // legacy edit, and after a removal moved the series' active labelmap. The panel's own handler
+  // re-reads state and calls setState; it raises nothing further.
 
   if (typeof document === 'undefined' || typeof CustomEvent === 'undefined') {
     return;

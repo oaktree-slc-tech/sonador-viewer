@@ -327,6 +327,12 @@ function getVisibleToolbarButtons() {
 
   toolbarModules.forEach((extension) => {
     const { definitions, defaultContext } = extension.module;
+
+    // OHIF v3 toolbar modules (arrays of button UI types) belong to the ToolbarService
+    if (!Array.isArray(definitions)) {
+      return;
+    }
+
     definitions.forEach((definition) => {
       const context = definition.context || defaultContext;
 

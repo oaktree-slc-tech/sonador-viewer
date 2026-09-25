@@ -200,5 +200,100 @@ describe('CommandsManager', () => {
       expect(command.commandFn.mock.calls.length).toBe(1);
       expect(result).toBe(true);
     });
+
+    it('Calls a function passed in place of a command name', () => {
+      const fn = jest.fn().mockReturnValue('ran');
+
+      const result = commandsManager.runCommand(fn, { value: 3 });
+
+      expect(fn).toHaveBeenCalledWith({ value: 3 });
+      expect(result).toBe('ran');
+    });
+
+    it('Looks the command up across an array of contexts', () => {
+      commandsManager.createContext('SONADOR3DSEG');
+      commandsManager.registerCommand('SONADOR3DSEG', 'TestCommand', command);
+
+      commandsManager.runCommand('TestCommand', {}, ['VIEWER', 'SONADOR3DSEG']);
+
+      expect(command.commandFn.mock.calls.length).toBe(1);
+    });
+  });
+
+  describe('run()', () => {
+    let first, second;
+
+    beforeEach(() => {
+      first = { commandFn: jest.fn().mockReturnValue('first') };
+      second = { commandFn: jest.fn().mockReturnValue('second') };
+      commandsManager.registerCommand('VIEWER', 'First', first);
+      commandsManager.registerCommand('VIEWER', 'Second', second);
+    });
+
+    it('runs a command given by name and returns its result', () => {
+      expect(commandsManager.run('First')).toBe('first');
+      expect(first.commandFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs a command object in its context, with its commandOptions over the run options', () => {
+      commandsManager.createContext('SONADOR3DSEG');
+      const scoped = { commandFn: jest.fn() };
+      commandsManager.registerCommand('SONADOR3DSEG', 'Scoped', scoped);
+
+      commandsManager.run(
+        { commandName: 'Scoped', commandOptions: { toolName: 'Brush' }, context: 'SONADOR3DSEG' },
+        { toolName: 'Zoom', viewportId: 'vp' }
+      );
+
+      expect(scoped.commandFn.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ toolName: 'Brush', viewportId: 'vp' })
+      );
+    });
+
+    it('runs an array of mixed forms in order and returns every result', () => {
+      const fn = jest.fn().mockReturnValue('fn');
+
+      const results = commandsManager.run(['First', { commandName: 'Second' }, fn]);
+
+      expect(results).toEqual(['first', 'second', 'fn']);
+      expect(first.commandFn.mock.invocationCallOrder[0]).toBeLessThan(
+        second.commandFn.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('unwraps a { commands } holder', () => {
+      commandsManager.run({ commands: ['First', 'Second'] });
+
+      expect(first.commandFn).toHaveBeenCalledTimes(1);
+      expect(second.commandFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs nothing for empty or unrunnable input', () => {
+      expect(commandsManager.run(undefined)).toEqual([]);
+      expect(commandsManager.run({ notACommand: true })).toEqual([]);
+      expect(first.commandFn).not.toHaveBeenCalled();
+    });
+
+    it('runAsync awaits each command before starting the next', async () => {
+      const order = [];
+      commandsManager.registerCommand('VIEWER', 'Slow', {
+        commandFn: async () => {
+          await new Promise(resolve => setTimeout(resolve, 5));
+          order.push('slow');
+          return 'slow';
+        },
+      });
+      commandsManager.registerCommand('VIEWER', 'Fast', {
+        commandFn: () => {
+          order.push('fast');
+          return 'fast';
+        },
+      });
+
+      const results = await commandsManager.runAsync(['Slow', 'Fast']);
+
+      expect(order).toEqual(['slow', 'fast']);
+      expect(results).toEqual(['slow', 'fast']);
+    });
   });
 });

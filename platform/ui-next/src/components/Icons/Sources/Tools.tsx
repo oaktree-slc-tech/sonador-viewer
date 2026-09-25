@@ -2041,6 +2041,41 @@ export const ToolMoreMenu = (props: IconProps) => (
   </svg>
 );
 
+export const ToolPointer = (props: IconProps) => (
+  <svg
+    width="28px"
+    height="28px"
+    viewBox="0 0 28 28"
+    version="1.1"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <g
+      id="tool-pointer"
+      stroke="none"
+      strokeWidth="1"
+      fill="none"
+      fillRule="evenodd"
+    >
+      <rect
+        id="Rectangle"
+        x="0"
+        y="0"
+        width="28"
+        height="28"
+      ></rect>
+      <path
+        d="M8,4.5 L8,21.5 L12.25,17.25 L15.25,24 L18,22.75 L15,16 L21,16 Z"
+        id="Pointer"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      ></path>
+    </g>
+  </svg>
+);
+
 export const ToolMove = (props: IconProps) => (
   <svg
     width="28px"
