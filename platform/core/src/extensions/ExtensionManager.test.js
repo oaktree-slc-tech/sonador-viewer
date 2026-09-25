@@ -248,5 +248,42 @@ describe('ExtensionManager.js', () => {
       expect(log.warn.mock.calls.length).toBe(1);
       expect(log.warn.mock.calls[0][0]).toContain('Commands Module contains no command definitions');
     });
+
+    it('registers the evaluate functions of OHIF v3 toolbar UI types with the ToolbarService', () => {
+      const toolbarService = { registerEvaluateFunction: jest.fn() };
+      servicesManager.services = { toolbarService };
+      const evaluateTool = jest.fn();
+      const evaluateHybrid = jest.fn();
+
+      extensionManager.registerExtension({
+        id: 'v3-toolbar',
+        getToolbarModule: () => [
+          { name: 'evaluate.cornerstoneTool', evaluate: evaluateTool },
+          { name: 'ohif.toolButton', defaultComponent: () => null },
+        ],
+      });
+      extensionManager.registerExtension({
+        id: 'hybrid-toolbar',
+        getToolbarModule: () => ({
+          definitions: [],
+          defaultContext: 'VIEWER',
+          uiTypes: [{ name: 'evaluate.segmentation', evaluate: evaluateHybrid }],
+        }),
+      });
+
+      expect(toolbarService.registerEvaluateFunction.mock.calls).toEqual([
+        ['evaluate.cornerstoneTool', evaluateTool],
+        ['evaluate.segmentation', evaluateHybrid],
+      ]);
+    });
+
+    it('registers a v2 toolbar module without a ToolbarService', () => {
+      extensionManager.registerExtension({
+        id: 'v2-toolbar',
+        getToolbarModule: () => ({ definitions: [{ id: 'Zoom' }], defaultContext: 'VIEWER' }),
+      });
+
+      expect(extensionManager.modules[MODULE_TYPES.TOOLBAR]).toHaveLength(1);
+    });
   });
 });

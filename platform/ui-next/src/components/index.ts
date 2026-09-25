@@ -34,6 +34,11 @@ import { Popover, PopoverTrigger, PopoverAnchor, PopoverContent, PopoverPortal }
 import { Calendar, CalendarDayButton } from './Calendar';
 import { DateRangePicker } from './DateRange';
 import { Toaster, toast } from './Sonner';
+import { Checkbox } from './Checkbox';
+import {
+  ToolButton, ToolButtonList, ToolButtonListDefault, ToolButtonListDropDown, ToolButtonListItem, ToolButtonListDivider,
+} from './ToolButton';
+import { ToolSettings } from './OHIFToolSettings';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
 
@@ -72,4 +77,7 @@ export {
   InputDialog, PresetDialog,
   FooterAction,
   Toaster, toast,
+  Checkbox,
+  ToolButton, ToolButtonList, ToolButtonListDefault, ToolButtonListDropDown, ToolButtonListItem, ToolButtonListDivider,
+  ToolSettings,
 }

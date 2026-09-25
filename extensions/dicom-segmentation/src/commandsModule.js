@@ -4,10 +4,11 @@ import csTools from 'cornerstone-tools';
 import OHIF from '@ohif/core';
 
 import DICOMSegTempCrosshairsTool from './tools/DICOMSegTempCrosshairsTool';
+import createSegmentationCommands from './createSegmentationCommands';
 
 const { studyMetadataManager } = OHIF.utils;
 
-const commandsModule = ({ commandsManager }) => {
+const commandsModule = ({ commandsManager, servicesManager }) => {
   const actions = {
     jumpToFirstSegment: ({ viewports }) => {
       try {
@@ -78,6 +79,9 @@ const commandsModule = ({ commandsManager }) => {
       storeContexts: ['viewports'],
       options: {},
     },
+
+    // New segmentations opened in the Segmentation Editor (ohif-viewers#143)
+    ...createSegmentationCommands({ servicesManager }).definitions,
   };
 
   return {

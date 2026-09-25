@@ -7,12 +7,13 @@ import SonadorSegmentationEditorPanel from './components/panels/SegmentationEdit
 
 import commandsModule from './commandsModule.js';
 import ConnectedSegmentationEditorViewport from './connectedComponents/ConnectedSegmentationEditorViewport';
-import toolbarModule from './toolbarModule.js';
+import createToolbarModule from './toolbarModule.js';
 import withCommandsManager from './connectedComponents/withCommandsManager.js';
 
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
 
 import Enums from './enums';
+import { modelsToLabelmap } from './threeDTools/modelsToLabelmap.js';
 
 
 // Sonador 2D/3D Segmentation Editor
@@ -36,9 +37,8 @@ const segmentationEditorExtension = {
     return withCommandsManager(ExtendedSegmentationEditorViewport, commandsManager);
   },
 
-  getToolbarModule() {
-    console.log('Initialize toolbar module for seg editor');
-    return toolbarModule;
+  getToolbarModule({ servicesManager }) {
+    return createToolbarModule({ servicesManager });
   },
 
   getCommandsModule({ commandsManager, servicesManager }) {
@@ -50,6 +50,7 @@ const segmentationEditorExtension = {
 
 export default segmentationEditorExtension;
 export {
+  modelsToLabelmap,
   Enums, segmentationEditorExtension, setSegmentationEditorLayout, Cornerstone3DSegmentationViewerBaseViewport, 
   SonadorSegmentationEditorPanel
 };

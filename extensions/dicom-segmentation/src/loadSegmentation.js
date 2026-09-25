@@ -206,3 +206,9 @@ function _getNextColorLUTIndex() {
 
   return colorLUTIndex;
 }
+
+// Shared with the in-memory segmentation creator (createInMemorySegmentation.js)
+export {
+  _getNextLabelmapIndex as getNextLabelmapIndex,
+  _makeColorLUTAndGetIndex as makeColorLUTAndGetIndex,
+};

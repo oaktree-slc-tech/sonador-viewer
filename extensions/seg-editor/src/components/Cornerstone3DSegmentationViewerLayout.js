@@ -51,22 +51,42 @@ import {
 } from '@cornerstonejs/polymorphic-segmentation';
 
 
-import OHIF from "@ohif/core";
+import OHIF, { uiNotificationService } from "@ohif/core";
+import i18n from '@ohif/i18n';
+import {
+  clearSurfaceComputeFailure,
+  getSurfaceComputeFailure,
+} from '@ohif/core/src/utils/polySegSingleFlight';
 import {
   cornerstone3dUtils as c3dUtils,
   Cornerstone3DLabelmapBaseView,
   LoadingIndicator,
   VolumeRenderingMenuButton,
+  vtkUtils,
 } from '@ohif/extension-vtk';
 
 import { eventTypes as uiEvents } from '@ohif/ui';
 
 import { Enums as SonadorSegEnums } from '../enums';
+import { clearSegEditorToolContext, setSegEditorToolContext } from '../toolbox/segEditorToolContext';
+import { addLabelmapTools, registerLabelmapTools } from '../toolbox/segEditorTools';
+import { attachBrushCursorClearing } from '../toolbox/brushCursor';
+import { attachSegEditorKeyBindings, trackActiveViewport } from '../toolbox/segEditorKeyboard';
+import { createSurfaceSync } from '../utils/surfaceSync';
+import SegEditorSurfaceView from './SegEditorSurfaceView';
+import { callConfirmDialog } from './confirmDialog';
+import { reset3DToolState } from '../threeDTools/threeDToolState';
+import { clearSegEditorHistory } from '../toolbox/segEditorHistory';
+import { terminateHoleFillingWorker } from '../threeDTools/registerHoleFillingWorker';
+import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
 const { SonadorZoomTool } = c3dUtils.viewportTools;
 
 const { DisplaySetApi } = OHIF.display;
+
+// SegmentationEditor strings for the 3D editing canvas (the layout itself translates with Common)
+const translateSegEditor = (key, options) => i18n.t(key, { ns: 'SegmentationEditor', ...options });
 
 
 var SEGVIEWER_LAYOUT = {
@@ -133,7 +153,6 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     surfaceModelInit: false,
     surfaceModelToolsInit: false,
     surfaceRendering: true,
-    surfaceRenderProgress: 0,
   };
 
   static propTypes = {
@@ -151,6 +170,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     onVolumeLabelmapImageLoad: PropTypes.func,
     segEditorVolumeRenderingEnabled: PropTypes.bool,
     segEditorSurfaceRenderingEnabled: PropTypes.bool,
+    segEditor3dEditingEnabled: PropTypes.bool,
     defaultVolumeRenderPresetMR: PropTypes.string,
     defaultVolumeRenderPresetCT: PropTypes.string,
   }
@@ -198,6 +218,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // there is no 'CT-Default' Cornerstone3D preset, hence CT-Bone).
     segEditorVolumeRenderingEnabled: false,
     segEditorSurfaceRenderingEnabled: true,
+    segEditor3dEditingEnabled: false,
     defaultVolumeRenderPresetMR: 'MR-Default',
     defaultVolumeRenderPresetCT: 'CT-Bone',
   }
@@ -278,18 +299,39 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
   }
 
   _isSurfaceReady() {
-    // True once Cornerstone3D has actually computed and stored the Surface geometry for the
-    // 3D labelmap. This is the only authoritative "surface is on screen now" signal: the
-    // lazy surfaceDisplay.render() path stores representationData.Surface.geometryIds when the
-    // marching-cubes job resolves, and viewport.render() draws it on the same tick.
+    // True once Cornerstone3D has computed and stored the Surface representation for the 3D
+    // labelmap. This is the authoritative "surface computation finished" signal: the lazy
+    // surfaceDisplay.render() path stores representationData.Surface when the marching-cubes job
+    // resolves, and viewport.render() draws it on the same tick.
+    //
+    // The stored representation may hold no geometry (a working copy whose segments are all
+    // empty produces none). That is still finished: requiring geometry kept the "Rendering"
+    // overlay up, and the poll re-poking, forever.
     const component = this;
 
     const { volumeId: labelmapInstance3dUID } = component._segVol3d();
     if (!labelmapInstance3dUID) return false;
 
     const _seg = c3dSegmentations.state.getSegmentation(labelmapInstance3dUID);
-    const surface = _seg?.representationData?.Surface;
-    return !!(surface?.geometryIds && surface.geometryIds.size > 0);
+    return !!_seg?.representationData?.Surface;
+  }
+
+  _surfaceComputeFailed(error) {
+    // The surface computation failed: stop waiting and retrying, clear the overlay, and report.
+    // (A failure stores no surface, so without this the poll re-poked -- restarting the whole
+    // computation -- every 500 ms with the overlay up.)
+    const component = this;
+    if (component._surfaceShown || !component._isMounted) return;
+
+    component._surfaceShown = true;
+    component._stopSurfacePolling();
+    component.setState({ surfaceRendering: false });
+
+    vtkUtils.logVtkError(component.props.servicesManager, 'Unable to build the 3D surface', {
+      err: error,
+      message: 'The 3D surface could not be generated from the segmentation. The 2D views are unaffected.',
+      userNotification: true,
+    });
   }
 
   _showSurfaceWhenReady() {
@@ -311,6 +353,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     }
 
     component.setState({ surfaceRendering: false });
+
+    // Edits made while the surface was being computed are applied now
+    component._surfaceSync?.refreshIfStale();
   }
 
   _pokeSegmentationRender() {
@@ -369,6 +414,14 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         return;
       }
 
+      // Stop if the computation failed; re-poking would only restart it.
+      const { volumeId: labelmapInstance3dUID } = component._segVol3d();
+      const failure = labelmapInstance3dUID && getSurfaceComputeFailure(labelmapInstance3dUID);
+      if (failure) {
+        component._surfaceComputeFailed(failure.error);
+        return;
+      }
+
       // Not ready yet: re-poke (throttled) so a lost initial trigger is retried until one lands.
       if (Date.now() - (component._lastSurfacePokeAt || 0) >= pokeIntervalMs) {
         component._pokeSegmentationRender();
@@ -385,7 +438,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
   }
 
   _evtWorkerProgress(evt) {
-    // Track background worker progress and trigger UI updates / state changes
+    // Background worker progress: a nudge to reveal the surface once it is ready
     const component = this;
     if (!component._isMounted || !component.props.segEditorSurfaceRenderingEnabled) return;
 
@@ -394,12 +447,8 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
     if (msg.type == SonadorSegEnums.CORNERSTONE3D_WORKER_EVENT_TYPE_LABELMAP) {
 
-      // Labelmap <-> Surface update
-      const { progress } = msg;
-
-      // Update progress state — setState triggers componentDidUpdate which calls
-      // _surfaceRenderStatus() only when surface state has actually changed.
-      component.setState({ surfaceRenderProgress: progress });
+      // Labelmap <-> Surface update. The progress value is not shown: the worker reports it per
+      // segment, so it restarts for each one and does not track the whole job.
 
       // Worker progress is a useful nudge, but it is NOT a reliable completion signal: the
       // previous code guessed "done" from the last segment's progress==100 using a lexicographic
@@ -621,8 +670,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const component = this;
     const {
       t, uiMessageSurfaceInitializing, uiMessageSurfaceRendering, segEditorVolumeRenderingEnabled,
+      segEditor3dEditingEnabled,
     } = component.props;
-    const { surfaceRendering, surfaceRenderProgress, surfaceModelInit, loadProgress } = component.state;
+    const { surfaceRendering, surfaceModelInit, loadProgress } = component.state;
 
     let loadingMessage;
     if (!surfaceModelInit) {
@@ -638,18 +688,74 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // waits for a complete volume.
     const volumeComplete = !!loadProgress?.complete;
 
+    // 3D editing: the Three.js canvas takes the tab while the tool palette's 3D tab is selected.
+    // The VTK view is hidden, not removed (visibility keeps its size, so it resumes without a
+    // resize), and the canvas stays mounted once created so its camera and scene persist.
+    const editing = !!segEditor3dEditingEnabled;
+    const { volumeId: labelmapInstance3dUID } = component._segVol3d();
+
     return (<>
       {surfaceRendering && volumeComplete && (
-        <LoadingIndicator loadingMessage={t(loadingMessage)} percentageComplete={surfaceRenderProgress} />
+        // No percentage: see _evtWorkerProgress
+        <LoadingIndicator loadingMessage={t(loadingMessage)} />
       )}
-      <div ref={component.tabRefs[tab]} style={{ width: "100%", height: "100%" }} />
-      {segEditorVolumeRenderingEnabled && (
+      <div ref={component.tabRefs[tab]}
+        style={{ width: "100%", height: "100%", visibility: editing ? 'hidden' : 'visible' }} />
+      {component._editorCanvasCreated && labelmapInstance3dUID && (
+        <div style={{ position: 'absolute', inset: 0, display: editing ? 'block' : 'none' }}>
+          <SegEditorSurfaceView
+            segmentationId={labelmapInstance3dUID}
+            referenceViewportId={component.getViewportId({ tab })}
+            colorLUTIndex={component.lutIdx}
+            getReferenceCamera={() => component._checkViewportActive({ tab }).viewport?.getCamera()}
+            setReferenceCamera={(camera) => {
+              const { viewport } = component._checkViewportActive({ tab });
+              if (viewport) {
+                viewport.setCamera(camera);
+                viewport.render();
+              }
+            }}
+            active={editing}
+            surfaceReady={!!surfaceModelInit && !surfaceRendering && component._isSurfaceReady()}
+            noSurfaceMessage={surfaceRendering ? null : translateSegEditor('The 3D surface is not available yet.')}
+            editSegmentationId={component._segVol().volumeId}
+            confirm={component._confirm3DEdit}
+            notify={component._notify3DEdit}
+            onEditError={component._on3DEditError}
+            onLabelmapEdited={() => component._surfaceSync?.syncNow()}
+            renderingMessage={t(uiMessageSurfaceRendering)}
+            t={translateSegEditor}
+          />
+        </div>
+      )}
+      {segEditorVolumeRenderingEnabled && !editing && (
         <div className="absolute bottom-2 left-2 z-10">
           <VolumeRenderingMenuButton viewportId={component.getViewportId({ tab })} />
         </div>
       )}
     </>);
   }
+
+  _confirm3DEdit = ({ title, message, confirmText, cancelText }) => callConfirmDialog({
+    uiDialogService: this.props.servicesManager.services.UIDialogService,
+    id: 'seg-editor-3d-confirm',
+    title,
+    message,
+    confirmText,
+    cancelText,
+  });
+
+  _notify3DEdit = ({ type, title, message }) => {
+    uiNotificationService.show({ type, title, message });
+  };
+
+  _on3DEditError = (error) => {
+    vtkUtils.logVtkError(this.props.servicesManager, 'Unable to remove the selected points', {
+      err: error,
+      message: translateSegEditor('The selected points could not be removed. The segmentation is unchanged.'),
+      userNotification: true,
+    });
+  };
 
   _surfaceRenderStatus() {
     // Update the 3D viewport render status based on the component state
@@ -693,10 +799,14 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
     const component = this;
 
-    // Update view3d and return tab element
+    // Update view3d and return the tab element built from the CURRENT state. Serving the element
+    // cached by the last _surfaceRenderStatus() was the cause of the "Rendering" overlay sticking:
+    // componentDidUpdate rebuilt that cache after the render that had already used the old one,
+    // and nothing rendered again until an unrelated state change (e.g. clicking a 2D view). The
+    // element is cheap to build, and React reconciles it in place, so the viewport's DOM element
+    // (appended imperatively into the tab's div) is untouched.
     component.view3dUpdate(tab);
-    const _tab3d = component.cached3dTabs[tab];
-    return _tab3d;
+    return component.createTab3dView(tab);
   }
 
   activate3dViewports () {
@@ -792,6 +902,20 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component.setState({ segInit: true });
     }
 
+    // Keep the vol3d labelmap, and the surface built from it, in step with 2D edits
+    if (!component._surfaceSync && labelmapInstanceUID && labelmapInstance3dUID) {
+      component._surfaceSync = createSurfaceSync({
+        sourceSegmentationId: labelmapInstanceUID,
+        targetSegmentationId: labelmapInstance3dUID,
+        getSourceVolume: () => component._segVol().segVol,
+        getTargetVolume: () => component._segVol3d().segVol,
+        isSurfaceShown: () => !!component._isMounted
+          && !!component.props.segEditorSurfaceRenderingEnabled
+          && !!component.state.surfaceModelInit
+          && component._isSurfaceReady(),
+      });
+    }
+
     if (_.isFunction(onVolumeLabelmapImageLoad)) {
       onVolumeLabelmapImageLoad({
         volumeId: labelmapInstance3dUID, segmentationId: labelmapInstance3dUID, vol: segVol3d,
@@ -875,6 +999,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     c3dAddTool(C3dPanTool);
     c3dAddTool(C3dStackScrollTool);
     c3dAddTool(C3dTrackballRotateTool);
+
+    // Labelmap palette tools (ohif-viewers#142)
+    registerLabelmapTools();
   }
 
   initTools() {
@@ -897,20 +1024,55 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component.imgTools.addTool(C3dPanTool.toolName);
       component.imgTools.addTool(C3dStackScrollTool.toolName);
 
+      // Labelmap palette tools, passive until chosen from the palette
+      addLabelmapTools(component.imgTools);
+
       // Add viewports to tool group
+      const viewportIds = [];
+      component._detachViewportListeners = [];
       _.each(views2d, (tab) => {
 
         // Retrieve viewport to ensure it is active
-        const { viewportId: _v3d_id } = component._checkViewportActive({ tab });
+        const { viewportId: _v3d_id, viewport: _v3d } = component._checkViewportActive({ tab });
         if (_v3d_id) {
 
           // Add viewport to the tool
           component.imgTools.addViewport(_v3d_id);
+          viewportIds.push(_v3d_id);
+
+          // Only the viewport under the pointer shows a brush cursor; the viewport under the
+          // pointer is also the one keyboard commands act on
+          if (_v3d?.element) {
+            component._detachViewportListeners.push(attachBrushCursorClearing({
+              toolGroupId, viewportId: _v3d_id, element: _v3d.element,
+            }));
+            component._detachViewportListeners.push(trackActiveViewport({
+              viewportId: _v3d_id, element: _v3d.element,
+            }));
+          }
         }
       });
 
       // Activate tools
       component.activateTools('default');
+
+      // Publish the tool group, 2D viewports and working segmentation to the tool palettes
+      registerSegEditorToolbar(component.props.servicesManager);
+      setSegEditorToolContext({
+        toolGroupId,
+        viewportIds,
+        segmentationId: component.props.paintFilterLabelMapDetails?.labelmapInstanceUID,
+      });
+
+      // A new session starts with an empty undo history
+      clearSegEditorHistory();
+
+      // Editor key bindings (A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo)
+      if (component.props.commandsManager) {
+        component._detachKeyBindings = attachSegEditorKeyBindings({
+          commandsManager: component.props.commandsManager,
+        });
+      }
 
       // Re-render viewports and udpate state
       setTimeout(component.render3d.bind(component), eventTimeout);
@@ -1160,7 +1322,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // Cancel queued/running marching-cubes jobs (AR-5 worker discipline)
     c3dUtils.terminateWorkerComputeJobs();
 
-    component.setState({ surfaceModelInit: false, surfaceRendering: false, surfaceRenderProgress: 0 });
+    component.setState({ surfaceModelInit: false, surfaceRendering: false });
     component.render3d();
   }
 
@@ -1213,6 +1375,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         // cannot pass the guard while this call is still in flight. setState({ surfaceModelInit })
         // below is async, so the boolean state alone is not enough to prevent re-entry.
         component._surfaceCreateStarted = true;
+        clearSurfaceComputeFailure(labelmapInstance3dUID);
 
         // Capture epoch before the async wait. Any concurrent call (re-render while
         // _activateSurfaceRepresentation is in flight) or unmount will increment
@@ -1253,13 +1416,17 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         // because surfaceModelInit changed — no forceUpdate() needed.
         component.setState({ surfaceModelInit: true, segRepUpdatePaused: false });
 
-        // Recompute the surface geometry from the current labelmap before revealing, so the
-        // progress indicator stays up while stale geometry (from edits made with the surface
-        // disabled) is regenerated. A failure falls through to the lazy compute path: the poll
-        // backstop below re-pokes the render until the single-flighted computeSurfaceData runs.
+        // Bring the surface up to date with edits made while it was disabled. With the surface
+        // sync, the current 2D voxels are copied into the vol3d labelmap and it is marked
+        // modified; Cornerstone3D's surface listener (attached with the representation above)
+        // then rebuilds the meshes. Without the sync, the surface is rebuilt directly.
         if (options.recompute) {
           try {
-            await c3dUpdateSurfaceData(labelmapInstance3dUID);
+            if (component._surfaceSync) {
+              component._surfaceSync.syncNow();
+            } else {
+              await c3dUpdateSurfaceData(labelmapInstance3dUID);
+            }
           } catch (err) {
             console.error('[SegViewer-createSurfaceRender] Unable to update surface data on re-enable. '
               + 'segmentationId='+labelmapInstance3dUID, err);
@@ -1416,7 +1583,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     } = component.props;
     const {
       tabUiInit, uiInit, imgViewportInit, imgRenderInit, imgToolsInit, imgSyncInit,
-      segInit, segRenderInit, surfaceModelInit, surfaceRendering, surfaceRenderProgress, surfaceModelToolsInit
+      segInit, segRenderInit, surfaceModelInit, surfaceRendering, surfaceModelToolsInit
     } = component.state;
 
     await super.componentDidUpdate(prevProps, prevState);
@@ -1426,7 +1593,6 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // rebuilding React elements for all 3D tabs on each render cycle.
     const surfaceStateChanged =
       prevState.surfaceRendering !== surfaceRendering ||
-      prevState.surfaceRenderProgress !== surfaceRenderProgress ||
       prevState.surfaceModelInit !== surfaceModelInit;
     if (surfaceStateChanged) {
       component._surfaceRenderStatus();
@@ -1439,6 +1605,17 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // overlay could sit over a fully drawn surface until some unrelated interaction forced a
     // re-render -- clicking a 2D viewport, which is exactly the reported symptom.
     component._showSurfaceWhenReady();
+
+    // 3D editing canvas: created on first use, then kept (hidden while not editing). When the VTK
+    // view is shown again, render it so it reflects any change made meanwhile.
+    if (prevProps.segEditor3dEditingEnabled !== component.props.segEditor3dEditingEnabled) {
+      if (component.props.segEditor3dEditingEnabled && !component._editorCanvasCreated) {
+        component._editorCanvasCreated = true;
+        component.forceUpdate();
+      } else if (!component.props.segEditor3dEditingEnabled) {
+        component.render3d();
+      }
+    }
 
     // Initialize image synchronizer
     if (isLoaded && imgToolsInit && !imgSyncInit) {
@@ -1468,7 +1645,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
       // Re-enable: show the progress indicator and recreate the representation, recomputing the
       // surface so segments edited or added while the surface was off are included (FR-5)
-      component.setState({ surfaceRendering: true, surfaceRenderProgress: 0 });
+      component.setState({ surfaceRendering: true });
       await component.createSurfaceRender({ recompute: true });
     }
 
@@ -1527,10 +1704,23 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     component.unsubscribeEvents();
     component._isMounted = false;
 
-    // Cancel background operations
+    // Cancel background operations (a pending 3D delete is also invalidated by its view)
     c3dUtils.terminateWorkerComputeJobs();
+    terminateHoleFillingWorker();
+
+    // Stop following 2D edits before the labelmaps are purged
+    component._surfaceSync?.stop();
+    component._surfaceSync = undefined;
 
     // Remove imaging and segmentation tools
+    clearSegEditorToolContext(toolGroupId);
+    reset3DToolState();
+    // Recorded edits reference this session's labelmaps: they must not be replayable in the next
+    clearSegEditorHistory();
+    component._detachKeyBindings?.();
+    component._detachKeyBindings = undefined;
+    component._detachViewportListeners?.forEach(detach => detach());
+    component._detachViewportListeners = undefined;
     if (component.imgTools) {
       _.each(views2d, (tab) => {
 

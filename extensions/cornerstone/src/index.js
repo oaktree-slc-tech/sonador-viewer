@@ -18,6 +18,8 @@ import {
 
 import SonadorSegmentationHeader from './components/SonadorSegmentationHeader';
 import DicomTagBrowser from './components/DicomTagBrowser/DicomTagBrowser';
+import { Toolbox } from './utils/Toolbox';
+import { Toolbar } from './Toolbar';
 
 import toolbarModule from './toolbarModule';
 import commandsModule from './commandsModule';
@@ -38,6 +40,8 @@ const hooks = {
 const components = {
   SonadorSegmentationHeader,
   DicomTagBrowser,
+  Toolbox,
+  Toolbar,
 }
 
 

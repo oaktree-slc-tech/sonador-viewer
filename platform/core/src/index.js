@@ -28,6 +28,7 @@ import measurements from './measurements';
 
 import display from './display';
 import { ViewportRefsProvider, useViewportRef } from './hooks/useViewportRef';
+import { useToolbar, useActiveToolOptions } from './hooks';
 
 import object from './object.js';
 import { ServicesManager } from './services';
@@ -70,6 +71,9 @@ import {
   startArchiveNotifications,
   stopArchiveNotifications,
   pubSubServiceInterface,
+  ToolbarService,
+  TOOLBAR_SECTIONS,
+  getToolbarUITypeEntries,
 } from './services';
 import string from './string.js';
 import ui from './ui';
@@ -178,6 +182,7 @@ const OHIF = {
   startDownloadNotifications,
   startArchiveNotifications,
   pubSubServiceInterface,
+  ToolbarService,
 };
 
 
@@ -261,6 +266,13 @@ export {
   stopArchiveNotifications,
   pubSubServiceInterface,
   str2ab,
+
+  // OHIF v3 toolbar
+  ToolbarService,
+  TOOLBAR_SECTIONS,
+  getToolbarUITypeEntries,
+  useToolbar,
+  useActiveToolOptions,
 
   useSystem,
 };

@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,9 @@ import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 import OHIF from '@ohif/core';
 
 import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  Icons,
   TooltipProvider,
   SegmentationTable,
 } from '@ohif/ui-next';
@@ -26,9 +29,12 @@ import {
 } from '@ohif/extension-viewer3d-volume';
 
 import { isSTLDisplaySet } from '../../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
+import { findM3DSourceDisplaySet } from '../../sopClassHandlers/m3dSourceSeries.js';
+import { setM3DStatus } from '../../m3dStatus.js';
 import { getM3DSegmentationId, DEFAULT_GEOMETRY_COLOR_HEX } from '../../m3dCache';
 
 const { DisplaySetApi } = OHIF.display;
+const { studyMetadataManager } = OHIF.utils;
 const { SonadorSegmentationHeader } = csextComponents;
 
 import styles from '@ohif/extension-cornerstone/src/components/SonadorSegmentationPanelTheme.module.scss';
@@ -66,6 +72,35 @@ export default function M3DViewerSidebarPanel({
   // (isSTLDisplaySet), which the Segmentations-panel visibility gate also consumes.
   const _displaySet = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
   const isSTL = isSTLDisplaySet(_displaySet);
+
+  // Open as Segmentation (ohif-viewers#143): STL models voxelized onto the series they were made
+  // from, when that series is in the study
+  const sourceDisplaySet = useMemo(() => {
+    if (!isSTL || !_displaySet) {
+      return undefined;
+    }
+    const study = studyMetadataManager.get(_displaySet.StudyInstanceUID);
+    const displaySets = study ? [].concat(...(study.getDisplaySets?.() || [])) : [];
+    return findM3DSourceDisplaySet(_displaySet, displaySets);
+  }, [isSTL, _displaySet]);
+
+  async function panelOnOpenAsSegmentation() {
+    const setStatus = message => setM3DStatus(displaySetInstanceUID, message);
+    try {
+      await commandsManager.runCommand('openModelsAsSegmentation', {
+        displaySetInstanceUID, onProgress: setStatus,
+      });
+    } catch (err) {
+      console.error('[M3DViewerPanel] Open as Segmentation failed', err);
+      servicesManager.services.UINotificationService?.show({
+        type: 'error',
+        title: t('Open as Segmentation'),
+        message: err?.message || String(err),
+      });
+    } finally {
+      setStatus(null);
+    }
+  }
 
 
   function _refreshTableData(segmentationId) {
@@ -251,7 +286,14 @@ export default function M3DViewerSidebarPanel({
           <SegmentationTable.Expanded>
 
             <div className={styles.panelHeader}>
-              <SonadorSegmentationHeader portalContainer={portalContainer} />
+              <SonadorSegmentationHeader portalContainer={portalContainer} dropdownMenuContent={sourceDisplaySet ? (
+                <DropdownMenuContent container={portalContainer} className="seg-dropdown-content">
+                  <DropdownMenuItem onClick={panelOnOpenAsSegmentation}>
+                    <Icons.ByName name="tab-segmentation" className="text-foreground h-4 w-4" />
+                    <span className="pl-2" data-cy="OpenAsSegmentation">{t('Open as Segmentation')}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              ) : null} />
             </div>
 
             <div className={styles.panelExpandedContainer}>

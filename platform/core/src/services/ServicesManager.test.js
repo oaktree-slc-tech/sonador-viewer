@@ -89,7 +89,35 @@ describe('ServicesManager.js', () => {
 
       expect(fakeService.create.mock.calls[0][0]).toEqual({
         configuration,
+        extensionManager: null,
+        commandsManager: null,
+        servicesManager,
       });
+    });
+
+    it('passes the commands and extension managers once they are attached', () => {
+      const commandsManager = { run: jest.fn() };
+      const extensionManager = { modules: {} };
+
+      servicesManager.setCommandsManager(commandsManager);
+      servicesManager.setExtensionManager(extensionManager);
+      servicesManager.registerService(fakeService);
+
+      expect(fakeService.create.mock.calls[0][0]).toEqual({
+        configuration: {},
+        extensionManager,
+        commandsManager,
+        servicesManager,
+      });
+    });
+
+    it('accepts the commands manager at construction, as in OHIF v3', () => {
+      const commandsManager = { run: jest.fn() };
+      const localServicesManager = new ServicesManager(commandsManager);
+
+      localServicesManager.registerService(fakeService);
+
+      expect(fakeService.create.mock.calls[0][0].commandsManager).toBe(commandsManager);
     });
   });
 });

@@ -26,13 +26,16 @@
   font-size: 13px;
   line-height: 1.5;
 
-  button {
+  // The Segmentation Editor tool palette (`.seg-editor-palette`) renders OHIF v3 toolbox components
+  // that style their own buttons and surfaces, so the button, header and popover rules below skip
+  // it. :where() keeps the exclusion from raising these rules' specificity elsewhere in the panel.
+  button:not(:where(:global(.seg-editor-palette) button)) {
     background-color: transparent;
     border-color: transparent;
     color: var(--text-secondary-color);
   }
 
-  h3 button {
+  h3 button:not(:where(:global(.seg-editor-palette) button)) {
     height: 63px;
     color: var(--text-secondary-color);
     margin-bottom: -10px;
@@ -67,7 +70,7 @@
     padding: 0.5rem 0.75rem;
   }
 
-  :global(.bg-popover) {
+  :global(.bg-popover):not(:where(:global(.seg-editor-palette) *)) {
     background-color: var(--ui-gray-darker);
     border-color: var(--ui-border-color);
   }

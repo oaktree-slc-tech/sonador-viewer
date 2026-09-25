@@ -75,6 +75,8 @@ import powerOff from './icons/power-off.svg';
 import reset from './icons/reset.svg';
 import rotate from './icons/rotate.svg';
 import rotateRight from './icons/rotate-right.svg';
+import undo from './icons/undo.svg';
+import redo from './icons/redo.svg';
 import saveRegular from './icons/save-regular.svg';
 import scissors from './icons/scissors.svg';
 import search from './icons/search.svg';
@@ -191,6 +193,8 @@ const ICONS = {
   reset,
   rotate,
   'rotate-right': rotateRight,
+  undo,
+  redo,
   trash,
   unlink,
   'exclamation-circle': exclamationCircle,

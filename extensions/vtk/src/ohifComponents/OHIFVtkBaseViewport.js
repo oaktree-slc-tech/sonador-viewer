@@ -141,12 +141,19 @@ class OHIFVtkBaseViewport extends Component {
     // active-labelmap selection and per-segment visibility -- when it is present.
     const seriesRecords = getCanonicalSegmentationsForSeries(firstImageId);
 
+    // A segmentation named on the display set (the Segmentation Editor opened on a segmentation
+    // just created in the viewer, ohif-viewers#143) is chosen over the series' active one
+    const requestedSegmentationId = displaySetService
+      .getDisplaySetByUID?.(displaySetInstanceUID)?.segEditorSegmentationId;
+    const requestedRecord = requestedSegmentationId
+      && _.find(seriesRecords, (r) => r.segmentationId === requestedSegmentationId);
+
     if (seriesRecords.length) {
       const activeIndex = brushStackState
         ? brushStackState.activeLabelmapIndex
         : undefined;
-      const record = _.find(seriesRecords,
-        (r) => activeIndex === undefined || r.labelmapIndex === activeIndex)
+      const record = requestedRecord
+        || _.find(seriesRecords, (r) => activeIndex === undefined || r.labelmapIndex === activeIndex)
         || seriesRecords[0];
 
       labelmapInstanceUID = record.segmentationId;
@@ -169,7 +176,7 @@ class OHIFVtkBaseViewport extends Component {
         }
       }
 
-      if (seriesRecords.length > 1 && this.props.viewportIndex === 0) {
+      if (seriesRecords.length > 1 && this.props.viewportIndex === 0 && !requestedRecord) {
 
         UINotificationService.show({
           title: 'Overlapping Segmentation Found',
