@@ -41,7 +41,7 @@ import {
   surfaceToBufferGeometry,
 } from '@ohif/extension-viewerm3d';
 
-import { LoadingIndicator } from '@ohif/extension-vtk';
+import { LoadingIndicator, getViewOrientation } from '@ohif/extension-vtk';
 
 import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
 import { DeleteCancelledError, deleteSelection, DELETE_STEPS } from '../threeDTools/deleteSelection';
@@ -390,6 +390,15 @@ export default class SegEditorSurfaceView extends Component {
     if (this.api && camera) {
       this.api.setCameraLookAt(camera);
     }
+  }
+
+  setViewOrientation(orientationId) {
+    // Turn to a preset direction (extension-vtk viewOrientations) with the surfaces fitted to the view
+    const orientation = getViewOrientation(orientationId);
+    if (!this.api || !orientation) {
+      return false;
+    }
+    return this.api.setCameraOrientation(orientation);
   }
 
   pushCameraToReference() {
@@ -770,6 +779,14 @@ export default class SegEditorSurfaceView extends Component {
 
   componentWillUnmount() {
     const { Events } = c3dToolsEnums;
+
+    // Unmounted while shown (the layout was rebuilt): the VTK view takes this camera, and the
+    // replacement canvas copies it back from there. A hidden canvas holds a stale camera and
+    // hands nothing over.
+    if (this.props.active) {
+      this.pushCameraToReference();
+    }
+
     this._generation += 1;
     c3dEventTarget.removeEventListener(Events.SEGMENTATION_MODIFIED, this._onSegmentationModified);
     c3dEventTarget.removeEventListener(
@@ -819,6 +836,7 @@ export default class SegEditorSurfaceView extends Component {
           modelType={MIMETYPE_STL}
           projection="orthographic"
           lightingModel="vtk"
+          rotation="trackball"
           observeResize
           models={initialModels}
           onCreated={this._onCreated}

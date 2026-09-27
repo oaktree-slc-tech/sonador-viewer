@@ -28,6 +28,8 @@ import { eventTypes as segmentationEventTypes } from "@ohif/extension-dicom-segm
 
 import SegmentationEditorViewport from "../components/SegmentationEditorLayout.js";
 import { Enums as SegEditorEnums } from '../enums';
+import { DEFAULT_SEG_EDITOR_LAYOUT } from '../layouts/segEditorLayouts';
+import { claimEditorDisplaySet, releaseEditorDisplaySet } from '../utils/editorDisplaySetLifecycle';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 const { DisplaySetApi } = OHIF.display;
@@ -51,6 +53,10 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
     segEditorSurfaceRenderingEnabled: true,
     // 3D tab shows the Three.js editing canvas (set by the tool palette's 3D tab)
     segEditor3dEditingEnabled: false,
+    // Layout preset (layouts/segEditorLayouts), chosen from the toolbar's Layout widget
+    segEditorLayout: DEFAULT_SEG_EDITOR_LAYOUT,
+    // Counter bumped by the 3D menu's Reset (resetSegEditor3DView); the layout resets the camera
+    segEditor3dViewReset: 0,
   };
 
   constructor() {
@@ -113,6 +119,13 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
             sourceSegmentationId: fork.sourceSegmentationId,
           };
         }
+
+        // A segmentation created in the viewer (ohif-viewers#143) exists only for this session of
+        // the editor and is removed on close. Which one that is, is settled now, from the source
+        // itself: the close runs after the layout has torn down, and must not depend on reading
+        // it back through the working copy.
+        _component._inMemorySegmentationId = cornerstone3dUtils.getInMemorySegmentationInfo(
+          sourceLabelmapDetails.labelmapInstanceUID)?.segmentationId;
       }
 
       _component.hasError = false;
@@ -128,16 +141,20 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
           const { labelmapInstanceUID, labelmapMetadata } = labelmapDetails;
           if (displaySet && labelmapInstanceUID && !displaySet.labelmapInstanceUID) {
 
-            // Add the labelmapInstanceUID to the displaySet. Also indicate the viewport as stable
-            // to avoid unintentional mutation while the segmentation editor is loaded.
-            displaySet.segmentationId = labelmapInstanceUID;
-            displaySet.stableViewport = true;
-
-            // Initialize the editor 3D rendering toggles to their defaults. Publishing satisfies
-            // the non-nil guard in the toggle commands and seeds the toolbar state indicators.
-            displaySet.segEditorVolumeRenderingEnabled = _component.state.segEditorVolumeRenderingEnabled;
-            displaySet.segEditorSurfaceRenderingEnabled = _component.state.segEditorSurfaceRenderingEnabled;
-            displaySet.segEditor3dEditingEnabled = _component.state.segEditor3dEditingEnabled;
+            // Publish the working segmentation as the displaySet's segmentationId and mark the
+            // viewport stable. The editor attributes seed the toolbar indicators and satisfy the
+            // non-nil guard of the toggle commands. The ids are kept on the instance: the close
+            // runs later, and must release what this editor took, not what the displaySet holds
+            // by then.
+            const { displacedSegmentationId } = claimEditorDisplaySet(displaySet, labelmapInstanceUID, {
+              segEditorVolumeRenderingEnabled: _component.state.segEditorVolumeRenderingEnabled,
+              segEditorSurfaceRenderingEnabled: _component.state.segEditorSurfaceRenderingEnabled,
+              segEditor3dEditingEnabled: _component.state.segEditor3dEditingEnabled,
+              segEditorLayout: _component.state.segEditorLayout,
+              segEditor3dViewReset: _component.state.segEditor3dViewReset,
+            });
+            _component._workingSegmentationId = labelmapInstanceUID;
+            _component._displacedSegmentationId = displacedSegmentationId;
 
             DisplaySetApi.Instance.displaySetService.addDisplaySets([displaySet]);
           }
@@ -238,7 +255,8 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
 
     if (displaySetInstanceUID == viewportDisplaySetInstanceUID) {
       _component.setState(_.pick(displaySet,
-        'segEditorVolumeRenderingEnabled', 'segEditorSurfaceRenderingEnabled', 'segEditor3dEditingEnabled'));
+        'segEditorVolumeRenderingEnabled', 'segEditorSurfaceRenderingEnabled', 'segEditor3dEditingEnabled',
+        'segEditorLayout', 'segEditor3dViewReset'));
     }
   }
 
@@ -299,55 +317,65 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
         // as stableViewport = false, which will notify OHIF that updates to displaySet state should trigger reloads.
         // TODO: Begin migrating general viewer state to utilize service based representations rather than flux.
         const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
-        if (_ds && _ds.stableViewport) {
+        const workingSegmentationId = _component._workingSegmentationId;
+        if (_ds && workingSegmentationId) {
 
-          // Restore style defaults on exit
-          if (_ds.segmentationId) {
+          // Each step stands on its own. This runs in a deferred callback after the layout's
+          // own teardown, so a failure in one step would otherwise go unreported and skip the
+          // rest: the created segmentation would stay installed, and active, on its series.
+          const step = (name, run) => {
+            try {
+              return run();
+            } catch (error) {
+              console.error(`[OHIFSegmentationEditorViewport:component-unmounting] ${name} failed`, error);
+              return undefined;
+            }
+          };
 
-            _component.props.commandsManager.runCommand('setFillAlpha', {
-              value: _component.labelmapStyleDefaults.fillAlpha, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-            _component.props.commandsManager.runCommand('setOutlineWidth', {
-              value: _component.labelmapStyleDefaults.outlineWidth, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-            _component.props.commandsManager.runCommand('setRenderFill', {
-              value: _component.labelmapStyleDefaults.renderFill, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-            _component.props.commandsManager.runCommand('setRenderFillInactive', {
-              value: _component.labelmapStyleDefaults.renderFillInactive, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-            _component.props.commandsManager.runCommand('setRenderOutline', {
-              value: _component.labelmapStyleDefaults.renderOutline, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-            _component.props.commandsManager.runCommand('setRenderOutlineInactive', {
-              value: _component.labelmapStyleDefaults.renderOutlineInactive, segmentationId: _ds.segmentationId
-            }, vtkEnums.VIEWPORT);
-          }
+          // A segmentation created in the viewer (ohif-viewers#143) exists only for this session
+          // of the editor: once closed, it is removed rather than left behind on the series. The
+          // id was settled at load; reading the marker through the working copy is only a
+          // fallback, since the copy may already be gone by now.
+          const inMemorySegmentationId = _component._inMemorySegmentationId
+            || step('reading the in-memory marker',
+              () => cornerstone3dUtils.getInMemorySegmentationInfo(workingSegmentationId))?.segmentationId;
 
           // Release the editor's working segmentation: its displays, state entry and stack go;
           // the source canonical segmentation and its legacy view are untouched.
-          // A segmentation created in the viewer (ohif-viewers#143) exists only for this session
-          // of the editor: once closed, it is removed rather than left behind on the series.
-          const inMemory = _ds.segmentationId
-            && cornerstone3dUtils.getInMemorySegmentationInfo(_ds.segmentationId);
-          if (_ds.segmentationId) {
-            cornerstone3dUtils.releaseEditorWorkingCopy(_ds.segmentationId);
-          }
-          if (inMemory) {
-            cornerstone3dUtils.removeCanonicalSegmentation(inMemory.segmentationId);
+          step('releasing the working copy',
+            () => cornerstone3dUtils.releaseEditorWorkingCopy(workingSegmentationId));
+          if (inMemorySegmentationId) {
+            step('removing the created segmentation',
+              () => cornerstone3dUtils.removeCanonicalSegmentation(inMemorySegmentationId));
           }
 
-          // Clear segmentationId and the editor 3D rendering toggles from the displaySet
-          // (mirrors the attribute lifecycle in OHIFVtkVolumeViewport.componentWillUnmount)
-          _ds.segmentationId = undefined;
-          _ds.segEditorSegmentationId = undefined;
-          _ds.volumeSegmentationId = undefined;
-          _ds.segEditorVolumeRenderingEnabled = undefined;
-          _ds.segEditorSurfaceRenderingEnabled = undefined;
-          _ds.segEditor3dEditingEnabled = undefined;
-          _ds.stableViewport = false;
+          // Give the displaySet back: the segmentation it carried before the editor (an M3D
+          // series' own) is restored, and the editor attributes are cleared
+          step('releasing the display set', () => releaseEditorDisplaySet(_ds, {
+            workingSegmentationId,
+            displacedSegmentationId: _component._displacedSegmentationId,
+          }));
+          _component._workingSegmentationId = undefined;
+          _component._displacedSegmentationId = undefined;
+          _component._inMemorySegmentationId = undefined;
 
-          DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+          step('publishing the display set',
+            () => DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]));
+
+          // Style defaults, last: the working copy these addressed is gone, so this only clears
+          // what the session set under its id.
+          step('restoring style defaults', () => [
+            ['setFillAlpha', 'fillAlpha'],
+            ['setOutlineWidth', 'outlineWidth'],
+            ['setRenderFill', 'renderFill'],
+            ['setRenderFillInactive', 'renderFillInactive'],
+            ['setRenderOutline', 'renderOutline'],
+            ['setRenderOutlineInactive', 'renderOutlineInactive'],
+          ].forEach(([command, style]) => {
+            _component.props.commandsManager.runCommand(command, {
+              value: _component.labelmapStyleDefaults[style], segmentationId: workingSegmentationId,
+            }, vtkEnums.VIEWPORT);
+          }));
         }
       }
     }, eventTimeout);
@@ -396,6 +424,8 @@ class OHIFSegmentationEditorViewport extends OHIFVtkBaseViewport {
             segEditorVolumeRenderingEnabled={component.state.segEditorVolumeRenderingEnabled}
             segEditorSurfaceRenderingEnabled={component.state.segEditorSurfaceRenderingEnabled}
             segEditor3dEditingEnabled={!!component.state.segEditor3dEditingEnabled}
+            segEditorLayout={component.state.segEditorLayout}
+            segEditor3dViewReset={component.state.segEditor3dViewReset}
           />
         )}
       </div>

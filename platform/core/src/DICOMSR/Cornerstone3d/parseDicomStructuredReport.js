@@ -1,5 +1,8 @@
 import _ from 'lodash';
 import dcmjs from 'dcmjs';
+import cornerstone from 'cornerstone-core';
+
+import log from '../../log';
 
 import {
   utilities as c3dCoreUtilities, 
@@ -17,6 +20,8 @@ import MeasurementApi from '../../measurements/classes/MeasurementApi';
 import getImagePath from '../../measurements/lib/getImagePath';
 
 import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements';
+import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
+import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 
 const {
@@ -82,8 +87,32 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       + 'matching instance not registered with displaySets');
   };
 
-  const sopInstanceUIDToImageId = {};
-  const imageIdsForToolState = {};
+  // Image ids for every image the study holds, keyed by SOP instance: the ids the viewports use,
+  // so a hydrated annotation keys the tool state the viewport reads. Independent of the SR
+  // display sets' own links below, which only add what the study's display sets do not cover.
+  const { sopInstanceUIDToImageId, imageIdsForToolState } = buildSopInstanceImageIds(imageDisplaySets);
+
+  // The SR display sets' measurements are linked to their images by the display sets' own load,
+  // which runs when they are registered and again as image display sets arrive. Parsing must not
+  // depend on that ordering: load them here and link against the study's image display sets.
+  const linkSummary = [];
+  for (const srDisplaySet of srDisplaySets) {
+    const _sr = displaySetService.getDisplaySetByUID(srDisplaySet.displaySetInstanceUID);
+    if (_sr && _.isFunction(_sr.load)) {
+      await _sr.load();
+      linkMeasurementsToDisplaySets(_sr, imageDisplaySets, external.servicesManager);
+    }
+    const _measurements = _sr?.measurements || [];
+    linkSummary.push({
+      displaySetInstanceUID: srDisplaySet.displaySetInstanceUID,
+      registered: !!_sr,
+      loaded: !!_sr?.isLoaded,
+      measurements: _measurements.length,
+      linked: _measurements.filter(m => m.loaded).length,
+    });
+  }
+  log.info('[DICOM-SR:parseDicomStructuredReport:link] SR display sets linked to images', linkSummary,
+    'imageDisplaySets='+imageDisplaySets.length, 'activeDisplaySets='+(displaySetService.activeDisplaySets?.length ?? 'n/a'));
 
   displaySets.forEach((ds) => {
 
@@ -99,6 +128,9 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     _.each(_ds.measurements, m => {
       
       const { ReferencedSOPInstanceUID, imageId, frameNumber } = m;
+      if (!ReferencedSOPInstanceUID || !imageId) {
+        return;
+      }
 
       if (!sopInstanceUIDToImageId[ReferencedSOPInstanceUID]) {
         console.log('[DICOM-SR:parseDicomStructuredReport:sopInstanceUIDs]', ReferencedSOPInstanceUID, imageId, m);
@@ -185,6 +217,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   }
 
   let measurementNumber = 1;
+  const skippedWithoutImage = [];
 
   // Generate tool data / annotation structure
   _.each(_.keys(hydratableMeasurementsInSR), annotationType => {
@@ -222,6 +255,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
       // Prevent rendering of annotations without a defined imageId
       if (!imageId) {
+        skippedWithoutImage.push(toolData.sopInstanceUid);
         return;
       }
 
@@ -321,6 +355,11 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       ++measurementNumber;
     });
   });
+
+  if (skippedWithoutImage.length) {
+    log.warn('[DICOM-SR:parseDicomStructuredReport:skipped] annotations skipped, no image loaded for their SOP instances',
+      _.uniq(skippedWithoutImage));
+  }
 }
 
 

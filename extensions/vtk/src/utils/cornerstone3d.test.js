@@ -447,6 +447,32 @@ describe('volumeLease', () => {
     expect(mockCache.removeVolumeLoadObject).toHaveBeenCalledWith(volumeId);
   });
 
+  it('does NOT remove the editor\'s working copy when the last lease is released', () => {
+    // The editor's views release their image volume before the editor's own deferred close runs;
+    // that close releases the working copy itself and reads, through it, which created
+    // segmentation to remove. Disposing of the copy here left that removal with nothing to read.
+    mockGetSegmentations.mockReturnValue([
+      {
+        segmentationId: 'working-copy',
+        cachedStats: { sonadorEditorWorkingCopyOf: 'created-seg' },
+        representationData: { Labelmap: { referencedVolumeId: volumeId, volumeId: 'working-copy' } },
+      },
+      {
+        segmentationId: 'vol3d:working-copy',
+        representationData: { Labelmap: { referenceVolumeId: volumeId, volumeId: 'vol3d:working-copy' } },
+      },
+    ]);
+    mockCache.loadObjects.set('working-copy', { promise: Promise.resolve({}) });
+    mockCache.loadObjects.set('vol3d:working-copy', { promise: Promise.resolve({}) });
+
+    volumeLease.acquire(volumeId);
+    expect(volumeLease.release(volumeId)).toBe(0);
+
+    expect(mockRemoveSegmentation).toHaveBeenCalledWith('vol3d:working-copy');
+    expect(mockRemoveSegmentation).not.toHaveBeenCalledWith('working-copy');
+    expect(mockCache.removeVolumeLoadObject).not.toHaveBeenCalledWith('working-copy');
+  });
+
   it('leaves canonical segmentations alone when releaseAll runs', () => {
     mockGetSegmentations.mockReturnValue([
       {

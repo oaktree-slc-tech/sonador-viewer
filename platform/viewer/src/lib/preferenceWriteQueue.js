@@ -38,6 +38,18 @@ let offlineToastShown = false;
 let seqCounter = 0;
 const nextSeq = () => Date.now() * 4096 + (seqCounter++ % 4096);
 
+// Writes to the server run one at a time, in the order they were asked for. A replay of a queued
+// (older) payload and a fresh save of the same section may otherwise be in flight together, and
+// the server keeps whichever commits LAST: an older replay landing after a newer save would put
+// the old values back while the newer save's success had already emptied the queue. The chain
+// never rejects, so one failed write cannot stall the ones behind it.
+let writeChain = Promise.resolve();
+const serializeWrite = (task) => {
+  const run = writeChain.then(task, task);
+  writeChain = run.then(() => undefined, () => undefined);
+  return run;
+};
+
 const isValidationError = (error) => error && error.status === 400;
 const isAuthError = (error) => error && (error.status === 401 || error.status === 403);
 const isRetryableError = (error) => !isValidationError(error);
@@ -192,22 +204,33 @@ export const hasPendingPreferenceWrite = (key) => {
   return !!user && readQueue().some((e) => e.key === key && e.user === user);
 };
 
+export const getPendingPreferenceWrite = (key) => {
+  // The pending queued write for `key` under the current user -- `{ section, payload }` -- or
+  // undefined. It is the newest value of that section the user has (FR-20): a write composed
+  // from anything older would replace it, on success by dequeuing it and on a retryable failure
+  // by coalescing over it, so a caller amending one key of a section starts from this payload.
+  const user = getCurrentPreferenceUser();
+  const entry = user && readQueue().find((e) => e.key === key && e.user === user);
+  return entry ? { section: entry.section, payload: entry.payload } : undefined;
+};
+
 export const hasPendingPreferenceWrites = () => {
   const user = getCurrentPreferenceUser();
   return !!user && readQueue().some((e) => e.user === user);
 };
 
-export const submitPreferenceWrite = async ({ key, section, payload }) => {
-  // Single write path for every preference mutation (AR-10). Attempts the POST immediately;
-  // on a retryable failure the payload is enqueued and the promise RESOLVES with
-  // `{ outcome: 'queued' }` (the change is preserved -- FR-7), or `{ outcome: 'failed' }`
-  // when it could NOT be enqueued (no authenticated identity to scope it to) so callers
-  // never promise a sync that will not happen. Validation failures (400) REJECT so error
-  // paths fire, and are never queued (FR-21).
+export const submitPreferenceWrite = ({ key, section, payload }) => serializeWrite(async () => {
+  // Single write path for every preference mutation (AR-10). Attempts the POST as soon as no
+  // other write (a replay included) is in flight; on a retryable failure the payload is
+  // enqueued and the promise RESOLVES with `{ outcome: 'queued' }` (the change is preserved --
+  // FR-7), or `{ outcome: 'failed' }` when it could NOT be enqueued (no authenticated identity
+  // to scope it to) so callers never promise a sync that will not happen. Validation failures
+  // (400) REJECT so error paths fire, and are never queued (FR-21).
 
-  // Snapshot any already-pending entry for this key: if the POST succeeds, only that entry
-  // (not a newer payload coalesced during the request) may be dequeued -- the server now
-  // holds this submission's value, and anything queued later is newer still (FR-19).
+  // Snapshot any already-pending entry for this key, once it is this write's turn: if the POST
+  // succeeds, only that entry (not a newer payload coalesced during the request) may be
+  // dequeued -- the server now holds this submission's value, and anything queued later is
+  // newer still (FR-19).
   const user = getCurrentPreferenceUser();
   const priorEntry =
     user && readQueue().find((e) => e.key === key && e.user === user);
@@ -234,7 +257,7 @@ export const submitPreferenceWrite = async ({ key, section, payload }) => {
     const queued = enqueue({ key, section, payload });
     return { outcome: queued ? 'queued' : 'failed', error };
   }
-};
+});
 
 export const flushPreferenceWrites = async () => {
   // Replay pending entries for the current user, oldest first (FR-20). Per-entry outcomes
@@ -250,31 +273,35 @@ export const flushPreferenceWrites = async () => {
 
   flushing = true;
   try {
-    const pending = readQueue().filter((e) => e.user === user);
-    let hadRetryableFailure = false;
+    // Behind any write already in flight, and ahead of any asked for while it runs: the
+    // entries replayed here are read once it is the flush's turn.
+    await serializeWrite(async () => {
+      const pending = readQueue().filter((e) => e.user === user);
+      let hadRetryableFailure = false;
 
-    for (const entry of pending) {
-      try {
-        await updateUserPreferenceSection(entry.section, entry.payload);
-        removeEntry(entry);
-      } catch (error) {
-        if (isValidationError(error)) {
+      for (const entry of pending) {
+        try {
+          await updateUserPreferenceSection(entry.section, entry.payload);
           removeEntry(entry);
-          notifyDropped(entry, error);
-        } else {
-          bumpAttempts(entry);
-          hadRetryableFailure = true;
-          if (isAuthError(error)) {
-            // Held for the next trigger; do not hammer a 401 inside this flush.
-            continue;
+        } catch (error) {
+          if (isValidationError(error)) {
+            removeEntry(entry);
+            notifyDropped(entry, error);
+          } else {
+            bumpAttempts(entry);
+            hadRetryableFailure = true;
+            if (isAuthError(error)) {
+              // Held for the next trigger; do not hammer a 401 inside this flush.
+              continue;
+            }
           }
         }
       }
-    }
 
-    if (!hadRetryableFailure) {
-      retryDelay = WRITE_QUEUE_BACKOFF_FLOOR_MS;
-    }
+      if (!hadRetryableFailure) {
+        retryDelay = WRITE_QUEUE_BACKOFF_FLOOR_MS;
+      }
+    });
   } finally {
     flushing = false;
   }

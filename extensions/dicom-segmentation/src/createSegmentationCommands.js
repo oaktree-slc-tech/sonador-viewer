@@ -4,15 +4,22 @@
 // - createSegmentation: a blank segmentation, one empty segment, on the active CT/MR series
 //   (the Cornerstone viewer's More -> Create Segmentation).
 // - openModelsAsSegmentation: an STL model series voxelized onto the series it was made from,
-//   one segment per model (the M3D models panel's Open as Segmentation).
+//   one segment per model (the M3D models panel's Open as Segmentation). Models locked in the
+//   panel are left out, and the user is told which before the editor opens -- unless they have
+//   asked not to be (the dialog's "don't ask again", a general preference).
 //
 // Both register an in-memory segmentation (createInMemorySegmentation) and open the editor on
 // that segmentation (the display set's `segEditorSegmentationId`, read by the editor's viewport).
 
-import OHIF from '@ohif/core';
+import OHIF, { LOCKED_MODELS_WARNING_PREFERENCE_KEY, UserPreferencesService } from '@ohif/core';
 import i18n from '@ohif/i18n';
 import { viewerbaseDisplaySetIsCTOrMRVolume, viewerbaseGetDisplaySet } from '@ohif/ui';
-import { modelsToLabelmap, setSegmentationEditorLayout } from '@ohif/extension-seg3d-editor';
+import {
+  callConfirmDialog,
+  listModelsForConversion,
+  modelsToLabelmap,
+  setSegmentationEditorLayout,
+} from '@ohif/extension-seg3d-editor';
 import { findM3DSourceDisplaySet } from '@ohif/extension-viewerm3d';
 
 import { createInMemorySegmentation, getDisplaySetImageIds, hexToRgb } from './createInMemorySegmentation';
@@ -88,6 +95,28 @@ export function segmentationLabelFor(displaySet) {
 }
 
 /**
+ * What the user is told before locked models are left out: the models by name, and what to do
+ * about it. Worded as an alert -- a question for the title, a verb on the confirming button,
+ * Cancel on the other -- with the suppression checkbox beneath the message.
+ */
+export function lockedModelsWarning({ unlocked, locked }) {
+  const names = locked.map(segment => segment.label).join(', ');
+  const total = unlocked.length + locked.length;
+  const leftOut = locked.length === 1
+    ? t('One of the {{total}} models is locked and will be left out: {{models}}.', { total, models: names })
+    : t('{{lockedCount}} of the {{total}} models are locked and will be left out: {{models}}.', {
+      lockedCount: locked.length, total, models: names,
+    });
+  return {
+    title: t('Open Only the Unlocked Models?'),
+    message: `${leftOut} ${t('Unlock a model in the models panel to include it.')}`,
+    confirmText: t('Open Unlocked Models'),
+    cancelText: t('Cancel'),
+    suppressionLabel: t('Don\'t ask again'),
+  };
+}
+
+/**
  * @param {Object} params
  * @param {Object} params.servicesManager
  * @param {Object} [params.deps] - injectable (tests)
@@ -95,12 +124,18 @@ export function segmentationLabelFor(displaySet) {
 export default function createSegmentationCommands({ servicesManager, deps = {} }) {
   const {
     create = createInMemorySegmentation,
+    listModels = listModelsForConversion,
     convertModels = modelsToLabelmap,
     openEditor = openEditorOnSegmentation,
     ensureStack = _ensureStack,
     getDisplaySet = uid => _displaySetService().getDisplaySetByUID(uid),
     getStudyDisplaySets = _studyDisplaySets,
     findImageSet = _findImageSet,
+    confirm = options => callConfirmDialog({
+      uiDialogService: servicesManager.services.UIDialogService, ...options,
+    }),
+    warnsAboutLockedModels = () => UserPreferencesService.getGeneral(LOCKED_MODELS_WARNING_PREFERENCE_KEY) !== false,
+    stopWarningAboutLockedModels = () => UserPreferencesService.setGeneral(LOCKED_MODELS_WARNING_PREFERENCE_KEY, false),
   } = deps;
 
   const notify = options => servicesManager?.services?.UINotificationService?.show(options);
@@ -137,10 +172,34 @@ export default function createSegmentationCommands({ servicesManager, deps = {} 
         throw new Error('The images these models were made from are not in this study');
       }
 
+      // Locked models stay out of the segmentation. Said before the conversion starts, so the
+      // user can unlock a model first instead of finding it missing in the editor.
+      const m3dSeriesInstanceUID = m3dDisplaySet.SeriesInstanceUID;
+      const models = listModels({ m3dSeriesInstanceUID });
+      if (!models.unlocked.length && models.locked.length) {
+        notify({
+          type: 'warning',
+          title: t('Open as Segmentation'),
+          message: t('All of the models are locked. Unlock a model in the models panel to open it as a segmentation.'),
+        });
+        return undefined;
+      }
+      if (models.locked.length && warnsAboutLockedModels()) {
+        const { confirmed, suppressed } = await confirm({
+          id: 'open-models-as-segmentation-locked', ...lockedModelsWarning(models),
+        });
+        if (!confirmed) {
+          return undefined;
+        }
+        if (suppressed) {
+          stopWarningAboutLockedModels();
+        }
+      }
+
       ensureStack(sourceDisplaySet);
       onProgress(t('Converting models...'));
       const result = await convertModels({
-        m3dSeriesInstanceUID: m3dDisplaySet.SeriesInstanceUID,
+        m3dSeriesInstanceUID,
         imageIds: getDisplaySetImageIds(sourceDisplaySet),
       });
 

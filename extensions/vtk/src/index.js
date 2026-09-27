@@ -85,6 +85,8 @@ import {
   removeCanonicalSegmentation,
   resolveLegacyViewPlacement,
   markInMemorySegmentation,
+  mintSegmentationId,
+  getEditorWorkingCopiesOf,
   getInMemorySegmentationInfo,
 } from './utils/labelmapBridge.js';
 
@@ -124,6 +126,8 @@ import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionVie
 
 // Volume Rendering controls
 import { VolumeRenderingMenuButton } from './components/VolumeRendering/VolumeRenderingMenuButton';
+import ViewOrientationMenu from './components/ViewOrientationMenu';
+import { VIEW_ORIENTATIONS, getViewOrientation, applyViewOrientationToViewport } from './utils/viewOrientations';
 import { VolumeRenderingOptions } from './components/VolumeRendering/VolumeRenderingOptions';
 import { VolumeRenderingPresets } from './components/VolumeRendering/VolumeRenderingPresets';
 import { VolumeRenderingPresetsContent } from './components/VolumeRendering/VolumeRenderingPresetsContent';
@@ -134,12 +138,13 @@ import { VolumeShade } from './components/VolumeRendering/VolumeShade';
 
 import ViewportGridOverlayTool from './components/tools/ViewportGridOverlayTool';
 import SonadorZoomTool from './components/tools/SonadorZoomTool';
+import SonadorTrackballRotateTool from './components/tools/SonadorTrackballRotateTool';
 
 import Enums from './enums';
 
 
 const cornerstone3dViewportTools = {
-  ViewportGridOverlayTool, SonadorZoomTool, getCornerstone3dViewport, removeVolumeActors
+  ViewportGridOverlayTool, SonadorZoomTool, SonadorTrackballRotateTool, getCornerstone3dViewport, removeVolumeActors
 }
 
 
@@ -178,6 +183,8 @@ const cornerstone3dUtils = {
   removeCanonicalSegmentation,
   resolveLegacyViewPlacement,
   markInMemorySegmentation,
+  mintSegmentationId,
+  getEditorWorkingCopiesOf,
   getInMemorySegmentationInfo,
   mirrorLegacyMetadataToCornerstone3d,
   attachLabelmapSegmentationService,
@@ -243,5 +250,6 @@ export {
   LoadingIndicator, VolumeFitNotice, vtkVolumeColorPresetSelector, DisplaySetAttributeActiveToolbarButton, createViewportToggleFeatureCommand,
   VolumeRenderingMenuButton, VolumeRenderingOptions, VolumeRenderingPresets, VolumeRenderingPresetsContent,
   VolumeRenderingQuality, VolumeShift, VolumeLighting, VolumeShade,
+  ViewOrientationMenu, VIEW_ORIENTATIONS, getViewOrientation, applyViewOrientationToViewport,
 };
 

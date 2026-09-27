@@ -4,7 +4,7 @@ import React, { Component, createRef } from "react";
 import { withTranslation } from 'react-i18next';
 import PropTypes from "prop-types";
 
-import { Layout, Model } from "flexlayout-react";
+import { Actions, Layout, Model } from "flexlayout-react";
 import "flexlayout-react/style/dark.css";
 
 import {
@@ -27,7 +27,6 @@ import {
   ZoomTool as C3dZoomTool,
   PanTool as C3dPanTool,
   StackScrollTool as C3dStackScrollTool,
-  TrackballRotateTool as C3dTrackballRotateTool,
   Enums as c3dToolsEnums,
   addTool as c3dAddTool,
 
@@ -62,12 +61,15 @@ import {
   Cornerstone3DLabelmapBaseView,
   LoadingIndicator,
   VolumeRenderingMenuButton,
+  ViewOrientationMenu,
+  applyViewOrientationToViewport,
   vtkUtils,
 } from '@ohif/extension-vtk';
 
 import { eventTypes as uiEvents } from '@ohif/ui';
 
 import { Enums as SonadorSegEnums } from '../enums';
+import { DEFAULT_SEG_EDITOR_LAYOUT, getSegEditorLayoutJson } from '../layouts/segEditorLayouts';
 import { clearSegEditorToolContext, setSegEditorToolContext } from '../toolbox/segEditorToolContext';
 import { addLabelmapTools, registerLabelmapTools } from '../toolbox/segEditorTools';
 import { attachBrushCursorClearing } from '../toolbox/brushCursor';
@@ -81,41 +83,12 @@ import { terminateHoleFillingWorker } from '../threeDTools/registerHoleFillingWo
 import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
-const { SonadorZoomTool } = c3dUtils.viewportTools;
+const { SonadorZoomTool, SonadorTrackballRotateTool } = c3dUtils.viewportTools;
 
 const { DisplaySetApi } = OHIF.display;
 
 // SegmentationEditor strings for the 3D editing canvas (the layout itself translates with Common)
 const translateSegEditor = (key, options) => i18n.t(key, { ns: 'SegmentationEditor', ...options });
-
-
-var SEGVIEWER_LAYOUT = {
-
-  // Two column layout with visible work panels for axial, coronal, and saggital views
-  // of the imaging and segmentation.
-  global: {},
-  borders: [],
-  layout: {
-    type: "row",
-    weight: 100,
-    children: [
-      { type: "tabset", weight: 60, children: [
-        // { type: "tab", name: "Editor", component: "placeholder", enableClose: false, enableRename: false, },
-        { type: "tab", name: "3D", component: "placeholder", enableClose: false, enableRename: false, },
-      ]},
-      { type: "column", weight: 40, children: [
-      { type: "tabset", weight: 33, children: [
-        { type: "tab", name: "Axial", component: "seg3dview", enableClose: false, enableRename: false, },
-      ]},
-      { type: "tabset", weight: 33, children: [
-        { type: "tab", name: "Coronal", component: "seg3dview", enableClose: false, enableRename: false, },
-      ]},
-      { type: "tabset", weight: 33, children: [
-        { type: "tab", name: "Sagittal", component: "seg3dview", enableClose: false, enableRename: false, },
-      ]},
-    ]},
-  ]},
-};
 
 
 class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapBaseView {
@@ -164,7 +137,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     views3d: PropTypes.array.isRequired,
     onCreated: PropTypes.func,
     onDestroyed: PropTypes.func,
-    segViewerLayout: PropTypes.object.isRequired,
+    // Layout preset id (see layouts/segEditorLayouts); `segViewerLayout` is a flexlayout model JSON
+    // that overrides the preset when given
+    segEditorLayout: PropTypes.string,
+    segViewerLayout: PropTypes.object,
+    // Changes whenever the 3D menu's Reset runs: the 3D camera returns to its load-time view
+    segEditor3dViewReset: PropTypes.number,
     uiMessageSurfaceInitializing: PropTypes.string.isRequired,
     uiMessageSurfaceRendering: PropTypes.string.isRequired,
     onVolumeLabelmapImageLoad: PropTypes.func,
@@ -209,7 +187,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         },
       }
     },
-    segViewerLayout: SEGVIEWER_LAYOUT,
+    segEditorLayout: DEFAULT_SEG_EDITOR_LAYOUT,
     uiMessageSurfaceInitializing: 'Initializing ...',
     uiMessageSurfaceRendering: 'Rendering ...',
 
@@ -229,16 +207,27 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const component = this;
 
     component.cached3dTabs = {};
-    component.tabRefs = {
-      '3D': createRef(),
-      Axial: createRef(),
-      Coronal: createRef(),
-      Sagittal: createRef(),
-    };
-    component.cornerstone3dViewProps = _.clone(component.props.cornerstone3dViewProps);
+
+    // Tab containers. Each ref object is filled by a callback ref, so that a viewport element can
+    // be (re)attached whenever its tab's container mounts: on first display of a tab, and again
+    // after a layout change rebuilds the tab tree.
+    component.tabRefs = {};
+    component._tabRefCallbacks = {};
+    component._tabRevealed = {};
+    _.each(_.keys(component.props.cornerstone3dViewProps), (tab) => {
+      component.tabRefs[tab] = { current: null };
+      component._tabRefCallbacks[tab] = (node) => component._onTabNode(tab, node);
+    });
+    // Per-tab copies: the viewport element and id are stored on these objects, so they must not be
+    // the (shared) default props, or a retired editor's element would come back in the next one
+    component.cornerstone3dViewProps = _.mapValues(component.props.cornerstone3dViewProps,
+      (viewProps) => _.omit(_.cloneDeep(viewProps), 'element', 'viewportId'));
+
+    // The 3D editing canvas (SegEditorSurfaceView), for camera commands
+    component._surfaceViewRef = createRef();
 
     // Initialize layout model
-    component.model = Model.fromJson(component.props.segViewerLayout);
+    component.model = component._createLayoutModel();
 
     // Bind tab factory
     component.tabFactory = component.tabFactory.bind(this);
@@ -257,6 +246,88 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     return renderId+sep+options.tab;
   }
 
+  _createLayoutModel() {
+    // The flexlayout model for the current layout preset (or the explicit model override)
+    const { segViewerLayout, segEditorLayout } = this.props;
+    return Model.fromJson(segViewerLayout || getSegEditorLayoutJson(segEditorLayout));
+  }
+
+  _onTabNode(tab, node) {
+    // Callback ref of a tab's container: attach the tab's viewport element when the container
+    // mounts. flexlayout renders a tab the first time it is selected and rebuilds every tab when
+    // the model changes, so this is where the (persistent) viewport element joins the DOM.
+    const component = this;
+    const { eventTimeout } = component.props;
+
+    component.tabRefs[tab].current = node;
+
+    const element = component.cornerstone3dViewProps[tab]?.element;
+    if (node && element && element.parentNode !== node) {
+      node.appendChild(element);
+      setTimeout(() => component._revealTab(tab), eventTimeout);
+    }
+  }
+
+  _revealTab(tab) {
+    // The tab is (or has just become) visible: size its viewport to the container and draw it.
+    // A viewport first laid out while hidden (a 0 x 0 container) holds an unusable camera, so
+    // the camera is reset the first time the viewport is actually shown.
+    const component = this;
+    if (!component._isMounted || !component.renderEngine || !component.state.imgRenderInit) {
+      return;
+    }
+
+    const element = component.cornerstone3dViewProps[tab]?.element;
+    if (!element || !element.clientWidth || !element.clientHeight) {
+      return;
+    }
+
+    component.renderEngine.resize();
+
+    const { viewport } = component._checkViewportActive({ tab });
+    if (viewport && !component._tabRevealed[tab]) {
+      component._tabRevealed[tab] = true;
+      viewport.resetCamera();
+    }
+    component.renderEngine.render();
+  }
+
+  resetView3d() {
+    // Return each 3D view to the direction it loaded in, fitted to what it shows now, and make
+    // the editing canvas match when it is the one on screen
+    const component = this;
+    const { views3d } = component.props;
+
+    _.each(views3d, (tab) => {
+      const { viewport } = component._checkViewportActive({ tab });
+      if (!viewport) {
+        return;
+      }
+      const initial = component._initialCamera3d?.[tab] || { viewPlaneNormal: [0, 0, 1], viewUp: [0, 1, 0] };
+      viewport.setCamera({ viewPlaneNormal: [...initial.viewPlaneNormal], viewUp: [...initial.viewUp] });
+      viewport.resetCamera();
+      viewport.render();
+    });
+
+    if (component.props.segEditor3dEditingEnabled) {
+      component._surfaceViewRef.current?.matchReferenceCamera();
+    }
+  }
+
+  setViewOrientation(tab, orientationId) {
+    // Turn a 3D view to a preset direction (extension-vtk viewOrientations): the editing canvas while it
+    // is shown, otherwise the Cornerstone3D viewport
+    const component = this;
+
+    if (component.props.segEditor3dEditingEnabled) {
+      component._surfaceViewRef.current?.setViewOrientation(orientationId);
+      return;
+    }
+
+    const { viewport } = component._checkViewportActive({ tab });
+    applyViewOrientationToViewport(viewport, orientationId);
+  }
+
   init3dViewport(tab) {
     // Initialize 3D viewport for tab
 
@@ -264,36 +335,31 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const { renderId, eventTimeout } = component.props;
 
     if (component.renderEngine) {
-      const { viewportId: _v3d_id } = component.getViewportId({ tab });
 
-      // Check to determine if the viewport has already been created
-      if (!_v3d_id) {
+      // One element per tab and editor instance
+      if (component.cornerstone3dViewProps[tab] && !component.cornerstone3dViewProps[tab].element) {
 
-        // Initialize Cornerstone 2D viewport
-        if (component.cornerstone3dViewProps[tab]) {
+        // Create viewport element and add to the current container
+        const _el = document.createElement("div");
 
-          // Create viewport element and add to the current container
-          const _el = document.createElement("div");
+        // Disable the default context menu
+        _el.oncontextmenu = (e) => e.preventDefault();
 
-          // Disable the default context menu
-          _el.oncontextmenu = (e) => e.preventDefault();
+        // Set element styles to grow to the full size of the tab
+        _el.style.width = "100%";
+        _el.style.height = "100%";
 
-          // Set element styles to grow to the full size of the tab
-          _el.style.width = "100%";
-          _el.style.height = "100%";
+        // Add viewport ID and other attributes to cornerstone viewport properties
+        component.cornerstone3dViewProps[tab].viewportId = component.getViewportId({ tab });
+        component.cornerstone3dViewProps[tab].element = _el;
 
-          // Add viewport ID and other attributes to cornerstone viewport properties
-          component.cornerstone3dViewProps[tab].viewportId = component.getViewportId({ tab });
-          component.cornerstone3dViewProps[tab].element = _el;
-
-          // Add the viewport to the tab
-          if (component.tabRefs[tab].current) {
-            component.tabRefs[tab].current.appendChild(_el);
-          }
-
-          // Trigger check of tabbed UI init
-          setTimeout(component._checkTabUiInit.bind(component), eventTimeout);
+        // Add the viewport to the tab
+        if (component.tabRefs[tab].current) {
+          component.tabRefs[tab].current.appendChild(_el);
         }
+
+        // Trigger check of tabbed UI init
+        setTimeout(component._checkTabUiInit.bind(component), eventTimeout);
       }
     }
   }
@@ -520,9 +586,8 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     const component = this;
     const { eventTimeout } = this.props;
 
-    const _init = _.every(component.views2d, (t) => {
-      const _v3 = component.cornerstone3dViewProps[t];
-      return _.has(_v3d, 'element');
+    const _init = _.every(component.props.views2d, (t) => {
+      return _.has(component.cornerstone3dViewProps[t], 'element');
     });
 
     if (_init) {
@@ -626,21 +691,21 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
   }
 
   onTabModelChange(model, action) {
-    // Trigger editor updates on changes to the tab model
+    // Trigger editor updates on changes to the tab model: a tab brought to the front of its
+    // tabset is sized and drawn once flexlayout has shown it. (A tab shown for the first time
+    // is handled by its container's callback ref, _onTabNode.)
     const component = this;
+    const { eventTimeout } = component.props;
 
-    const activeTabset = model.getActiveTabset();
-    const activeTab = activeTabset?.getSelectedNode();
-    const tab = activeTab?._attributes?.name;
-    const tabRef = component.tabRefs[tab];
+    let tab;
+    if (action?.type === Actions.SELECT_TAB) {
+      tab = model.getNodeById(action.data?.tabNode)?.getName();
+    } else {
+      tab = model.getActiveTabset()?.getSelectedNode()?.getName();
+    }
 
-    if (tabRef && tabRef?.current && tabRef.current.children.length == 0) {
-
-      // Append Cornerstone3D element to the tab if it is not currently visible.
-      // flexlayout-react does not initialize the current element until a tab
-      // has been made visible for the first time.
-      tabRef.current.appendChild(component.cornerstone3dViewProps[tab].element);
-      component.view3dUpdate(tab);
+    if (tab && component.tabRefs[tab]) {
+      setTimeout(() => component._revealTab(tab), eventTimeout);
     }
   }
 
@@ -699,11 +764,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         // No percentage: see _evtWorkerProgress
         <LoadingIndicator loadingMessage={t(loadingMessage)} />
       )}
-      <div ref={component.tabRefs[tab]}
+      <div ref={component._tabRefCallbacks[tab]}
         style={{ width: "100%", height: "100%", visibility: editing ? 'hidden' : 'visible' }} />
       {component._editorCanvasCreated && labelmapInstance3dUID && (
         <div style={{ position: 'absolute', inset: 0, display: editing ? 'block' : 'none' }}>
           <SegEditorSurfaceView
+            ref={component._surfaceViewRef}
             segmentationId={labelmapInstance3dUID}
             referenceViewportId={component.getViewportId({ tab })}
             colorLUTIndex={component.lutIdx}
@@ -728,6 +794,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
           />
         </div>
       )}
+      <div className="absolute top-2 left-2 z-10">
+        <ViewOrientationMenu
+          onSelect={(orientationId) => component.setViewOrientation(tab, orientationId)}
+          t={t}
+        />
+      </div>
       {segEditorVolumeRenderingEnabled && !editing && (
         <div className="absolute bottom-2 left-2 z-10">
           <VolumeRenderingMenuButton viewportId={component.getViewportId({ tab })} />
@@ -785,7 +857,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
       // 2D viewport without loading indicator or state management
       _el = (
-        <div ref={component.tabRefs[tab]} style={{ width: "100%", height: "100%" }} />
+        <div ref={component._tabRefCallbacks[tab]} style={{ width: "100%", height: "100%" }} />
       );
     }
 
@@ -821,6 +893,16 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       // Set viewports for engine
       component.renderEngine.setViewports(_.filter(
         _.values(component.cornerstone3dViewProps), _v3d => _v3d.element));
+
+      // The 3D views' load-time direction, for Reset (fresh viewports carry the vtk defaults)
+      component._initialCamera3d = {};
+      _.each(component.props.views3d, (tab) => {
+        const camera = component._checkViewportActive({ tab }).viewport?.getCamera();
+        if (camera?.viewPlaneNormal && camera?.viewUp) {
+          component._initialCamera3d[tab] = _.pick(camera, 'viewPlaneNormal', 'viewUp');
+        }
+      });
+
       component.setState({ imgViewportInit: true });
     }
   }
@@ -998,7 +1080,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     c3dAddTool(C3dWindowLevelTool);
     c3dAddTool(C3dPanTool);
     c3dAddTool(C3dStackScrollTool);
-    c3dAddTool(C3dTrackballRotateTool);
+    c3dAddTool(SonadorTrackballRotateTool);
 
     // Labelmap palette tools (ohif-viewers#142)
     registerLabelmapTools();
@@ -1463,10 +1545,18 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
           // Initialize surface tool group and 3D components
           component.surfaceTools = C3dToolGroupManager.createToolGroup(surfaceToolGroupId);
 
-          // Add tools to the group
+          // Add tools to the group. A mouse-down on the 3D view before it has a volume or a
+          // surface is recorded in the log instead of failing.
+          const { LoggerService } = component.props.servicesManager.services;
           component.surfaceTools.addTool(SonadorZoomTool.toolName);
           component.surfaceTools.addTool(C3dPanTool.toolName);
-          component.surfaceTools.addTool(C3dTrackballRotateTool.toolName);
+          component.surfaceTools.addTool(SonadorTrackballRotateTool.toolName, {
+            onEmptyViewport: ({ viewportId }) => LoggerService?.info({
+              title: translateSegEditor('The 3D view has nothing to rotate yet'),
+              message: translateSegEditor('The 3D view was clicked before its volume or surface was loaded.'),
+              details: { viewportId },
+            }),
+          });
 
           // Add viewports to the tool group
           _.each(views3d, (tab) => {
@@ -1502,7 +1592,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     if (surfaceTools) {
       surfaceTools.setToolPassive(C3dPanTool.toolName);
       surfaceTools.setToolPassive(SonadorZoomTool.toolName);
-      surfaceTools.setToolPassive(C3dTrackballRotateTool.toolName);
+      surfaceTools.setToolPassive(SonadorTrackballRotateTool.toolName);
     }
   }
 
@@ -1522,7 +1612,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       if (!mode || (mode == 'default')) {
 
         // Rotate volume
-        surfaceTools.setToolActive(C3dTrackballRotateTool.toolName, {
+        surfaceTools.setToolActive(SonadorTrackballRotateTool.toolName, {
           bindings: [
             { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
           ]
@@ -1606,6 +1696,24 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // re-render -- clicking a 2D viewport, which is exactly the reported symptom.
     component._showSurfaceWhenReady();
 
+    // Viewports laid out visibly by the time the first render lands keep their cameras; only a
+    // tab shown later for the first time has its camera reset (_revealTab).
+    if (!prevState.imgRenderInit && imgRenderInit) {
+      _.each(component.cornerstone3dViewProps, ({ element }, tab) => {
+        if (element?.clientWidth && element?.clientHeight) {
+          component._tabRevealed[tab] = true;
+        }
+      });
+    }
+
+    // Layout preset: rebuild the flexlayout model. The tab containers remount and re-adopt their
+    // viewport elements through _onTabNode.
+    if (prevProps.segEditorLayout !== component.props.segEditorLayout
+        || prevProps.segViewerLayout !== component.props.segViewerLayout) {
+      component.model = component._createLayoutModel();
+      component.forceUpdate();
+    }
+
     // 3D editing canvas: created on first use, then kept (hidden while not editing). When the VTK
     // view is shown again, render it so it reflects any change made meanwhile.
     if (prevProps.segEditor3dEditingEnabled !== component.props.segEditor3dEditingEnabled) {
@@ -1659,6 +1767,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // Render and display surface data
     if (isLoaded && segRenderInit && surfaceModelInit && !surfaceModelToolsInit && !component.surfaceTools) {
       await component.initSurfaceTools();
+    }
+
+    // Reset (3D menu): after the rendering toggles above have been applied, so the camera fits
+    // what the view shows
+    if (prevProps.segEditor3dViewReset !== component.props.segEditor3dViewReset && imgRenderInit) {
+      component.resetView3d();
     }
   }
 
@@ -1764,6 +1878,13 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     }
     await super.componentWillUnmount();
 
+    // Retire the viewport elements: nothing may adopt them after this
+    _.each(component.cornerstone3dViewProps, (viewProps) => {
+      viewProps.element?.remove();
+      delete viewProps.element;
+      delete viewProps.viewportId;
+    });
+
     // Set component state
     component.setState({ imgRenderInit: false, imgToolsInit: false });
 
@@ -1792,7 +1913,6 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
           factory={component.tabFactory.bind(component)}
           onAction={component.onTabAction.bind(component)}
           onModelChange={component.onTabModelChange.bind(component)}
-          rootOrientationVertical={true}
         />
       </div>
     );

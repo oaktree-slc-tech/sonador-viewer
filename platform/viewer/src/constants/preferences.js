@@ -51,6 +51,12 @@ export const ARCHIVE_TRANSFER_DEFAULT = false;
 // clamps whatever it is handed, and are imported from @ohif/core wherever the form needs them.
 export const RETRY_ATTEMPTS_PREFERENCE_KEY = 'offlineRetryAttempts';
 
+// Whether Open as Segmentation warns before leaving a series' locked models out. The key and its
+// default are NOT repeated here: they belong to UserPreferencesService (@ohif/core), which holds the
+// value and is where the models command reads it -- `LOCKED_MODELS_WARNING_PREFERENCE_KEY`. The
+// same sonador companion rule as the attempt budget applies: the key must be in the server's
+// `GeneralPrefForm` allowlist or the section save silently fails with a 400.
+
 // Study-list interfaces stored under `UserPref.studylist[version]` (FR-13). `upload` carries
 // `selectedColumns`/`columnOrder` only -- no `selectedFilters`.
 export const STUDYLIST_INTERFACES = {

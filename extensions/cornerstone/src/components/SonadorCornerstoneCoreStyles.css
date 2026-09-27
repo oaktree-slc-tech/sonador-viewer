@@ -9,3 +9,17 @@
 .sonadorSimpleInputDialog .footer > div {
 	width: 100%;
 }
+
+/* A "don't ask again" checkbox beneath a confirmation dialog's message */
+.sonadorSimpleInputDialog .content .dialogOption {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 16px 0 0;
+	font-weight: normal;
+	cursor: pointer;
+}
+
+.sonadorSimpleInputDialog .content .dialogOption input {
+	margin: 0;
+}

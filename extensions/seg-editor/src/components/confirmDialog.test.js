@@ -1,6 +1,7 @@
-// Keyboard handling of the confirmation dialog (Remove selected points, Discard Segmentation)
+// The confirmation dialog (Remove selected points, Discard Segmentation, Open as Segmentation):
+// its keyboard handling and the answer it resolves, with and without a "don't ask again" checkbox
 
-import { confirmDialogKeyAction } from './confirmDialog';
+import { callConfirmDialog, confirmDialogKeyAction } from './confirmDialog';
 
 jest.mock('@ohif/ui', () => ({ SimpleDialogShell: () => null }), { virtual: true });
 jest.mock('@ohif/ui-next', () => ({ FooterAction: () => null }), { virtual: true });
@@ -39,5 +40,52 @@ describe('confirmDialogKeyAction', () => {
     const root = { contains: () => false };
     expect(confirmDialogKeyAction({ key: 'Enter', target: element('DIV') }, root)).toBeNull();
     expect(confirmDialogKeyAction({ key: 'a', target: body }, root)).toBeNull();
+  });
+});
+
+describe('callConfirmDialog', () => {
+  function service() {
+    const uiDialogService = { show: jest.fn(), dismiss: jest.fn() };
+    const props = () => uiDialogService.show.mock.calls[0][0].contentProps;
+    return { uiDialogService, props };
+  }
+
+  it('resolves a plain answer without a suppression checkbox', async () => {
+    const { uiDialogService, props } = service();
+    const answer = callConfirmDialog({
+      uiDialogService, id: 'd', title: 't', message: 'm', confirmText: 'Yes', cancelText: 'No',
+    });
+
+    expect(props().suppressionLabel).toBeUndefined();
+    props().onConfirm({ suppressed: false });
+    await expect(answer).resolves.toBe(true);
+    expect(uiDialogService.dismiss).toHaveBeenCalledWith({ id: 'd' });
+  });
+
+  it('resolves the answer and the checkbox with a suppression label', async () => {
+    const { uiDialogService, props } = service();
+    const answer = callConfirmDialog({
+      uiDialogService, id: 'd', title: 't', message: 'm', confirmText: 'Yes', cancelText: 'No',
+      suppressionLabel: "Don't ask again",
+    });
+
+    expect(props()).toEqual(expect.objectContaining({
+      suppressionLabel: "Don't ask again", suppressionId: 'd-suppress',
+    }));
+    props().onConfirm({ suppressed: true });
+    await expect(answer).resolves.toEqual({ confirmed: true, suppressed: true });
+  });
+
+  it('never reports suppression on cancel, and settles once', async () => {
+    const { uiDialogService, props } = service();
+    const answer = callConfirmDialog({
+      uiDialogService, id: 'd', title: 't', message: 'm', confirmText: 'Yes', cancelText: 'No',
+      suppressionLabel: "Don't ask again",
+    });
+
+    props().onCancel({ suppressed: true });
+    props().onConfirm({ suppressed: true });
+    await expect(answer).resolves.toEqual({ confirmed: false, suppressed: false });
+    expect(uiDialogService.dismiss).toHaveBeenCalledTimes(1);
   });
 });

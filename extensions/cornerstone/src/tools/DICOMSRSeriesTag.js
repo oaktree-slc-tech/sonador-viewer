@@ -53,7 +53,6 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
     // Retrieve tool state for the current element
     const toolState = getToolState(element, this.name);
     if (!toolState || !toolState.data || toolState.data.length == 0) {
-      console.debug('[cornerstone:DICOMSRSeriesTagTool:renderToolData] unable to retrieve tool data');
       return;
     }
 

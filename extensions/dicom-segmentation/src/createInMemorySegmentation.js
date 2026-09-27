@@ -48,6 +48,7 @@ export function createInMemorySegmentation({
     markInMemorySegmentation = cornerstone3dUtils.markInMemorySegmentation,
     nextLabelmapIndex = getNextLabelmapIndex,
     makeColorLUT = makeColorLUTAndGetIndex,
+    mintSegmentationId = cornerstone3dUtils.mintSegmentationId,
   } = deps;
 
   const imageIds = getDisplaySetImageIds(displaySet);
@@ -56,7 +57,9 @@ export function createInMemorySegmentation({
   }
   const firstImageId = imageIds[0];
   const labelmapIndex = nextLabelmapIndex(firstImageId);
-  const segmentationId = `${firstImageId}_${labelmapIndex}`;
+  // A session-unique id, never derived from the series or the labelmap slot: creating, discarding
+  // and creating again must not hand the new segmentation a discarded one's identity
+  const segmentationId = mintSegmentationId();
 
   // The segment metadata the importer would have from a SEG: labels, and colours as ROIDisplayColor
   const segMetadata = {
@@ -82,7 +85,11 @@ export function createInMemorySegmentation({
     colorLUTIndex,
     label,
   });
-  markInMemorySegmentation(segmentationId, { origin });
+  markInMemorySegmentation(segmentationId, {
+    origin,
+    sourceDisplaySetInstanceUID: displaySet.displaySetInstanceUID,
+    sourceSeriesInstanceUID: displaySet.SeriesInstanceUID,
+  });
 
   return { segmentationId, firstImageId, labelmapIndex };
 }

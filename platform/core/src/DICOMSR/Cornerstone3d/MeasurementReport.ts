@@ -12,6 +12,7 @@ import { MeasurementApi } from '../../measurements/classes'
 import { Enums as MeasurementEnums } from '../../measurements/enums';
 
 import TID1500MeasurementReport from '../utils/TID1500';
+import { findReferencedSOPSequence } from './utils/findReferencedSOP';
 
 const { MeasurementReport: c3dMeasurementReport } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
@@ -115,13 +116,17 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
       throw new Error('No finding group found or finding group does not contain a valid content sequence');
     }
 
-    // SOP Instance References
-    const { ReferencedSOPSequence } = findingGroup.ContentSequence;
+    // SOP Instance References (the sequence may be naturalized as an object or an array)
+    const ReferencedSOPSequence = findReferencedSOPSequence(findingGroup);
+    if (!ReferencedSOPSequence?.ReferencedSOPInstanceUID) {
+      throw new Error('Finding group does not reference an image (no ReferencedSOPSequence)');
+    }
     const { ReferencedSOPInstanceUID, ReferencedFrameNumber } = ReferencedSOPSequence;
 
-    // "Loaded" image reference and image plane frame of reference
+    // "Loaded" image reference and image plane frame of reference. A reference without a
+    // loaded image has no plane; the caller decides whether the measurement is usable.
     const referencedImageId = sopInstanceUIDToImageIdMap[ReferencedSOPInstanceUID];
-    const imagePlaneModule = metadata.get('imagePlaneModule', referencedImageId);
+    const imagePlaneModule = referencedImageId ? metadata.get('imagePlaneModule', referencedImageId) : undefined;
 
     // Annotation UIDs
     const annotationUID = DicomMetaDictionary.uid();
@@ -141,7 +146,7 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
           metadata: { 
             toolName: toolType, 
             referencedImageId,
-            FrameOfReferenceUID: imagePlaneModule.frameOfReferenceUID,
+            FrameOfReferenceUID: imagePlaneModule?.frameOfReferenceUID,
           }
         }
       }

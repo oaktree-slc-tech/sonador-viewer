@@ -9,7 +9,7 @@ const { TypedArrayProp } = OHIF.classes;
 
 import * as THREE from 'three';
 import {
-  Clock,
+  Timer,
   BoxBufferGeometry,
   AnimationMixer,
   Color,
@@ -48,6 +48,10 @@ CameraControls.install({ THREE });
 
 import { MIMETYPE_GLB, MIMETYPE_STL } from '../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
 import { accumulateOrthographicZoom } from './cameraControlsFixes.js';
+import { POINTER_BUTTONS, TrackballRotation, trackballRotate } from './trackballRotation.js';
+
+// Fitted views keep this much room around the models (Cornerstone3D's inset multiplier)
+const FIT_MARGIN = 1.1;
 
 // Camera actions a mouse button can be bound to (setMouseActions) -> camera-controls ACTION names
 export const MOUSE_ACTIONS = {
@@ -96,6 +100,10 @@ export default class M3DModelView extends Component {
     // Follow the container's size (ResizeObserver): needed where the view's container can change
     // size without a window or sidebar event, e.g. a flexlayout tab being resized
     observeResize: PropTypes.bool,
+    // 'orbit': camera-controls' orbit about a fixed up axis (M3D default). 'trackball': the rotate
+    // button turns the camera about its own up and right axes with no clamp, as Cornerstone3D's
+    // TrackballRotateTool does, so the view handles like the VTK 3D viewports.
+    rotation: PropTypes.oneOf(['orbit', 'trackball']),
   };
 
   state = {
@@ -119,9 +127,7 @@ export default class M3DModelView extends Component {
     env: { sigma: 0.0 },
     interactionControlOptions: {
       target: [0, 0.5, 0],
-      enablePan: true,
       enableDamping: true,
-      dampingFactor: 0.025,
     },
     lightOptions: {
       ambient: { color: 0x000000, intensity: 0.35, },
@@ -143,6 +149,7 @@ export default class M3DModelView extends Component {
     projection: 'perspective',
     lightingModel: 'm3d',
     observeResize: false,
+    rotation: 'orbit',
   };
 
   initRenderer() {
@@ -175,17 +182,10 @@ export default class M3DModelView extends Component {
     return renderer;
   }
 
-  initClock(options) {
-    // Initialize clock instance. (The clock will be stopped on initialization to allow for
-    // synchronization with animation loops, unless specified otherwise in the options.)
-    options = options || {};
-    _.defaults(options, { running: false });
-
-    // Initialize clock and apply options.
-    const clock = new Clock();
-    _.extend(clock, options);
-
-    return clock;
+  initClock() {
+    // Frame timer for the render loop and animation playback (three's Timer; the delta is the
+    // time between two update() calls)
+    return new Timer();
   }
 
   initCamera(model, options) {
@@ -419,14 +419,50 @@ export default class M3DModelView extends Component {
       controls.addEventListener('change', onInteractionChange);
     }
 
-    // Apply options to controls and return
-    _.extend(
-      controls,
-      _.pick(coptions, 'enablePan', 'enableDamping', 'dampingFactor')
-    );
+    // Smoothing: camera-controls smooths over `smoothTime` seconds (its default when unset);
+    // `enableDamping: false` turns it off
+    if (coptions.enableDamping === false) {
+      controls.smoothTime = 0;
+    } else if (_.isNumber(coptions.smoothTime)) {
+      controls.smoothTime = coptions.smoothTime;
+    }
+
+    // Trackball rotation takes the rotate button (left, camera-controls' default) away from the
+    // orbit; pan, dolly and zoom stay with camera-controls
+    this._rotateButton = null;
+    if (this.props.rotation === 'trackball') {
+      controls.mouseButtons.left = CameraControls.ACTION.NONE;
+      this._rotateButton = 'left';
+      this._trackball = new TrackballRotation(renderer.domElement, {
+        getButton: () => (this._rotateButton ? POINTER_BUTTONS[this._rotateButton] : -1),
+        onRotate: (previous, current) => this._applyTrackballRotation(previous, current),
+      });
+    }
 
     controls.update()
     return controls;
+  }
+
+  _applyTrackballRotation(previous, current) {
+    // One trackball drag step: turn the camera about the orbit target and hand the result to
+    // camera-controls, keeping the screen-up (so roll is preserved)
+    if (!this.camera || !this.controls) {
+      return;
+    }
+    const rotated = trackballRotate({
+      position: this.controls.getPosition(new Vector3()).toArray(),
+      target: this.controls.getTarget(new Vector3()).toArray(),
+      up: new Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion).toArray(),
+      previous,
+      current,
+    });
+    if (!rotated) {
+      return;
+    }
+    this.camera.up.set(...rotated.up);
+    this.controls.updateCameraUp();
+    this.controls.setLookAt(...rotated.position, ...this.controls.getTarget(new Vector3()).toArray(), false);
+    this.controls.update(0);
   }
 
   initMixer(model) {
@@ -603,6 +639,50 @@ export default class M3DModelView extends Component {
     return { position, target, up, fov: this.camera.fov };
   }
 
+  setCameraOrientation({ viewPlaneNormal, viewUp }) {
+    // Look at the models from a preset direction, with the whole model group fitted to the view.
+    // `viewPlaneNormal` points from the models toward the camera; `viewUp` is screen up. Returns
+    // false when there is nothing to frame.
+    const fit = this.getModelFit(this.model);
+    if (!fit || !this.camera || !this.controls || !viewPlaneNormal || !viewUp) {
+      return false;
+    }
+
+    const normal = new Vector3(...viewPlaneNormal).normalize();
+    const up = new Vector3(...viewUp).normalize();
+    const right = new Vector3().crossVectors(up, normal);
+    if (normal.lengthSq() === 0 || up.lengthSq() === 0 || right.lengthSq() === 0) {
+      return false;
+    }
+    right.normalize();
+
+    // Extent of the bounding box along a screen axis
+    const { min, max } = fit.box;
+    const corners = [min.x, max.x].flatMap(x => [min.y, max.y].flatMap(y => [min.z, max.z].map(z => new Vector3(x, y, z))));
+    const extent = (axis) => {
+      const projected = corners.map(corner => corner.dot(axis));
+      return Math.max(...projected) - Math.min(...projected);
+    };
+
+    const aspect = this.camera.isOrthographicCamera
+      ? (this.camera.right - this.camera.left) / (this.camera.top - this.camera.bottom)
+      : this.camera.aspect;
+    const halfHeight = (Math.max(extent(up), extent(right) / (aspect || 1)) / 2) * FIT_MARGIN;
+
+    const distance = this.camera.isOrthographicCamera
+      ? fit.radius * 3
+      : halfHeight / Math.tan((this.camera.fov * Math.PI) / 360) + fit.radius;
+    const position = fit.center.clone().addScaledVector(normal, distance);
+
+    this.setCameraLookAt({
+      position: position.toArray(),
+      target: fit.center.toArray(),
+      up: up.toArray(),
+      parallelScale: halfHeight,
+    });
+    return true;
+  }
+
   setMouseActions(actions) {
     // Rebind the camera controls' mouse buttons, e.g. to free the left button for an editing tool.
     // `actions` maps left / middle / right / wheel to a camera action name (MOUSE_ACTIONS); a
@@ -612,15 +692,28 @@ export default class M3DModelView extends Component {
     }
     if (!this._defaultMouseButtons) {
       this._defaultMouseButtons = { ...this.controls.mouseButtons };
+      this._defaultRotateButton = this._rotateButton;
     }
     if (!actions) {
       Object.assign(this.controls.mouseButtons, this._defaultMouseButtons);
+      this._rotateButton = this._defaultRotateButton;
       return;
     }
+    const trackball = !!this._trackball;
     _.each(_.pick(actions, 'left', 'middle', 'right', 'wheel'), (name, button) => {
       const action = CameraControls.ACTION[MOUSE_ACTIONS[name]];
-      if (!_.isUndefined(action)) {
-        this.controls.mouseButtons[button] = action;
+      if (_.isUndefined(action)) {
+        return;
+      }
+      // Under trackball rotation the rotate button belongs to the trackball, not to the orbit
+      if (trackball && name === 'rotate' && button !== 'wheel') {
+        this.controls.mouseButtons[button] = CameraControls.ACTION.NONE;
+        this._rotateButton = button;
+        return;
+      }
+      this.controls.mouseButtons[button] = action;
+      if (trackball && button === this._rotateButton) {
+        this._rotateButton = null;
       }
     });
   }
@@ -634,7 +727,8 @@ export default class M3DModelView extends Component {
     const wasPaused = !!this._renderingPaused;
     this._renderingPaused = !!paused;
     if (wasPaused && !paused) {
-      this.clock.getDelta();
+      // The pause must not count as one frame
+      this.clock.update();
       this.animate();
     }
   }
@@ -779,9 +873,8 @@ export default class M3DModelView extends Component {
     if (!cinePlaying) {
       animation = animation || this.sceneData.animations[0];
 
-      // Re-start anaimation clock
-      this.clock.running = true;
-      this.clock.start();
+      // The time paused must not count as one frame
+      this.clock.update();
 
       // Initialize animation and begin playback
       if (!this.cineAction) {
@@ -821,10 +914,9 @@ export default class M3DModelView extends Component {
       // Animate the model
       window.requestAnimationFrame(this.animate.bind(this));
 
-      // getDelta must be called every frame unconditionally so the clock stays
-      // in sync. CameraControls.update() requires a delta time (in seconds) for
-      // its damping/physics simulation — omitting it causes NaN state corruption,
-      // which manifests as jitter and a black screen on zoom.
+      // The timer advances once per frame; CameraControls.update() needs the delta (seconds)
+      // for its smoothing, and a missing delta corrupts its state (jitter, black frames on zoom).
+      this.clock.update();
       const delta = this.clock.getDelta();
 
       if (cinePlaying) {
@@ -897,6 +989,7 @@ export default class M3DModelView extends Component {
         getModels: this.getModels.bind(this),
         setCameraLookAt: this.setCameraLookAt.bind(this),
         getCameraLookAt: this.getCameraLookAt.bind(this),
+        setCameraOrientation: this.setCameraOrientation.bind(this),
         setRenderingPaused: this.setRenderingPaused.bind(this),
         setMouseActions: this.setMouseActions.bind(this),
         getCamera: this.getCamera.bind(this),
@@ -927,6 +1020,10 @@ export default class M3DModelView extends Component {
     if (this._resizeFrame) {
       window.cancelAnimationFrame(this._resizeFrame);
       this._resizeFrame = null;
+    }
+    if (this._trackball) {
+      this._trackball.dispose();
+      this._trackball = null;
     }
     if (this.controls) {
       this.controls.dispose();

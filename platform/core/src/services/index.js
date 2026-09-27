@@ -50,6 +50,11 @@ import ToolbarService from './ToolBarService/SonadorToolbarService';
 import { TOOLBAR_SECTIONS } from './ToolBarService';
 import { getToolbarUITypeEntries } from './ToolBarService/toolbarModuleEntries';
 
+import UserPreferencesService, {
+  UserPreferencesServiceEvents,
+  LOCKED_MODELS_WARNING_PREFERENCE_KEY,
+} from './UserPreferencesService/UserPreferencesService';
+
 import ServicesManager from './ServicesManager.js';
 import pubSubServiceInterface, { PubSubService } from './_shared/pubSubServiceInterface';
 
@@ -92,6 +97,9 @@ export {
   notifyArchivesQueued,
   startArchiveNotifications,
   stopArchiveNotifications,
+  UserPreferencesService,
+  UserPreferencesServiceEvents,
+  LOCKED_MODELS_WARNING_PREFERENCE_KEY,
   pubSubServiceInterface,
   PubSubService,
   ToolbarService,

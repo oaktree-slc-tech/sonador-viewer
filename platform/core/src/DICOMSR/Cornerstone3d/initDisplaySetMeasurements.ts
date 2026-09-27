@@ -11,6 +11,7 @@ import DicomMetadataStore from '../../services/DicomMetadataStore';
 import DisplaySetService from '../../services/DisplaySetService';
 
 import isRehydratable from './utils/isRehydratable';
+import { findReferencedSOP } from './utils/findReferencedSOP';
 
 const { Enums: MeasurementEnums, SREnums } = measurements;
 const { CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION } = MeasurementEnums;
@@ -23,6 +24,10 @@ const { CodeNameCodeSequenceValues, CodingSchemeDesignators } = SREnums;
 
 type InstanceMetadata = Types.InstanceMetadata;
 
+
+// Bumped when the report parsing below changes: a display set parsed by an older version of this
+// module (kept alive across a hot reload) is parsed again
+const PARSER_VERSION = 2;
 
 const sopClassUids = [
   sopClassDictionary.BasicTextSR,
@@ -86,7 +91,7 @@ function _getImageIdsForInstance({ instance, frame }) {
 function _getImageIdsForDisplaySet(displaySet) {
   // Retrieve the imageIds for all images within a displayset
 
-  const images = displaySet.instances || displaySet.images;
+  const images = displaySet.images || displaySet.instances;
   const imageIds = [];
 
   if (!images) {
@@ -94,7 +99,7 @@ function _getImageIdsForDisplaySet(displaySet) {
     return imageIds;
   }
 
-  displaySet.images.forEach(instance => {
+  images.forEach(instance => {
 
     // Determine imageId
     const NumberOfFrames = instance.NumberOfFrames;
@@ -377,23 +382,20 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     }
   });
 
-  // Retrieve referenced SOP instance and imageId if they are not already attached
+  // A finding without coordinates (a series tag) is placed on the image its finding group
+  // references. The sequence is merged across the groups sharing this tracking UID, and a finding
+  // item without an image reference (a description) may come first, so every finding item is
+  // considered before any other item.
   if (!measurement.coords || !measurement.coords.length) {
+    const isFinding = group => Cornerstone3dMeasurementReport.codeValueMatch(group, SREnums.DCMSR_FINDING);
+    const reference = findReferencedSOP(mergedContentSequence, isFinding);
 
-    // Retrieve primary finding group    
-    const findingGroup = mergedContentSequence.find(
-      group => Cornerstone3dMeasurementReport.codeValueMatch(group, SREnums.DCMSR_FINDING));
-
-    // SOP Instance References
-    const { ReferencedSOPSequence } = findingGroup.ContentSequence;    
-    const { ReferencedSOPInstanceUID, ReferencedFrameNumber } = (ReferencedSOPSequence || {});
-
-    if (ReferencedSOPInstanceUID) {
-      measurement.coords.push({ ReferencedSOPSequence, });
+    if (reference) {
+      measurement.coords.push({ ReferencedSOPSequence: reference.ReferencedSOPSequence });
+    } else {
+      console.warn('[DICOM-SR:Cornerstone3d:_processNonGeometricallyDefinedMeasurement] no coordinates and no image '
+        + 'reference in the measurement group; the measurement cannot be placed on an image', measurement);
     }
-
-    console.warn('[DICOM-SR:Cornerstone3d:_processNonGeometricallyDefinedMeasurement] no coordinates defined attempt to back-fill '
-      + 'from finding group. ReferencedSOPInstanceUID="'+ReferencedSOPInstanceUID+'"');
   }
 
   return measurement;
@@ -574,30 +576,71 @@ function _getDisplaySetsFromSeries(displaySet, instances, servicesManager) {
 
 
 async function _load(srDisplaySet, servicesManager) {
-  // Retrieve SR data and parse to displaySet attributes
+  // Retrieve SR data and parse to displaySet attributes. Loading once parses the report; every
+  // call links the measurements that still lack an image to the display sets known so far, and
+  // display sets registered later are linked as they arrive (DISPLAY_SETS_ADDED), as the OHIF v3
+  // SR handler does.
 
   const { MeasurementService, displaySetService } = servicesManager.services;
-  const { ContentSequence } = srDisplaySet.instance;
 
-  if (srDisplaySet.isImagingMeasurementReport) {
-    srDisplaySet.referencedImages = _getReferencedImagesList(ContentSequence)
-    srDisplaySet.measurements = _getMeasurements(ContentSequence);
-  } else {
-    srDisplaySet.referendImages = [];
-    srDisplaySet.measurements = [];
+  if (!srDisplaySet.isLoaded || srDisplaySet._parserVersion !== PARSER_VERSION) {
+    const { ContentSequence } = srDisplaySet.instance;
+
+    if (srDisplaySet.isImagingMeasurementReport) {
+      srDisplaySet.referencedImages = _getReferencedImagesList(ContentSequence)
+      srDisplaySet.measurements = _getMeasurements(ContentSequence);
+    } else {
+      srDisplaySet.referencedImages = [];
+      srDisplaySet.measurements = [];
+    }
+
+    const mappings = MeasurementService.getSourceMappings(
+      CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION);
+
+    srDisplaySet.isHydrated = false;
+    srDisplaySet.isRehydratable = isRehydratable(srDisplaySet)
+    srDisplaySet.isLoaded = true;
+    srDisplaySet._parserVersion = PARSER_VERSION;
   }
 
-  const mappings = MeasurementService.getSourceMappings(
-    CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION);
-
-  srDisplaySet.isHydrated = false;
-  srDisplaySet.isRehydratable = isRehydratable(srDisplaySet)
-  srDisplaySet.isLoaded = true;
-
   // Add measurements to display, add reference image IDs
-  displaySetService.activeDisplaySets.forEach(activeDisplaySet => {
-    _checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, activeDisplaySet, servicesManager);
+  linkMeasurementsToDisplaySets(srDisplaySet, displaySetService.activeDisplaySets, servicesManager);
+
+  // Sources may come in after: keep linking until every measurement has its image
+  if (_unloadedMeasurements(srDisplaySet).length && !srDisplaySet._displaySetsAddedSubscription) {
+    srDisplaySet._displaySetsAddedSubscription = displaySetService.subscribe(
+      displaySetService.EVENTS.DISPLAY_SETS_ADDED, ({ displaySetsAdded }) => {
+        linkMeasurementsToDisplaySets(srDisplaySet, displaySetsAdded, servicesManager);
+      });
+  }
+}
+
+
+function _unloadedMeasurements(srDisplaySet) {
+  return (srDisplaySet.measurements || []).filter(measurement => measurement.loaded === false);
+}
+
+
+function linkMeasurementsToDisplaySets(srDisplaySet, displaySets, servicesManager) {
+  // Link the SR display set's measurements that still lack an image to the images of the given
+  // display sets. Returns the number of measurements still unlinked afterwards.
+
+  if (!srDisplaySet?.isLoaded) {
+    return _unloadedMeasurements(srDisplaySet).length;
+  }
+
+  (displaySets || []).forEach(displaySet => {
+    if (_unloadedMeasurements(srDisplaySet).length) {
+      _checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, displaySet, servicesManager);
+    }
   });
+
+  const remaining = _unloadedMeasurements(srDisplaySet).length;
+  if (!remaining && srDisplaySet._displaySetsAddedSubscription) {
+    srDisplaySet._displaySetsAddedSubscription.unsubscribe();
+    srDisplaySet._displaySetsAddedSubscription = null;
+  }
+  return remaining;
 }
 
 
@@ -655,6 +698,8 @@ function _checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, newDisplaySet, ser
 
   const unloadedMeasurements = srDisplaySet.measurements.filter(measurement => measurement.loaded === false);
 
+  // Only image series (ImageSets) carry images a measurement can be drawn on; derived display
+  // sets (SR, SEG, models, documents) hold instances that resolve to no image
   if (unloadedMeasurements.length === 0 || !(newDisplaySet instanceof ImageSet) || newDisplaySet.unsupported) {
     return;
   }
@@ -663,9 +708,17 @@ function _checkIfCanAddMeasurementsToDisplaySet(srDisplaySet, newDisplaySet, ser
   // Create a Set for faster lookups
   // const sopClassUidSet = new Set(sopClassUids);
 
-  // Create a Map to efficiently look up ImageIds by SOPInstanceUID and frame number
+  // Create a Map to efficiently look up ImageIds by SOPInstanceUID and frame number. A display
+  // set whose instances cannot be resolved is skipped; it must not stop the others from linking.
   const imageIdMap = new Map<string, string>();
-  const imageIds = _getImageIdsForDisplaySet(newDisplaySet);
+  let imageIds;
+  try {
+    imageIds = _getImageIdsForDisplaySet(newDisplaySet);
+  } catch (error) {
+    console.warn('[DICOM-SR:Cornerstone3d:linkMeasurements] unable to resolve image ids for displaySetInstanceUID='
+      + newDisplaySet.displaySetInstanceUID, error);
+    return;
+  }
 
   for (const imageId of imageIds) {
     const { SOPInstanceUID, frameNumber } = metadataProvider.getUIDsFromImageID(imageId);
@@ -740,9 +793,24 @@ const initDisplaySetMeasurements = (displaySet, servicesManager) => {
     return null;
   }
 
+  // A display set the service already holds for the series' newest report keeps its parsed
+  // report and the links made so far
+  const { displaySetService } = servicesManager.services;
+  const registered = displaySet.displaySetInstanceUID
+    && displaySetService?.getDisplaySetByUID(displaySet.displaySetInstanceUID);
+  if (registered && typeof registered.load === 'function' && registered.isLoaded) {
+    const instances = [...(series.instances || [])];
+    utils.sortStudyInstances(instances);
+    const newest = instances[instances.length - 1];
+    if (newest && newest.SOPInstanceUID === registered.SOPInstanceUID) {
+      return registered;
+    }
+  }
+
   const _ds = _getDisplaySetsFromSeries(displaySet, series.instances, servicesManager);
   return _ds;
 }
 
 
 export default initDisplaySetMeasurements;
+export { initDisplaySetMeasurements, linkMeasurementsToDisplaySets };

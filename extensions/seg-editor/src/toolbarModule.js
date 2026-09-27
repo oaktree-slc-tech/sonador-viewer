@@ -4,6 +4,7 @@ import SegEditorVolumeRenderingEnabledToolbarButton from './toolbarComponents/Se
 import SegEditorSurfaceRenderingEnabledToolbarButton from './toolbarComponents/SegEditorSurfaceRenderingEnabledToolbarButton';
 import SegEditorImagingToolButtons from './toolbarComponents/SegEditorImagingToolButtons';
 import SegEditor3DOptionsMenu from './toolbarComponents/SegEditor3DOptionsMenu';
+import SegEditorLayoutSelector from './toolbarComponents/SegEditorLayoutSelector';
 import getSegEditorEvaluators from './toolbox/evaluators';
 
 
@@ -27,6 +28,13 @@ const definitions = [
     id: 'SegEditorImagingTools',
     label: 'Imaging Tools',
     CustomComponent: SegEditorImagingToolButtons,
+  },
+  {
+    // Layout presets for the editor's views (runs setSegEditorLayout)
+    id: 'SegEditorLayout',
+    label: 'Layout',
+    icon: 'tool-layout',
+    CustomComponent: SegEditorLayoutSelector,
   },
   {
     // "3D" submenu: state-indicating toggles for the editor's 3D viewport rendering modes
@@ -54,6 +62,17 @@ const definitions = [
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'toggleSegEditorSurfaceRendering',
         commandOptions: {},
+      },
+      {
+        // Rendering toggles back to their defaults and the camera back to the load-time view;
+        // also offered while the Three.js editing canvas is shown
+        id: 'SegEditor3DViewReset',
+        label: 'Reset',
+        icon: 'reset',
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'resetSegEditor3DView',
+        commandOptions: {},
+        uiOptions: { availableWhileEditing3d: true },
       },
     ]
   },

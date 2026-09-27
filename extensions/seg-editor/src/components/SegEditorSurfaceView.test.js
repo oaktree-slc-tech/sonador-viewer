@@ -369,6 +369,32 @@ describe('SegEditorSurfaceView', () => {
     view.componentDidUpdate(hiddenProps);
     expect(api.setCameraLookAt).toHaveBeenCalledTimes(1);
   });
+
+  it('hands its camera to the VTK view when unmounted while shown, and not while hidden', () => {
+    setSurfaces([surface(1)]);
+    const reference = {
+      position: [0, -500, 0], focalPoint: [0, 0, 0], viewUp: [0, 0, 1],
+      parallelProjection: true, parallelScale: 150,
+    };
+    const setReferenceCamera = jest.fn();
+
+    // Shown: a layout change unmounts the canvas with its current camera
+    const shown = createView({ active: true, getReferenceCamera: () => reference, setReferenceCamera });
+    shown._loadInitialModels();
+    shown._onCreated(fakeApi(shown.state.initialModels));
+    shown.componentWillUnmount();
+    expect(setReferenceCamera).toHaveBeenCalledWith({
+      position: [0, -400, 0], focalPoint: [0, 0, 0], viewUp: [0, 0, 1], parallelScale: 120,
+    });
+
+    // Hidden: its camera is stale (the VTK view has been used since) and must not win
+    setReferenceCamera.mockClear();
+    const hidden = createView({ active: false, getReferenceCamera: () => reference, setReferenceCamera });
+    hidden._loadInitialModels();
+    hidden._onCreated(fakeApi(hidden.state.initialModels));
+    hidden.componentWillUnmount();
+    expect(setReferenceCamera).not.toHaveBeenCalled();
+  });
 });
 
 describe('SegEditorSurfaceView 3D tools', () => {
