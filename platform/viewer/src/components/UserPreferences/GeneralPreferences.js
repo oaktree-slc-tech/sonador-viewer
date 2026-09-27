@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import i18n from '@ohif/i18n';
-import { DownloadManagerService, RETRY_ATTEMPTS_DEFAULT } from '@ohif/core';
+import {
+  DownloadManagerService,
+  LOCKED_MODELS_WARNING_PREFERENCE_KEY,
+  RETRY_ATTEMPTS_DEFAULT,
+  UserPreferencesService,
+} from '@ohif/core';
 import { LanguageSwitcher, TabFooter } from '@ohif/ui';
 
 import {
@@ -62,6 +67,10 @@ function GeneralPreferences({ onClose }) {
           // the Settings page stored (ohif-viewers#131 FR-12).
           [RETRY_ATTEMPTS_PREFERENCE_KEY]:
             DownloadManagerService?.getRetryAttempts?.() ?? RETRY_ATTEMPTS_DEFAULT,
+          // Carried for the same reason: the Settings page (and the Open as Segmentation dialog)
+          // own this one.
+          [LOCKED_MODELS_WARNING_PREFERENCE_KEY]:
+            UserPreferencesService?.getGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY) ?? true,
         },
       },
       showSaveOutcome(t('SaveMessage'), 'general preferences')

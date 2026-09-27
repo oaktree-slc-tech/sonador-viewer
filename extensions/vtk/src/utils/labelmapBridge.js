@@ -83,10 +83,37 @@ const LABELMAP_MODIFIED = cornerstoneTools.EVENTS.LABELMAP_MODIFIED;
 const LEGACY_LABELMAP_STATE_EVENT = 'extensiondicomsegmentationlabelmapstatemodified';
 const LEGACY_METADATA_MODIFIED_EVENT = 'extensiondicomsegmentationlabelmapmetadatamodified';
 
-// Registrations, keyed by segmentationId. The segmentationId is the labelmapInstanceUID,
-// `${firstImageId}_${labelmapIndex}` (AR-7), which is also how a legacy element event finds its
-// registration: the element yields the firstImageId, the event yields the labelmapIndex.
+// Registrations, keyed by segmentationId. An imported SEG's id is its labelmapInstanceUID,
+// `${firstImageId}_${labelmapIndex}` (AR-7); a segmentation created or forked in the viewer gets
+// a minted id (`mintSegmentationId`). A legacy element event knows only the element's
+// firstImageId and the labelmapIndex, so canonical registrations with a legacy view are indexed
+// by that slot as well.
 const _registrations = new Map();
+const _registrationsBySlot = new Map();
+
+const _slotKey = (firstImageId, labelmapIndex) => `${firstImageId}_${labelmapIndex}`;
+
+function _indexRegistrationSlot(registration) {
+  const { firstImageId, labelmapIndex, workingCopyOf } = registration;
+  if (firstImageId && labelmapIndex !== undefined && !workingCopyOf) {
+    _registrationsBySlot.set(_slotKey(firstImageId, labelmapIndex), registration.segmentationId);
+  }
+}
+
+function _registrationForSlot(firstImageId, labelmapIndex) {
+  const key = _slotKey(firstImageId, labelmapIndex);
+  return _registrations.get(_registrationsBySlot.get(key) || key);
+}
+
+/**
+ * A session-unique segmentation id for a segmentation created or forked in the viewer. Never
+ * derived from another id: two objects made from the same source in one session must not
+ * collide, and nothing persisted is keyed by it (a DICOM UID is minted at save time).
+ */
+export function mintSegmentationId() {
+  const { guid } = OHIF.utils || {};
+  return typeof guid === 'function' ? guid() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 // One `registration` per segmentation, created at import and destroyed only by
 // `removeCanonicalSegmentation`: the legacy-view bookkeeping, the event-subscription state, and the
@@ -602,6 +629,7 @@ function _reconstructRegistration(segmentationId) {
   };
 
   _registrations.set(segmentationId, registration);
+  _indexRegistrationSlot(registration);
   _ensureGlobalListeners();
 
   // Never for a working copy: it is Cornerstone3D-only by contract, and installing a legacy view
@@ -869,6 +897,7 @@ export function createCanonicalSegmentation(params) {
     }
 
     _registrations.set(segmentationId, registration);
+    _indexRegistrationSlot(registration);
     _ensureGlobalListeners();
 
     const segmentation = c3dSegmentations.state.getSegmentation(segmentationId);
@@ -901,10 +930,10 @@ export function forkSegmentationForEditor(sourceSegmentationId, options) {
   // event route exists in either direction. Everything display-side (attach/detach, generations,
   // derived displays) works on it exactly as on a canonical segmentation.
   //
-  // A leftover copy from a previous session under the same id is removed first -- every editor
-  // session starts from a fresh snapshot of the source.
+  // A leftover working copy of the same source (a session that never released) is removed first
+  // -- every editor session starts from a fresh snapshot of the source under a new id.
 
-  // @input options.workingSegmentationId (str): override the `<sourceId>::edit` default
+  // @input options.workingSegmentationId (str): override the minted id
   // @returns { workingSegmentationId, sourceSegmentationId } or undefined when the source is
   //   unknown
 
@@ -918,13 +947,13 @@ export function forkSegmentationForEditor(sourceSegmentationId, options) {
     return undefined;
   }
 
-  const workingSegmentationId =
-    options.workingSegmentationId || `${sourceSegmentationId}::edit`;
+  const workingSegmentationId = options.workingSegmentationId || mintSegmentationId();
 
-  if (_registrations.has(workingSegmentationId)
-      || c3dSegmentations.state.getSegmentation(workingSegmentationId)) {
-    removeCanonicalSegmentation(workingSegmentationId);
-  }
+  _.each(_.uniq([workingSegmentationId, ...getEditorWorkingCopiesOf(sourceSegmentationId)]), (id) => {
+    if (_registrations.has(id) || c3dSegmentations.state.getSegmentation(id)) {
+      removeCanonicalSegmentation(id);
+    }
+  });
 
   // The one-time snapshot: a fresh allocation, never an alias of the source.
   const scalarData = new Uint8Array(source.scalarData);
@@ -994,6 +1023,7 @@ export function forkSegmentationForEditor(sourceSegmentationId, options) {
 
     const registration = {
       segmentationId: workingSegmentationId,
+      workingCopyOf: sourceSegmentationId,
       firstImageId: source.firstImageId,
       labelmapIndex: source.labelmapIndex,
       stackImageIds: [...source.stackImageIds],
@@ -1813,14 +1843,32 @@ export function noteReferencedVolume(segmentationId, imageVolumeId) {
 
 
 /** Mark a canonical segmentation as existing only in memory (see IN_MEMORY_KEY). */
-export function markInMemorySegmentation(segmentationId, { origin } = {}) {
+export function markInMemorySegmentation(segmentationId, { origin, ...provenance } = {}) {
+  // `provenance`: where the segmentation came from (sourceDisplaySetInstanceUID,
+  // sourceSeriesInstanceUID, ...), kept with the marker for save/export
   const segmentation = c3dSegmentations.state.getSegmentation(segmentationId);
   if (!segmentation) {
     return false;
   }
   segmentation.cachedStats = segmentation.cachedStats || {};
-  segmentation.cachedStats[IN_MEMORY_KEY] = { origin, createdAt: Date.now() };
+  segmentation.cachedStats[IN_MEMORY_KEY] = { origin, createdAt: Date.now(), ...provenance };
   return true;
+}
+
+/** Ids of the editor working copies forked from `sourceSegmentationId` (registered or in state) */
+export function getEditorWorkingCopiesOf(sourceSegmentationId) {
+  const ids = new Set();
+  _registrations.forEach((registration, id) => {
+    if (registration.workingCopyOf === sourceSegmentationId) {
+      ids.add(id);
+    }
+  });
+  _.each(c3dSegmentations.state.getSegmentations?.() || [], (segmentation) => {
+    if (segmentation?.cachedStats?.[EDITOR_COPY_OF_KEY] === sourceSegmentationId) {
+      ids.add(segmentation.segmentationId);
+    }
+  });
+  return [...ids];
 }
 
 /**
@@ -1894,6 +1942,9 @@ export function removeCanonicalSegmentation(segmentationId) {
   }
 
   _registrations.delete(segmentationId);
+  if (_registrationsBySlot.get(_slotKey(registration.firstImageId, registration.labelmapIndex)) === segmentationId) {
+    _registrationsBySlot.delete(_slotKey(registration.firstImageId, registration.labelmapIndex));
+  }
 
   if (!_registrations.size) {
     _teardownGlobalListeners();
@@ -2549,7 +2600,7 @@ function _onLegacyLabelmapModified(event) {
     ? brushStackState && brushStackState.activeLabelmapIndex
     : detail.labelmapIndex;
 
-  const registration = _registrations.get(`${firstImageId}_${labelmapIndex}`);
+  const registration = _registrationForSlot(firstImageId, labelmapIndex);
   if (!registration || registration.inBridge) {
     return;
   }

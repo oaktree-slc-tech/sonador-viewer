@@ -39,6 +39,7 @@ import {
   ToolButton, ToolButtonList, ToolButtonListDefault, ToolButtonListDropDown, ToolButtonListItem, ToolButtonListDivider,
 } from './ToolButton';
 import { ToolSettings } from './OHIFToolSettings';
+import { LayoutSelector } from './LayoutSelector';
 export { DataRow } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
 
@@ -80,4 +81,5 @@ export {
   Checkbox,
   ToolButton, ToolButtonList, ToolButtonListDefault, ToolButtonListDropDown, ToolButtonListItem, ToolButtonListDivider,
   ToolSettings,
+  LayoutSelector,
 }

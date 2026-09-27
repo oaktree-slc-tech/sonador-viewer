@@ -365,10 +365,12 @@ let mockAppConfig = {};
 // 16-bit labelmap becomes a 4-byte R32F texture instead of a 2-byte one.
 let mockGpuCapabilities = { norm16: true };
 
+let mockMintedIds = 0;
 jest.mock('@ohif/core', () => ({
   utils: {
     cornerstone3dUtils: { getCornerstone3dConfig: () => mockAppConfig },
     gpuCapabilities: { getGpuCapabilities: () => mockGpuCapabilities },
+    guid: () => `minted-${++mockMintedIds}`,
   },
 }), { virtual: true });
 
@@ -429,6 +431,7 @@ const {
   attachSegmentationDisplay,
   detachDerivedSegmentationDisplay,
   forkSegmentationForEditor,
+  getEditorWorkingCopiesOf,
   pushLegacyLabelmapModified,
   releaseEditorWorkingCopy,
   ensureLegacyLabelmapView,
@@ -2551,14 +2554,16 @@ describe('the Seg-Editor working copy (fork/release)', () => {
   // into a distinct Cornerstone3D-owned segmentation; there is NO event route between source and
   // copy in either direction, and the copy never has a legacy view.
 
-  const WORKING_ID = `${SEGMENTATION_ID}::edit`;
+  let WORKING_ID;
 
   it('creates an independent identity, voxel store and segment config', async () => {
     segMetadata.data[1] = { SegmentNumber: 1, SegmentLabel: 'Liver' };
     importSegmentation();
 
     const fork = forkSegmentationForEditor(SEGMENTATION_ID);
-    expect(fork.workingSegmentationId).toBe(WORKING_ID);
+    WORKING_ID = fork.workingSegmentationId;
+    expect(WORKING_ID).toMatch(/^minted-\d+$/);
+    expect(WORKING_ID).not.toBe(SEGMENTATION_ID);
 
     const sourceVoxels = getSegmentationVoxels(SEGMENTATION_ID);
     const workingVoxels = getSegmentationVoxels(WORKING_ID);
@@ -2583,7 +2588,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
     // segment-value map, geometry/references -- with no nested reference shared with the source.
     segMetadata.data[1] = { SegmentNumber: 1, SegmentLabel: 'Liver' };
     importSegmentation({ canonical: { segmentValueMap: { 300: 2 } } });
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
 
     const source = mockC3dSegmentationState.get(SEGMENTATION_ID);
     const working = mockC3dSegmentationState.get(WORKING_ID);
@@ -2670,13 +2675,13 @@ describe('the Seg-Editor working copy (fork/release)', () => {
     // Release also works through reconstruction alone.
     expect(releaseEditorWorkingCopy(WORKING_ID)).toBe(true);
     expect(mockC3dSegmentationState.has(WORKING_ID)).toBe(false);
-    expect([...mockImageCache.keys()].filter(id => id.includes('::edit'))).toEqual([]);
+    expect([...mockImageCache.keys()].filter(id => id.includes(WORKING_ID))).toEqual([]);
   });
 
   it('editor-side voxel and segment changes leave the source and legacy view unchanged', async () => {
     segMetadata.data[1] = { SegmentNumber: 1, SegmentLabel: 'Liver' };
     importSegmentation();
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     const volume = attachSegmentationDisplay(WORKING_ID);
 
     const sourceEvents = [];
@@ -2710,7 +2715,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
 
   it('source changes after the fork do not update the working copy', async () => {
     importSegmentation();
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
 
     // A legacy edit lands on the SOURCE after the snapshot.
     const registration = getLabelmapRegistration(SEGMENTATION_ID);
@@ -2726,7 +2731,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
   it('release removes the working state and never the source; a re-fork starts fresh', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     importSegmentation();
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     const volume = attachSegmentationDisplay(WORKING_ID);
     detachSegmentationDisplay(WORKING_ID);
 
@@ -2736,7 +2741,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
 
     expect(mockC3dSegmentationState.has(WORKING_ID)).toBe(false);
     expect(getLabelmapRegistration(WORKING_ID)).toBeUndefined();
-    expect([...mockImageCache.keys()].filter(id => id.includes('::edit'))).toEqual([]);
+    expect([...mockImageCache.keys()].filter(id => id.includes(WORKING_ID))).toEqual([]);
     expect(mockVolumeCache.has(volume.volumeId)).toBe(false);
 
     // The source is fully intact ...
@@ -2745,7 +2750,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
     expect(getSegmentationVoxels(SEGMENTATION_ID)[2 * SLICE_LENGTH]).toBe(1);
 
     // ... and a new session snapshots the CURRENT source, not the stale copy.
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     expect(getSegmentationVoxels(WORKING_ID)[0]).toBe(0);
     releaseEditorWorkingCopy(WORKING_ID);
   });
@@ -2755,7 +2760,7 @@ describe('the Seg-Editor working copy (fork/release)', () => {
     // so an install for the copy would replace the source's legacy slot and open an
     // editor->legacy route.
     importSegmentation();
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     const sourceLabelmap3D = mockSegmentationModuleState.series[FIRST_IMAGE_ID].labelmaps3D[0];
 
     expect(ensureLegacyLabelmapView(WORKING_ID)).toBe(false);
@@ -2815,8 +2820,23 @@ describe('lazy legacy install (post-#92 deployments)', () => {
 });
 
 
+describe('working copy identity', () => {
+  it('mints a new id per fork and removes the previous copy of the same source', () => {
+    importSegmentation();
+
+    const first = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
+    const second = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
+
+    expect(second).not.toBe(first);
+    expect(mockC3dSegmentationState.has(first)).toBe(false);
+    expect(mockC3dSegmentationState.has(second)).toBe(true);
+    expect(getEditorWorkingCopiesOf(SEGMENTATION_ID)).toEqual([second]);
+    expect(mockC3dSegmentationState.get(second).cachedStats.sonadorEditorWorkingCopyOf).toBe(SEGMENTATION_ID);
+  });
+});
+
 describe('segmentations created in the viewer (ohif-viewers#143)', () => {
-  const WORKING_ID = `${SEGMENTATION_ID}::edit`;
+  let WORKING_ID;
 
   it('names the segmentation, and the editor working copy keeps the name', () => {
     importSegmentation({ canonical: { labelmapBuffer: undefined, label: 'Segmentation – CT Abdomen' } });
@@ -2824,7 +2844,7 @@ describe('segmentations created in the viewer (ohif-viewers#143)', () => {
     expect(mockC3dSegmentationState.get(SEGMENTATION_ID).label).toBe('Segmentation – CT Abdomen');
     expect(getSegmentationVoxels(SEGMENTATION_ID).every(v => v === 0)).toBe(true);
 
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     expect(mockC3dSegmentationState.get(WORKING_ID).label).toBe('Segmentation – CT Abdomen');
     releaseEditorWorkingCopy(WORKING_ID);
   });
@@ -2842,7 +2862,7 @@ describe('segmentations created in the viewer (ohif-viewers#143)', () => {
     expect(getInMemorySegmentationInfo(SEGMENTATION_ID))
       .toEqual(expect.objectContaining({ segmentationId: SEGMENTATION_ID, origin: 'blank' }));
 
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     expect(getInMemorySegmentationInfo(WORKING_ID))
       .toEqual(expect.objectContaining({ segmentationId: SEGMENTATION_ID, origin: 'blank' }));
     releaseEditorWorkingCopy(WORKING_ID);
@@ -2852,7 +2872,7 @@ describe('segmentations created in the viewer (ohif-viewers#143)', () => {
 
   it('a working copy of a loaded SEG is not in memory', () => {
     importSegmentation();
-    forkSegmentationForEditor(SEGMENTATION_ID);
+    WORKING_ID = forkSegmentationForEditor(SEGMENTATION_ID).workingSegmentationId;
     expect(getInMemorySegmentationInfo(WORKING_ID)).toBeUndefined();
     releaseEditorWorkingCopy(WORKING_ID);
   });

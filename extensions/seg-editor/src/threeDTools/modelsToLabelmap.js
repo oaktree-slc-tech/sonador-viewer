@@ -22,6 +22,38 @@ import { voxelizeSurfaceInWorker } from './segmentEdits.js';
 // Holder id for the geometry the conversion reads (the M3D cache counts references per viewport)
 const GEOMETRY_HOLDER = 'models-to-segmentation';
 
+function _modelSegments(segmentation) {
+  return Object.values(segmentation?.segments || {})
+    .filter(segment => segment?.geometryId)
+    .sort((a, b) => a.segmentIndex - b.segmentIndex);
+}
+
+/**
+ * The models of an STL series as the conversion takes them, in panel order: the unlocked models
+ * are converted, the locked ones left out. A lock in the models panel is the user's mark that a
+ * model is not to be touched, and a segmentation the editor can change would be exactly that.
+ *
+ * @param {Object} params
+ * @param {string} params.m3dSeriesInstanceUID - the model series
+ * @param {Object} [params.deps] - injectable (tests)
+ * @returns {{ unlocked: Object[], locked: Object[] }} the series' segments (`segmentIndex`,
+ *   `label`, `color`, `geometryId`)
+ */
+export function listModelsForConversion({ m3dSeriesInstanceUID, deps = {} }) {
+  const {
+    getSegmentation = id => c3dSegmentations.state.getSegmentation(id),
+    isSegmentLocked = (id, index) => c3dSegmentations.segmentLocking.isSegmentIndexLocked(id, index),
+  } = deps;
+
+  const segmentationId = getM3DSegmentationId(m3dSeriesInstanceUID);
+  const unlocked = [];
+  const locked = [];
+  _modelSegments(getSegmentation(segmentationId)).forEach(segment => {
+    (isSegmentLocked(segmentationId, segment.segmentIndex) ? locked : unlocked).push(segment);
+  });
+  return { unlocked, locked };
+}
+
 /**
  * A welded, indexed surface from a triangle soup (THREE non-indexed `position` array: three
  * vertices per triangle), as the voxelizer expects: shared vertices merged, so the surface is
@@ -149,7 +181,8 @@ export async function voxelizeModels({ models, dimensions, axes, voxelize, onPro
 }
 
 /**
- * The models of an STL series as a labelmap on its source series' image grid.
+ * The unlocked models of an STL series as a labelmap on its source series' image grid
+ * (`listModelsForConversion` says which models those are).
  *
  * @param {Object} params
  * @param {string} params.m3dSeriesInstanceUID - the model series
@@ -158,11 +191,12 @@ export async function voxelizeModels({ models, dimensions, axes, voxelize, onPro
  * @param {Object} [params.deps] - injectable (tests)
  * @returns {Promise<{ labelmapBuffer: Uint16Array, bufferImageIds: string[],
  *   segments: Array<{ label: string, color: string }>, overlapVoxels: number,
- *   emptySegments: Array<{ segmentIndex: number, label: string }> }>}
+ *   emptySegments: Array<{ segmentIndex: number, label: string }>,
+ *   lockedSegments: Array<{ label: string }> }>} `segments` are the converted models in order
+ *   (segment index = position + 1); `lockedSegments` the models left out
  */
 export async function modelsToLabelmap({ m3dSeriesInstanceUID, imageIds, onProgress, deps = {} }) {
   const {
-    getSegmentation = id => c3dSegmentations.state.getSegmentation(id),
     getGeometry = id => c3dCache.getGeometry(id),
     acquire = acquireGeometry,
     release = releaseGeometry,
@@ -170,12 +204,11 @@ export async function modelsToLabelmap({ m3dSeriesInstanceUID, imageIds, onProgr
     voxelize = voxelizeSurfaceInWorker,
   } = deps;
 
-  const m3dSegmentation = getSegmentation(getM3DSegmentationId(m3dSeriesInstanceUID));
-  const modelSegments = Object.values(m3dSegmentation?.segments || {})
-    .filter(segment => segment?.geometryId)
-    .sort((a, b) => a.segmentIndex - b.segmentIndex);
+  const { unlocked: modelSegments, locked } = listModelsForConversion({ m3dSeriesInstanceUID, deps });
   if (!modelSegments.length) {
-    throw new Error('The series has no models to convert');
+    throw new Error(locked.length
+      ? 'All of the series\' models are locked'
+      : 'The series has no models to convert');
   }
 
   const props = volumeProps(imageIds);
@@ -213,6 +246,7 @@ export async function modelsToLabelmap({ m3dSeriesInstanceUID, imageIds, onProgr
         label: segments[segmentIndex - 1].label,
         error: failures.find(failure => failure.segmentIndex === segmentIndex)?.error,
       })),
+      lockedSegments: locked.map(segment => ({ label: segment.label })),
     };
   } finally {
     geometryIds.forEach(id => release(id, GEOMETRY_HOLDER));

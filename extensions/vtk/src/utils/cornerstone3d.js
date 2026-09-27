@@ -296,6 +296,21 @@ export function isCanonicalSegmentation(segmentation) {
 }
 
 
+export function isEditorWorkingCopy(segmentation) {
+  // True for the Segmentation Editor's working copy of a segmentation: session state the editor
+  // creates on entry and releases itself on close (`releaseEditorWorkingCopy`), never flagged
+  // canonical, so it must not be mistaken for a disposable per-view segmentation either.
+
+  // @input segmentation (object|str): a segmentation record, or a segmentationId
+
+  const record = _.isString(segmentation)
+    ? c3dSegmentations.state.getSegmentation(segmentation)
+    : segmentation;
+
+  return !!(record && (record.cachedStats || {}).sonadorEditorWorkingCopyOf);
+}
+
+
 function _releaseDerivedSegmentations(volumeUid) {
   // Remove the segmentations (and their labelmap volumes) DERIVED from this image volume.
   //
@@ -304,8 +319,12 @@ function _releaseDerivedSegmentations(volumeUid) {
   // classic viewport, the panel and a future serializer still read. Only an explicit product-level
   // removal (`removeCanonicalSegmentation` / `SegmentationService`) destroys one.
 
+  // The editor's working copy is not derived display state either: the editor's own close
+  // releases it, after it has read what it needs through it. Removing it here -- the editor's
+  // views release their image volume before that close runs -- would leave the close nothing to
+  // read, and the segmentation created for the session installed on its series for good.
   _.each(getVolumeSegmentations(volumeUid), (s) => {
-    if (isCanonicalSegmentation(s)) {
+    if (isCanonicalSegmentation(s) || isEditorWorkingCopy(s)) {
       return;
     }
 

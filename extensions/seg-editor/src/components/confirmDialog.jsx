@@ -1,8 +1,13 @@
 // Confirmation dialog in the OHIF v3 style (a dialog shell with a primary and a secondary footer
 // action), shown through the UIDialogService and laid out like the viewer's input dialog
 // (callInputDialog): `.content` / `.footer` sections and the dialog's `btn` button classes.
+//
+// A dialog that warns about something the user may not want to hear again can carry a
+// suppression checkbox ("Don't ask again") beneath its message. Its state is reported with the
+// user's answer and is only meaningful when they proceed: cancelling a warning is not a request
+// to stop being warned.
 
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import { SimpleDialogShell } from '@ohif/ui';
@@ -44,8 +49,16 @@ export function confirmDialogKeyAction(event, root) {
 
 export function ConfirmDialog({
   headerTitle, message, confirmText, cancelText, onConfirm, onCancel, rootClass = '',
+  suppressionLabel, suppressionId = 'confirm-dialog-suppress',
 }) {
   const rootRef = useRef(null);
+  const [suppressed, setSuppressed] = useState(false);
+  // Read by the key handler, which is bound once per answer callback rather than per keystroke
+  const suppressedRef = useRef(false);
+  suppressedRef.current = suppressed;
+
+  const confirm = useCallback(() => onConfirm({ suppressed: suppressedRef.current }), [onConfirm]);
+  const cancel = useCallback(() => onCancel({ suppressed: false }), [onCancel]);
 
   useEffect(() => {
     const onKeyDown = event => {
@@ -55,21 +68,34 @@ export function ConfirmDialog({
       }
       event.preventDefault();
       event.stopPropagation();
-      (action === 'cancel' ? onCancel : onConfirm)();
+      (action === 'cancel' ? cancel : confirm)();
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [onConfirm, onCancel]);
+  }, [confirm, cancel]);
 
   return (
-    <SimpleDialogShell componentRef={rootRef} headerTitle={headerTitle} onClose={onCancel} rootClass={rootClass}>
-      <div className="content">{message}</div>
+    <SimpleDialogShell componentRef={rootRef} headerTitle={headerTitle} onClose={cancel} rootClass={rootClass}>
+      <div className="content">
+        {message}
+        {suppressionLabel && (
+          <label className="dialogOption" htmlFor={suppressionId}>
+            <input
+              id={suppressionId}
+              type="checkbox"
+              checked={suppressed}
+              onChange={event => setSuppressed(event.target.checked)}
+            />
+            <span>{suppressionLabel}</span>
+          </label>
+        )}
+      </div>
       <div className="footer">
         <FooterAction>
-          <FooterAction.Secondary className="btn btn-default" onClick={onCancel}>
+          <FooterAction.Secondary className="btn btn-default" onClick={cancel}>
             {cancelText}
           </FooterAction.Secondary>
-          <FooterAction.Primary className="btn btn-primary" onClick={onConfirm} data-cy="confirm-dialog-confirm">
+          <FooterAction.Primary className="btn btn-primary" onClick={confirm} data-cy="confirm-dialog-confirm">
             {confirmText}
           </FooterAction.Primary>
         </FooterAction>
@@ -83,9 +109,13 @@ ConfirmDialog.propTypes = {
   message: PropTypes.node,
   confirmText: PropTypes.string.isRequired,
   cancelText: PropTypes.string.isRequired,
+  /** Called with `{ suppressed }`, the suppression checkbox's state (false without one) */
   onConfirm: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
   rootClass: PropTypes.string,
+  /** Shows the suppression checkbox with this label */
+  suppressionLabel: PropTypes.string,
+  suppressionId: PropTypes.string,
 };
 
 
@@ -99,16 +129,23 @@ ConfirmDialog.propTypes = {
  * @param {React.ReactNode} params.message
  * @param {string} params.confirmText
  * @param {string} params.cancelText
- * @returns {Promise<boolean>} true when confirmed
+ * @param {string} [params.suppressionLabel] - offer a "don't ask again" checkbox with this label
+ * @returns {Promise<boolean|{ confirmed: boolean, suppressed: boolean }>} true when confirmed;
+ *   with a suppression checkbox, the answer and the checkbox's state (`suppressed` is only ever
+ *   true with `confirmed`)
  */
-export function callConfirmDialog({ uiDialogService, id, title, message, confirmText, cancelText }) {
+export function callConfirmDialog({
+  uiDialogService, id, title, message, confirmText, cancelText, suppressionLabel,
+}) {
   return new Promise(resolve => {
     let settled = false;
-    const settle = confirmed => {
+    const settle = (confirmed, { suppressed = false } = {}) => {
       if (!settled) {
         settled = true;
         uiDialogService.dismiss({ id });
-        resolve(confirmed);
+        resolve(suppressionLabel
+          ? { confirmed, suppressed: confirmed && !!suppressed }
+          : confirmed);
       }
     };
 
@@ -125,7 +162,9 @@ export function callConfirmDialog({ uiDialogService, id, title, message, confirm
         confirmText,
         cancelText,
         rootClass: 'sonadorSimpleInputDialog',
-        onConfirm: () => settle(true),
+        suppressionLabel,
+        suppressionId: `${id}-suppress`,
+        onConfirm: answer => settle(true, answer),
         onCancel: () => settle(false),
       },
     });

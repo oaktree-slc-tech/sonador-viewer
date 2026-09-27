@@ -37,6 +37,8 @@ import {
   Cornerstone3DLabelmapBaseView,
   LoadingIndicator,
   VolumeRenderingMenuButton,
+  ViewOrientationMenu,
+  applyViewOrientationToViewport,
 } from '@ohif/extension-vtk';
 
 import { eventTypes as uiEvents } from '@ohif/ui';
@@ -635,11 +637,11 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
   }
 
   render() {
-    // Render 3D volume viewport with volume rendering menu button in the lower-left
+    // Render 3D volume viewport: orientation menu upper-left, volume rendering menu lower-left
     const component = this;
     const viewportId = component.getViewportId();
     const {
-      imageVolumeRenderingEnabled, segmentationSurfaceEnabled, uiMessageSurfaceInitializing, uiMessageSurfaceRendering,
+      t, imageVolumeRenderingEnabled, segmentationSurfaceEnabled, uiMessageSurfaceInitializing, uiMessageSurfaceRendering,
     } = component.props;
     const { surfaceRendering, surfaceRenderProgress, surfaceModelInit } = component.state;
 
@@ -658,6 +660,13 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
               <LoadingIndicator loadingMessage={loadingMessage} percentageComplete={surfaceRenderProgress} />
             )}
             <div className="viewportElement" ref={component.container} />
+            <div className="absolute top-2 left-2 z-10">
+              <ViewOrientationMenu
+                onSelect={(orientationId) => applyViewOrientationToViewport(
+                  component._checkViewportActive().viewport, orientationId)}
+                t={t}
+              />
+            </div>
             {imageVolumeRenderingEnabled && (
               <div className="absolute bottom-2 left-2 z-10">
                 <VolumeRenderingMenuButton viewportId={viewportId} />

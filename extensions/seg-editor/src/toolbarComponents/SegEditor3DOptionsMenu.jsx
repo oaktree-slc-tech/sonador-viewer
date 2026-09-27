@@ -12,9 +12,10 @@ const EDITING_ATTR = 'segEditor3dEditingEnabled';
 
 
 function SegEditor3DOptionsMenu({ button, activeButtons = [], toolbarClickCallback }) {
-  // The editor's "3D" toolbar menu (3D Volume, Surface). It controls the VTK 3D view, so it is
-  // hidden while the 3D tab shows the Three.js editing canvas, which renders neither. Otherwise it
-  // renders exactly as ToolbarRow renders a nested-button menu.
+  // The editor's "3D" toolbar menu (3D Volume, Surface, Reset). The rendering toggles control the
+  // VTK 3D view, so while the 3D tab shows the Three.js editing canvas (which renders neither)
+  // only the buttons flagged `uiOptions.availableWhileEditing3d` are offered. Otherwise it renders
+  // exactly as ToolbarRow renders a nested-button menu.
 
   const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
   const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
@@ -36,14 +37,15 @@ function SegEditor3DOptionsMenu({ button, activeButtons = [], toolbarClickCallba
     return () => subscription?.unsubscribe();
   }, []);
 
-  if (editing) {
+  const childButtons = (button.buttons || [])
+    .filter(child => !editing || child.uiOptions?.availableWhileEditing3d)
+    .map(child => ({
+      ...child,
+      onClick: evt => toolbarClickCallback(child, evt),
+    }));
+  if (!childButtons.length) {
     return null;
   }
-
-  const childButtons = (button.buttons || []).map(child => ({
-    ...child,
-    onClick: evt => toolbarClickCallback(child, evt),
-  }));
   const activeCommand = childButtons.find(child => activeButtons.includes(child.id))?.id;
 
   return (

@@ -21,6 +21,7 @@ import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 import { callConfirmDialog } from './components/confirmDialog';
 
 import { Enums as SegEditEnums } from './enums';
+import { getSegEditorLayout } from './layouts/segEditorLayouts';
 import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
 import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
 import { redoSegEditorEdit, undoSegEditorEdit } from './toolbox/segEditorHistory';
@@ -244,6 +245,32 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
     },
   };
 
+  const setEditorDisplaySetAttributes = (viewports, changes) => {
+    // Set editor-scoped attributes of the active viewport's displaySet and republish once. Acts
+    // only on attributes the editor has initialized (OHIFSegmentationEditorViewport), and only
+    // when a value changes.
+    const { activeViewportIndex, viewportSpecificData } = viewports || {};
+    const displaySetInstanceUID = viewportSpecificData?.[activeViewportIndex]?.displaySetInstanceUID;
+    const _ds = displaySetInstanceUID
+      && DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+    if (!_ds) {
+      return;
+    }
+
+    let changed = false;
+    _.each(changes, (value, name) => {
+      if (!_.isNil(_ds[name]) && _ds[name] !== value) {
+        _ds[name] = value;
+        changed = true;
+      }
+    });
+    if (changed) {
+      DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+    }
+  };
+  const setEditorDisplaySetAttribute = (viewports, name, value) =>
+    setEditorDisplaySetAttributes(viewports, { [name]: value });
+
   const actions = {
     async closeSegEditor({ viewports } = {}) {
       // Exit Segmentation Editor. A segmentation created in the viewer exists only in memory, so
@@ -327,15 +354,15 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
     // than toggles the editor-scoped displaySet attribute; like the toggles above, it only acts
     // once the editor has initialized the attribute.
     setSegEditor3DEditing: {
-      commandFn: ({ viewports, enabled }) => {
-        const { activeViewportIndex, viewportSpecificData } = viewports || {};
-        const displaySetInstanceUID = viewportSpecificData?.[activeViewportIndex]?.displaySetInstanceUID;
-        const _ds = displaySetInstanceUID
-          && DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
-
-        if (_ds && !_.isNil(_ds.segEditor3dEditingEnabled) && _ds.segEditor3dEditingEnabled !== !!enabled) {
-          _ds.segEditor3dEditingEnabled = !!enabled;
-          DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+      commandFn: ({ viewports, enabled }) => setEditorDisplaySetAttribute(viewports, 'segEditor3dEditingEnabled', !!enabled),
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    // Layout preset of the editor's views (layouts/segEditorLayouts), from the toolbar's Layout widget
+    setSegEditorLayout: {
+      commandFn: ({ viewports, layoutId }) => {
+        if (getSegEditorLayout(layoutId)?.id === layoutId) {
+          setEditorDisplaySetAttribute(viewports, 'segEditorLayout', layoutId);
         }
       },
       storeContexts: ['viewports'],
@@ -343,6 +370,25 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
     },
     toggleSegEditorSurfaceRendering: {
       commandFn: createViewportToggleFeatureCommand('segEditorSurfaceRenderingEnabled'),
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    // "Reset" in the 3D menu: the 3D view's rendering toggles back to their load-time defaults
+    // (the volume actor goes with its preset and rendering options) and the camera back to the
+    // view the object first loaded in. The counter tells the layout to reset the camera once the
+    // toggles have been applied; segments and surfaces are untouched.
+    resetSegEditor3DView: {
+      commandFn: ({ viewports }) => {
+        const { activeViewportIndex, viewportSpecificData } = viewports || {};
+        const displaySetInstanceUID = viewportSpecificData?.[activeViewportIndex]?.displaySetInstanceUID;
+        const _ds = displaySetInstanceUID
+          && DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+        setEditorDisplaySetAttributes(viewports, {
+          segEditorVolumeRenderingEnabled: false,
+          segEditorSurfaceRenderingEnabled: true,
+          segEditor3dViewReset: (_ds?.segEditor3dViewReset || 0) + 1,
+        });
+      },
       storeContexts: ['viewports'],
       options: {},
     },

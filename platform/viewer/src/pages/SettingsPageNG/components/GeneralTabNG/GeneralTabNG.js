@@ -6,9 +6,12 @@ import i18n from '@ohif/i18n';
 import {
   DownloadManagerService,
   DownloadManagerServiceEvents,
+  LOCKED_MODELS_WARNING_PREFERENCE_KEY,
   RETRY_ATTEMPTS_DEFAULT,
   RETRY_ATTEMPTS_MAX,
   RETRY_ATTEMPTS_MIN,
+  UserPreferencesService,
+  UserPreferencesServiceEvents,
 } from '@ohif/core';
 import { Numeric } from '@ohif/ui-next';
 import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
@@ -30,9 +33,13 @@ import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
 import styles from './GeneralTabNG.module.scss';
 
-// Latch keys for the two offline-storage fields on this tab.
+// Latch keys for the fields on this tab.
 const ARCHIVE_FIELD = 'archiveTransfer';
 const RETRY_FIELD = 'retryAttempts';
+const LOCKED_MODELS_FIELD = 'lockedModelsWarning';
+
+const lockedModelsWarningDefault = () =>
+  UserPreferencesService?.GENERAL_DEFAULTS?.[LOCKED_MODELS_WARNING_PREFERENCE_KEY] ?? true;
 
 export default function GeneralTabNG() {
   // The preferences namespace, which is where every string on this surface is registered. Without
@@ -157,6 +164,33 @@ export default function GeneralTabNG() {
     return () => input.removeEventListener('keydown', onKeyDown);
   }, [stepRetryAttempts]);
 
+  // Open as Segmentation's warning about locked models (ohif-viewers!92). The dialog's "don't ask
+  // again" turns it off through the same service, so the checkbox here is where it is turned back
+  // on. Read, hydrated and latched like the two settings above.
+  const [lockedModelsWarning, setLockedModelsWarning] = useState(
+    () => UserPreferencesService?.getGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY) ?? lockedModelsWarningDefault()
+  );
+
+  useEffect(() => {
+    if (!UserPreferencesService?.subscribe) {
+      return undefined;
+    }
+    const { unsubscribe } = UserPreferencesService.subscribe(
+      UserPreferencesServiceEvents.GENERAL_CHANGED,
+      ({ key, value }) => {
+        if (key === LOCKED_MODELS_WARNING_PREFERENCE_KEY) {
+          setLockedModelsWarning(current => latch.accept(LOCKED_MODELS_FIELD, value, current));
+        }
+      }
+    );
+    return unsubscribe;
+  }, []);
+
+  const handleLockedModelsWarningChange = (event) => {
+    latch.markEdited(LOCKED_MODELS_FIELD);
+    setLockedModelsWarning(event.target.checked);
+  };
+
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
   const onSave = () => {
@@ -165,6 +199,9 @@ export default function GeneralTabNG() {
     // either.
     DownloadManagerService?.setArchiveTransferEnabled?.(archiveTransfer);
     DownloadManagerService?.setRetryAttempts?.(retryAttempts);
+    // Recorded only: the wholesale save below carries the value, so the service's own write is
+    // not wanted here.
+    UserPreferencesService?.setGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY, lockedModelsWarning, { persist: false });
 
     // `language` rides along because a section POST replaces the section's values wholesale --
     // sending the toggle alone would erase a stored language preference.
@@ -175,6 +212,7 @@ export default function GeneralTabNG() {
           language: i18n.language,
           [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
           [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
+          [LOCKED_MODELS_WARNING_PREFERENCE_KEY]: lockedModelsWarning,
         },
       },
       // Not the shared `SaveMessage` ("Preferences saved"): a confirmation that names the setting
@@ -190,8 +228,10 @@ export default function GeneralTabNG() {
   const onReset = () => {
     latch.markEdited(ARCHIVE_FIELD);
     latch.markEdited(RETRY_FIELD);
+    latch.markEdited(LOCKED_MODELS_FIELD);
     setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
     setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
+    setLockedModelsWarning(lockedModelsWarningDefault());
   };
 
   return (
@@ -272,6 +312,24 @@ export default function GeneralTabNG() {
               <span>{t('OfflineRetryAttemptsLabel')}</span>
             </label>
             <p className={styles.optionHelp}>{t('OfflineRetryAttemptsHelp')}</p>
+          </div>
+        </div>
+
+        {/* Open as Segmentation's warning about locked models (ohif-viewers!92). The dialog's
+            "Don't ask again" clears this; here is where it is turned back on. */}
+        <div className={classNames(styles.wrapper, styles.wrapperTop)}>
+          <p className={styles.label}>{t('Segmentation')}</p>
+          <div className={styles.optionContainer}>
+            <label className={styles.option} htmlFor="locked-models-warning">
+              <input
+                id="locked-models-warning"
+                type="checkbox"
+                checked={lockedModelsWarning}
+                onChange={handleLockedModelsWarningChange}
+              />
+              <span>{t('LockedModelsWarningLabel')}</span>
+            </label>
+            <p className={styles.optionHelp}>{t('LockedModelsWarningHelp')}</p>
           </div>
         </div>
       </div>

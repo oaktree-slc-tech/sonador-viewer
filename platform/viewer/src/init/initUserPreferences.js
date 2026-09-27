@@ -18,7 +18,7 @@
 // no-op on error, never a crash or an error dialog.
 
 import i18n from '@ohif/i18n';
-import { redux, DownloadManagerService, RETRY_ATTEMPTS_DEFAULT } from '@ohif/core';
+import { redux, DownloadManagerService, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
 
 import {
   ARCHIVE_TRANSFER_DEFAULT,
@@ -33,6 +33,12 @@ import {
 } from '../constants/preferences';
 
 import { getUserPreferences } from '../api/preferences';
+import {
+  resetGeneralHydrationForTests,
+  settleGeneralHydration,
+  startGeneralHydration,
+} from '../lib/generalHydration';
+import { persistGeneralPreferences } from '../lib/generalPreferences';
 import {
   flushPreferenceWrites,
   getCurrentPreferenceUser,
@@ -93,6 +99,10 @@ const applyGeneral = (values) => {
       typeof attempts === 'number' ? attempts : RETRY_ATTEMPTS_DEFAULT
     );
   }
+
+  // The general keys with no other holder (the Open as Segmentation warning). Same hydration
+  // rules: a value the user chose this session wins, and an absent key reads as the default.
+  UserPreferencesService?.applyHydratedGeneral?.(values);
 };
 
 const applyHotkeys = (values) => {
@@ -234,11 +244,21 @@ export const initUserPreferences = async () => {
   // Idempotent per session AND per user; safe to call from a mount effect. A repeat call
   // with a different authenticated identity re-runs the sequence for that user; a repeat
   // call with the same (or no resolvable) identity is a no-op.
+  // A preference set on the user's behalf outside the Settings page (a dialog's "don't ask
+  // again") is written through the same queue as a Settings save. Wired before the latch: it
+  // must be in place for every session, not only the first identity's.
+  UserPreferencesService?.setPersistence?.(persistGeneralPreferences);
+
   const identity = getCurrentPreferenceUser() || '';
   if (hydratedForUser !== null && (hydratedForUser === identity || identity === '')) {
     return;
   }
   hydratedForUser = identity;
+
+  // Settled below with whether the general section's holders now reflect the stored document;
+  // a section write made on the user's behalf waits for this (lib/generalPreferences.js).
+  startGeneralHydration();
+  let generalHydrated = false;
 
   try {
     startPreferenceWriteQueue();
@@ -265,11 +285,17 @@ export const initUserPreferences = async () => {
     if (document) {
       applyViewerSections(document.viewer);
       applyStudylist(document.studylist);
+      // The general holders now carry the stored values (or the built-in defaults when nothing
+      // is stored), safe to write back -- unless a queued write for the section is still
+      // waiting, in which case the holders were deliberately left alone and hold neither.
+      generalHydrated = !hasPendingPreferenceWrite(PREFERENCE_SECTION_PATHS[PREFERENCE_SECTIONS.GENERAL]);
     }
   } catch (error) {
     // FR-9: hydration must never block startup or surface an error dialog.
     console.error('User preferences: hydration failed; the locally cached values remain in effect.', error);
   } finally {
+    settleGeneralHydration({ hydrated: generalHydrated });
+
     // (4) Save-on-change sync starts against the post-hydration baseline (AR-9) -- also on
     // the failure paths, so changes made while offline queue for later replay.
     startStudylistPreferenceSync();
@@ -278,4 +304,5 @@ export const initUserPreferences = async () => {
 
 export const resetUserPreferencesInitForTests = () => {
   hydratedForUser = null;
+  resetGeneralHydrationForTests();
 };

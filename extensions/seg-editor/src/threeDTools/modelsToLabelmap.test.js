@@ -3,6 +3,7 @@
 import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
 
 import {
+  listModelsForConversion,
   modelsToLabelmap,
   surfaceFromTriangleSoup,
   volumeAxesFromProps,
@@ -13,7 +14,9 @@ import { polysToTriangles } from './meshCut';
 
 // virtual: jest's resolver does not follow the Cornerstone3D packages' `exports` maps
 jest.mock('@cornerstonejs/core', () => ({ cache: {}, utilities: {} }), { virtual: true });
-jest.mock('@cornerstonejs/tools', () => ({ segmentation: { state: {} } }), { virtual: true });
+jest.mock('@cornerstonejs/tools', () => ({
+  segmentation: { state: {}, segmentLocking: { isSegmentIndexLocked: () => false } },
+}), { virtual: true });
 jest.mock('@ohif/extension-viewerm3d', () => ({
   acquireGeometry: jest.fn(() => Promise.resolve()),
   releaseGeometry: jest.fn(),
@@ -210,6 +213,7 @@ describe('modelsToLabelmap', () => {
     ]);
     expect(result.bufferImageIds).toEqual(['sorted-b', 'sorted-a']);
     expect(result.emptySegments).toEqual([{ segmentIndex: 2, label: 'missing' }]);
+    expect(result.lockedSegments).toEqual([]);
     expect(result.labelmapBuffer.some(v => v === 1)).toBe(true);
     expect(result.labelmapBuffer.some(v => v === 3)).toBe(true);
     expect(result.overlapVoxels).toBe(0);
@@ -259,9 +263,78 @@ describe('modelsToLabelmap', () => {
     expect(release.mock.calls.map(([id]) => id)).toEqual(['m3d:1', 'm3d:2', 'm3d:3']);
   });
 
-  it('refuses a series without models', async () => {
+  it('leaves locked models out, so the segment indices are those of the unlocked models', async () => {
+    const geometryAt = x => ({
+      parsed: { getAttribute: () => ({ array: soup(uvSphere({ radius: 3, center: [x, 0, 0] })) }) },
+    });
+    const geometries = { 'm3d:1': geometryAt(-6), 'm3d:2': geometryAt(0), 'm3d:3': geometryAt(6) };
+    const acquire = jest.fn(() => Promise.resolve());
+    const isSegmentLocked = jest.fn((_id, index) => index === 2);
+
+    const result = await modelsToLabelmap({
+      m3dSeriesInstanceUID: '1.2.3',
+      imageIds: ['a'],
+      deps: {
+        getSegmentation: () => ({
+          segments: {
+            1: { segmentIndex: 1, label: 'femur', color: '#ff0000', geometryId: 'm3d:1' },
+            2: { segmentIndex: 2, label: 'patella', color: '#00ff00', geometryId: 'm3d:2' },
+            3: { segmentIndex: 3, label: 'tibia', color: '#0000ff', geometryId: 'm3d:3' },
+          },
+        }),
+        isSegmentLocked,
+        getGeometry: id => geometries[id],
+        acquire,
+        release: () => {},
+        volumeProps: () => ({ ...PROPS, imageIds: ['a'] }),
+        voxelize: async s => voxelizeByParity(s, 12),
+      },
+    });
+
+    expect(isSegmentLocked).toHaveBeenCalledWith('m3dseg:1.2.3', 2);
+    expect(result.segments.map(segment => segment.label)).toEqual(['femur', 'tibia']);
+    expect(result.lockedSegments).toEqual([{ label: 'patella' }]);
+    expect(acquire.mock.calls.map(([id]) => id)).toEqual(['m3d:1', 'm3d:3']);
+    expect(new Set(result.labelmapBuffer)).toEqual(new Set([0, 1, 2]));
+  });
+
+  it('refuses a series without models, and one whose models are all locked', async () => {
     await expect(modelsToLabelmap({
       m3dSeriesInstanceUID: 'x', imageIds: [], deps: { getSegmentation: () => undefined },
     })).rejects.toThrow('no models');
+
+    await expect(modelsToLabelmap({
+      m3dSeriesInstanceUID: 'x', imageIds: [], deps: {
+        getSegmentation: () => ({ segments: { 1: { segmentIndex: 1, label: 'femur', geometryId: 'g' } } }),
+        isSegmentLocked: () => true,
+      },
+    })).rejects.toThrow('models are locked');
+  });
+});
+
+describe('listModelsForConversion', () => {
+  it('splits the series\' models by lock, in panel order, and ignores segments without a model', () => {
+    const getSegmentation = jest.fn(() => ({
+      segments: {
+        3: { segmentIndex: 3, label: 'tibia', geometryId: 'm3d:3' },
+        1: { segmentIndex: 1, label: 'femur', geometryId: 'm3d:1' },
+        2: { segmentIndex: 2, label: 'patella', geometryId: 'm3d:2' },
+        4: { segmentIndex: 4, label: 'not a model' },
+      },
+    }));
+
+    const { unlocked, locked } = listModelsForConversion({
+      m3dSeriesInstanceUID: '1.2.3',
+      deps: { getSegmentation, isSegmentLocked: (_id, index) => index !== 1 },
+    });
+
+    expect(getSegmentation).toHaveBeenCalledWith('m3dseg:1.2.3');
+    expect(unlocked.map(segment => segment.label)).toEqual(['femur']);
+    expect(locked.map(segment => segment.label)).toEqual(['patella', 'tibia']);
+  });
+
+  it('lists nothing for a series without a presentation segmentation', () => {
+    expect(listModelsForConversion({ m3dSeriesInstanceUID: 'x', deps: { getSegmentation: () => undefined } }))
+      .toEqual({ unlocked: [], locked: [] });
   });
 });

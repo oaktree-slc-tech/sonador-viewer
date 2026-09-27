@@ -4,6 +4,7 @@
 import { createInMemorySegmentation, hexToRgb } from './createInMemorySegmentation';
 import createSegmentationCommands, {
   EDITOR_SEGMENTATION_ATTRIBUTE,
+  lockedModelsWarning,
   segmentationLabelFor,
 } from './createSegmentationCommands';
 
@@ -16,6 +17,8 @@ jest.mock('@ohif/extension-vtk', () => ({ cornerstone3dUtils: {} }), { virtual: 
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: { display: { DisplaySetApi: {} }, utils: { StackManager: {}, studyMetadataManager: {} } },
+  LOCKED_MODELS_WARNING_PREFERENCE_KEY: 'warnLockedModelsOnOpenAsSegmentation',
+  UserPreferencesService: { getGeneral: jest.fn(), setGeneral: jest.fn() },
 }));
 jest.mock('@ohif/i18n', () => ({
   t: (key, options = {}) => key.replace(/{{(\w+)}}/g, (_m, name) => options[name]),
@@ -25,6 +28,8 @@ jest.mock('@ohif/ui', () => ({
   viewerbaseGetDisplaySet: () => ({}),
 }), { virtual: true });
 jest.mock('@ohif/extension-seg3d-editor', () => ({
+  callConfirmDialog: jest.fn(),
+  listModelsForConversion: jest.fn(),
   modelsToLabelmap: jest.fn(),
   setSegmentationEditorLayout: jest.fn(),
 }), { virtual: true });
@@ -46,6 +51,7 @@ describe('createInMemorySegmentation', () => {
       markInMemorySegmentation: jest.fn(),
       nextLabelmapIndex: jest.fn(() => 2),
       makeColorLUT: jest.fn(() => 5),
+      mintSegmentationId: jest.fn(() => 'minted-1'),
     };
   }
 
@@ -57,10 +63,10 @@ describe('createInMemorySegmentation', () => {
       segments: [{ label: 'Segment 1' }], deps: d,
     });
 
-    expect(result).toEqual({ segmentationId: 'ct-1_2', firstImageId: 'ct-1', labelmapIndex: 2 });
+    expect(result).toEqual({ segmentationId: 'minted-1', firstImageId: 'ct-1', labelmapIndex: 2 });
     expect(d.nextLabelmapIndex).toHaveBeenCalledWith('ct-1');
     expect(d.createCanonicalSegmentation).toHaveBeenCalledWith(expect.objectContaining({
-      segmentationId: 'ct-1_2',
+      segmentationId: 'minted-1',
       imageIds: ['ct-1', 'ct-2'],
       labelmapBuffer: undefined,
       firstImageId: 'ct-1',
@@ -72,7 +78,7 @@ describe('createInMemorySegmentation', () => {
         data: [undefined, expect.objectContaining({ SegmentNumber: 1, SegmentLabel: 'Segment 1' })],
       }),
     }));
-    expect(d.markInMemorySegmentation).toHaveBeenCalledWith('ct-1_2', { origin: 'blank' });
+    expect(d.markInMemorySegmentation).toHaveBeenCalledWith('minted-1', expect.objectContaining({ origin: 'blank' }));
   });
 
   it('seeds voxels in the buffer\'s own slice order, with segment colours', () => {
@@ -112,6 +118,16 @@ describe('helpers', () => {
     expect(segmentationLabelFor(CT)).toBe('Segmentation – CT Abdomen');
     expect(segmentationLabelFor({})).toBe('Segmentation');
   });
+
+  it('words the locked-models warning for one model and for several', () => {
+    const femur = { label: 'femur' };
+    const one = lockedModelsWarning({ unlocked: [femur, femur], locked: [{ label: 'patella' }] });
+    expect(one.message).toBe('One of the 3 models is locked and will be left out: patella. '
+      + 'Unlock a model in the models panel to include it.');
+
+    const several = lockedModelsWarning({ unlocked: [femur], locked: [{ label: 'patella' }, { label: 'tibia' }] });
+    expect(several.message).toContain('2 of the 3 models are locked and will be left out: patella, tibia.');
+  });
 });
 
 describe('commands', () => {
@@ -120,26 +136,33 @@ describe('commands', () => {
       displaySetInstanceUID: 'm3d-ds', StudyInstanceUID: 'study', SeriesInstanceUID: 'm3d-series',
       SeriesDescription: 'Bone models',
     } };
+    const femur = { segmentIndex: 1, label: 'femur', color: '#ff0000' };
+    const tibia = { segmentIndex: 2, label: 'tibia', color: '#00ff00' };
     const deps = {
       create: jest.fn(() => ({ segmentationId: 'new-seg' })),
+      listModels: jest.fn(() => ({ unlocked: [femur, tibia], locked: [] })),
       convertModels: jest.fn(async () => ({
         labelmapBuffer: new Uint16Array(4),
         bufferImageIds: ['ct-2', 'ct-1'],
         segments: [{ label: 'femur', color: '#ff0000' }, { label: 'tibia', color: '#00ff00' }],
         overlapVoxels: 0,
         emptySegments: [],
+        lockedSegments: [],
       })),
       openEditor: jest.fn(),
       ensureStack: jest.fn(),
       getDisplaySet: uid => displaySets[uid],
       getStudyDisplaySets: () => Object.values(displaySets),
       findImageSet: (_study, uid) => displaySets[uid],
+      confirm: jest.fn(async () => ({ confirmed: true, suppressed: false })),
+      warnsAboutLockedModels: jest.fn(() => true),
+      stopWarningAboutLockedModels: jest.fn(),
     };
     const notify = jest.fn();
     const { actions } = createSegmentationCommands({
       servicesManager: { services: { UINotificationService: { show: notify } } }, deps,
     });
-    return { actions, deps, notify, displaySets };
+    return { actions, deps, notify, displaySets, femur, tibia };
   }
 
   const viewports = {
@@ -201,6 +224,8 @@ describe('commands', () => {
     expect(await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds', onProgress }))
       .toBe('new-seg');
 
+    expect(deps.listModels).toHaveBeenCalledWith({ m3dSeriesInstanceUID: 'm3d-series' });
+    expect(deps.confirm).not.toHaveBeenCalled();
     expect(deps.convertModels).toHaveBeenCalledWith({
       m3dSeriesInstanceUID: 'm3d-series', imageIds: ['ct-1', 'ct-2'],
     });
@@ -230,6 +255,79 @@ describe('commands', () => {
       type: 'warning', message: expect.stringContaining('femur'),
     }));
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info' }));
+  });
+
+  it('Open as Segmentation names the locked models it leaves out, and goes on when told to', async () => {
+    const { actions, deps, displaySets, femur, tibia } = setup();
+    mockFindSource.mockReturnValue(displaySets['ct-ds']);
+    deps.listModels.mockReturnValue({ unlocked: [femur], locked: [tibia] });
+
+    expect(await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds' })).toBe('new-seg');
+
+    expect(deps.confirm).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'open-models-as-segmentation-locked',
+      title: 'Open Only the Unlocked Models?',
+      message: expect.stringContaining('tibia'),
+      confirmText: 'Open Unlocked Models',
+      cancelText: 'Cancel',
+      suppressionLabel: "Don't ask again",
+    }));
+    expect(deps.convertModels).toHaveBeenCalledTimes(1);
+    expect(deps.stopWarningAboutLockedModels).not.toHaveBeenCalled();
+  });
+
+  it('Open as Segmentation stops warning when asked to, once the user goes on', async () => {
+    const { actions, deps, displaySets, femur, tibia } = setup();
+    mockFindSource.mockReturnValue(displaySets['ct-ds']);
+    deps.listModels.mockReturnValue({ unlocked: [femur], locked: [tibia] });
+    deps.confirm.mockResolvedValueOnce({ confirmed: true, suppressed: true });
+
+    await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds' });
+
+    expect(deps.stopWarningAboutLockedModels).toHaveBeenCalledTimes(1);
+    expect(deps.convertModels).toHaveBeenCalledTimes(1);
+  });
+
+  it('Open as Segmentation does nothing when the warning is cancelled', async () => {
+    const { actions, deps, displaySets, femur, tibia } = setup();
+    mockFindSource.mockReturnValue(displaySets['ct-ds']);
+    deps.listModels.mockReturnValue({ unlocked: [femur], locked: [tibia] });
+    deps.confirm.mockResolvedValueOnce({ confirmed: false, suppressed: false });
+    const onProgress = jest.fn();
+
+    expect(await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds', onProgress }))
+      .toBeUndefined();
+
+    expect(deps.ensureStack).not.toHaveBeenCalled();
+    expect(deps.convertModels).not.toHaveBeenCalled();
+    expect(deps.create).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it('Open as Segmentation leaves locked models out without asking once the warning is off', async () => {
+    const { actions, deps, displaySets, femur, tibia } = setup();
+    mockFindSource.mockReturnValue(displaySets['ct-ds']);
+    deps.listModels.mockReturnValue({ unlocked: [femur], locked: [tibia] });
+    deps.warnsAboutLockedModels.mockReturnValue(false);
+
+    expect(await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds' })).toBe('new-seg');
+
+    expect(deps.confirm).not.toHaveBeenCalled();
+    expect(deps.convertModels).toHaveBeenCalledTimes(1);
+  });
+
+  it('Open as Segmentation says so when every model is locked', async () => {
+    const { actions, deps, displaySets, notify, femur } = setup();
+    mockFindSource.mockReturnValue(displaySets['ct-ds']);
+    deps.listModels.mockReturnValue({ unlocked: [], locked: [femur] });
+
+    expect(await actions.openModelsAsSegmentation({ displaySetInstanceUID: 'm3d-ds' })).toBeUndefined();
+
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'warning', message: expect.stringContaining('All of the models are locked'),
+    }));
+    expect(deps.confirm).not.toHaveBeenCalled();
+    expect(deps.convertModels).not.toHaveBeenCalled();
   });
 
   it('Open as Segmentation fails without the source series', async () => {

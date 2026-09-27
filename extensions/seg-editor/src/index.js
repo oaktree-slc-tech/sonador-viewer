@@ -13,7 +13,8 @@ import withCommandsManager from './connectedComponents/withCommandsManager.js';
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
 
 import Enums from './enums';
-import { modelsToLabelmap } from './threeDTools/modelsToLabelmap.js';
+import { callConfirmDialog } from './components/confirmDialog';
+import { listModelsForConversion, modelsToLabelmap } from './threeDTools/modelsToLabelmap.js';
 
 
 // Sonador 2D/3D Segmentation Editor
@@ -50,6 +51,8 @@ const segmentationEditorExtension = {
 
 export default segmentationEditorExtension;
 export {
+  callConfirmDialog,
+  listModelsForConversion,
   modelsToLabelmap,
   Enums, segmentationEditorExtension, setSegmentationEditorLayout, Cornerstone3DSegmentationViewerBaseViewport, 
   SonadorSegmentationEditorPanel

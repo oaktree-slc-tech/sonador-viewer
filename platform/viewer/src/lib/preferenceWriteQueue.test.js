@@ -326,6 +326,60 @@ describe('flushPreferenceWrites', () => {
 
 // -- Triggers and session behavior ----------------------------------------------------------
 
+describe('write ordering', () => {
+  const deferred = () => {
+    let resolve; let reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  };
+  const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+
+  it('a save asked for while a replay of the same section is in flight waits for the replay', async () => {
+    // Otherwise the server keeps whichever commits last: an older replay landing after the
+    // newer save would put the old values back, with the queue already emptied by the save.
+    global.localStorage.setItem(WRITE_QUEUE_STORAGE_KEY, JSON.stringify([{
+      key: 'general', user: 'user-a', section: 'general',
+      payload: { version: '0.4', values: { language: 'de-DE' } },
+      queuedAt: new Date().toISOString(), attempts: 1, seq: 1,
+    }]));
+    const replay = deferred();
+    updateUserPreferenceSection.mockReturnValueOnce(replay.promise).mockResolvedValue({});
+
+    const flush = flushPreferenceWrites();
+    await tick();
+    const save = submitPreferenceWrite({
+      key: 'general', section: 'general',
+      payload: { version: '0.4', values: { language: 'de-DE', warn: false } },
+    });
+    await tick();
+    expect(updateUserPreferenceSection).toHaveBeenCalledTimes(1);
+
+    replay.resolve({});
+    await flush;
+    await save;
+
+    expect(updateUserPreferenceSection).toHaveBeenCalledTimes(2);
+    expect(updateUserPreferenceSection.mock.calls[1][1].values).toEqual({ language: 'de-DE', warn: false });
+    expect(readStoredQueue()).toEqual([]);
+  });
+
+  it('a replay asked for while a save is in flight waits for the save, and one failed write does not stall the next', async () => {
+    const save = deferred();
+    updateUserPreferenceSection.mockReturnValueOnce(save.promise).mockResolvedValue({});
+
+    const first = submitPreferenceWrite({ key: 'hotkeys', section: 'hotkeys', payload: { version: '0.4', values: {} } });
+    await tick();
+    const second = submitPreferenceWrite({ key: 'window-level', section: 'windowLevel', payload: { version: '0.4', values: {} } });
+    await tick();
+    expect(updateUserPreferenceSection).toHaveBeenCalledTimes(1);
+
+    save.reject(httpError(400));
+    await expect(first).rejects.toMatchObject({ status: 400 });
+    await expect(second).resolves.toMatchObject({ outcome: 'saved' });
+    expect(updateUserPreferenceSection).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('startPreferenceWriteQueue', () => {
   it('registers the browser online listener (FR-20b)', () => {
     startPreferenceWriteQueue();
