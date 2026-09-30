@@ -22,10 +22,16 @@ import {
 } from './m3dCache';
 
 import Enums from './enums';
+import { getActionStatus, setActionStatus, subscribeActionStatus } from './actionStatus.js';
 import { findM3DSourceDisplaySet, getM3DSourceSeriesUID } from './sopClassHandlers/m3dSourceSeries.js';
 import {
   acquireGeometry,
+  getM3DGeometryId,
+  getM3DInstanceColor,
+  getM3DInstanceLabel,
+  getM3DInstanceMetadata,
   getM3DSegmentationId,
+  listM3DInstanceSources,
   releaseGeometry,
 } from './m3dCache';
 
@@ -62,4 +68,10 @@ export { Enums, M3DViewerSidebarPanel, M3D_MIMETYPES, getM3DModelType, isSTLDisp
 export { M3DModelView, MIMETYPE_STL, createSurfaceModel, disposeSurfaceModel, surfaceToBufferGeometry };
 
 // Models as a segmentation (ohif-viewers#143): the source series and the models' geometry
-export { findM3DSourceDisplaySet, getM3DSourceSeriesUID, acquireGeometry, releaseGeometry, getM3DSegmentationId };
+export {
+  findM3DSourceDisplaySet, getM3DSourceSeriesUID, acquireGeometry, releaseGeometry, getM3DSegmentationId,
+  getM3DGeometryId, getM3DInstanceColor, getM3DInstanceLabel, getM3DInstanceMetadata, listM3DInstanceSources,
+};
+
+// Status of an action on what a view shows (the view's loading indicator follows it)
+export { getActionStatus, setActionStatus, subscribeActionStatus };

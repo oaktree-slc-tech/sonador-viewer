@@ -13,6 +13,13 @@
 // (polySeg updateSurfaceData) and re-renders. Calling updateSurfaceData directly skipped the
 // index invalidation, so new segments never appeared.
 //
+// That library update runs through the polySeg addon wrapper (@ohif/core polySegSingleFlight),
+// which publishes when an update starts and ends and runs them in order. The sync follows those
+// for the vol3d segmentation: `onUpdateStart` / `onUpdateEnd` bracket the whole run of
+// outstanding updates (queued ones included), so the view says the surface is being updated until
+// none is left, and `syncNow()` resolves once the update its own marking queued has ended (or
+// timed out): the next update queued after it asks, behind any that were already outstanding.
+//
 // - The copy always runs, so a surface enabled later is computed from current voxels.
 // - Edits made before the surface exists (or while it is off) mark it stale; `refreshIfStale()`
 //   marks the labelmap modified again once the surface is available.
@@ -24,9 +31,16 @@ import {
 } from '@cornerstonejs/tools';
 
 import log from '@ohif/core/src/log.js';
+import {
+  isSurfaceUpdating as c3dIsSurfaceUpdating,
+  subscribeSurfaceUpdates as c3dSubscribeSurfaceUpdates,
+  waitForSurfaceUpdate as c3dWaitForSurfaceUpdate,
+} from '@ohif/core/src/utils/polySegSingleFlight';
 
 
 export const SURFACE_SYNC_DELAY_MS = 1500;
+// An update that has not ended by then is treated as over, so a view never waits forever
+export const SURFACE_UPDATE_TIMEOUT_MS = 120000;
 
 const LOG_PREFIX = '[SegEditor-surfaceSync]';
 
@@ -39,6 +53,9 @@ const LOG_PREFIX = '[SegEditor-surfaceSync]';
  * @param {Function} params.getTargetVolume - () => the vol3d labelmap volume
  * @param {Function} params.isSurfaceShown - () => true while a surface is displayed and can be
  *   updated (surface enabled and its first computation finished)
+ * @param {Function} [params.onUpdateStart] - () => void, when a surface update of the vol3d
+ *   segmentation begins
+ * @param {Function} [params.onUpdateEnd] - ({ error?, cancelled? }) => void, when it ends
  * @param {Function} [params.onError] - (err) => void
  * @param {number} [params.delayMs]
  * @param {Object} [params.deps] - injectable Cornerstone3D functions (tests)
@@ -49,6 +66,8 @@ export function createSurfaceSync({
   getSourceVolume,
   getTargetVolume,
   isSurfaceShown,
+  onUpdateStart = () => {},
+  onUpdateEnd = () => {},
   onError = err => log.error(LOG_PREFIX, err),
   delayMs = SURFACE_SYNC_DELAY_MS,
   deps = {},
@@ -57,11 +76,16 @@ export function createSurfaceSync({
     eventTarget = c3dEventTarget,
     markModified = id => c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(id),
     dataModifiedEvent = c3dToolsEnums.Events.SEGMENTATION_DATA_MODIFIED,
+    subscribeSurfaceUpdates = c3dSubscribeSurfaceUpdates,
+    waitForSurfaceUpdate = c3dWaitForSurfaceUpdate,
+    isSurfaceUpdating = c3dIsSurfaceUpdating,
+    updateTimeoutMs = SURFACE_UPDATE_TIMEOUT_MS,
   } = deps;
 
   let timer = null;
   let surfaceStale = false;
   let stopped = false;
+  let updating = false;
 
   function copyVoxels() {
     const source = getSourceVolume();
@@ -120,6 +144,21 @@ export function createSurfaceSync({
     }, delayMs);
   }
 
+  // The surface updates of the vol3d segmentation, as the polySeg wrapper reports them
+  const unsubscribeUpdates = subscribeSurfaceUpdates(event => {
+    if (stopped || event.segmentationId !== targetSegmentationId) {
+      return;
+    }
+    if (event.phase === 'start' && !updating) {
+      updating = true;
+      onUpdateStart();
+    } else if (event.phase === 'end' && updating && !isSurfaceUpdating(targetSegmentationId)) {
+      // The last outstanding update of the segmentation has ended
+      updating = false;
+      onUpdateEnd({ error: event.error, cancelled: event.cancelled });
+    }
+  });
+
   eventTarget.addEventListener(dataModifiedEvent, onDataModified);
 
   return {
@@ -133,11 +172,20 @@ export function createSurfaceSync({
     /**
      * Copy the current voxels and update the surface now, whatever its state: used when the
      * surface is re-enabled and must reflect edits made while it was off.
+     *
+     * @returns {Promise<Object|false>} false when nothing was updated; else the outcome of the
+     *   update the library ran for it (`{ ended }`, `{ timedOut }` or `{ cancelled }`)
      */
     syncNow() {
       clearTimeout(timer);
       timer = null;
-      return copyAndUpdate('re-enable', { force: true });
+      // Ask before marking modified: the waiter is bound to the next update queued after it asks,
+      // which is the one the marking causes, and never to one already running
+      const outcome = waitForSurfaceUpdate(targetSegmentationId, { timeoutMs: updateTimeoutMs });
+      if (!copyAndUpdate('re-enable', { force: true })) {
+        return Promise.resolve(false);
+      }
+      return outcome;
     },
 
     /** Detach. */
@@ -146,11 +194,12 @@ export function createSurfaceSync({
       clearTimeout(timer);
       timer = null;
       eventTarget.removeEventListener(dataModifiedEvent, onDataModified);
+      unsubscribeUpdates();
     },
 
     // for tests
     get state() {
-      return { surfaceStale, scheduled: !!timer, stopped };
+      return { surfaceStale, scheduled: !!timer, stopped, updating };
     },
   };
 }

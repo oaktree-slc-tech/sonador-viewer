@@ -30,7 +30,7 @@ import {
 
 import { isSTLDisplaySet } from '../../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
 import { findM3DSourceDisplaySet } from '../../sopClassHandlers/m3dSourceSeries.js';
-import { setM3DStatus } from '../../m3dStatus.js';
+import { setActionStatus } from '../../actionStatus.js';
 import { getM3DSegmentationId, DEFAULT_GEOMETRY_COLOR_HEX } from '../../m3dCache';
 
 const { DisplaySetApi } = OHIF.display;
@@ -85,7 +85,7 @@ export default function M3DViewerSidebarPanel({
   }, [isSTL, _displaySet]);
 
   async function panelOnOpenAsSegmentation() {
-    const setStatus = message => setM3DStatus(displaySetInstanceUID, message);
+    const setStatus = message => setActionStatus(displaySetInstanceUID, message);
     try {
       await commandsManager.runCommand('openModelsAsSegmentation', {
         displaySetInstanceUID, onProgress: setStatus,

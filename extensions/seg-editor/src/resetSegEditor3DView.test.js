@@ -36,6 +36,8 @@ jest.mock('@ohif/extension-vtk', () => ({
 jest.mock('@ohif/ui/src/store/useLayoutButton', () => ({ useLayoutButton: { getState: () => ({}) } }));
 jest.mock('./components/confirmDialog', () => ({ callConfirmDialog: jest.fn() }));
 jest.mock('./utils/setSegmentationEditorLayout.js', () => jest.fn());
+// The import commands read files and the study; not what these tests exercise
+jest.mock('./importers/importCommands.js', () => () => ({ actions: {}, definitions: {} }));
 jest.mock('./toolbox/segEditorTools', () => ({ LABELMAP_TOOL_NAMES: [] }));
 
 const viewports = { activeViewportIndex: 0, viewportSpecificData: { 0: { displaySetInstanceUID: 'ds1' } } };

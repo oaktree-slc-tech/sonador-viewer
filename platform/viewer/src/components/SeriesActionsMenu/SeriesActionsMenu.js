@@ -12,6 +12,11 @@
 // trash), by styling (only the server removal is destructive), by the absence of the word "Delete"
 // on the offline item, and by the confirmation only the server removal raises (#130 AR-1).
 //
+// While the Segmentation Editor is open, an STL model series or a DICOM-SEG series also offers
+// "Add to Current Segmentation": its models or segments imported into the segmentation being
+// edited. Whether that applies, and the import itself, belong to the editor's extension and are
+// reached through its commands; this menu only asks.
+//
 // VIEWER ONLY. It reaches the thumbnail through an optional `renderSeriesActions` slot on
 // StudyBrowser, and only ConnectedStudyBrowser — the viewer's left sidepanel — supplies one. The
 // study list's drawer uses ImageThumbnailNG and has its own menu; the quick-switch SeriesList
@@ -33,6 +38,7 @@ import {
   DownloadManagerService,
   notifySeriesQueued,
 } from '@ohif/core';
+import { ReactComponent as AddCircleIcon } from '@ohif/ui/src/elements/Svg/svgs/add-circle.svg';
 import { ReactComponent as DownloadIcon } from '@ohif/ui/src/elements/Svg/svgs/cloud-download.svg';
 import { ReactComponent as OfflineCacheIcon } from '@ohif/ui/src/elements/Icon/icons/offline-cache.svg';
 import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
@@ -47,6 +53,17 @@ import radixStyles from '../../styles/radixUi.module.scss';
 import styles from './SeriesActionsMenu.module.scss';
 
 
+// The editor's commands, in the viewer-wide context (registered by the seg-editor extension)
+const CAN_ADD_TO_SEGMENTATION = 'canAddSeriesToCurrentSegmentation';
+const ADD_TO_SEGMENTATION = 'addSeriesToCurrentSegmentation';
+const VIEWER_CONTEXT = 'VIEWER';
+
+const activeViewportPlugin = (state) => {
+  const { activeViewportIndex, layout, viewportSpecificData } = state.viewports || {};
+  return layout?.viewports?.[activeViewportIndex]?.plugin
+    || viewportSpecificData?.[activeViewportIndex]?.plugin;
+};
+
 export default function SeriesActionsMenu({
   StudyInstanceUID,
   SeriesInstanceUID,
@@ -55,9 +72,23 @@ export default function SeriesActionsMenu({
   displaySetInstanceUID,
   numImageFrames,
   onSeriesRemoved,
+  commandsManager,
+  studies,
 }) {
   const { t } = useTranslation('StudyList');
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
+
+  // Re-evaluated whenever the active viewport changes plugin (the editor opening or closing), and
+  // again as the menu opens, since the editor publishes its segmentation a moment after it mounts
+  const activePlugin = useSelector(activeViewportPlugin);
+  const [, setOpenCount] = useState(0);
+  const canAddToSegmentation = !!(
+    commandsManager
+    && displaySetInstanceUID
+    && activePlugin
+    && commandsManager.getCommand(CAN_ADD_TO_SEGMENTATION, VIEWER_CONTEXT)
+    && commandsManager.runCommand(CAN_ADD_TO_SEGMENTATION, { displaySetInstanceUID }, VIEWER_CONTEXT)
+  );
 
   const { aclView, aclRemove, resolveSeriesAcl } = useResourceAclPermissions({
     server: activeServer,
@@ -139,7 +170,20 @@ export default function SeriesActionsMenu({
     }
   };
 
+  // Actions that act on what the user is doing right now (the editor), kept apart from the
+  // series' own actions by a divider; without any, no divider either
+  const contextActions = [];
   const actions = [];
+
+  if (canAddToSegmentation) {
+    contextActions.push({
+      id: 'add-to-segmentation',
+      label: t('Add to Current Segmentation'),
+      Icon: AddCircleIcon,
+      onSelect: () => commandsManager.runCommand(
+        ADD_TO_SEGMENTATION, { displaySetInstanceUID, studies }, VIEWER_CONTEXT),
+    });
+  }
 
   if (aclView) {
     actions.push({
@@ -191,9 +235,22 @@ export default function SeriesActionsMenu({
   }
 
   // No permitted action means no trigger at all — not a disabled button, not an empty menu.
-  if (!SeriesInstanceUID || !actions.length) {
+  if (!SeriesInstanceUID || (!actions.length && !contextActions.length)) {
     return null;
   }
+
+  const renderItem = ({ id, label, Icon, destructive, onSelect }) => (
+    <DropdownMenu.Item
+      key={id}
+      className={classNames(radixStyles.DropdownItem, styles.item, {
+        [styles.itemDestructive]: destructive,
+      })}
+      onSelect={onSelect}
+    >
+      <Icon className={classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon)} />
+      <span>{label}</span>
+    </DropdownMenu.Item>
+  );
 
   return (
     <>
@@ -201,6 +258,7 @@ export default function SeriesActionsMenu({
         onOpenChange={(open) => {
           if (open) {
             resolveSeriesAcl();
+            setOpenCount((count) => count + 1);
           }
         }}
       >
@@ -224,18 +282,11 @@ export default function SeriesActionsMenu({
             sideOffset={4}
             onClick={(e) => e.stopPropagation()}
           >
-            {actions.map(({ id, label, Icon, destructive, onSelect }) => (
-              <DropdownMenu.Item
-                key={id}
-                className={classNames(radixStyles.DropdownItem, styles.item, {
-                  [styles.itemDestructive]: destructive,
-                })}
-                onSelect={onSelect}
-              >
-                <Icon className={classNames(radixStyles.icon15x, radixStyles.DropDownSvgIcon)} />
-                <span>{label}</span>
-              </DropdownMenu.Item>
-            ))}
+            {contextActions.map(renderItem)}
+            {contextActions.length > 0 && actions.length > 0 && (
+              <DropdownMenu.Separator className={radixStyles.Separator} />
+            )}
+            {actions.map(renderItem)}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -263,4 +314,8 @@ SeriesActionsMenu.propTypes = {
   numImageFrames: PropTypes.number,
   /** Called after a confirmed removal so the viewer can rebuild its study. */
   onSeriesRemoved: PropTypes.func,
+  /** The viewer's commands manager: the Segmentation Editor's import commands, when it is open. */
+  commandsManager: PropTypes.object,
+  /** The viewer's studies, handed to the import (a DICOM-SEG's bytes are read through them). */
+  studies: PropTypes.array,
 };

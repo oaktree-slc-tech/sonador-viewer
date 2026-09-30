@@ -10,9 +10,10 @@ module.exports = {
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
   },
-  // ES-module-only code some tests run for real: vtk.js (index -> world check) and Cornerstone3D's
-  // HistoryMemo (undo / redo), loaded from its own file
+  // ES-module-only code some tests run for real: vtk.js (index -> world check), Cornerstone3D's
+  // HistoryMemo (undo / redo), loaded from its own file, and three's examples (the STL and NRRD
+  // loaders the importers read files with)
   transformIgnorePatterns: [
-    '/node_modules/(?!@kitware/vtk\\.js/|@cornerstonejs/core/dist/esm/utilities/(historyMemo|asArray))',
+    '/node_modules/(?!@kitware/vtk\\.js/|three/examples/|@cornerstonejs/core/dist/esm/utilities/(historyMemo|asArray))',
   ],
 };

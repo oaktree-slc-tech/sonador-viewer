@@ -1,11 +1,9 @@
 import React, { Component } from 'react';
-import dcmjs from 'dcmjs';
 import _ from 'lodash';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { str2ab } from '@ohif/core';
-import { LoadingIndicator } from '@ohif/extension-vtk';
+import { LoadingIndicator, ViewOrientationMenu, applyViewOrientationToModelView } from '@ohif/extension-vtk';
 import { eventTypes as uiEvents } from '@ohif/ui';
 
 import {
@@ -14,7 +12,7 @@ import {
 } from '@cornerstonejs/tools';
 
 import M3DModelView from '../threejs/M3DModelView.js';
-import { getM3DStatus, subscribeM3DStatus } from '../m3dStatus.js';
+import { getActionStatus, subscribeActionStatus } from '../actionStatus.js';
 import { MIMETYPE_STL } from '../sopClassHandlers/OHIFDicom3DSopClassHandler.js';
 import {
   getM3DGeometryId,
@@ -24,11 +22,11 @@ import {
   disposeM3DInstance,
   registerM3DSegmentation,
   releaseM3DSegmentation,
+  getM3DInstanceColor,
+  listM3DInstanceSources,
 } from '../m3dCache';
 
 import '../styles/LoadingIndicator.css';
-
-const { DicomLoaderService } = OHIF.utils;
 
 // -90deg X transform so the STL major axis points up and the model faces the viewer; without it
 // the orbit controls have an extremely limited range.
@@ -122,27 +120,12 @@ class OHIFDicomM3DViewport extends Component {
     }
   }
 
-  getInstanceColor(series, sopInstanceUID) {
-    // Resolve the per-instance display colour from series metadata (available without fetching the
-    // encapsulated document, so it is usable on a cache hit).
-    if (!series || !sopInstanceUID) {
-      return undefined;
-    }
-    const instance = series.getInstanceByUID(sopInstanceUID);
-    const idata = instance && instance.getData ? instance.getData().metadata : undefined;
-    if (idata && idata.RecommendedDisplayCIELabValue) {
-      return OHIF.utils.color.rgb2hex(
-        ...dcmjs.data.Colors.dicomlab2RGB(idata.RecommendedDisplayCIELabValue).map((x) => Math.round(x * 255))
-      );
-    }
-    return undefined;
-  }
-
   acquireModel({ sopInstanceUID, series, fetchRawData }) {
     // Acquire a model from the M3D geometry cache (cache-first; `fetchRawData` runs only on a miss)
-    // and hydrate a private per-viewport Three.js instance from the shared cached payload.
+    // and hydrate a private per-viewport Three.js instance from the shared cached payload. The
+    // display colour comes from the series metadata, so it is usable on a cache hit.
     const geometryId = getM3DGeometryId(sopInstanceUID);
-    const color = this.getInstanceColor(series, sopInstanceUID);
+    const color = getM3DInstanceColor(series, sopInstanceUID);
 
     return acquireGeometry(geometryId, this._viewportId, {
       fetchRawData,
@@ -280,7 +263,7 @@ class OHIFDicomM3DViewport extends Component {
     // Retrieve DICOM model instances and stage them through the M3D geometry cache.
 
     const { displaySet, studies } = this.props.viewportData;
-    const { numImageFrames, series } = displaySet;
+    const { series } = displaySet;
     const _component = this;
 
     const applyModel = (model, extra) => {
@@ -299,85 +282,52 @@ class OHIFDicomM3DViewport extends Component {
       throw new Error(error);
     };
 
-    // Inline binary is only valid for single-instance series. Multi-instance series must always
-    // fetch each model separately via their individual WADO URIs — the metadata on the display
-    // set is that of the first instance only and must not short-circuit the full fetch loop.
-    if ((!numImageFrames || numImageFrames <= 1) && displaySet.metadata && displaySet.metadata.EncapsulatedDocument) {
-      const { InlineBinary } = displaySet.metadata.EncapsulatedDocument;
+    // One source per instance: inline binary or a single fetch for a single-instance series, one
+    // fetch per instance otherwise (m3dInstanceSources)
+    const sources = listM3DInstanceSources(displaySet, studies);
+    if (!sources.length) {
+      return;
+    }
+    this.setState({ modelCount: sources.length });
 
-      if (InlineBinary) {
-        this.setState({ modelCount: 1 });
-        this.acquireModel({
-          sopInstanceUID: displaySet.SOPInstanceUID,
-          series,
-          fetchRawData: () => Promise.resolve(str2ab(atob(InlineBinary))),
-        }).then((model) => applyModel(model), onError);
-        return;
-      }
+    if (sources.length === 1) {
+      // Retrieve the single model file (from the remote server only on a cache miss)
+      const [{ sopInstanceUID, fetchRawData }] = sources;
+      this.acquireModel({ sopInstanceUID, series, fetchRawData })
+        .then((model) => applyModel(model), onError);
+      return;
     }
 
-    if (!numImageFrames && _.isUndefined(numImageFrames)) {
-      this.setState({ modelCount: 1 });
+    sources.forEach(({ sopInstanceUID, fetchRawData }) => {
+      _component.acquireModel({ sopInstanceUID, series, fetchRawData }).then((model) => {
+        // Use functional setState to avoid stale state reads when multiple
+        // acquire promises resolve within the same React 18 batch.
+        _component.setState(prevState => {
+          const updatedModels = [...prevState.models, model];
+          const newState = {
+            models: updatedModels,
+            percentComplete: updatedModels.length === sources.length
+              ? 100
+              : Math.round((updatedModels.length / sources.length) * 100),
+          };
 
-      // Retrieve single model file from remote server (only on a cache miss)
-      this.acquireModel({
-        sopInstanceUID: displaySet.SOPInstanceUID,
-        series,
-        fetchRawData: () => DicomLoaderService.findDicomDataPromise(displaySet, studies),
-      }).then((model) => applyModel(model), onError);
-    } else if (numImageFrames && numImageFrames > 1) {
-      this.setState({ modelCount: numImageFrames });
+          if (!prevState.modelType) {
+            newState.modelType = model.modelType;
+          }
 
-      _.times(numImageFrames, function (i) {
-        // Retrieve DICOM instance
-        const instance = series.getInstanceByIndex(i);
-        const sopInstanceUID = instance.getSOPInstanceUID();
+          if (model.modelType === MIMETYPE_STL) {
+            newState.coordinateTransform = STL_COORDINATE_TRANSFORM;
+          }
 
-        // Create a copy of the display set and add instance specific data.
-        // images must be cleared: DicomLoaderService.getDataByImageType() reads dataset.images[0]
-        // and would always fetch the first instance regardless of the wadoUri override below.
-        // Clearing it forces the service to fall through to getDataByDatasetType(), which uses
-        // the per-instance wadoUri and SOPInstanceUID set here.
-        const displayInstance = _.extend(_.clone(displaySet), {
-          wadoUri: instance.getData().wadouri,
-          SOPInstanceUID: sopInstanceUID,
-          images: undefined,
+          return newState;
+        }, () => {
+          // Register the presentation-state segmentation once the full series is acquired
+          if (_component.state.percentComplete === 100) {
+            _component.initM3DSegmentationState();
+          }
         });
-
-        _component.acquireModel({
-          sopInstanceUID,
-          series,
-          fetchRawData: () => DicomLoaderService.findDicomDataPromise(displayInstance, studies),
-        }).then((model) => {
-          // Use functional setState to avoid stale state reads when multiple
-          // acquire promises resolve within the same React 18 batch.
-          _component.setState(prevState => {
-            const updatedModels = [...prevState.models, model];
-            const newState = {
-              models: updatedModels,
-              percentComplete: updatedModels.length === numImageFrames
-                ? 100
-                : Math.round((updatedModels.length / numImageFrames) * 100),
-            };
-
-            if (!prevState.modelType) {
-              newState.modelType = model.modelType;
-            }
-
-            if (model.modelType === MIMETYPE_STL) {
-              newState.coordinateTransform = STL_COORDINATE_TRANSFORM;
-            }
-
-            return newState;
-          }, () => {
-            // Register the presentation-state segmentation once the full series is acquired
-            if (_component.state.percentComplete === 100) {
-              _component.initM3DSegmentationState();
-            }
-          });
-        }, onError);
-      });
-    }
+      }, onError);
+    });
   }
 
   onInteractionStart() {
@@ -403,12 +353,12 @@ class OHIFDicomM3DViewport extends Component {
     this.fetchModel();
 
     // Status of an action on the series started from the side panel
-    this.unsubscribeStatus = subscribeM3DStatus((displaySetInstanceUID, message) => {
+    this.unsubscribeStatus = subscribeActionStatus((displaySetInstanceUID, message) => {
       if (displaySetInstanceUID === this.props.viewportData?.displaySet?.displaySetInstanceUID) {
         this.setState({ statusMessage: message });
       }
     });
-    const statusMessage = getM3DStatus(this.props.viewportData?.displaySet?.displaySetInstanceUID);
+    const statusMessage = getActionStatus(this.props.viewportData?.displaySet?.displaySetInstanceUID);
     if (statusMessage) {
       this.setState({ statusMessage });
     }
@@ -523,15 +473,30 @@ class OHIFDicomM3DViewport extends Component {
     this.api = null;
   }
 
+  setViewOrientation(orientationId) {
+    // Turn the view to a preset direction (extension-vtk viewOrientations) with the models fitted
+    // to the view. The presets are patient directions, which STL models are in; the model view
+    // turns them with the STL coordinate transform.
+    return applyViewOrientationToModelView(this.api, orientationId);
+  }
+
   render() {
-    const { byteArray, error, models, percentComplete, modelCount } = this.state;
+    const { percentComplete, modelCount, isLoaded, modelType } = this.state;
     const style = { width: '100%', height: '100%', position: 'relative' };
 
     return (
       <>
         <div className="ohif-m3d-model-container" style={style} onClick={this.onInteractionStart}>
-          {!this.state.isLoaded && (
+          {!isLoaded && (
             <LoadingIndicator percentComplete={modelCount && modelCount > 1 ? percentComplete : undefined} />
+          )}
+          {/* Orientation menu upper-left, as in the 3D volume viewer and the Segmentation Editor.
+              STL models only: they are in patient coordinates, which the presets name; a GLB scene
+              has axes of its own. */}
+          {isLoaded && modelType === MIMETYPE_STL && (
+            <div className="absolute top-2 left-2 z-10">
+              <ViewOrientationMenu onSelect={(orientationId) => this.setViewOrientation(orientationId)} />
+            </div>
           )}
           {this.state.isLoaded && this.state.statusMessage && (
             <LoadingIndicator loadingMessage={this.state.statusMessage} />

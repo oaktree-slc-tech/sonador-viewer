@@ -69,9 +69,42 @@ export function getLabelmapForEdit(segmentationId) {
 }
 
 /**
- * Clear voxels of a segmentation's labelmap, recorded for undo (as the labelmap tools and
+ * Edit voxels of a segmentation's labelmap, recorded for undo (as the labelmap tools and
  * Cornerstone3D's clearSegmentValue record their edits), and mark it modified so the 2D views
  * and the surface sync update.
+ *
+ * An error thrown by `edit` leaves the history untouched (nothing was committed) and propagates,
+ * so the caller can put the voxels back. Once the edit is committed and recorded it stands: a
+ * listener failing while the views are told is logged, not thrown, so the labelmap and the undo
+ * history never disagree about what was written.
+ *
+ * @param {Object} params
+ * @param {string} params.segmentationId
+ * @param {Object} params.volume - the labelmap volume
+ * @param {(setAtIndex: (index: number, value: number) => void) => void} params.edit - writes the
+ *   voxels through the memo's voxel manager
+ * @returns {boolean} whether anything changed
+ */
+export function editLabelmapVoxels({ segmentationId, volume, edit }) {
+  const { LabelmapMemo } = c3dToolsUtilities.segmentation;
+  const memo = LabelmapMemo.createLabelmapMemo(segmentationId, volume.voxelManager);
+  const voxelManager = memo.voxelManager;
+  edit((index, value) => voxelManager.setAtIndex(index, value));
+
+  const changed = memo.commitMemo();
+  if (changed) {
+    c3dUtilities.HistoryMemo.DefaultHistoryMemo.push(memo);
+  }
+  try {
+    c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(segmentationId);
+  } catch (error) {
+    console.error('[SegEditor] a listener failed after the labelmap edit was recorded', error);
+  }
+  return !!changed;
+}
+
+/**
+ * Clear voxels of a segmentation's labelmap (editLabelmapVoxels with value 0).
  *
  * @param {Object} params
  * @param {string} params.segmentationId
@@ -79,13 +112,9 @@ export function getLabelmapForEdit(segmentationId) {
  * @param {Int32Array} params.indices - linear voxel indices
  */
 export function removeLabelmapVoxels({ segmentationId, volume, indices }) {
-  const { LabelmapMemo } = c3dToolsUtilities.segmentation;
-  const memo = LabelmapMemo.createLabelmapMemo(segmentationId, volume.voxelManager);
-  const voxelManager = memo.voxelManager;
-  indices.forEach(index => voxelManager.setAtIndex(index, 0));
-
-  if (memo.commitMemo()) {
-    c3dUtilities.HistoryMemo.DefaultHistoryMemo.push(memo);
-  }
-  c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(segmentationId);
+  return editLabelmapVoxels({
+    segmentationId,
+    volume,
+    edit: setAtIndex => indices.forEach(index => setAtIndex(index, 0)),
+  });
 }

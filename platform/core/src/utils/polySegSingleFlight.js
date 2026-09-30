@@ -1,65 +1,129 @@
-/**
- * Wrap the @cornerstonejs/polymorphic-segmentation addon so that concurrent surface
- * computations for the same segmentation coalesce onto a single in-flight job.
- *
- * Why this exists
- * ---------------
- * Cornerstone3D's Surface display tool (tools/displayTools/Surface/surfaceDisplay.render)
- * lazily computes surface data whenever a Surface representation is rendered while
- * `segmentation.representationData.Surface` is still empty:
- *
- *     SurfaceData = await computeAndAddRepresentation(
- *       segmentationId, Surface, () => polySeg.computeSurfaceData(segmentationId, { viewport }));
- *
- * Surface renders are scheduled on requestAnimationFrame and fired fire-and-forget by
- * SegmentationRenderingEngine._triggerRender (it does not await display.render). So any event
- * that re-renders the 3D viewport while the (seconds-to-minutes) surface computation is still
- * running — a color LUT change, SEGMENTATION_DATA_MODIFIED, a representation-modified event,
- * React setState churn from worker-progress, etc. — finds representationData.Surface still
- * empty and kicks off ANOTHER full computeSurfaceData. Each computeSurfaceData fans out to one
- * marching-cubes worker job per segment, and registerPolySegWorker runs a single worker
- * instance (maxWorkerInstances: 1), so duplicate triggers pile (retriggers x segments) jobs
- * onto one worker. The queue never drains (so autoTerminateOnIdle never fires) and startup
- * stalls for minutes.
- *
- * Cornerstone3D already guards the equivalent Labelmap conversion path with a module-level
- * `polySegConversionInProgress` boolean (tools/displayTools/Labelmap/labelmapDisplay.render),
- * but the Surface path has no such guard. This wrapper supplies the missing guard at the addon
- * boundary — the single point that getPolySeg() returns to every caller — so the lazy render
- * path and any explicit caller all share one computation per segmentation. Once the first
- * computation resolves and Cornerstone3D stores representationData.Surface, the lazy path stops
- * calling compute entirely, so the in-flight window is exactly the compute duration: precisely
- * when coalescing is needed.
- *
- * @param {object} polySeg - The polymorphic-segmentation module namespace passed to
- *   cornerstoneTools.init({ addons: { polySeg } }).
- * @returns {object} A drop-in replacement addon with a single-flight computeSurfaceData.
- */
-// Last failed surface computation per segmentation. A failed computation stores no surface, so
-// the lazy render path would otherwise retry it on every render with no end; callers that wait
-// for a surface (the Segmentation Editor's reveal poll) consult this to stop and report instead.
+// Polymorphic-segmentation addon wrapper, installed at cornerstoneTools.init as
+// `addons.polySeg`, so it is what every library caller of `getPolySeg()` reaches.
+//
+// Cornerstone3D schedules segmentation renders on requestAnimationFrame without awaiting them,
+// and every render of a Surface representation whose data is not yet stored starts a full
+// surface computation. `computeSurfaceData` is therefore single-flighted per segmentation and
+// segment set: concurrent callers share one marching-cubes job.
+//
+// `updateSurfaceData`, the library's response to a labelmap edit, is serialized per segmentation
+// (two updates running at once write the same geometry in whichever order they finish) and its
+// start and end are published, so a view can show that the surface is being updated and wait
+// for the update that follows an edit. Terminating the polySeg worker (a view's toggle-off or
+// unmount) kills the running job, whose promise then never settles: `resetPolySegInFlight`
+// drops everything in flight so the next call starts a fresh job instead of joining a dead one.
+
 const surfaceComputeFailures = new Map();
 
-/**
- * @param {string} segmentationId
- * @returns {{ error: unknown, at: number } | undefined} the most recent failed surface
- *   computation for the segmentation, cleared by a later successful one
- */
+// In-flight state, module-level: one addon instance serves the application. Updates of a
+// segmentation are numbered as they are queued; since they run in order, the highest ended
+// number says which are done.
+const inFlightComputes = new Map();   // key -> promise
+const updateChains = new Map();       // segmentationId -> promise of the last queued update
+const queuedUpdate = new Map();       // segmentationId -> number of the last update queued
+const endedUpdate = new Map();        // segmentationId -> number of the last update ended
+const updateListeners = new Set();
+const resetListeners = new Set();
+let generation = 0;
+
 export function getSurfaceComputeFailure(segmentationId) {
   return surfaceComputeFailures.get(segmentationId);
 }
 
-/** Forget a recorded failure, e.g. before deliberately retrying the computation. */
 export function clearSurfaceComputeFailure(segmentationId) {
   surfaceComputeFailures.delete(segmentationId);
 }
 
-export function createSingleFlightPolySeg(polySeg) {
-  // Keyed by `${segmentationId}::${segmentIndices}` so distinct per-segment requests do not
-  // incorrectly share a job, while the common "compute the whole surface" calls (no indices)
-  // all collapse onto one entry.
-  const inFlight = new Map();
+function _notify(event) {
+  updateListeners.forEach(listener => {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error('[polySegSingleFlight] surface update listener failed', error);
+    }
+  });
+}
 
+/**
+ * Follow surface updates: `listener({ segmentationId, phase: 'start' | 'end', update, error?,
+ * cancelled? })`, where `update` numbers the segmentation's updates in queue order. Returns an
+ * unsubscribe function.
+ */
+export function subscribeSurfaceUpdates(listener) {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
+}
+
+/** Whether a surface update of the segmentation is queued or running */
+export function isSurfaceUpdating(segmentationId) {
+  return (queuedUpdate.get(segmentationId) || 0) > (endedUpdate.get(segmentationId) || 0);
+}
+
+/**
+ * Resolves when the next surface update of the segmentation to be queued after this call has
+ * ended. Updates run in order, so by then every update outstanding at the call has ended too; an
+ * update already running when the caller asks is never taken for the caller's own. Resolves with
+ * `{ ended: true }` (with that update's `error`, if it failed), with `{ timedOut: true }` after
+ * `timeoutMs`, or with `{ cancelled: true }` when in-flight work is dropped (resetPolySegInFlight).
+ */
+export function waitForSurfaceUpdate(segmentationId, { timeoutMs = 120000 } = {}) {
+  return new Promise(resolve => {
+    const target = (queuedUpdate.get(segmentationId) || 0) + 1;
+
+    let timer = null;
+    const finish = result => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(result);
+    };
+    const unsubscribe = subscribeSurfaceUpdates(event => {
+      if (event.segmentationId !== segmentationId || event.phase !== 'end') {
+        return;
+      }
+      if (event.cancelled) {
+        finish({ cancelled: true });
+      } else if (event.update >= target) {
+        finish({ ended: true, error: event.error });
+      }
+    });
+    timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+  });
+}
+
+/**
+ * Be told when in-flight work is forgotten (resetPolySegInFlight): whatever else waits on the
+ * polySeg worker (the Segmentation Editor's imports voxelize models on it) can give up its own
+ * pending jobs then. Returns an unsubscribe function.
+ */
+export function subscribePolySegReset(listener) {
+  resetListeners.add(listener);
+  return () => resetListeners.delete(listener);
+}
+
+/**
+ * Forget every computation and update in flight (their promises are left to whoever holds
+ * them): after the worker is terminated they can never settle, and a later call must not join
+ * them. Waiters are released with `cancelled`, and reset listeners are told.
+ */
+export function resetPolySegInFlight() {
+  generation += 1;
+  inFlightComputes.clear();
+  updateChains.clear();
+  const updating = Array.from(queuedUpdate.keys()).filter(isSurfaceUpdating);
+  updating.forEach(segmentationId => endedUpdate.set(segmentationId, queuedUpdate.get(segmentationId)));
+  updating.forEach(segmentationId => _notify({
+    segmentationId, phase: 'end', update: queuedUpdate.get(segmentationId), cancelled: true,
+  }));
+  resetListeners.forEach(listener => {
+    try {
+      listener();
+    } catch (error) {
+      console.error('[polySegSingleFlight] reset listener failed', error);
+    }
+  });
+}
+
+export function createSingleFlightPolySeg(polySeg) {
   const keyFor = (segmentationId, options = {}) => {
     const indices = options.segmentIndices?.length
       ? [...options.segmentIndices].sort((a, b) => a - b).join(',')
@@ -70,31 +134,22 @@ export function createSingleFlightPolySeg(polySeg) {
   const computeSurfaceData = (segmentationId, options = {}) => {
     const key = keyFor(segmentationId, options);
 
-    const existing = inFlight.get(key);
+    const existing = inFlightComputes.get(key);
     if (existing) {
-      // A computation for this segmentation is already running; await the same result instead
-      // of launching a duplicate fan-out of marching-cubes worker jobs.
       return existing;
     }
 
-    // Promise.resolve() normalizes the result so callers can always `.finally()`/`await` it,
-    // even if a future polySeg implementation returns a non-promise.
     const job = Promise.resolve(polySeg.computeSurfaceData(segmentationId, options));
 
-    inFlight.set(key, job);
+    inFlightComputes.set(key, job);
     job.then(
       () => surfaceComputeFailures.delete(segmentationId),
       error => surfaceComputeFailures.set(segmentationId, { error, at: Date.now() })
     );
-    // Clear once settled (success or failure) so a later legitimate recompute — e.g. after the
-    // surface is removed and needs regeneration — is not blocked by a stale entry.
-    // `.finally()` returns a new promise that rejects when the job does; that branch is only
-    // bookkeeping (callers receive `job` itself), so its rejection is handled here rather than
-    // surfacing as an unhandled rejection on every failed computation.
     job
       .finally(() => {
-        if (inFlight.get(key) === job) {
-          inFlight.delete(key);
+        if (inFlightComputes.get(key) === job) {
+          inFlightComputes.delete(key);
         }
       })
       .catch(() => {});
@@ -102,12 +157,45 @@ export function createSingleFlightPolySeg(polySeg) {
     return job;
   };
 
-  // Spread preserves every other addon method (init, canComputeRequestedRepresentation,
-  // computeLabelmapData, computeContourData, updateSurfaceData, ...) by reference; only the
-  // surface computation is wrapped.
+  const updateSurfaceData = (segmentationId, options) => {
+    const startedIn = generation;
+    const previous = updateChains.get(segmentationId) || Promise.resolve();
+
+    const update = (queuedUpdate.get(segmentationId) || 0) + 1;
+    queuedUpdate.set(segmentationId, update);
+    _notify({ segmentationId, phase: 'start', update });
+
+    const end = extra => {
+      // A reset has already released the waiters of an older generation
+      if (startedIn !== generation) {
+        return;
+      }
+      endedUpdate.set(segmentationId, Math.max(endedUpdate.get(segmentationId) || 0, update));
+      _notify({ segmentationId, phase: 'end', update, ...extra });
+    };
+
+    // Queued behind the previous update of the same segmentation, whatever became of it
+    const job = previous
+      .catch(() => {})
+      .then(() => polySeg.updateSurfaceData(segmentationId, options))
+      .then(result => { end({}); return result; }, error => { end({ error }); throw error; });
+
+    updateChains.set(segmentationId, job);
+    job
+      .finally(() => {
+        if (updateChains.get(segmentationId) === job) {
+          updateChains.delete(segmentationId);
+        }
+      })
+      .catch(() => {});
+
+    return job;
+  };
+
   return {
     ...polySeg,
     computeSurfaceData,
+    updateSurfaceData,
   };
 }
 

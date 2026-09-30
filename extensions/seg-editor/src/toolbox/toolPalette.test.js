@@ -56,6 +56,8 @@ jest.mock('@ohif/extension-vtk', () => ({
   createViewportToggleFeatureCommand: () => () => {},
 }));
 jest.mock('../utils/setSegmentationEditorLayout.js', () => jest.fn());
+// The import commands read files and the study; not what these tests exercise
+jest.mock('../importers/importCommands.js', () => () => ({ actions: {}, definitions: {} }));
 jest.mock('../components/confirmDialog', () => ({ callConfirmDialog: jest.fn() }));
 jest.mock('@ohif/ui/src/store/useLayoutButton', () => ({
   useLayoutButton: { getState: () => ({ setIsDisplayedLayoutButton: jest.fn() }) },

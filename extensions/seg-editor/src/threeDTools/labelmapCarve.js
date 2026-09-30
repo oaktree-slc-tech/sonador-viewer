@@ -16,6 +16,66 @@
 // voxels of the segment within that distance of the removed points are removed as well.
 
 
+const IDENTITY_DIRECTION = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+function _isIdentityDirection(direction) {
+  return !direction || IDENTITY_DIRECTION.every((value, i) => Math.abs(direction[i] - value) < 1e-9);
+}
+
+/**
+ * Nearest-voxel sampler of a labelled grid in world coordinates: (x, y, z) => the value of the
+ * voxel whose centre is nearest, or 0 outside the grid.
+ *
+ * The grid is voxel (i, j, k) at origin + i*spacing[0]*direction[0..2] + j*spacing[1]*direction[3..5]
+ * + k*spacing[2]*direction[6..8], with i the fastest index in `data`. Without a `direction` the
+ * grid is axis-aligned (the polymorphic segmentation voxelizer's surface -> labelmap result).
+ *
+ * @param {{ data: ArrayLike<number>, dimensions: ArrayLike<number>, origin: ArrayLike<number>,
+ *   spacing: ArrayLike<number>, direction?: ArrayLike<number> }} grid
+ * @returns {(x: number, y: number, z: number) => number}
+ */
+export function createGridSampler(grid) {
+  if (!grid?.data) {
+    return () => 0;
+  }
+  const { data } = grid;
+  const [nx, ny, nz] = grid.dimensions;
+  const [ox, oy, oz] = grid.origin;
+  const [sx, sy, sz] = grid.spacing;
+
+  if (_isIdentityDirection(grid.direction)) {
+    return (x, y, z) => {
+      const i = Math.round((x - ox) / sx);
+      const j = Math.round((y - oy) / sy);
+      const k = Math.round((z - oz) / sz);
+      if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) {
+        return 0;
+      }
+      return data[i + nx * (j + ny * k)];
+    };
+  }
+
+  // Oblique grid: world -> index through the inverse of the index -> world matrix
+  const d = grid.direction;
+  const inverse = invert3([
+    [d[0] * sx, d[1] * sx, d[2] * sx],
+    [d[3] * sy, d[4] * sy, d[5] * sy],
+    [d[6] * sz, d[7] * sz, d[8] * sz],
+  ]);
+  return (x, y, z) => {
+    const rx = x - ox;
+    const ry = y - oy;
+    const rz = z - oz;
+    const i = Math.round(inverse[0][0] * rx + inverse[0][1] * ry + inverse[0][2] * rz);
+    const j = Math.round(inverse[1][0] * rx + inverse[1][1] * ry + inverse[1][2] * rz);
+    const k = Math.round(inverse[2][0] * rx + inverse[2][1] * ry + inverse[2][2] * rz);
+    if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) {
+      return 0;
+    }
+    return data[i + nx * (j + ny * k)];
+  };
+}
+
 /**
  * Inside test for a voxelized surface (polymorphic segmentation's surface -> labelmap result: an
  * axis-aligned grid in world coordinates).
@@ -28,20 +88,8 @@ export function createGridLookup(grid) {
   if (!grid?.data) {
     return () => false;
   }
-  const { data } = grid;
-  const [nx, ny, nz] = grid.dimensions;
-  const [ox, oy, oz] = grid.origin;
-  const [sx, sy, sz] = grid.spacing;
-
-  return (x, y, z) => {
-    const i = Math.round((x - ox) / sx);
-    const j = Math.round((y - oy) / sy);
-    const k = Math.round((z - oz) / sz);
-    if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) {
-      return false;
-    }
-    return data[i + nx * (j + ny * k)] > 0;
-  };
+  const sample = createGridSampler(grid);
+  return (x, y, z) => sample(x, y, z) > 0;
 }
 
 /**
@@ -108,7 +156,7 @@ export function volumeAxes(indexToWorld) {
   return { origin, di: step([1, 0, 0]), dj: step([0, 1, 0]), dk: step([0, 0, 1]) };
 }
 
-function _invert3(m) {
+export function invert3(m) {
   // m: rows [di, dj, dk] as columns of the index -> world matrix
   const [a, b, c] = [m[0][0], m[1][0], m[2][0]];
   const [d, e, f] = [m[0][1], m[1][1], m[2][1]];
@@ -131,7 +179,7 @@ function _invert3(m) {
  *   misses the volume
  */
 export function worldBoxToIndexBox({ min, max }, axes, dimensions, padding = 1) {
-  const inverse = _invert3([axes.di, axes.dj, axes.dk]);
+  const inverse = invert3([axes.di, axes.dj, axes.dk]);
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
   for (let corner = 0; corner < 8; corner++) {

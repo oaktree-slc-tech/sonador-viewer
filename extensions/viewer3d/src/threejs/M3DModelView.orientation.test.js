@@ -74,6 +74,22 @@ describe('M3DModelView.setCameraOrientation', () => {
     expect(-camera.position[1]).toBeCloseTo(33 + Math.hypot(20, 40, 60) / 2, 3);
   });
 
+  it('turns the preset with the model group, so a view transform keeps the patient side', () => {
+    // The STL viewer rotates its model group -90 degrees about x (patient z becomes screen y)
+    const model = createModel();
+    model.rotation.set(-Math.PI / 2, 0, 0);
+    const view = createView({ model });
+
+    // Front: patient anterior (LPS -y) is world +z after the rotation, superior (LPS +z) world +y
+    view.setCameraOrientation({ viewPlaneNormal: [0, -1, 0], viewUp: [0, 0, 1] });
+
+    const [camera] = view.setCameraLookAt.mock.calls[0];
+    expect(camera.position[0]).toBeCloseTo(0);
+    expect(camera.position[1]).toBeCloseTo(0);
+    expect(camera.position[2]).toBeGreaterThan(0);
+    expect(camera.up.map(v => +v.toFixed(6) + 0)).toEqual([0, 1, 0]);
+  });
+
   it('returns false with nothing to frame or a degenerate direction', () => {
     const empty = createView();
     expect(empty.setCameraOrientation({ viewPlaneNormal: [0, 0, 1], viewUp: [0, 1, 0] })).toBe(false);

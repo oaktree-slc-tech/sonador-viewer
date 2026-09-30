@@ -13,11 +13,12 @@ import {
 import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 
 import OHIF from '@ohif/core';
+import { Icon } from '@ohif/ui';
 import {
   Button,
   Icons,
   TooltipProvider,
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   Tooltip, TooltipTrigger, TooltipContent,
   SegmentationTable, useSegmentationExpanded, useSegmentationTableContext,
 } from '@ohif/ui-next';
@@ -29,6 +30,7 @@ import {
 } from '@ohif/extension-viewer3d-volume';
 
 import { Enums as SegEditorEnums } from '../../enums';
+import { SEG_EDITOR_COMMAND_CONTEXT } from '../../toolbox/constants';
 import SegEditorToolPalette from './SegEditorToolPalette';
 import { Enums as vtkEnums } from '@ohif/extension-vtk';
 
@@ -244,6 +246,13 @@ export default function SonadorSegmentationEditorPanel({
   }
 
 
+  function editorOnImport(commandName) {
+    // Panel menu imports (importers/importCommands): the command opens the file window and adds
+    // the file's segments to the working segmentation
+    commandsManager.runCommand(commandName, {}, SEG_EDITOR_COMMAND_CONTEXT);
+  }
+
+
   async function editorOnSegmentEdit(segmentationId, segIdx) {
     // Segmentation editor callback for edits
 
@@ -444,6 +453,22 @@ export default function SonadorSegmentationEditorPanel({
               <DropdownMenuItem onClick={editorOnSegmentationEdit} >
                 <Icons.Rename className="text-foreground" />
                 <span className="pl-2" data-cy="Rename">{t('Rename')}</span>
+              </DropdownMenuItem>
+              {/* Imports, apart from the segmentation's own actions; each source type has its own
+                  icon and one of the viewer's accent colours */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => editorOnImport('importStlModels')} >
+                {/* The cube the 3D toggles use, so models read as 3D here too */}
+                <Icon name="cube" className="text-actions-highlight h-4 w-4" />
+                <span className="pl-2" data-cy="ImportStlModels">{t('Import STL Models')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editorOnImport('importDicomSeg')} >
+                <Icons.TabSegmentation className="text-actions-primary h-4 w-4" />
+                <span className="pl-2" data-cy="ImportDicomSeg">{t('Import DICOM-SEG')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editorOnImport('importNrrdNifti')} >
+                <Icons.Database className="text-customgreen-100 h-4 w-4" />
+                <span className="pl-2" data-cy="ImportNrrdNifti">{t('Import NRRD / NIfTI')}</span>
               </DropdownMenuItem>
               </DropdownMenuContent>
             </>)} />

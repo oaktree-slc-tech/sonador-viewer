@@ -28,6 +28,7 @@ import OHIF from '@ohif/core';
 import { getSopInstanceUIDFromGeometryId } from './m3dGeometryId.js';
 import { getReferenceCount } from './m3dCacheService.js';
 import { DEFAULT_GEOMETRY_COLOR_HEX } from './hydrateM3DInstance.js';
+import { getM3DInstanceLabel, getM3DInstanceMetadata } from './m3dInstanceSources.js';
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -42,15 +43,6 @@ export function getM3DSegmentationId(seriesInstanceUID) {
   return `${M3D_SEGMENTATION_SCHEME}:${seriesInstanceUID}`;
 }
 
-function _instanceMetadata(series, sopInstanceUID) {
-  // Instance metadata access pattern shared with OHIFDicomM3DViewport.getInstanceColor
-  if (!series || !sopInstanceUID) {
-    return undefined;
-  }
-  const instance = series.getInstanceByUID(sopInstanceUID);
-  return instance && instance.getData ? instance.getData().metadata : undefined;
-}
-
 function _buildSegments({ series, models }) {
   // Build the segments hash keyed by Instance Number (0020,0013). Label resolves from Content
   // Description (0070,0081), then Content Label (0070,0080), then 'Model <n>'. The
@@ -59,7 +51,7 @@ function _buildSegments({ series, models }) {
   const segments = {};
   _.each(models, (model) => {
     const sopInstanceUID = getSopInstanceUIDFromGeometryId(model.geometryId);
-    const meta = _instanceMetadata(series, sopInstanceUID) || {};
+    const meta = getM3DInstanceMetadata(series, sopInstanceUID) || {};
 
     // Segment index from InstanceNumber; fall back to the next free index when the instance
     // number is missing, non-positive (segment index 0 is background), or already taken.
@@ -70,7 +62,7 @@ function _buildSegments({ series, models }) {
 
     segments[segmentIndex] = {
       segmentIndex,
-      label: meta.ContentDescription || meta.ContentLabel || `Model ${segmentIndex}`,
+      label: getM3DInstanceLabel(meta, segmentIndex),
       active: true,
       locked: false,
       visible: true,

@@ -1,4 +1,4 @@
-// Preset view directions for the editor's 3D views, in patient (LPS) coordinates.
+// Preset view directions for the 3D views, in patient (LPS) coordinates.
 // `viewPlaneNormal` points from the focal point toward the camera; `viewUp` is screen up.
 
 export const VIEW_ORIENTATIONS = [
@@ -10,6 +10,10 @@ export const VIEW_ORIENTATIONS = [
   { id: 'front', label: 'Front', viewPlaneNormal: [0, -1, 0], viewUp: [0, 0, 1] },
   // From behind the patient, superior at the top of the screen
   { id: 'back', label: 'Back', viewPlaneNormal: [0, 1, 0], viewUp: [0, 0, 1] },
+  // From the patient's left side, superior up (the patient faces screen left)
+  { id: 'left', label: 'Left', viewPlaneNormal: [1, 0, 0], viewUp: [0, 0, 1] },
+  // From the patient's right side, superior up (the patient faces screen right)
+  { id: 'right', label: 'Right', viewPlaneNormal: [-1, 0, 0], viewUp: [0, 0, 1] },
 ];
 
 export function getViewOrientation(id) {
@@ -32,4 +36,15 @@ export function applyViewOrientationToViewport(viewport, id) {
   viewport.resetCamera();
   viewport.render();
   return true;
+}
+
+export function applyViewOrientationToModelView(api, id) {
+  // Turn a Three.js model view (extension-viewerm3d's M3DModelView api) to the preset direction
+  // with the models fitted to the view. Returns false when the view, the preset or the models are
+  // missing.
+  const orientation = getViewOrientation(id);
+  if (!api?.setCameraOrientation || !orientation) {
+    return false;
+  }
+  return api.setCameraOrientation(orientation) === true;
 }

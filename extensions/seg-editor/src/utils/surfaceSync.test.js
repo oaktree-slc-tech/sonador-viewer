@@ -33,14 +33,22 @@ function setup({ surfaceShown = true } = {}) {
   const source = volume([0, 0, 0, 0]);
   const target = volume([0, 0, 0, 0]);
   const marked = [];
+  // The polySeg wrapper's update notifications, driven by the test
+  const updateListeners = new Set();
+  const publish = event => updateListeners.forEach(listener => listener(event));
   const deps = {
     eventTarget,
     dataModifiedEvent: 'DATA_MODIFIED',
     // Record what the vol3d labelmap held each time it was marked modified
     markModified: jest.fn(id => marked.push({ id, voxels: target.data })),
+    subscribeSurfaceUpdates: listener => { updateListeners.add(listener); return () => updateListeners.delete(listener); },
+    waitForSurfaceUpdate: jest.fn(() => Promise.resolve({ ended: true })),
+    isSurfaceUpdating: jest.fn(() => state.outstanding > 0),
   };
-  const state = { surfaceShown };
+  const state = { surfaceShown, outstanding: 0 };
   const onError = jest.fn();
+  const onUpdateStart = jest.fn();
+  const onUpdateEnd = jest.fn();
 
   const sync = createSurfaceSync({
     sourceSegmentationId: SOURCE,
@@ -48,6 +56,8 @@ function setup({ surfaceShown = true } = {}) {
     getSourceVolume: () => source,
     getTargetVolume: () => (state.targetMissing ? undefined : target),
     isSurfaceShown: () => state.surfaceShown,
+    onUpdateStart,
+    onUpdateEnd,
     onError,
     delayMs: DELAY,
     deps,
@@ -62,7 +72,7 @@ function setup({ surfaceShown = true } = {}) {
     eventTarget.dispatchEvent(evt);
   };
 
-  return { sync, source, target, deps, marked, edit, state, onError };
+  return { sync, source, target, deps, marked, edit, state, onError, onUpdateStart, onUpdateEnd, publish, updateListeners };
 }
 
 jest.mock('@ohif/core/src/log.js', () => ({ debug: jest.fn(), error: jest.fn() }));
@@ -129,15 +139,50 @@ describe('createSurfaceSync', () => {
     expect(deps.markModified).toHaveBeenCalledTimes(1);
   });
 
-  it('syncNow copies and marks modified immediately, even while the surface is not shown', () => {
+  it('syncNow copies and marks modified immediately, even while the surface is not shown', async () => {
     const { sync, deps, edit, target } = setup({ surfaceShown: false });
 
     edit(0, 3);
-    sync.syncNow();
+    const outcome = sync.syncNow();
 
     expect(target.data).toEqual([3, 0, 0, 0]);
     expect(deps.markModified).toHaveBeenCalledWith(TARGET);
     expect(sync.state.scheduled).toBe(false);
+    // ... and resolves with the outcome of the update the library runs for it
+    expect(deps.waitForSurfaceUpdate).toHaveBeenCalledWith(TARGET, expect.objectContaining({ timeoutMs: expect.any(Number) }));
+    await expect(outcome).resolves.toEqual({ ended: true });
+  });
+
+  it('syncNow resolves false when there is nothing to update', async () => {
+    const { sync, deps, state } = setup();
+    state.targetMissing = true;
+    await expect(sync.syncNow()).resolves.toBe(false);
+    expect(deps.markModified).not.toHaveBeenCalled();
+  });
+
+  it('reports the start of the vol3d surface updates and their end once none is outstanding', () => {
+    const { sync, publish, onUpdateStart, onUpdateEnd, state } = setup();
+
+    publish({ segmentationId: 'other', phase: 'start' });
+    state.outstanding = 1;
+    publish({ segmentationId: TARGET, phase: 'start', update: 1 });
+    state.outstanding = 2;
+    publish({ segmentationId: TARGET, phase: 'start', update: 2 });   // a queued second update: still one "updating"
+    expect(onUpdateStart).toHaveBeenCalledTimes(1);
+    expect(sync.state.updating).toBe(true);
+
+    // The first update ends while the second is still outstanding: not the end
+    state.outstanding = 1;
+    publish({ segmentationId: TARGET, phase: 'end', update: 1 });
+    expect(onUpdateEnd).not.toHaveBeenCalled();
+    expect(sync.state.updating).toBe(true);
+
+    state.outstanding = 0;
+    publish({ segmentationId: TARGET, phase: 'end', update: 2, cancelled: true });
+    expect(onUpdateEnd).toHaveBeenCalledWith({ error: undefined, cancelled: true });
+    expect(sync.state.updating).toBe(false);
+    publish({ segmentationId: TARGET, phase: 'end', update: 2 });
+    expect(onUpdateEnd).toHaveBeenCalledTimes(1);
   });
 
   it('skips the update when a labelmap volume is unavailable', () => {
@@ -164,8 +209,8 @@ describe('createSurfaceSync', () => {
     expect(deps.markModified).not.toHaveBeenCalled();
   });
 
-  it('stops following edits once stopped', () => {
-    const { sync, deps, edit } = setup();
+  it('stops following edits and updates once stopped', () => {
+    const { sync, deps, edit, updateListeners, publish, onUpdateStart } = setup();
 
     edit(0, 1);
     sync.stop();
@@ -173,7 +218,10 @@ describe('createSurfaceSync', () => {
     edit(1, 1);
     jest.advanceTimersByTime(DELAY);
     sync.syncNow();
+    publish({ segmentationId: TARGET, phase: 'start' });
 
     expect(deps.markModified).not.toHaveBeenCalled();
+    expect(onUpdateStart).not.toHaveBeenCalled();
+    expect(updateListeners.size).toBe(0);
   });
 });
