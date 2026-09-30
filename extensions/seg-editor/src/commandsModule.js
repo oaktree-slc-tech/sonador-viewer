@@ -33,6 +33,7 @@ import {
   setRemovalDepth,
 } from './threeDTools/threeDToolState';
 
+import createImportCommands from './importers/importCommands.js';
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
 
 
@@ -327,6 +328,10 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
     ...Object.fromEntries(
       Object.entries(toolActions).map(([name, commandFn]) => [name, { commandFn, options: {} }])
     ),
+
+    // Imports into the working segmentation: local STL / DICOM-SEG / NRRD / NIfTI files from the
+    // panel menu, and the study's model or SEG series from the study browser (importers/)
+    ...createImportCommands({ servicesManager }).definitions,
 
     closeSegEditor: {
       commandFn: actions.closeSegEditor,

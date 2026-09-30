@@ -89,6 +89,18 @@ export function surfaceFromTriangleSoup(positions) {
 }
 
 /**
+ * The closed surface of a THREE BufferGeometry (a parsed STL: a non-indexed triangle soup), or
+ * null when it has no positions.
+ *
+ * @param {Object} geometry - THREE.BufferGeometry
+ * @returns {{ points: Float32Array, polys: Int32Array }|null}
+ */
+export function surfaceFromGeometry(geometry) {
+  const position = geometry?.getAttribute?.('position');
+  return position?.array ? surfaceFromTriangleSoup(position.array) : null;
+}
+
+/**
  * Index -> world of an image volume from Cornerstone3D volume props (generateVolumePropsFromImageIds):
  * `direction` is [row cosines, column cosines, slice normal], and the volume's vtkImageData maps
  * index (i, j, k) to origin + i*spacing[0]*row + j*spacing[1]*column + k*spacing[2]*normal.
@@ -112,6 +124,14 @@ function _bounds(points) {
   return { min, max };
 }
 
+export class VoxelizationCancelledError extends Error {
+  constructor() {
+    super('The voxelization was cancelled');
+    this.name = 'VoxelizationCancelledError';
+    this.cancelled = true;
+  }
+}
+
 /**
  * Voxelize models onto an image grid.
  *
@@ -122,18 +142,29 @@ function _bounds(points) {
  * @param {{ origin, di, dj, dk }} params.axes - image grid index -> world
  * @param {Function} params.voxelize - async (surface) => voxelizer result
  * @param {Function} [params.onProgress] - (fraction 0..1) => void
+ * @param {Function} [params.isCancelled] - () => true once the caller has given the conversion
+ *   up (its worker was stopped): no further model is sent to the voxelizer and no further
+ *   progress is reported, and the conversion rejects with `VoxelizationCancelledError`
  * @returns {Promise<{ labelmap: Uint16Array, overlapVoxels: number, emptySegments: number[],
  *   failures: Array<{ segmentIndex: number, error: Error }> }>} a model that cannot be voxelized
  *   (an invalid surface the worker rejects) becomes an empty segment, listed in `failures`, and
  *   the other models are still converted
  */
-export async function voxelizeModels({ models, dimensions, axes, voxelize, onProgress = () => {} }) {
+export async function voxelizeModels({
+  models, dimensions, axes, voxelize, onProgress = () => {}, isCancelled = () => false,
+}) {
   const [nx, ny, nz] = dimensions;
   const labelmap = new Uint16Array(nx * ny * nz);
   const { origin, di, dj, dk } = axes;
   let overlapVoxels = 0;
   const emptySegments = [];
   const failures = [];
+
+  const checkCancelled = () => {
+    if (isCancelled()) {
+      throw new VoxelizationCancelledError();
+    }
+  };
 
   for (let m = 0; m < models.length; m++) {
     const { segmentIndex, surface } = models[m];
@@ -143,11 +174,15 @@ export async function voxelizeModels({ models, dimensions, axes, voxelize, onPro
       const box = worldBoxToIndexBox(_bounds(surface.points), axes, dimensions, 1);
       let grid;
       if (box) {
+        checkCancelled();
         try {
           grid = await voxelize(surface);
         } catch (error) {
           failures.push({ segmentIndex, error });
         }
+        // A result arriving after the conversion was given up is not applied, and the next
+        // model is not sent
+        checkCancelled();
       }
       if (grid) {
         const inside = createGridLookup(grid);
@@ -219,13 +254,10 @@ export async function modelsToLabelmap({ m3dSeriesInstanceUID, imageIds, onProgr
   const geometryIds = modelSegments.map(segment => segment.geometryId).filter(id => getGeometry(id));
   await Promise.all(geometryIds.map(id => acquire(id, GEOMETRY_HOLDER)));
   try {
-    const models = modelSegments.map((segment, i) => {
-      const position = getGeometry(segment.geometryId)?.parsed?.getAttribute?.('position');
-      return {
-        segmentIndex: i + 1,
-        surface: position ? surfaceFromTriangleSoup(position.array) : null,
-      };
-    });
+    const models = modelSegments.map((segment, i) => ({
+      segmentIndex: i + 1,
+      surface: surfaceFromGeometry(getGeometry(segment.geometryId)?.parsed),
+    }));
 
     const { labelmap, overlapVoxels, emptySegments, failures } = await voxelizeModels({
       models,

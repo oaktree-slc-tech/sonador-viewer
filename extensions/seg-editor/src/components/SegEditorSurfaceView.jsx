@@ -41,7 +41,7 @@ import {
   surfaceToBufferGeometry,
 } from '@ohif/extension-viewerm3d';
 
-import { LoadingIndicator, getViewOrientation } from '@ohif/extension-vtk';
+import { LoadingIndicator, applyViewOrientationToModelView } from '@ohif/extension-vtk';
 
 import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
 import { DeleteCancelledError, deleteSelection, DELETE_STEPS } from '../threeDTools/deleteSelection';
@@ -394,11 +394,7 @@ export default class SegEditorSurfaceView extends Component {
 
   setViewOrientation(orientationId) {
     // Turn to a preset direction (extension-vtk viewOrientations) with the surfaces fitted to the view
-    const orientation = getViewOrientation(orientationId);
-    if (!this.api || !orientation) {
-      return false;
-    }
-    return this.api.setCameraOrientation(orientation);
+    return applyViewOrientationToModelView(this.api, orientationId);
   }
 
   pushCameraToReference() {

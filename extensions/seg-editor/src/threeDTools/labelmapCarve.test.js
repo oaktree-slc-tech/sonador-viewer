@@ -3,10 +3,36 @@
 import {
   computeCarvedVoxels,
   createGridLookup,
+  createGridSampler,
   createPointProximity,
   volumeAxes,
   worldBoxToIndexBox,
 } from './labelmapCarve';
+
+
+describe('createGridSampler', () => {
+  it('reads the nearest voxel\'s value of an axis-aligned grid, 0 outside', () => {
+    const sample = createGridSampler({
+      data: Uint8Array.from([0, 7, 0, 0, 0, 0, 0, 3]), dimensions: [2, 2, 2], origin: [10, 20, 30], spacing: [2, 2, 2],
+    });
+    expect(sample(12, 20, 30)).toBe(7);
+    expect(sample(12.9, 22.9, 32.9)).toBe(3);
+    expect(sample(10, 20, 30)).toBe(0);
+    expect(sample(100, 20, 30)).toBe(0);
+    expect(createGridSampler(undefined)(12, 20, 30)).toBe(0);
+  });
+
+  it('follows the direction cosines of an oblique grid', () => {
+    // Rows along +y, columns along -x, 2 mm voxels: voxel (1, 0, 0) is at (10, 22, 30), (0, 1, 0) at (8, 20, 30)
+    const sample = createGridSampler({
+      data: Uint8Array.from([0, 7, 3, 0, 0, 0, 0, 0]), dimensions: [2, 2, 2], origin: [10, 20, 30], spacing: [2, 2, 2],
+      direction: [0, 1, 0, -1, 0, 0, 0, 0, 1],
+    });
+    expect(sample(10, 22, 30)).toBe(7);
+    expect(sample(8, 20, 30)).toBe(3);
+    expect(sample(12, 20, 30)).toBe(0);
+  });
+});
 
 
 describe('createGridLookup', () => {

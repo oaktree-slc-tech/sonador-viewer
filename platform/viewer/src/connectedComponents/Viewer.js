@@ -318,6 +318,8 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
                         <SeriesActionsMenu
                           key={series.SeriesInstanceUID}
                           {...series}
+                          commandsManager={commandsManager}
+                          studies={studies}
                           onSeriesRemoved={() => {
                             // The removed series is gone from the server and from the metadata
                             // caches, but this viewer's study tree was built before that. Reload

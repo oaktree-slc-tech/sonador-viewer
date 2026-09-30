@@ -634,8 +634,14 @@ export function attachSegmentationRepresentationTableEvents({
 
     } else if (_seg && _tableSeg) {
 
-      // Synchronize the table segmentation state from Cornerstone3D meta
-      const tableSeg = syncTableSegRepData(_seg, _tableSeg);
+      // The table in the ref may predate segments added in this same tick (React applies the
+      // regenerated table only after the tick): a colour set right after an addSegment reaches
+      // this handler while the ref still holds the old table, and syncing that old table would
+      // put it back over the new one. When the segment count differs, regenerate instead.
+      const _count = checkSegmentsLength(_seg, _tableSeg);
+      const tableSeg = _count.meta !== _count.table
+        ? c3dSeg2SegmentationTableData(_seg)
+        : syncTableSegRepData(_seg, _tableSeg);
       setSegmentations([tableSeg]);
 
       // Trigger onUpdateSegmentationRepresentation

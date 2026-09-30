@@ -11,3 +11,6 @@ export { acquireGeometry, releaseGeometry, getSourceBlob, getReferenceCount } fr
 export { hydrateM3DInstance, disposeM3DInstance, createModelMaterial, DEFAULT_GEOMETRY_COLOR, DEFAULT_GEOMETRY_COLOR_HEX } from './hydrateM3DInstance.js';
 export { C3D_SURFACE_MODEL_TYPE, createSurfaceModel, disposeSurfaceModel, polysToTriangleIndices, surfaceToBufferGeometry } from './cornerstoneSurfaceModels.js';
 export { M3D_SEGMENTATION_SCHEME, getM3DSegmentationId, registerM3DSegmentation, releaseM3DSegmentation } from './m3dSegmentationState.js';
+export {
+  getM3DInstanceMetadata, getM3DInstanceColor, getM3DInstanceLabel, listM3DInstanceSources,
+} from './m3dInstanceSources.js';

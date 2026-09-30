@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Icons, Popover, PopoverContent, PopoverPortal, PopoverTrigger } from '@ohif/ui-next';
 
 import { VIEW_ORIENTATIONS } from '../utils/viewOrientations';
 
 
-function ViewOrientationMenu({ orientations = VIEW_ORIENTATIONS, onSelect, t = key => key, align = 'start', side = 'bottom' }) {
+function ViewOrientationMenu({ orientations = VIEW_ORIENTATIONS, onSelect, t: tProp, align = 'start', side = 'bottom' }) {
   // Quick-orientation menu for a 3D view, after OHIF v3's viewport orientation menu: a popover
   // listing preset directions. Choosing one turns the view's camera to that direction and fits
   // the contents to the view (the caller's `onSelect(orientationId)` does the turning).
 
   const [open, setOpen] = useState(false);
+  // The labels live in the Common namespace; a caller with its own translator passes it in
+  const { t: tCommon } = useTranslation('Common');
+  const t = tProp || tCommon;
 
   // The viewer loads no Tailwind preflight, so a bare <button> keeps the browser's light chrome;
   // both buttons reset it explicitly (the ui-next ghost variant sets neither background nor border)
@@ -59,7 +63,8 @@ ViewOrientationMenu.propTypes = {
   })),
   // (orientationId) => void
   onSelect: PropTypes.func.isRequired,
-  // i18n (Common namespace: Orientation, Top, Bottom, Front, Back)
+  // i18n (Common namespace: Orientation, Top, Bottom, Front, Back, Left, Right); defaults to the
+  // Common translator
   t: PropTypes.func,
   align: PropTypes.string,
   side: PropTypes.string,

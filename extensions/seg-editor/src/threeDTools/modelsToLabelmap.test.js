@@ -7,6 +7,7 @@ import {
   modelsToLabelmap,
   surfaceFromTriangleSoup,
   volumeAxesFromProps,
+  VoxelizationCancelledError,
   voxelizeModels,
 } from './modelsToLabelmap';
 import { insideMesh, uvSphere, voxelizeByParity } from './testing/meshes';
@@ -162,6 +163,30 @@ describe('voxelizeModels', () => {
     expect(labelmap.some(v => v === 2)).toBe(false);
     expect(emptySegments).toEqual([2]);
     expect(failures).toEqual([{ segmentIndex: 2, error: failure }]);
+  });
+
+  it('sends no further model and reports no further progress once cancelled', async () => {
+    let cancelled = false;
+    let releaseFirst;
+    const held = new Promise(resolve => { releaseFirst = resolve; });
+    const voxelize = jest.fn(() => held.then(() => ({ data: new Uint8Array(1), dimensions: [1, 1, 1], origin: [0, 0, 0], spacing: [1, 1, 1] })));
+    const onProgress = jest.fn();
+    const surface = { points: Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0]), polys: Int32Array.from([3, 0, 1, 2]) };
+    const models = [{ segmentIndex: 1, surface }, { segmentIndex: 2, surface }];
+
+    const axes = volumeAxesFromProps({
+      dimensions: [4, 4, 4], spacing: [1, 1, 1], origin: [0, 0, 0], direction: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+    });
+    const conversion = voxelizeModels({ models, dimensions: [4, 4, 4], axes, voxelize, onProgress, isCancelled: () => cancelled });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(voxelize).toHaveBeenCalledTimes(1);
+
+    cancelled = true;      // the worker was stopped while model 1 was in flight
+    releaseFirst();        // ...and its result arrives late
+
+    await expect(conversion).rejects.toBeInstanceOf(VoxelizationCancelledError);
+    expect(voxelize).toHaveBeenCalledTimes(1);
+    expect(onProgress).not.toHaveBeenCalled();
   });
 
   it('reports models outside the grid or without a surface as empty', async () => {

@@ -15,6 +15,10 @@ import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js'
 import Enums from './enums';
 import { callConfirmDialog } from './components/confirmDialog';
 import { listModelsForConversion, modelsToLabelmap } from './threeDTools/modelsToLabelmap.js';
+import { importIntoSegmentation } from './importers/labelmapImport.js';
+import { parseDicomSeg } from './importers/dicomSeg.js';
+import { parseNrrd } from './importers/nrrd.js';
+import { parseNifti } from './importers/nifti.js';
 
 
 // Sonador 2D/3D Segmentation Editor
@@ -54,6 +58,7 @@ export {
   callConfirmDialog,
   listModelsForConversion,
   modelsToLabelmap,
+  importIntoSegmentation, parseDicomSeg, parseNrrd, parseNifti,
   Enums, segmentationEditorExtension, setSegmentationEditorLayout, Cornerstone3DSegmentationViewerBaseViewport, 
   SonadorSegmentationEditorPanel
 };

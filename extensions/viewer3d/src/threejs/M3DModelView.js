@@ -31,6 +31,7 @@ import {
   WebGLRenderer,
   PMREMGenerator,
   Box3,
+  Quaternion,
   Vector3,
   ACESFilmicToneMapping,
   SRGBColorSpace,
@@ -641,15 +642,22 @@ export default class M3DModelView extends Component {
 
   setCameraOrientation({ viewPlaneNormal, viewUp }) {
     // Look at the models from a preset direction, with the whole model group fitted to the view.
-    // `viewPlaneNormal` points from the models toward the camera; `viewUp` is screen up. Returns
-    // false when there is nothing to frame.
+    // `viewPlaneNormal` points from the models toward the camera; `viewUp` is screen up. Both are
+    // given in the models' own coordinates (patient LPS for STL models) and turned with the model
+    // group, so a view's coordinate transform (the STL viewer's, see OHIFDicomM3DViewport) does
+    // not change which side of the patient a preset looks from. Returns false when there is
+    // nothing to frame.
     const fit = this.getModelFit(this.model);
     if (!fit || !this.camera || !this.controls || !viewPlaneNormal || !viewUp) {
       return false;
     }
 
-    const normal = new Vector3(...viewPlaneNormal).normalize();
-    const up = new Vector3(...viewUp).normalize();
+    this.model.updateWorldMatrix?.(true, false);
+    const modelRotation = this.model.getWorldQuaternion
+      ? this.model.getWorldQuaternion(new Quaternion())
+      : new Quaternion();
+    const normal = new Vector3(...viewPlaneNormal).applyQuaternion(modelRotation).normalize();
+    const up = new Vector3(...viewUp).applyQuaternion(modelRotation).normalize();
     const right = new Vector3().crossVectors(up, normal);
     if (normal.lengthSq() === 0 || up.lengthSq() === 0 || right.lengthSq() === 0) {
       return false;

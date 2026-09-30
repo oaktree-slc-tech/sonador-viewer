@@ -28,6 +28,7 @@ import {
 } from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
+import { resetPolySegInFlight } from '@ohif/core/src/utils/polySegSingleFlight';
 
 const { Events: c3dEvents } = C3dEnums;
 
@@ -690,6 +691,10 @@ export function terminateWorkerComputeJobs(options) {
   } catch(err) {
     console.warn('Unable to terminate polySeg worker due to an error.', err);
   }
+
+  // The jobs the worker was running can never settle now: forget them, so the next surface
+  // computation or update starts fresh instead of waiting on a dead promise
+  resetPolySegInFlight();
 
   return c3dWorkerManager;
 }

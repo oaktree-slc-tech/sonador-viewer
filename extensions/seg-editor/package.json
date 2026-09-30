@@ -46,7 +46,9 @@
     "@cornerstonejs/tools": "~4.22.13",
     "@icr/polyseg-wasm": "^0.4.0",
     "comlink": "4.4.2",
+    "dcmjs": "^0.41.0",
     "flexlayout-react": "^0.7.15",
+    "nifti-reader-js": "0.6.9",
     "opencascade.js": "github:zalo/opencascade.js#cascadestudio-v3-occt801",
     "three": "^0.183.2",
     "three-mesh-bvh": "^0.9.15"

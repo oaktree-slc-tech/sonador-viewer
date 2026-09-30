@@ -127,7 +127,9 @@ import Cornerstone3DInspectionView from './components/Cornerstone3DInspectionVie
 // Volume Rendering controls
 import { VolumeRenderingMenuButton } from './components/VolumeRendering/VolumeRenderingMenuButton';
 import ViewOrientationMenu from './components/ViewOrientationMenu';
-import { VIEW_ORIENTATIONS, getViewOrientation, applyViewOrientationToViewport } from './utils/viewOrientations';
+import {
+  VIEW_ORIENTATIONS, getViewOrientation, applyViewOrientationToViewport, applyViewOrientationToModelView,
+} from './utils/viewOrientations';
 import { VolumeRenderingOptions } from './components/VolumeRendering/VolumeRenderingOptions';
 import { VolumeRenderingPresets } from './components/VolumeRendering/VolumeRenderingPresets';
 import { VolumeRenderingPresetsContent } from './components/VolumeRendering/VolumeRenderingPresetsContent';
@@ -251,5 +253,6 @@ export {
   VolumeRenderingMenuButton, VolumeRenderingOptions, VolumeRenderingPresets, VolumeRenderingPresetsContent,
   VolumeRenderingQuality, VolumeShift, VolumeLighting, VolumeShade,
   ViewOrientationMenu, VIEW_ORIENTATIONS, getViewOrientation, applyViewOrientationToViewport,
+  applyViewOrientationToModelView,
 };
 
