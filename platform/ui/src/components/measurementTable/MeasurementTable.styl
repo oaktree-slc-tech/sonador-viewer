@@ -59,6 +59,40 @@
         height: 20px
         pointer-events: inherit
 
+  // The Annotations section: the ui-next accordion (PanelSection) fills the space between the
+  // header and the footer, and the groups scroll inside it. The markup down to the ScrollArea is
+  // accordion root > item > (h3 > button trigger) + [role=region] content > the Accordion
+  // content's inner div > PanelSection.Content's wrapper div > ScrollArea; every level along the
+  // way is a flex column with no minimum height, so the scroll area gets the remaining height
+  // instead of growing (and being clipped) with its rows.
+  .measurementTableAnnotations
+    flex: 1 1 auto
+    min-height: 0
+    display: flex
+    flex-direction: column
+
+    > div, > div > div, [role="region"], [role="region"] > div, [role="region"] > div > div
+      flex: 1 1 auto
+      min-height: 0
+      display: flex
+      flex-direction: column
+
+    h3
+      margin: 0
+      flex: 0 0 auto
+
+      // The trigger is a bare button: no preflight in the viewer, so its chrome is reset here,
+      // and it takes the surface the Segmentations panel gives its section header
+      button
+        appearance: none
+        border: 0
+        font: inherit
+        background-color: var(--ui-gray-darker)
+
+    .measurementTableScroll
+      flex: 1 1 auto
+      min-height: 0
+
   .measurementTableFooter
     padding: 10px
     color: #fff
