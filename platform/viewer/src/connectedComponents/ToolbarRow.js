@@ -14,6 +14,7 @@ import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 import { commandsManager, extensionManager } from '../App';
 import { withAppContext } from '../context/AppContext';
 import { useViewerSidePanels } from '../store/useViewerSidePanels';
+import { panelToOpenForEditor, rightPanelWithoutTab } from './segEditorPanelFollow';
 
 import ConnectedCineDialog from './ConnectedCineDialog';
 import ConnectedLayoutButton from './ConnectedLayoutButton';
@@ -139,6 +140,30 @@ class ToolbarRow extends Component {
         },
         this.closeCineDialogIfNotApplicable
       );
+      this.followSegmentationEditor(prevProps.activeContexts);
+    }
+    this.closeRightPanelWithoutTab();
+  }
+
+  followSegmentationEditor(prevActiveContexts) {
+    // Opening the Segmentation Editor opens the Segmentations panel when no right panel is
+    // showing (segEditorPanelFollow)
+    const { isRightSidePanelOpen, onChangeSidePanel, setIsIssuesContentRightSidePanel } = useViewerSidePanels.getState();
+    const panel = panelToOpenForEditor({
+      prevActiveContexts, activeContexts: this.props.activeContexts, isRightSidePanelOpen,
+    });
+    if (panel) {
+      onChangeSidePanel('right', panel);
+      setIsIssuesContentRightSidePanel(false);
+    }
+  }
+
+  closeRightPanelWithoutTab() {
+    // A right panel whose tab is no longer offered closes with its tab (segEditorPanelFollow)
+    const state = useViewerSidePanels.getState();
+    const panel = rightPanelWithoutTab({ ...state, rightOptions: this.buttonGroups.right });
+    if (panel) {
+      state.onChangeSidePanel('right', panel);
     }
   }
 

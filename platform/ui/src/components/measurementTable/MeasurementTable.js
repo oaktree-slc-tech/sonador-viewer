@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { ScrollArea } from '@ohif/ui-next';
+import { PanelSection, ScrollArea } from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
 
@@ -252,9 +252,21 @@ const MeasurementTable = ({
         )}
         {getTimepointsHeader()}
       </div>
-      <ScrollArea>
-        <div>{getMeasurementsGroups()}</div>
-      </ScrollArea>
+      {/* The measurement groups (Measurements, Findings, pending) under one collapsible
+          section, the same element the Segmentations panel groups its controls with, with the
+          groups scrolling inside it: room for the other annotation kinds the panel is to hold */}
+      <div className="measurementTableAnnotations">
+        <PanelSection defaultOpen>
+          <PanelSection.Header>
+            <span>{t('Annotations')}</span>
+          </PanelSection.Header>
+          <PanelSection.Content>
+            <ScrollArea className="measurementTableScroll">
+              <div>{getMeasurementsGroups()}</div>
+            </ScrollArea>
+          </PanelSection.Content>
+        </PanelSection>
+      </div>
       <div className="measurementTableFooter">
         {_.get(server, 'perms.upload', false) && saveFunction && savePending && (
           <button onClick={handleSave} className="saveBtn" data-cy="save-measurements-btn">

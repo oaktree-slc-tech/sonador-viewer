@@ -4,7 +4,6 @@ import OHIF from '@ohif/core';
 import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
 import { Enums as vtkEnums } from '@ohif/extension-vtk';
-import { isSTLDisplaySet } from '@ohif/extension-viewerm3d';
 
 import dicomSegmentationPackage from '../package.json';
 
@@ -12,6 +11,7 @@ import SegmentationPanel from './components/SegmentationPanel/SegmentationPanel.
 import commandsModule from './commandsModule.js';
 import getSopClassHandlerModule from './getOHIFDicomSegSopClassHandler.js';
 import init from './init.js';
+import { isSegmentationPanelDisabled } from './segmentationPanelGate.js';
 import toolbarModule from './toolbarModule.js';
 const { studyMetadataManager } = OHIF.utils;
 
@@ -152,59 +152,11 @@ const segmentationExtension = {
           label: 'Segmentations',
           target: 'segmentation-panel',
           stateEvent: SegmentationPanelTabUpdatedEvent,
-          isDisabled: (studies, activeViewport) => {
-            if (!studies) {
-              return true;
-            }
-
-            for (let i = 0; i < studies.length; i++) {
-              const study = studies[i];
-
-              if (study && study.series) {
-                for (let j = 0; j < study.series.length; j++) {
-                  const series = study.series[j];
-
-                  if (series.Modality === 'SEG') {
-                    if (activeViewport) {
-                      const studyMetadata = studyMetadataManager.get(activeViewport.StudyInstanceUID);
-                      if (!studyMetadata) {
-                        return;
-                      }
-                      const referencedDS = studyMetadata.getDerivedDatasets({
-                        referencedSeriesInstanceUID: activeViewport.SeriesInstanceUID,
-                        Modality: 'SEG',
-                      });
-                      triggerSegmentationPanelTabUpdatedEvent({
-                        badgeNumber: referencedDS.length,
-                        target: 'segmentation-panel',
-                      });
-                    }
-                    return false;
-                  }
-                }
-              }
-            }
-
-            // M3D/STL series host the M3D sidebar in this panel, so they enable it without a
-            // DICOM-SEG being present. GLB scenes have no sidebar content and do not enable it —
-            // the STL/GLB distinction lives with the viewerm3d SOP class handler
-            // (isSTLDisplaySet), which resolves it from the display set metadata.
-            for (let i = 0; i < studies.length; i++) {
-              const study = studies[i];
-
-              if (!study || !study.series || !study.series.some((series) => series.Modality === 'M3D')) {
-                continue;
-              }
-
-              const studyMetadata = studyMetadataManager.get(study.StudyInstanceUID);
-              const displaySets = studyMetadata ? studyMetadata.getDisplaySets() : [];
-              if (displaySets.some(isSTLDisplaySet)) {
-                return false;
-              }
-            }
-
-            return true;
-          },
+          // The tab is offered for SEG studies, STL model studies and while the Segmentation
+          // Editor is open (segmentationPanelGate)
+          isDisabled: (studies, activeViewport) => isSegmentationPanelDisabled(studies, activeViewport, {
+            onSegBadge: triggerSegmentationPanelTabUpdatedEvent,
+          }),
         },
       ],
       components: [
