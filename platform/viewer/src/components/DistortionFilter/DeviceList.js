@@ -1,27 +1,25 @@
-import _ from 'lodash';
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import classNames from 'classnames';
+import _ from 'lodash';
 import PropTypes from 'prop-types';
 
 import OHIF, { redux } from '@ohif/core';
-
+import { uiNotificationService } from '@ohif/core';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
+import { ReactComponent as CancelIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 import { ReactComponent as AddCircleIcon } from '@ohif/ui/src/elements/Svg/svgs/add-circle.svg';
 import { ReactComponent as EditIcon } from '@ohif/ui/src/elements/Svg/svgs/edit.svg';
 import { ReactComponent as RemoveIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
-import { ReactComponent as CancelIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 
-import { getDevicelistGroup, createDevice, getDeviceList, removeDevice, updateDevice } from '../../api/distortionFilter';
+import { createDevice, getDeviceList, removeDevice, updateDevice } from '../../api/distortionFilter';
+import GroupSearch from '../GroupSearch/GroupSearch';
 
-import groupSearchStyles from '../../styles/groupSearch.module.scss';
 import globalTableStyles from '../../styles/globalTableStyles.module.scss';
 import settingsPanelTableStyles from '../../styles/settingsPanelTableStyles.module.scss';
 import styles from './DevicesList.module.scss';
-import { uiNotificationService } from '@ohif/core';
 
 
 const headers = [
@@ -34,15 +32,6 @@ const headers = [
 ];
 
 
-const useGroupSearch = (server, searchTerm) => {
-  // Cache function for device list group search
-
-  return useQuery({
-    queryKey: ['deviceList', 'groupSearch', server, searchTerm],
-    queryFn: () => getDevicelistGroup(server, searchTerm),
-  });
-};
-
 
 export default function DeviceList() {
   // Editing component for the Sonador / Distortion Filter Device List.
@@ -52,16 +41,7 @@ export default function DeviceList() {
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
   // Group Search State
-  const [groupSearchTerm, setGroupSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
-  const [showGroupSearchResponse, setShowGroupSearchResponse] = useState(true);
-  const { data: groupSearch = [] } = useGroupSearch(activeServer, groupSearchTerm);
-
-  useEffect(() => {
-    // Clear selected group if activeServer is changed
-    setSelectedGroup(null);
-    setGroupSearchTerm('');
-  }, [activeServer]);
 
   // ACL for the device list
   const [aclDeviceList, setAclDeviceList] = useState(false);
@@ -69,21 +49,6 @@ export default function DeviceList() {
 
   // Save / Cancel State
   const [changesPending, setChangesPending] = useState(false);
-
-  const handleGroupInputChange = async (e) => {
-    // Search for groups
-    
-    setGroupSearchTerm(e.target.value);
-    setSelectedGroup(null);
-  }
-
-  const handleSelectGroup = (group) => {
-    // Set currently selected group and update the input name to the group name
-
-    setSelectedGroup(group);
-    setGroupSearchTerm(group.name);
-    setShowGroupSearchResponse(false);
-  }
 
   const { data: deviceListResponse = [] } = useQuery({
     // Retrieve the device list for the group
@@ -376,7 +341,7 @@ export default function DeviceList() {
 
     <div>
       <div className={styles.header} >
-        <h2 className={styles.tabTitle}>Distortion Filter Device List</h2>
+        <h2 className={styles.tabTitle}>Device Registry</h2>
         {selectedGroup && aclDeviceListModify && (
           <button className={styles.addNewBtn} onClick={addListItem}>
             <AddCircleIcon />
@@ -388,24 +353,7 @@ export default function DeviceList() {
 
     </div>
 
-    {/* Group Search */}
-    <div className={styles.inputGroup}>
-      <label htmlFor="group-search">Select Group</label>
-      <input id="group-search" type="text" value={groupSearchTerm} 
-        onChange={handleGroupInputChange} onFocus={() => setShowGroupSearchResponse(true)}
-        placeholder="Search for group" className={styles.input} />
-
-        {showGroupSearchResponse && groupSearch.length > 0 && (
-          <ul className={groupSearchStyles.dropdown}>
-            {groupSearch.map((group) => (
-              <li key={group.id} className={groupSearchStyles.dropdownItem} 
-                onClick={() => handleSelectGroup(group)}>
-                {group.name}
-              </li>
-            ))}
-          </ul>
-        )}
-    </div>
+    <GroupSearch server={activeServer} filter={{ devices_list: true }} value={selectedGroup} onChange={setSelectedGroup} />
 
     {selectedGroup && aclDeviceList && (
         <>        

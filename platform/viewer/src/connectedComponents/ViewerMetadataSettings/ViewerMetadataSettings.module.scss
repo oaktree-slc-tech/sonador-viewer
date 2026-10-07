@@ -27,7 +27,9 @@
 .blocks {
   display: flex;
   background-color: transparent;
-  padding: 20px;
+  // No horizontal padding: the corner blocks share the section's left edge with its heading and
+  // divider, like every other Settings page.
+  padding: 20px 0;
   gap: 16px;
   overflow: auto;
   border-radius: 8px;
@@ -141,4 +143,8 @@
   .deleteIcon {
     cursor: pointer;
   }
+}
+
+.tabs {
+  flex: 1;
 }

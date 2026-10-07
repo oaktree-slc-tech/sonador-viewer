@@ -22,3 +22,40 @@
 	background-color: #f0f0f0;
 	color: black;
 }
+// Search box shared by the group-scoped settings editors (components/GroupSearch).
+.inputGroup {
+	position: relative;
+	margin-top: 1rem;
+	margin-bottom: 20px;
+
+	label {
+		display: block;
+		margin-bottom: 6px;
+		color: #fff;
+	}
+
+	.input {
+		width: 100%;
+		padding: 8px;
+		font-size: 1rem;
+	}
+}
+
+.dropdownItem {
+	padding: 0;
+}
+
+.dropdownBtn {
+	all: unset;
+	display: block;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 8px;
+	cursor: pointer;
+	color: inherit;
+
+	&:focus-visible {
+		outline: 1px solid #a6cdf5;
+		outline-offset: -1px;
+	}
+}

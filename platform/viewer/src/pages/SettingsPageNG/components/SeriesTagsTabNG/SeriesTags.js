@@ -1,3 +1,5 @@
+import _ from 'lodash';
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
@@ -5,20 +7,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
 
 import OHIF, { redux, sonador } from '@ohif/core';
-
+import { uiNotificationService } from '@ohif/core';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
+import { ReactComponent as CancelIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 import { ReactComponent as AddCircleIcon } from '@ohif/ui/src/elements/Svg/svgs/add-circle.svg';
 import { ReactComponent as EditIcon } from '@ohif/ui/src/elements/Svg/svgs/edit.svg';
 import { ReactComponent as RemoveIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
-import { ReactComponent as CancelIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 
-import { getSeriesTagGroup, getTagList, createSeriesTag, updateSeriesTag, removeSeriesTag } from '../../../../api/ext';
+import { createSeriesTag, getTagList, removeSeriesTag,updateSeriesTag } from '../../../../api/ext';
+import GroupSearch from '../../../../components/GroupSearch/GroupSearch';
 
-import groupSearchStyles from '../../../../styles/groupSearch.module.scss';
 import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import settingsPanelTableStyles from '../../../../styles/settingsPanelTableStyles.module.scss';
 import styles from './SeriesTags.module.scss';
-import { uiNotificationService } from '@ohif/core';
 
 
 const headers = [
@@ -27,15 +28,6 @@ const headers = [
   { label: 'Scheme Designator', id: 'scheme-designator' },
   { label: 'Scheme Version', id: 'scheme-version' },  
 ];
-
-const useGroupSearch = (server, searchTerm) => {
-  // Cache function for tag group search
-
-  return useQuery({
-    queryKey: ['tags', 'groupSearch', server, searchTerm],
-    queryFn: () => getSeriesTagGroup(server, searchTerm),
-  });
-}
 
 
 export default function SeriesTagsTabNG() {
@@ -46,16 +38,7 @@ export default function SeriesTagsTabNG() {
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
   // Group Search State
-  const [groupSearchTerm, setGroupSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(null);
-  const [showGroupSearchResponse, setShowGroupSearchResponse] = useState(true);
-  const { data: groupSearch = [] } = useGroupSearch(activeServer, groupSearchTerm);
-
-  useEffect(() => {
-    // Clear selected group if activeServer is changed
-    setSelectedGroup(null);
-    setGroupSearchTerm('');
-  }, [activeServer])
 
   // ACL for the tag list
   const [aclTag, setAclTag] = useState(false);
@@ -63,21 +46,6 @@ export default function SeriesTagsTabNG() {
 
   // Save / Cancel state
   const [changesPending, setChangesPending] = useState(false);
-
-  const handleGroupInputChange = async (e) => {
-    // Search for groups
-    
-    setGroupSearchTerm(e.target.value);
-    setSelectedGroup(null);
-  }
-
-  const handleSelectGroup = (group) => {
-    // Set currently selected group and update the input name to the group name
-
-    setSelectedGroup(group);
-    setGroupSearchTerm(group.name);
-    setShowGroupSearchResponse(false);
-  }
 
   const { data: tagResponse = [] } = useQuery({
     // Retrieve the tag list for the group
@@ -367,24 +335,7 @@ export default function SeriesTagsTabNG() {
 
     </div>
 
-    {/* Group Search */}
-    <div className={styles.inputGroup}>
-      <label htmlFor="group-search">Select Group</label>
-      <input id="group-search" type="text" value={groupSearchTerm} 
-        onChange={handleGroupInputChange} onFocus={() => setShowGroupSearchResponse(true)}
-        placeholder="Search for group" className={styles.input} />
-
-        {showGroupSearchResponse && groupSearch.length > 0 && (
-          <ul className={groupSearchStyles.dropdown}>
-            {groupSearch.map((group) => (
-              <li key={group.id} className={groupSearchStyles.dropdownItem} 
-                  onClick={() => handleSelectGroup(group)}>
-                {group.name}
-              </li>
-            ))}
-          </ul>
-        )}
-    </div>
+    <GroupSearch server={activeServer} filter={{ tag: true }} value={selectedGroup} onChange={setSelectedGroup} />
 
     {selectedGroup && aclTag && (
       <>

@@ -1,0 +1,189 @@
+// Display Attributes editor. Controls follow the Settings page conventions (labels as in
+// GeneralTabNG, text fields as in HotkeyFieldNG, the add button as in Series Tags); the viewport
+// palette is reserved for the Viewport Display tab.
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  row-gap: 16px;
+  color: #ffffff;
+}
+
+.empty {
+  color: #d3d3d3;
+  font-size: 16px;
+  margin: 12px 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px;
+  min-width: 0;
+
+  span {
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #d3d3d3;
+  }
+
+  input {
+    height: 42px;
+    padding: 10px 12px;
+    border: 1px solid #60646d;
+    border-radius: 5px;
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #ffffff;
+    background: none;
+    outline: none;
+
+    &:hover,
+    &:focus {
+      border-color: #ffffff;
+    }
+
+    &::placeholder {
+      color: #89898b;
+    }
+  }
+}
+
+.addRow {
+  display: flex;
+  column-gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
+.search {
+  position: relative;
+  flex: 1 1 320px;
+}
+
+.matches {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #000000;
+
+  li {
+    padding: 0;
+  }
+
+  // The shared dropdown row turns light on hover; both lines of the match must darken with it.
+  // Each span is coloured explicitly so neither depends on what the button inherits.
+  .matchBtn > span {
+    color: #ffffff;
+  }
+
+  li:hover .matchBtn,
+  li:hover .matchBtn > span,
+  li:hover .meta,
+  .matchBtn:focus-visible,
+  .matchBtn:focus-visible > span,
+  .matchBtn:focus-visible .meta {
+    color: #1e1f23;
+  }
+
+  .matchBtn:focus-visible {
+    background-color: #f0f0f0;
+  }
+}
+
+.matchBtn {
+  all: unset;
+  display: flex;
+  justify-content: space-between;
+  column-gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  cursor: pointer;
+  color: inherit;
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 1px solid #ffffff;
+    outline-offset: -1px;
+  }
+}
+
+.matches .matchBtn > .meta {
+  color: #89898b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.taken {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.addBtn {
+  all: unset;
+  background-color: #58bc82;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  column-gap: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #ffffff;
+  padding: 11px 12px;
+  cursor: pointer;
+  font-weight: 600;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+
+  :where(table) {
+    width: 100%;
+  }
+}
+
+.confirm {
+  padding: 20px;
+  text-align: center;
+  color: #ffffff;
+
+  p {
+    margin: 0 0 20px;
+  }
+}
+
+.confirmActions {
+  display: flex;
+  column-gap: 10px;
+  justify-content: center;
+}
+
+.cancelBtn,
+.removeBtn {
+  all: unset;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.cancelBtn {
+  background-color: #89898b;
+}
+
+.removeBtn {
+  background-color: #dc3545;
+}

@@ -1,17 +1,17 @@
 // The Cornerstone Tools extension provides the core components of the OHIF viewer
 // including the primary toolbar, core overlays, and interaction for the viewer.
-import _ from 'lodash';
-
 import cornerstone from 'cornerstone-core';
 import cornerstoneTools from 'cornerstone-tools';
+import _ from 'lodash';
 
 import OHIF from '@ohif/core';
-import { workflow, SaveDicomSeriesDialog } from '@ohif/ui';
+import { useDicomHeadersOverlayStore } from '@ohif/sonador-viewer/src/store/useDicomHeadersOverlay';
+import { SaveDicomSeriesDialog,workflow } from '@ohif/ui';
 
+import cornerstoneToolEnums from './tools/constants/toolNames.js';
 import setCornerstoneLayout from './utils/setCornerstoneLayout';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import { getEnabledElement } from './state';
-import cornerstoneToolEnums from './tools/constants/toolNames.js';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
@@ -33,6 +33,11 @@ const { setViewportSpecificData } = OHIF.redux.actions;
 const commandsModule = ({ commandsManager, servicesManager }) => {
 
   const actions = {
+
+    toggleOverlay() {
+      // Show or hide the viewport overlay (corner metadata) for every viewport.
+      useDicomHeadersOverlayStore.getState().toggleShowOverlay();
+    },
 
     getCornerstoneEnabledElement({ viewports }) {
       // Retrieve active/active Cornerstone element for the currently active viewport.
@@ -791,6 +796,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     resetViewport: {
       commandFn: actions.resetViewport,
       storeContexts: ['viewports'],
+      options: {},
+    },
+    toggleOverlay: {
+      commandFn: actions.toggleOverlay,
+      storeContexts: [],
       options: {},
     },
     seriesTagDialog: {

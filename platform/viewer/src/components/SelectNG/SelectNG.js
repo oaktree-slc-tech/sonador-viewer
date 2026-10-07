@@ -42,16 +42,26 @@ export default function SelectNG({ options = [], selected = {}, onChange }) {
         <FloatingFocusManager context={context} modal={false}>
           <ul ref={refs.setFloating} style={floatingStyles} {...getFloatingProps()} className={styles.list}>
             {options.map((item) => {
+              if (item.heading) {
+                return (
+                  <li key={`heading:${item.heading}`} className={styles.heading} aria-hidden="true">
+                    {item.heading}
+                  </li>
+                );
+              }
+
               return (
-                <li
-                  key={item.value}
-                  onClick={() => {
-                    onChange(item);
-                    setIsOpen(false);
-                  }}
-                  className={styles.item}
-                >
-                  {item.title}
+                <li key={item.value} className={styles.item}>
+                  <button
+                    type="button"
+                    className={styles.itemBtn}
+                    onClick={() => {
+                      onChange(item);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {item.title}
+                  </button>
                 </li>
               );
             })}

@@ -17,22 +17,21 @@
 // the locally cached state (localStorage / zustand persist / redux) in effect -- it must be a
 // no-op on error, never a crash or an error dialog.
 
+import { DownloadManagerService, redux, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
 import i18n from '@ohif/i18n';
-import { redux, DownloadManagerService, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
 
+import { getUserPreferences } from '../api/preferences';
 import {
   ARCHIVE_TRANSFER_DEFAULT,
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
-  RETRY_ATTEMPTS_PREFERENCE_KEY,
-  PREFERENCES_VERSION,
-  PREFERENCE_SECTIONS,
   PREFERENCE_SECTION_PATHS,
+  PREFERENCE_SECTIONS,
+  PREFERENCES_VERSION,
+  RETRY_ATTEMPTS_PREFERENCE_KEY,
   STUDYLIST_INTERFACE_KEYS,
   STUDYLIST_INTERFACE_STORE_KEYS,
   studylistQueueKey,
 } from '../constants/preferences';
-
-import { getUserPreferences } from '../api/preferences';
 import {
   resetGeneralHydrationForTests,
   settleGeneralHydration,
@@ -47,16 +46,15 @@ import {
   submitPreferenceWrite,
 } from '../lib/preferenceWriteQueue';
 import {
+  setStudylistSyncHydrating,
+  startStudylistPreferenceSync,
+} from '../lib/studylistPreferenceSync';
+import {
   RESOLVED_FROM_CURRENT,
   RESOLVED_FROM_DEFAULTS,
   resolveSection,
   resolveStudylistInterfaces,
 } from '../lib/userPreferences';
-import {
-  setStudylistSyncHydrating,
-  startStudylistPreferenceSync,
-} from '../lib/studylistPreferenceSync';
-
 import { useStudiesTableFiltersAndColumnsStore } from '../store/useStudiesTableFiltersAndColumnsStore';
 import { useViewerMetadataSettingsStore } from '../store/useViewerMetadataSettingsStore';
 
@@ -110,6 +108,9 @@ const applyHotkeys = (values) => {
   if (!hotkeysManager) {
     return;
   }
+  // Defaults first so a default added since the user last saved still appears; the cloud
+  // values then take precedence binding by binding.
+  hotkeysManager.setHotkeys(hotkeysManager.hotkeyDefaults);
   hotkeysManager.setHotkeys(values);
   // Cloud values overwrite the local cache on successful load (AR-5) -- the same key
   // _initHotkeys reads before authentication.

@@ -1,69 +1,58 @@
 import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-
-import { Provider } from 'react-redux';
 import { I18nextProvider } from 'react-i18next';
-
+import { Provider } from 'react-redux';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import PropTypes from 'prop-types';
 import { OidcProvider } from 'redux-oidc';
 
 import {
+  ArchiveDownloadService,
   CommandsManager,
+  CustomizationService,
+  DicomMetadataStore,
+  DisplaySetService,
+  DownloadManagerService,
   ExtensionManager,
   HotkeysManager,
-  ServicesManager,
-  
+  LocalCacheService,
   LoggerService,
-  DicomMetadataStore,
   MeasurementService,
-  DisplaySetService,
-  CustomizationService,
+  NotificationLogService,
+  ServicesManager,
+  startArchiveNotifications,
+  startDownloadNotifications,
+  SystemContextProvider,
+  ToolbarService,
   UIDialogService,
   UIModalService,
   UINotificationService,
-  NotificationLogService,
-  ViewportGridService,
-  ToolbarService,
-  LocalCacheService,
-  DownloadManagerService,
-  ArchiveDownloadService,
-  startDownloadNotifications,
-  startArchiveNotifications,
-
-  SystemContextProvider,
-  
   utils,
+  ViewportGridService,
 } from '@ohif/core';
 import OHIFCornerstoneExtension, { createDicomLocalApi } from '@ohif/extension-cornerstone';
-
 import i18n from '@ohif/i18n';
 import { DialogProvider, LoggerProvider, ModalProvider, OHIFModal } from '@ohif/ui';
-import { NotificationProvider } from '@ohif/ui-next';
 import ErrorBoundaryNG from '@ohif/ui/src/components/ErrorBoudaryNG/ErrorBoundaryNG';
+import { NotificationProvider } from '@ohif/ui-next';
 
 import { AppProvider, CONTEXTS, useAppContext } from './context/AppContext';
 import UserManagerContext from './context/UserManagerContext';
-
 /** Contexts */
 import WhiteLabelingContext from './context/WhiteLabelingContext';
-
 /** State Management: Redux, Services, and UI Stores */
 import { initDataServiceIntegration } from './init/initDataIntegrations.js';
 import { initViewportGridService } from './init/initViewportGridService.js';
+import { viewportScopeGuard } from './lib/hotkeyScopes';
 import { getActiveContexts } from './store/layout/selectors';
-
 /** Extensions */
 import { GenericViewerCommands, MeasurementsPanel } from './appExtensions';
-
 // TODO: This should not be here
 //import './config';
 import { setConfiguration } from './config';
-
 /** Viewer */
 import OHIFStandaloneViewer from './OHIFStandaloneViewer';
 import { createViewerStore } from './store';
-
 /** Utils */
 import { getUserManagerForOpenIdConnectClient } from './utils';
 
@@ -369,12 +358,13 @@ function _initHotkeys(appConfigHotkeys) {
   // TODO: Mozilla has a special library for this
   const userPreferredHotkeys = JSON.parse(localStorage.getItem('hotkey-definitions') || '{}');
 
-  // TODO: hotkeysManager.isValidDefinitionObject(/* */)
-  const hasUserPreferences = userPreferredHotkeys && Object.keys(userPreferredHotkeys).length > 0;
-  if (hasUserPreferences) {
+  hotkeysManager.setScopeGuard('viewport', viewportScopeGuard);
+
+  // Defaults first, then the stored customisations over them: a binding the user changed keeps
+  // their keys, and a default added since they last saved still appears.
+  hotkeysManager.setHotkeys(appConfigHotkeys);
+  if (userPreferredHotkeys && Object.keys(userPreferredHotkeys).length > 0) {
     hotkeysManager.setHotkeys(userPreferredHotkeys);
-  } else {
-    hotkeysManager.setHotkeys(appConfigHotkeys);
   }
 
   hotkeysManager.setDefaultHotKeys(appConfigHotkeys);

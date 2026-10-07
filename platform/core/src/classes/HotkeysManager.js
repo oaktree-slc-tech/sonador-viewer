@@ -8,6 +8,8 @@ import hotkeys from './../utils/hotkeys';
  * @property {String} commandName - Command to call
  * @property {String} label - Display name for hotkey
  * @property {String[]} keys - Keys to bind; Follows Mousetrap.js binding syntax
+ * @property {String} [scope] - Name of a scope guard registered with `setScopeGuard`; the
+ *   command runs only while the guard allows it
  */
 
 export class HotkeysManager {
@@ -15,6 +17,7 @@ export class HotkeysManager {
     this.hotkeyDefinitions = {};
     this.hotkeyDefaults = [];
     this.isEnabled = true;
+    this._scopeGuards = {};
 
     if (!commandsManager) {
       log.warn(
@@ -50,6 +53,17 @@ export class HotkeysManager {
   enable() {
     this.isEnabled = true;
     hotkeys.unpause();
+  }
+
+  /**
+   * Registers the predicate for a hotkey scope. A definition carrying that `scope` dispatches
+   * only when `guard(event)` returns true; otherwise the keypress is left to the browser.
+   *
+   * @param {String} scope
+   * @param {function(KeyboardEvent): boolean} guard
+   */
+  setScopeGuard(scope, guard) {
+    this._scopeGuards[scope] = guard;
   }
 
   /**
@@ -146,7 +160,7 @@ export class HotkeysManager {
    * @param {String} extension
    * @returns {undefined}
    */
-  registerHotkeys({ commandName, keys, label } = {}, extension) {
+  registerHotkeys({ commandName, keys, label, scope } = {}, extension) {
     if (!commandName) {
       log.warn(`No command was defined for hotkey "${keys}"`);
       return;
@@ -160,9 +174,12 @@ export class HotkeysManager {
       log.info(`Unbinding ${commandName} from ${previouslyRegisteredKeys}`);
     }
 
+    // A stored customisation carries keys and label only; the scope comes from the default.
+    const effectiveScope = scope || (previouslyRegisteredDefinition && previouslyRegisteredDefinition.scope);
+
     // Set definition & bind
-    this.hotkeyDefinitions[commandName] = { keys, label };
-    this._bindHotkeys(commandName, keys);
+    this.hotkeyDefinitions[commandName] = effectiveScope ? { keys, label, scope: effectiveScope } : { keys, label };
+    this._bindHotkeys(commandName, keys, effectiveScope);
     log.info(`Binding ${commandName} to ${keys}`);
   }
 
@@ -190,9 +207,10 @@ export class HotkeysManager {
    * @private
    * @param {string} commandName - The name of the command to trigger when hotkeys are used
    * @param {string[]} keys - One or more key combinations that should trigger command
+   * @param {string} [scope] - Scope guard that must allow the event before the command runs
    * @returns {undefined}
    */
-  _bindHotkeys(commandName, keys) {
+  _bindHotkeys(commandName, keys, scope) {
     const isKeyDefined = keys === '' || keys === undefined;
     if (isKeyDefined) {
       return;
@@ -202,6 +220,11 @@ export class HotkeysManager {
     const combinedKeys = isKeyArray ? keys.join('+') : keys;
 
     hotkeys.bind(combinedKeys, (evt) => {
+      const guard = scope && this._scopeGuards[scope];
+      if (guard && !guard(evt)) {
+        return;
+      }
+
       evt.preventDefault();
       evt.stopPropagation();
       this._commandsManager.runCommand(commandName, { evt });
