@@ -12,29 +12,30 @@ import { useSelector } from 'react-redux';
 import PropTypes from 'prop-types';
 
 import OHIF, {
-  redux,
-  LocalCacheService,
+  clearOfflineStorageWithNotice,
   DownloadManagerService,
   JOB_STATES,
-  TRANSFER_MODES,
+  LocalCacheService,
+  redux,
   SERIES_TRANSFER_STATES,
-  clearOfflineStorageWithNotice,
+  TRANSFER_MODES,
 } from '@ohif/core';
-import { useDebounce, Icon } from '@ohif/ui';
+import { Icon,useDebounce } from '@ohif/ui';
+import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
+import { ReactComponent as RefreshIcon } from '@ohif/ui/src/elements/Svg/svgs/refresh.svg';
+import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 import {
   Popover,
   PopoverTrigger,
   Tooltip,
-  TooltipTrigger,
   TooltipContent,
   TooltipProvider,
+  TooltipTrigger,
 } from '@ohif/ui-next';
-import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
-import { ReactComponent as RefreshIcon } from '@ohif/ui/src/elements/Svg/svgs/refresh.svg';
-import { ReactComponent as SearchIcon } from '@ohif/ui/src/elements/Svg/svgs/search.svg';
 
-import StudyOfflineDetailsCard from '../StudyOfflineDetailsCard/StudyOfflineDetailsCard';
+import TabsNG from '../../../../TabsNG/TabsNG';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
+import StudyOfflineDetailsCard from '../StudyOfflineDetailsCard/StudyOfflineDetailsCard';
 
 import styles from './DownloadManagerModal.module.scss';
 
@@ -433,23 +434,14 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
       onClose={onClose}
       classes={{ content: styles.modal }}
     >
-      <div className={styles.tabs}>
-        <button
-          type="button"
-          className={activeTab === TABS.ACTIVE ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab(TABS.ACTIVE)}
-        >
-          {t('Active Transfers')}
-        </button>
-        <button
-          type="button"
-          className={activeTab === TABS.STORED ? styles.tabActive : styles.tab}
-          onClick={() => setActiveTab(TABS.STORED)}
-          data-cy="offline-studies-tab"
-        >
-          {t('Offline Studies')}
-        </button>
-      </div>
+      <TabsNG value={activeTab} onValueChange={setActiveTab}>
+        <TabsNG.List>
+          <TabsNG.Trigger value={TABS.ACTIVE}>{t('Active Transfers')}</TabsNG.Trigger>
+          <TabsNG.Trigger value={TABS.STORED} data-cy="offline-studies-tab">
+            {t('Offline Studies')}
+          </TabsNG.Trigger>
+        </TabsNG.List>
+      </TabsNG>
 
       <div className={styles.searchRow}>
         <div className={styles.searchBox}>

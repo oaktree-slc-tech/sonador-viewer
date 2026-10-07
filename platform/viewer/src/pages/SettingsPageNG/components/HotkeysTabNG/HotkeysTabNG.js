@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
+import { uiNotificationService } from '@ohif/core';
 
 import { hotkeysManager } from '../../../../App';
-import { useUserPreferences } from '../../../../queries/preferences';
+import { PREFERENCE_SECTIONS,PREFERENCES_VERSION } from '../../../../constants/preferences';
+import { useUpdateUserPreferenceSection } from '../../../../queries/preferences';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import HotkeyFieldNG from '../HotkeyFieldNG/HotkeyFieldNG';
 import TabFooterNG from '../TabFooterNG/TabFooterNG';
@@ -13,7 +15,6 @@ import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 import { getInitialState, splitHotkeys, validateCommandKey } from './logic';
 
 import styles from './HotkeysTabNG.module.scss';
-import { uiNotificationService } from '@ohif/core';
 
 export default function HotkeysTabNG() {
   const { t } = useTranslation('UserPreferencesModal');
@@ -23,8 +24,7 @@ export default function HotkeysTabNG() {
 
   const { isDesktop } = useDeviceStore();
 
-  // TODO use prefences fetched from api
-  const { data: userPreferences } = useUserPreferences()
+  const { mutate: saveHotkeysSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.HOTKEYS);
 
   const onReset = () => {
     const defaultHotKeyDefinitions = {};
@@ -44,10 +44,29 @@ export default function HotkeysTabNG() {
 
     localStorage.setItem('hotkey-definitions', JSON.stringify(hotkeys));
 
-    uiNotificationService.show({
-      message: t('SaveMessage'),
-      type: 'success',
-    });
+    // The preference section carries keys and label only; a binding's scope stays with its
+    // default definition.
+    const values = Object.fromEntries(
+      Object.entries(hotkeys).map(([commandName, { keys, label }]) => [commandName, { keys, label }])
+    );
+
+    saveHotkeysSection(
+      { version: PREFERENCES_VERSION, values },
+      {
+        onSuccess: ({ outcome }) => {
+          if (outcome === 'saved') {
+            uiNotificationService.show({ message: t('SaveMessage'), type: 'success' });
+          } else if (outcome === 'queued') {
+            uiNotificationService.show({ title: 'Hotkeys saved locally', message: 'They will sync when reconnected.', type: 'info' });
+          } else {
+            uiNotificationService.show({ title: 'Failed to save hotkeys', message: 'The server rejected the change; they were kept locally.', type: 'error' });
+          }
+        },
+        onError: (error) => {
+          uiNotificationService.show({ title: 'Failed to save hotkeys', message: error.message, type: 'error' });
+        },
+      }
+    );
   };
 
   /**

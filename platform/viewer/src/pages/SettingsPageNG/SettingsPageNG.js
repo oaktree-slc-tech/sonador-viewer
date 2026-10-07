@@ -29,7 +29,7 @@ const TOP_TABS = [
   { id: 'hotkeys', label: 'Hotkeys', perm: null, },
   { id: 'window-level', label: 'Window Level', perm: null, },
   { id: 'about', label: 'About', 'perm': null, },
-  { id: 'distortion-filter', label: 'Distortion Filter', perm: 'devices_list', },
+  { id: 'distortion-filter', label: 'Device Registry', perm: 'devices_list', },
   { id: 'series-tags', label: 'Series Tags', perm: 'tag', },
   { id: 'viewer-metadata', label: 'Viewer Metadata', perm: null, },
 ];

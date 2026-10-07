@@ -6,7 +6,7 @@ export const useViewerMetadataSettingsStore = create(
     (set) => ({
       topLeftCorner: [
         { title: 'Patient Name', value: 'patientName' },
-        { title: 'Patient Id', value: 'patientId' },
+        { title: 'Patient ID', value: 'patientId' },
       ],
       topRightCorner: [
         { title: 'Study Description', value: 'studyDescription' },

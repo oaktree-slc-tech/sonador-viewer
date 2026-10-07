@@ -1,24 +1,27 @@
-import React, { Fragment, memo, useEffect, useState } from 'react';
+import React, { memo } from 'react';
 import classNames from 'classnames';
 import cornerstone from 'cornerstone-core';
 import PropTypes from 'prop-types';
 
+import { DicomMetadataStore } from '@ohif/core';
 import { useDicomHeadersOverlayStore } from '@ohif/sonador-viewer/src/store/useDicomHeadersOverlay';
 import { useViewerMetadataSettingsStore } from '@ohif/sonador-viewer/src/store/useViewerMetadataSettingsStore';
 import { OverlayTrigger } from '@ohif/ui/src/components/overlayTrigger';
 import { Tooltip } from '@ohif/ui/src/components/tooltip';
 import { Icon } from '@ohif/ui/src/elements/Icon';
 
-import {
-  formatDICOMDate,
-  formatDICOMTime,
-  formatNumberPrecision,
-  formatPN,
-  getCompression,
-  isValidNumber,
-} from '../utils/formatStudy';
+import { buildOverlayContext, resolveOverlayItem } from '../utils/overlayFields/resolvers';
 
 import './OHIFCornerstoneViewportOverlay.css';
+
+function getSeriesInstances(instance) {
+  if (!instance) {
+    return null;
+  }
+
+  const series = DicomMetadataStore.getSeries(instance.StudyInstanceUID, instance.SeriesInstanceUID);
+  return series ? series.instances : null;
+}
 
 function OHIFCornerstoneViewportOverlay({
   imageId,
@@ -32,20 +35,8 @@ function OHIFCornerstoneViewportOverlay({
 }) {
   const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = useViewerMetadataSettingsStore();
 
-  const { showOverlay, toggleShowOverlay } = useDicomHeadersOverlayStore()
-
-  // on shift + space toggle overlay
-  useEffect(() => {
-    const handleKeyDown = (e ) => {
-      if (e.key === ' ' && e.shiftKey) {
-        e.preventDefault();
-        toggleShowOverlay();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // Toggled by the `toggleOverlay` command (Settings > Hotkeys), not by a listener here.
+  const { showOverlay } = useDicomHeadersOverlayStore();
 
   if (!imageId) {
     return null;
@@ -55,31 +46,27 @@ function OHIFCornerstoneViewportOverlay({
     return  null
   }
 
-  const zoomPercentage = formatNumberPrecision(scale * 100, 0);
-  const seriesMetadata = cornerstone.metaData.get('generalSeriesModule', imageId) || {};
+  const ctx = buildOverlayContext(
+    { imageId, scale, windowWidth, windowCenter, imageIndex, stackSize },
+    { metaData: cornerstone.metaData, getSeriesInstances }
+  );
+  const { seriesNumber } = ctx.modules.generalSeriesModule;
 
-  const imagePlaneModule = cornerstone.metaData.get('imagePlaneModule', imageId) || {};
-  const { rows, columns, sliceThickness, sliceLocation } = imagePlaneModule;
-  const { seriesNumber, seriesDescription, modality, seriesInstanceUID, studyInstanceUID } = seriesMetadata;
+  const renderCorner = items =>
+    items.map((item, index) => {
+      const resolved = resolveOverlayItem(item, ctx);
+      if (!resolved) {
+        return null;
+      }
 
-  const generalStudyModule = cornerstone.metaData.get('generalStudyModule', imageId) || {};
-  const { studyDate, studyTime, studyDescription, accessionNumber } = generalStudyModule;
-
-  const patientModule = cornerstone.metaData.get('patientModule', imageId) || {};
-  const { patientId, patientName } = patientModule;
-
-  const generalImageModule = cornerstone.metaData.get('generalImageModule', imageId) || {};
-  const { instanceNumber } = generalImageModule;
-
-  const cineModule = cornerstone.metaData.get('cineModule', imageId) || {};
-  const { frameTime } = cineModule;
-
-  const frameRate = formatNumberPrecision(1000 / frameTime, 1);
-  const compression = getCompression(imageId);
-  const wwwc = `W: ${windowWidth.toFixed ? windowWidth.toFixed(0) : windowWidth} L: ${
-    windowWidth.toFixed ? windowCenter.toFixed(0) : windowCenter
-  }`;
-  const imageDimensions = `${columns} x ${rows}`;
+      return (
+        <div key={index} className={resolved.className}>
+          {resolved.lines.map((line, lineIndex) => (
+            <div key={lineIndex}>{line}</div>
+          ))}
+        </div>
+      );
+    });
 
   const inconsistencyWarningsOn = inconsistencyWarnings && inconsistencyWarnings.length !== 0;
   const getWarningContent = (warningList) => {
@@ -170,55 +157,16 @@ function OHIFCornerstoneViewportOverlay({
     return SRLabels.length !== 0 ? getSRLabelsContent(SRLabels) : null;
   };
 
-  const elements = {
-    patientName: <div>{formatPN(patientName)}</div>,
-    patientId: <div>{patientId}</div>,
-    studyDescription: <div>{studyDescription}</div>,
-    'studyDate-studyTime': (
-      <div>
-        {formatDICOMDate(studyDate)} {formatDICOMTime(studyTime)}
-      </div>
-    ),
-    seriesNumber: <div>{seriesNumber >= 0 ? `Ser: ${seriesNumber}` : ''}</div>,
-    'Img-instance-number-index-stack-size': (
-      <div>{stackSize > 1 ? `Img: ${instanceNumber} ${imageIndex}/${stackSize}` : ''}</div>
-    ),
-    'frameRate-image-info': (
-      <div>
-        {frameRate >= 0 ? `${formatNumberPrecision(frameRate, 2)} FPS` : ''}
-        <div>{imageDimensions}</div>
-        <div>
-          {isValidNumber(sliceLocation) ? `Loc: ${formatNumberPrecision(sliceLocation, 2)} mm ` : ''}
-          {sliceThickness ? `Thick: ${formatNumberPrecision(sliceThickness, 2)} mm` : ''}
-        </div>
-        <div>{seriesDescription}</div>
-      </div>
-    ),
-    zoomPercentage: <div>Zoom: {zoomPercentage}%</div>,
-    wwwc: <div>{wwwc}</div>,
-    compression: <div className="compressionIndicator">{compression}</div>,
-    modality: <div>Modality: {modality}</div>,
-    seriesInstanceUID: seriesInstanceUID ? <div>Series Instance UID: {seriesInstanceUID}</div> : null,
-    studyInstanceUID: studyInstanceUID ? <div>Study Instance UID: {studyInstanceUID}</div> : null,
-    accessionNumber: accessionNumber ? <div>Accession Number: {accessionNumber}</div> : null,
-  };
-
   return (
     <div className="OHIFCornerstoneViewportOverlay">
       <div className="top-left overlay-element">
-        {topLeftCorner.map(({ value }, index) => {
-          return <Fragment key={index}>{elements[value]}</Fragment>;
-        })}
+        {renderCorner(topLeftCorner)}
       </div>
       <div className="top-right overlay-element">
-        {topRightCorner.map(({ value }, index) => {
-          return <Fragment key={index}>{elements[value]}</Fragment>;
-        })}
+        {renderCorner(topRightCorner)}
       </div>
       <div className="bottom-right overlay-element">
-        {bottomRightCorner.map(({ value }, index) => {
-          return <Fragment key={index}>{elements[value]}</Fragment>;
-        })}
+        {renderCorner(bottomRightCorner)}
       </div>
       <div className="bottom-left2 warning">
         <div>{inconsistencyWarningsOn ? getWarningInfo(seriesNumber, inconsistencyWarnings) : ''}</div>
@@ -227,9 +175,7 @@ function OHIFCornerstoneViewportOverlay({
         <div>{SRLabelsOn ? getSRLabelsInfo(SRLabels) : ''}</div>
       </div>
       <div className="bottom-left overlay-element">
-        {bottomLeftCorner.map(({ value }, index) => {
-          return <Fragment key={index}>{elements[value]}</Fragment>;
-        })}
+        {renderCorner(bottomLeftCorner)}
       </div>
     </div>
   );
