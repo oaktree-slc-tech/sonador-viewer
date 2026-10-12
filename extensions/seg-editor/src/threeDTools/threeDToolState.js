@@ -4,26 +4,106 @@
 // commands and evaluators write and read it, and the canvas (SegEditorSurfaceView) follows it and
 // publishes its target and selection back.
 
+// The 3D selection tools: both build the same triangle selection of the target segment's
+// surface, with a lasso (or box) drawn over the view, or a brush painted on the surface
 export const THREE_D_TOOLS = {
-  Selection: 'Selection',
+  Lasso: 'Lasso',
+  Paint: 'Paint',
 };
 
-// Removal depth of the Selection tool's delete (mm): the segment's voxels within this distance of
-// the removed points are removed too
+/** Whether a 3D tool is one of the selection tools (the selection is kept between them). */
+export function is3DSelectionTool(toolName) {
+  return toolName === THREE_D_TOOLS.Lasso || toolName === THREE_D_TOOLS.Paint;
+}
+
+// Removal depth of the Selection tool's delete (surface units): the segment's voxels within this
+// distance of the removed points are removed too
 export const REMOVAL_DEPTH = { min: 0, max: 20, step: 0.5, default: 2 };
+
+// Brush radius of the Paint selector (surface units)
+export const PAINT_RADIUS = { min: 0.5, max: 50, step: 0.5, default: 5 };
+
+// Smooth: the Laplacian step per pass, and the number of passes (ohif-viewers#148, FR-8)
+export const SMOOTH_STRENGTH = { min: 0.1, max: 0.9, step: 0.025, default: 0.5 };
+export const SMOOTH_PASSES = { min: 1, max: 10, step: 1, default: 3 };
+
+// The lasso's shape: drawn freehand, or a box dragged out
+export const LASSO_SHAPES = {
+  lasso: 'lasso',
+  box: 'box',
+};
+
+// What a paint stroke does: selects faces, or erases them from the selection
+export const PAINT_MODES = {
+  paint: 'paint',
+  erase: 'erase',
+};
+
+// The action card shown under the tool: one at a time
+export const SELECTION_ACTIONS = {
+  remove: 'remove',
+  smooth: 'smooth',
+  repair: 'repair',
+};
+
+// Selection tool settings kept across editor sessions, with their allowed values
+export const EDIT_SETTINGS = {
+  removalDepth: { default: REMOVAL_DEPTH.default },
+  // The lasso: freehand or a box (LASSO_SHAPES)
+  lassoShape: { default: LASSO_SHAPES.lasso, values: Object.values(LASSO_SHAPES) },
+  // The brush: paint or erase (PAINT_MODES), and its radius
+  paintMode: { default: PAINT_MODES.paint, values: Object.values(PAINT_MODES) },
+  paintRadius: { default: PAINT_RADIUS.default, min: PAINT_RADIUS.min, max: PAINT_RADIUS.max },
+  // The action card shown under the tool (SELECTION_ACTIONS); an edit started elsewhere (Delete,
+  // a shortcut) switches it to its own
+  action: { default: SELECTION_ACTIONS.remove, values: Object.values(SELECTION_ACTIONS) },
+  // Smooth of the selection: strength and passes of the Taubin pass, and whether the boundary
+  // ring moves at half weight (feather) or stays pinned
+  smoothStrength: { default: SMOOTH_STRENGTH.default, min: SMOOTH_STRENGTH.min, max: SMOOTH_STRENGTH.max },
+  smoothPasses: { default: SMOOTH_PASSES.default, min: SMOOTH_PASSES.min, max: SMOOTH_PASSES.max, integer: true },
+  smoothFeather: { default: true, boolean: true },
+  // How a hole is closed: auto (flat for small holes, smooth for larger ones), smooth, flat
+  closure: { default: 'auto', values: ['auto', 'smooth', 'flat'] },
+  // Rim cleanup after the cut: ears and islands removed (off, light, full)
+  rimCleanup: { default: 'full', values: ['off', 'light', 'full'] },
+  // A lasso keeps only the largest connected part of what it selects
+  connectedOnly: { default: false, boolean: true },
+  // An edit is shown for Apply / Cancel before it is recorded
+  previewEnabled: { default: true, boolean: true },
+  // Open and non-manifold edges drawn on the canvas
+  showIssues: { default: false, boolean: true },
+  // Vertices closer than this (mm) are one vertex
+  weldTolerance: { default: 0.001, min: 0, max: 1 },
+  // Largest edge-connected piece removed as an island after a cut (triangles)
+  islandMaxTriangles: { default: 50, min: 0, max: 10000 },
+  // Most boundary vertices a smooth patch is fitted to
+  maxConstraints: { default: 12, min: 4, max: 32 },
+};
 
 const INITIAL_STATE = {
   // The active 3D tool (THREE_D_TOOLS), or null
   activeTool: null,
-  // The segment the tools act on, published by the canvas: { segmentIndex, label } when it can
-  // be edited, else { segmentIndex, disabledReason }
+  // The segment the tools act on, published by the canvas: { segmentIndex, label, color } when
+  // it can be edited, else { segmentIndex, disabledReason }
   target: null,
-  // Selected surface points of the target segment
+  // Selected faces of the target segment's surface, the points they have, and the connected
+  // regions they form
   selectionCount: 0,
-  // A delete is running
+  selectionPoints: 0,
+  selectionRegions: 0,
+  // An edit is being computed for the surface (cut, patch, smooth)
   busy: false,
-  // Selection tool delete setting (kept across editor sessions, like the brush radius)
-  removalDepth: REMOVAL_DEPTH.default,
+  // Labelmap writes queued behind surface edits
+  pendingWrites: 0,
+  // An edit shown on the canvas awaiting Apply / Cancel: its summary ({ kind, points, holes,
+  // methods, closed, openEdges, repair }), or null
+  preview: null,
+  // Open and non-manifold edge counts of the target segment's surface, or null while unknown
+  surfaceHealth: null,
+  // Summary of the last edit applied in this session, or null
+  lastEdit: null,
+  // Selection tool settings (EDIT_SETTINGS; kept across editor sessions, like the brush radius)
+  ...Object.fromEntries(Object.entries(EDIT_SETTINGS).map(([key, setting]) => [key, setting.default])),
 };
 
 let _state = { ...INITIAL_STATE };
@@ -71,8 +151,10 @@ export function set3DToolTarget(target) {
   _set({ target: target || null });
 }
 
-export function set3DSelectionCount(selectionCount) {
-  _set({ selectionCount });
+export function set3DSelectionCount(selectionCount, {
+  points = 0, regions = selectionCount ? 1 : 0,
+} = {}) {
+  _set({ selectionCount, selectionPoints: points, selectionRegions: regions });
 }
 
 export function set3DToolBusy(busy) {
@@ -96,6 +178,11 @@ export function end3DToolJob(token) {
   }
 }
 
+/** Count a queued labelmap write in (+1) or out (-1). */
+export function adjustPendingWrites(delta) {
+  _set({ pendingWrites: Math.max(0, _state.pendingWrites + delta) });
+}
+
 export function setRemovalDepth(depth) {
   const value = Number(depth);
   if (Number.isFinite(value)) {
@@ -103,14 +190,71 @@ export function setRemovalDepth(depth) {
   }
 }
 
-/** The target segment can be edited (and nothing is running). */
+/** The target segment can be edited (nothing is running and no edit awaits Apply / Cancel). */
 export function is3DTargetEditable(state = _state) {
-  return !!state.target && !state.target.disabledReason && !state.busy;
+  return !!state.target && !state.target.disabledReason && !state.busy && !state.preview;
+}
+
+/**
+ * Set a Selection tool setting (EDIT_SETTINGS): enumerations must hold the value, numbers are
+ * clamped, booleans coerced. Unknown settings are ignored.
+ */
+export function set3DToolOption(key, value) {
+  const setting = EDIT_SETTINGS[key];
+  if (!setting) {
+    return false;
+  }
+  if (key === 'removalDepth') {
+    setRemovalDepth(value);
+    return true;
+  }
+  if (setting.values) {
+    if (!setting.values.includes(value)) {
+      return false;
+    }
+    _set({ [key]: value });
+  } else if (setting.boolean) {
+    _set({ [key]: !!value });
+  } else {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return false;
+    }
+    const clamped = Math.min(setting.max, Math.max(setting.min, number));
+    _set({ [key]: setting.integer ? Math.round(clamped) : clamped });
+  }
+  return true;
+}
+
+/** The current Smooth options (smoothSelection's SMOOTH_OPTION_DEFAULTS keys). */
+export function get3DSmoothOptions(state = _state) {
+  const { smoothStrength, smoothPasses, smoothFeather } = state;
+  return { strength: smoothStrength, passes: smoothPasses, feather: smoothFeather };
+}
+
+/** The current cut-and-patch options (deleteSelection's EDIT_OPTION_DEFAULTS keys). */
+export function get3DEditOptions(state = _state) {
+  const { closure, rimCleanup, weldTolerance, islandMaxTriangles, maxConstraints } = state;
+  return { closure, rimCleanup, weldTolerance, islandMaxTriangles, maxConstraints };
+}
+
+/** An edit awaiting Apply / Cancel (its summary), or null once decided. */
+export function set3DPreview(preview) {
+  _set({ preview: preview || null });
+}
+
+export function set3DSurfaceHealth(surfaceHealth) {
+  _set({ surfaceHealth: surfaceHealth || null });
+}
+
+export function set3DLastEdit(lastEdit) {
+  _set({ lastEdit: lastEdit || null });
 }
 
 /**
  * The canvas registers a handler for a request; returns an unregister function.
- * Requests: 'deleteSelection', 'clearSelection'.
+ * Requests: 'deleteSelection', 'smoothSelection', 'clearSelection', 'growSelection',
+ * 'shrinkSelection', 'applyPreview', 'cancelPreview', 'repairSurface'.
  */
 export function handle3DToolRequest(request, handler) {
   _requestHandlers.set(request, handler);
@@ -128,7 +272,10 @@ export function request3DToolAction(request, options) {
 
 /** Back to the initial state (editor closed; tests). Settings are kept unless `settings` is set. */
 export function reset3DToolState({ settings = false } = {}) {
-  _state = { ...INITIAL_STATE, ...(settings ? {} : { removalDepth: _state.removalDepth }) };
+  const kept = settings
+    ? {}
+    : Object.fromEntries(Object.keys(EDIT_SETTINGS).map(key => [key, _state[key]]));
+  _state = { ...INITIAL_STATE, ...kept };
   _busyOwner = null;
   _requestHandlers.clear();
   _notify();

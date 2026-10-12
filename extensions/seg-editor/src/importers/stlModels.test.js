@@ -24,6 +24,7 @@ jest.mock('@ohif/extension-viewerm3d', () => ({
   listM3DInstanceSources: jest.fn(),
 }), { virtual: true });
 jest.mock('../threeDTools/registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
+jest.mock('../threeDTools/registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 
 
 const ASCII_STL = [

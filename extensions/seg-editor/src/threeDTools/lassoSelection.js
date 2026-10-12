@@ -1,9 +1,10 @@
-// Lasso selection of surface points for the 3D Selection tool (ohif-viewers#142, FR-18), after
-// three-mesh-bvh's lasso-selection example: the lasso is drawn in screen space, each vertex of the
-// target mesh is projected and tested against it, and only vertices the camera can see are kept.
-// Visibility is a raycast from the camera towards the vertex against every visible mesh (the
-// meshes carry three-mesh-bvh bounds trees, so each cast is fast): a vertex is hidden when
-// something is hit in front of it.
+// Lasso selection for the 3D Lasso tool (ohif-viewers#142, FR-18), after three-mesh-bvh's
+// lasso-selection example: the lasso is drawn in screen space, each triangle of the target mesh is
+// projected by its centroid and tested against it, and only triangles the camera can see are kept
+// (the example's "centroid-visible" mode). Visibility is a raycast from the camera towards the
+// centroid against every visible mesh (the meshes carry three-mesh-bvh bounds trees, so each cast
+// is fast): a triangle is hidden when something is hit in front of its centroid. The vertex form,
+// selectVerticesInLasso, is kept for the vertex operations.
 
 import { Raycaster, Vector2, Vector3 } from 'three';
 
@@ -106,8 +107,68 @@ export function selectVerticesInLasso({ mesh, camera, lasso, occluders }) {
   return selected;
 }
 
+function _visibilityTest(mesh, camera, occluders) {
+  if (!occluders?.length) {
+    return () => true;
+  }
+  const radius = mesh.geometry.boundingSphere?.radius
+    ?? (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere.radius);
+  const tolerance = Math.max(radius * 1e-3, 1e-6);
+  const raycaster = new Raycaster();
+  raycaster.firstHitOnly = true;
+  const ndc = new Vector2();
+  return (world, x, y) => {
+    ndc.set(x, y);
+    raycaster.setFromCamera(ndc, camera);
+    raycaster.far = raycaster.ray.origin.distanceTo(world) - tolerance;
+    return !(raycaster.far > 0 && raycaster.intersectObjects(occluders, false).length);
+  };
+}
+
 /**
- * Combine a lasso's vertices with the current selection.
+ * Triangles of `mesh` inside a lasso: those whose centroid projects inside it and is visible.
+ *
+ * @param {Object} params - selectVerticesInLasso's
+ * @returns {number[]} triangle indices (in the geometry's index order)
+ */
+export function selectTrianglesInLasso({ mesh, camera, lasso, occluders }) {
+  if (!mesh?.geometry || lasso.length < 6) {
+    return [];
+  }
+  const position = mesh.geometry.getAttribute('position');
+  const index = mesh.geometry.getIndex();
+  const count = index ? index.count / 3 : position.count / 3;
+  const bounds = _polygonBounds(lasso);
+  mesh.updateMatrixWorld();
+  camera.updateMatrixWorld();
+  const visible = _visibilityTest(mesh, camera, occluders);
+
+  const world = new Vector3();
+  const corner = new Vector3();
+  const projected = new Vector3();
+  const selected = [];
+  for (let t = 0; t < count; t++) {
+    world.set(0, 0, 0);
+    for (let k = 0; k < 3; k++) {
+      const v = index ? index.getX(3 * t + k) : 3 * t + k;
+      world.add(corner.fromBufferAttribute(position, v));
+    }
+    world.multiplyScalar(1 / 3).applyMatrix4(mesh.matrixWorld);
+    projected.copy(world).project(camera);
+    const { x, y, z } = projected;
+    if (z < -1 || z > 1 || x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) {
+      continue;
+    }
+    if (!pointInPolygon(x, y, lasso) || !visible(world, x, y)) {
+      continue;
+    }
+    selected.push(t);
+  }
+  return selected;
+}
+
+/**
+ * Combine a lasso's vertices (or triangles) with the current selection.
  *
  * @param {Set<number>} current
  * @param {number[]} lassoed

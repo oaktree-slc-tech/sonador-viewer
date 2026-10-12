@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { components as csextComponents } from '@ohif/extension-cornerstone';
+import { Icon } from '@ohif/ui';
 import {
   Icons,
   Tabs,
@@ -17,9 +17,10 @@ import {
 
 import { SECTIONS, SEG_EDITOR_COMMAND_CONTEXT } from '../../toolbox/constants';
 
+import SegEditorToolbox from './SegEditorToolbox';
+
 import styles from './SegEditorToolPalette.module.scss';
 
-const { Toolbox } = csextComponents;
 const { DisplaySetApi } = OHIF.display;
 
 
@@ -29,10 +30,11 @@ export const PALETTES = {
 };
 
 // Palette tabs are icons with a tooltip, as the OHIF v3 side panel tabs are. The Labelmap palette
-// uses v3's segmentation-panel icon.
+// uses v3's segmentation-panel icon; the 3D palette the cube the 2D MPR toolbar button uses (a
+// viewer icon, so it is drawn with the viewer's Icon).
 const PALETTE_TABS = [
   { value: PALETTES.labelmap, iconName: 'tab-segmentation', label: 'Labelmap Tools' },
-  { value: PALETTES.threeD, iconName: 'layout-advanced-3d-only', label: '3D Tools' },
+  { value: PALETTES.threeD, legacyIconName: 'cube', label: '3D Tools' },
 ];
 
 // OHIF v3 SidePanel tab styling (getTabClassNames / getTabIconClassNames)
@@ -84,7 +86,7 @@ export default function SegEditorToolPalette({
       <Tabs value={palette} onValueChange={onPaletteChange} className="w-full">
         <div className="bg-muted flex justify-center py-2">
           <TabsList className="h-auto gap-[2px] rounded-none bg-transparent p-0 hover:bg-transparent">
-            {PALETTE_TABS.map(({ value, iconName, label }) => (
+            {PALETTE_TABS.map(({ value, iconName, legacyIconName, label }) => (
               <Tooltip key={value}>
                 <TooltipTrigger asChild>
                   <TabsTrigger
@@ -94,11 +96,15 @@ export default function SegEditorToolPalette({
                     className={`group ${TAB_CLASSES}`}
                   >
                     <span className={TAB_ICON_CLASSES}>
-                      <Icons.ByName
-                        name={iconName}
-                        className="text-primary"
-                        style={{ width: '22px', height: '22px' }}
-                      />
+                      {legacyIconName ? (
+                        <Icon name={legacyIconName} className="text-primary" style={{ width: '20px', height: '20px' }} />
+                      ) : (
+                        <Icons.ByName
+                          name={iconName}
+                          className="text-primary"
+                          style={{ width: '22px', height: '22px' }}
+                        />
+                      )}
                     </span>
                   </TabsTrigger>
                 </TooltipTrigger>
@@ -109,11 +115,11 @@ export default function SegEditorToolPalette({
         </div>
 
         <TabsContent value={PALETTES.labelmap} className="mt-0">
-          <Toolbox buttonSectionId={SECTIONS.labelMapToolbox} title={t('Labelmap Tools')} />
+          <SegEditorToolbox buttonSectionId={SECTIONS.labelMapToolbox} title={t('Labelmap Tools')} />
         </TabsContent>
 
         <TabsContent value={PALETTES.threeD} className="mt-0">
-          <Toolbox buttonSectionId={SECTIONS.threeDToolbox} title={t('3D Tools')} />
+          <SegEditorToolbox buttonSectionId={SECTIONS.threeDToolbox} title={t('3D Tools')} />
         </TabsContent>
       </Tabs>
     </div>

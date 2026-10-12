@@ -120,4 +120,11 @@
 
     button { padding: 0; }
   }
+
+  // The editor's segment list shows six rows (28px rows, 1px apart) and scrolls beyond them, so
+  // the tool palettes beneath stay in view
+  .panelSegmentsBounded {
+    max-height: calc(6 * 28px + 5px);
+    overflow-y: auto;
+  }
 }

@@ -27,6 +27,9 @@ jest.mock('@ohif/i18n', () => {
   return instance;
 });
 jest.mock('@ohif/extension-vtk', () => ({ Enums: { CORNERSTONE: {} } }));
+// The Selection tool's panel component imports the ui-next controls, which need a browser
+jest.mock('@ohif/ui-next', () => ({}));
+jest.mock('@ohif/core', () => ({ useSystem: () => ({}) }));
 
 function collectLabels(buttons) {
   const labels = [];

@@ -8,8 +8,8 @@ import React from 'react';
 
 import i18n from '@ohif/i18n';
 
-import SelectionToolOptions from '../toolbarComponents/SelectionToolOptions';
-import { REMOVAL_DEPTH, THREE_D_TOOLS } from '../threeDTools/threeDToolState';
+import SelectionToolPanel from '../toolbarComponents/SelectionToolPanel';
+import { THREE_D_TOOLS } from '../threeDTools/threeDToolState';
 
 import {
   BRUSH_TOOL_NAMES,
@@ -273,49 +273,39 @@ export function getToolbarButtons() {
       },
     },
 
-    // 3D tools (act on the 3D editing canvas; ohif-viewers#142, §10.2)
+    // 3D tools (act on the 3D editing canvas; ohif-viewers#142, §10.2 and §13): the Lasso and
+    // Paint tools build one selection; each tool's whole panel (its own card, then removal, smooth
+    // and surface) is one component whose controls read and set the 3D tool state directly
     {
-      id: THREE_D_TOOLS.Selection,
+      id: THREE_D_TOOLS.Lasso,
       uiType: 'ohif.toolBoxButton',
       props: {
         icon: 'icon-tool-freehand-roi',
-        label: tb('Selection'),
-        evaluate: [
-          { name: EVALUATORS.threeDTool, toolName: THREE_D_TOOLS.Selection },
-          { name: EVALUATORS.synchronizeSelectionOptions },
-        ],
-        commands: command('toggleSegEditor3DTool', { toolName: THREE_D_TOOLS.Selection }),
+        label: tb('Lasso'),
+        evaluate: { name: EVALUATORS.threeDTool, toolName: THREE_D_TOOLS.Lasso },
+        commands: command('toggleSegEditor3DTool', { toolName: THREE_D_TOOLS.Lasso }),
         options: [
           {
-            id: 'selection-options',
+            id: 'lasso-panel',
             type: 'custom',
-            children: () => React.createElement(SelectionToolOptions),
+            children: () => React.createElement(SelectionToolPanel, { tool: THREE_D_TOOLS.Lasso }),
           },
+        ],
+      },
+    },
+    {
+      id: THREE_D_TOOLS.Paint,
+      uiType: 'ohif.toolBoxButton',
+      props: {
+        icon: 'icon-tool-brush',
+        label: tb('Paint'),
+        evaluate: { name: EVALUATORS.threeDTool, toolName: THREE_D_TOOLS.Paint },
+        commands: command('toggleSegEditor3DTool', { toolName: THREE_D_TOOLS.Paint }),
+        options: [
           {
-            name: tb('Depth'),
-            tooltip: tb('Also remove the segment within this distance (mm) of the selected points'),
-            id: 'removal-depth',
-            // Line the label up with the help text and the action buttons
-            labelClassName: 'pl-2',
-            type: 'range',
-            explicitRunOnly: true,
-            min: REMOVAL_DEPTH.min,
-            max: REMOVAL_DEPTH.max,
-            step: REMOVAL_DEPTH.step,
-            value: REMOVAL_DEPTH.default,
-            commands: command('setSegEditor3DRemovalDepth'),
-          },
-          {
-            name: tb('Remove selected points'),
-            id: 'remove-selection',
-            type: 'button',
-            commands: command('requestSegEditor3DAction', { request: 'deleteSelection' }),
-          },
-          {
-            name: tb('Clear selection'),
-            id: 'clear-selection',
-            type: 'button',
-            commands: command('requestSegEditor3DAction', { request: 'clearSelection' }),
+            id: 'paint-panel',
+            type: 'custom',
+            children: () => React.createElement(SelectionToolPanel, { tool: THREE_D_TOOLS.Paint }),
           },
         ],
       },

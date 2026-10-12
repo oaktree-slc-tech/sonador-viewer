@@ -81,6 +81,8 @@ import { callConfirmDialog } from './confirmDialog';
 import { reset3DToolState } from '../threeDTools/threeDToolState';
 import { clearSegEditorHistory } from '../toolbox/segEditorHistory';
 import { terminateHoleFillingWorker } from '../threeDTools/registerHoleFillingWorker';
+import { terminateLabelmapCarveWorker } from '../threeDTools/registerLabelmapCarveWorker';
+import { cancelSurfaceEditWrites, pendingSurfaceEditWrites } from '../threeDTools/surfaceEdits';
 import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
@@ -824,8 +826,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
             confirm={component._confirm3DEdit}
             notify={component._notify3DEdit}
             onEditError={component._on3DEditError}
-            onLabelmapEdited={() => component._surfaceSync?.syncNow()}
-            renderingMessage={t(uiMessageSurfaceRendering)}
+            withOwnLabelmapEdit={component._withOwnLabelmapEdit}
             t={translateSegEditor}
           />
         </div>
@@ -855,6 +856,13 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
 
   _notify3DEdit = ({ type, title, message }) => {
     uiNotificationService.show({ type, title, message });
+  };
+
+  _withOwnLabelmapEdit = (fn) => {
+    // A labelmap write made for the surface (surface edits and their undo): copied to the vol3d
+    // labelmap like any edit, but never a reason to rebuild the surface from it
+    const sync = this._surfaceSync;
+    return sync ? sync.withOwnEdit(fn) : fn();
   };
 
   _on3DEditError = (error) => {
@@ -1034,6 +1042,8 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         // The 3D view says so while the library rebuilds the meshes after an edit
         onUpdateStart: () => component._isMounted && component.setState({ surfaceUpdating: true }),
         onUpdateEnd: () => component._isMounted && component.setState({ surfaceUpdating: false }),
+        // A rebuild from the labelmap waits for the surface edits still being written to it
+        deps: { isUpdateBlocked: () => pendingSurfaceEditWrites() > 0 },
       });
     }
 
@@ -1393,14 +1403,14 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     _view3d.setProperties({ preset: component._getDefaultVolumeRenderPreset() });
 
     // setVolumes() reinitializes the viewport actor list, which clears any surface mesh actors
-    // previously added to the scene. Re-fire SEGMENTATION_DATA_MODIFIED for the 3D labelmap so
-    // updateSurfaceData re-adds the surface actors.
+    // previously added to the scene. A segmentation render re-adds them from the cached surfaces
+    // without recomputing them.
     const { segEditorSurfaceRenderingEnabled } = component.props;
     const { surfaceModelInit } = component.state;
     if (segEditorSurfaceRenderingEnabled && surfaceModelInit) {
       const { volumeId: labelmapInstance3dUID } = component._segVol3d();
       if (labelmapInstance3dUID) {
-        c3dSegmentations.triggerSegmentationEvents.triggerSegmentationDataModified(labelmapInstance3dUID);
+        c3dToolsUtilities.segmentation.triggerSegmentationRenderBySegmentationId(labelmapInstance3dUID);
       }
     }
 
@@ -1878,8 +1888,10 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     component._isMounted = false;
 
     // Cancel background operations (a pending 3D delete is also invalidated by its view)
+    cancelSurfaceEditWrites();
     c3dUtils.terminateWorkerComputeJobs();
     terminateHoleFillingWorker();
+    terminateLabelmapCarveWorker();
 
     // Stop following 2D edits before the labelmaps are purged
     component._surfaceSync?.stop();

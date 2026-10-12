@@ -28,6 +28,11 @@ export function installMeshBvh() {
   installed = true;
 }
 
+// The tree keeps its own triangle order (`indirect`) rather than sorting the geometry's index in
+// place, so the triangle indices it reports (raycast face indices, shapecast triangles) are the
+// surface's own: the 3D tools' selection is a set of those.
+const DEFAULT_OPTIONS = { indirect: true };
+
 /**
  * Returns the geometry's bounds tree, building it on first use.
  *
@@ -39,7 +44,7 @@ export function ensureBoundsTree(geometry, options = {}) {
   installMeshBvh();
 
   if (!geometry.boundsTree) {
-    geometry.computeBoundsTree(options);
+    geometry.computeBoundsTree({ ...DEFAULT_OPTIONS, ...options });
   }
 
   return geometry.boundsTree;
@@ -49,7 +54,7 @@ export function ensureBoundsTree(geometry, options = {}) {
 export function refreshBoundsTree(geometry, options = {}) {
   installMeshBvh();
   geometry.disposeBoundsTree();
-  geometry.computeBoundsTree(options);
+  geometry.computeBoundsTree({ ...DEFAULT_OPTIONS, ...options });
   return geometry.boundsTree;
 }
 

@@ -60,6 +60,8 @@ export default async function loadSegmentation(
     firstImageId: imageIds[0],
     labelmapIndex,
     colorLUTIndex,
+    // The series' description names the segmentation (and the editor's working copy of it)
+    label: segDisplaySet.SeriesDescription || segDisplaySet.seriesDescription || undefined,
   });
 
   // Every layer's id, keyed by its labelmap index; `segmentationId` stays the latest layer's id

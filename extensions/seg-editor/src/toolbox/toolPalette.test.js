@@ -8,7 +8,7 @@ import { buildButtonCommands } from '@ohif/core/src/utils/buildButtonCommands';
 import commandsModule from '../commandsModule';
 import getSegEditorEvaluators from './evaluators';
 import { registerSegEditorToolbar } from './registerSegEditorToolbar';
-import { addLabelmapTools } from './segEditorTools';
+import { addLabelmapTools, releaseIdlePreview } from './segEditorTools';
 import {
   clearSegEditorToolContext,
   getSegEditorToolContext,
@@ -525,12 +525,12 @@ describe('palette through the ToolbarService', () => {
 
       expect(toolbarService.state.buttonSections[SECTIONS.threeDToolbox]).toEqual([SECTIONS.threeDTools]);
       expect(toolbarService.state.buttonSections[SECTIONS.threeDTools])
-        .toEqual([POINTER_BUTTONS.threeD, THREE_D_TOOLS.Selection]);
+        .toEqual([POINTER_BUTTONS.threeD, THREE_D_TOOLS.Lasso, THREE_D_TOOLS.Paint]);
     });
 
-    it('disables Selection until the 3D canvas has an editable target, with the reason', () => {
+    it('disables Lasso until the 3D canvas has an editable target, with the reason', () => {
       const { toolbarService } = createPalette();
-      const selection = () => toolbarService.getButtonProps(THREE_D_TOOLS.Selection);
+      const selection = () => toolbarService.getButtonProps(THREE_D_TOOLS.Lasso);
 
       expect(selection().disabled).toBe(true);
 
@@ -545,60 +545,55 @@ describe('palette through the ToolbarService', () => {
       expect(selection().disabled).toBe(true);
     });
 
-    it('clicking Selection activates it, and clicking again releases it', () => {
+    it('clicking Lasso activates it, Paint takes over from it, and clicking the active tool releases it', () => {
       const { click, isActive, toolGroup } = createPalette();
       set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
 
-      click(THREE_D_TOOLS.Selection);
-      expect(get3DToolState().activeTool).toBe(THREE_D_TOOLS.Selection);
-      expect(isActive(THREE_D_TOOLS.Selection)).toBe(true);
+      click(THREE_D_TOOLS.Lasso);
+      expect(get3DToolState().activeTool).toBe(THREE_D_TOOLS.Lasso);
+      expect(isActive(THREE_D_TOOLS.Lasso)).toBe(true);
       // The 2D tool group is not involved
       expect(toolGroup.getActivePrimaryMouseButtonTool()).toBe('WindowLevel');
 
-      click(THREE_D_TOOLS.Selection);
+      click(THREE_D_TOOLS.Paint);
+      expect(get3DToolState().activeTool).toBe(THREE_D_TOOLS.Paint);
+      expect(isActive(THREE_D_TOOLS.Lasso)).toBe(false);
+      expect(isActive(THREE_D_TOOLS.Paint)).toBe(true);
+
+      click(THREE_D_TOOLS.Paint);
       expect(get3DToolState().activeTool).toBeNull();
-      expect(isActive(THREE_D_TOOLS.Selection)).toBe(false);
+      expect(isActive(THREE_D_TOOLS.Paint)).toBe(false);
     });
 
-    it('keeps the Selection options in step with the tool state', () => {
-      const { toolbarService, run } = createPalette();
+    it('keeps the Selection tool settings in the tool state', () => {
+      const { run } = createPalette();
       set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
-      const option = id => toolbarService.getButtonProps(THREE_D_TOOLS.Selection).options
-        .find(entry => entry.id === id);
 
       run('setSegEditor3DRemovalDepth', { value: 6 });
-      toolbarService.refreshToolbarState({});
-      expect(get3DToolState().removalDepth).toBe(6);
-      expect(option('removal-depth').value).toBe(6);
+      run('setSegEditor3DOption', { option: 'closure', value: 'flat' });
+      expect(get3DToolState()).toMatchObject({ removalDepth: 6, closure: 'flat' });
     });
 
-    it('the Remove and Clear options ask the 3D canvas to act', () => {
+    it('offers each selection tool one panel option that runs nothing on activation', () => {
       const { toolbarService } = createPalette();
-      const deleteSelection = jest.fn();
-      const clearSelection = jest.fn();
-      handle3DToolRequest('deleteSelection', deleteSelection);
-      handle3DToolRequest('clearSelection', clearSelection);
       set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
-      set3DSelectionCount(3);
 
-      const selection = toolbarService.getButtonSection(SECTIONS.threeDTools)
-        .find(button => button.id === THREE_D_TOOLS.Selection);
-      const options = selection.componentProps.options;
-      options.find(entry => entry.id === 'remove-selection').onChange();
-      options.find(entry => entry.id === 'clear-selection').onChange();
-
-      expect(deleteSelection).toHaveBeenCalledTimes(1);
-      expect(clearSelection).toHaveBeenCalledTimes(1);
+      [[THREE_D_TOOLS.Lasso, 'lasso-panel'], [THREE_D_TOOLS.Paint, 'paint-panel']].forEach(([id, panel]) => {
+        const button = toolbarService.getButtonSection(SECTIONS.threeDTools).find(b => b.id === id);
+        const options = button.componentProps.options;
+        expect(options).toHaveLength(1);
+        expect(options[0]).toMatchObject({ id: panel, type: 'custom' });
+        expect(options[0].commands).toBeUndefined();
+      });
     });
-
     it('leaving the 3D palette releases the 3D tool', () => {
       const { click, isActive, run } = createPalette();
       set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
-      click(THREE_D_TOOLS.Selection);
+      click(THREE_D_TOOLS.Lasso);
 
       run('deactivate3DTools');
 
-      expect(isActive(THREE_D_TOOLS.Selection)).toBe(false);
+      expect(isActive(THREE_D_TOOLS.Lasso)).toBe(false);
     });
   });
 
@@ -631,13 +626,13 @@ describe('palette through the ToolbarService', () => {
     set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
     expect(isActive(POINTER_BUTTONS.threeD)).toBe(true);
 
-    click(THREE_D_TOOLS.Selection);
+    click(THREE_D_TOOLS.Lasso);
     expect(isActive(POINTER_BUTTONS.threeD)).toBe(false);
 
     click(POINTER_BUTTONS.threeD);
     expect(get3DToolState().activeTool).toBeNull();
     expect(isActive(POINTER_BUTTONS.threeD)).toBe(true);
-    expect(isActive(THREE_D_TOOLS.Selection)).toBe(false);
+    expect(isActive(THREE_D_TOOLS.Lasso)).toBe(false);
   });
 
   it('disables the labelmap tools once the editor closes', () => {
@@ -648,5 +643,48 @@ describe('palette through the ToolbarService', () => {
 
     expect(toolbarService.getButtonProps('Brush').disabled).toBe(true);
     expect(toolbarService.getButtonProps('WindowLevel').disabled).toBe(true);
+  });
+});
+
+describe('releaseIdlePreview', () => {
+  const brush = ({ preview = null, element = {} } = {}) => ({
+    _previewData: { preview, element, isDrag: false },
+    doneEditMemo: jest.fn(),
+  });
+
+  it('commits the edit memo and drops the preview element when no preview is pending', () => {
+    const tool = brush();
+    expect(releaseIdlePreview(tool)).toBe(true);
+    expect(tool.doneEditMemo).toHaveBeenCalled();
+    expect(tool._previewData.element).toBeNull();
+  });
+
+  it('leaves a pending preview to the tool', () => {
+    const tool = brush({ preview: { some: 'preview' } });
+    expect(releaseIdlePreview(tool)).toBe(false);
+    expect(tool.doneEditMemo).not.toHaveBeenCalled();
+    expect(tool._previewData.element).not.toBeNull();
+  });
+
+  it('ignores tools without preview state, and an unused brush', () => {
+    expect(releaseIdlePreview(undefined)).toBe(false);
+    expect(releaseIdlePreview({})).toBe(false);
+    expect(releaseIdlePreview(brush({ element: null }))).toBe(false);
+  });
+
+  it('is applied to the tool a palette switch passivates', () => {
+    const toolGroup = createEditorToolGroup();
+    publishEditor();
+    const { run } = createCommands();
+    const instances = { CircularBrush: brush(), CircularEraser: brush() };
+    toolGroup.getToolInstance = name => instances[name];
+
+    run('setToolActive', { toolName: 'CircularBrush' });
+    run('setToolActive', { toolName: 'CircularEraser' });
+
+    expect(instances.CircularBrush._previewData.element).toBeNull();
+    expect(instances.CircularBrush.doneEditMemo).toHaveBeenCalled();
+    expect(instances.CircularEraser._previewData.element).not.toBeNull();
+    expect(toolGroup.getActivePrimaryMouseButtonTool()).toBe('CircularEraser');
   });
 });

@@ -28,7 +28,7 @@ function volume(values) {
   };
 }
 
-function setup({ surfaceShown = true } = {}) {
+function setup({ surfaceShown = true, ...extraDeps } = {}) {
   const eventTarget = new EventTarget();
   const source = volume([0, 0, 0, 0]);
   const target = volume([0, 0, 0, 0]);
@@ -44,6 +44,7 @@ function setup({ surfaceShown = true } = {}) {
     subscribeSurfaceUpdates: listener => { updateListeners.add(listener); return () => updateListeners.delete(listener); },
     waitForSurfaceUpdate: jest.fn(() => Promise.resolve({ ended: true })),
     isSurfaceUpdating: jest.fn(() => state.outstanding > 0),
+    ...extraDeps,
   };
   const state = { surfaceShown, outstanding: 0 };
   const onError = jest.fn();
@@ -223,5 +224,59 @@ describe('createSurfaceSync', () => {
     expect(deps.markModified).not.toHaveBeenCalled();
     expect(onUpdateStart).not.toHaveBeenCalled();
     expect(updateListeners.size).toBe(0);
+  });
+});
+
+describe('createSurfaceSync with surface edits', () => {
+  it('copies but never rebuilds for edits made for the surface', () => {
+    const { sync, target, deps, edit } = setup();
+
+    sync.withOwnEdit(() => edit(1, 2));
+    jest.advanceTimersByTime(DELAY);
+
+    expect(target.data[1]).toBe(2);
+    expect(deps.markModified).not.toHaveBeenCalled();
+    expect(sync.state.surfaceStale).toBe(false);
+  });
+
+  it('rebuilds once when edits of both kinds are pending', () => {
+    const { sync, target, deps, edit } = setup();
+
+    sync.withOwnEdit(() => edit(1, 2));
+    edit(2, 3);
+    jest.advanceTimersByTime(DELAY);
+
+    expect(target.data).toEqual([0, 2, 3, 0]);
+    expect(deps.markModified).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds a rebuild while surface edits are still being written, and runs it once they are', () => {
+    const blocked = { value: true };
+    const { sync, target, deps, edit } = setup({ isUpdateBlocked: () => blocked.value });
+
+    edit(3, 2);
+    jest.advanceTimersByTime(DELAY);
+    expect(target.data).toEqual([0, 0, 0, 0]);
+    expect(deps.markModified).not.toHaveBeenCalled();
+    expect(sync.state.scheduled).toBe(true);
+
+    jest.advanceTimersByTime(DELAY);
+    expect(deps.markModified).not.toHaveBeenCalled();
+
+    blocked.value = false;
+    jest.advanceTimersByTime(DELAY);
+    expect(target.data).toEqual([0, 0, 0, 2]);
+    expect(deps.markModified).toHaveBeenCalledTimes(1);
+    expect(sync.state.scheduled).toBe(false);
+  });
+
+  it('does not hold the copy of edits made for the surface', () => {
+    const { sync, target, deps, edit } = setup({ isUpdateBlocked: () => true });
+
+    sync.withOwnEdit(() => edit(0, 1));
+    jest.advanceTimersByTime(DELAY);
+
+    expect(target.data).toEqual([1, 0, 0, 0]);
+    expect(deps.markModified).not.toHaveBeenCalled();
   });
 });

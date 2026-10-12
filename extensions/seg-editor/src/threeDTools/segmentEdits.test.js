@@ -1,8 +1,11 @@
-// The undo-recorded labelmap write: what a failure before and after the record does
+// The labelmap writes: slice-scoped notification, and what a failure before and after the record does
 
 const mockHistory = { push: jest.fn() };
 const mockTrigger = { triggerSegmentationDataModified: jest.fn() };
-const mockMemo = { voxelManager: { setAtIndex: jest.fn() }, commitMemo: jest.fn(() => true) };
+const mockMemo = {
+  voxelManager: { setAtIndex: jest.fn(), getArrayOfModifiedSlices: () => [3, 4] },
+  commitMemo: jest.fn(() => true),
+};
 
 // virtual: jest's resolver does not follow the Cornerstone3D packages' `exports` maps
 jest.mock('@cornerstonejs/core', () => ({
@@ -14,20 +17,24 @@ jest.mock('@cornerstonejs/tools', () => ({
 }), { virtual: true });
 jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({ init: () => {} }), { virtual: true });
 jest.mock('./registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
+jest.mock('./registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 
 // Required after the mocks above are defined: their factories run when this module loads
-const { editLabelmapVoxels } = require('./segmentEdits');
+const { applyLabelmapEdit, editLabelmapVoxels } = require('./segmentEdits');
 
 const volume = { voxelManager: {} };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockMemo.commitMemo.mockImplementation(() => true);
+});
 
 describe('editLabelmapVoxels', () => {
-  it('records the edit and tells the views', () => {
+  it('records the edit and tells the views which slices changed', () => {
     expect(editLabelmapVoxels({ segmentationId: 'seg', volume, edit: set => set(3, 2) })).toBe(true);
     expect(mockMemo.voxelManager.setAtIndex).toHaveBeenCalledWith(3, 2);
     expect(mockHistory.push).toHaveBeenCalledWith(mockMemo);
-    expect(mockTrigger.triggerSegmentationDataModified).toHaveBeenCalledWith('seg');
+    expect(mockTrigger.triggerSegmentationDataModified).toHaveBeenCalledWith('seg', [3, 4]);
   });
 
   it('records nothing when the edit itself throws, and lets the error through', () => {
@@ -38,6 +45,12 @@ describe('editLabelmapVoxels', () => {
     expect(mockTrigger.triggerSegmentationDataModified).not.toHaveBeenCalled();
   });
 
+  it('records nothing when the edit changed nothing', () => {
+    mockMemo.commitMemo.mockImplementation(() => false);
+    expect(editLabelmapVoxels({ segmentationId: 'seg', volume, edit: () => {} })).toBe(false);
+    expect(mockHistory.push).not.toHaveBeenCalled();
+  });
+
   it('keeps a recorded edit when a listener fails afterwards, logging instead of throwing', () => {
     mockTrigger.triggerSegmentationDataModified.mockImplementationOnce(() => { throw new Error('listener threw'); });
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -46,5 +59,14 @@ describe('editLabelmapVoxels', () => {
     expect(mockHistory.push).toHaveBeenCalledWith(mockMemo);
     expect(console.error).toHaveBeenCalled();
     console.error.mockRestore();
+  });
+});
+
+describe('applyLabelmapEdit', () => {
+  it('returns the memo for the caller to record, without recording it', () => {
+    expect(applyLabelmapEdit({ segmentationId: 'seg', volume, edit: set => set(1, 1) }))
+      .toEqual({ changed: true, memo: mockMemo });
+    expect(mockHistory.push).not.toHaveBeenCalled();
+    expect(mockTrigger.triggerSegmentationDataModified).toHaveBeenCalledWith('seg', [3, 4]);
   });
 });

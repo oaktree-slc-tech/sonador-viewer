@@ -1,19 +1,15 @@
 {
   "Acquired": "Acquired",
-  "Also remove the segment within this distance (mm) of the selected points": "Also remove the segment within this distance (mm) of the selected points",
   "Angle": "Angle",
   "Axial": "Axial",
   "Bidirectional": "Bidirectional",
   "Brush": "Brush",
-  "Cancel": "Cancel",
   "CINE": "CINE",
   "Circle": "Circle",
   "Clear": "Clear",
-  "Clear selection": "Clear selection",
   "Coronal": "Coronal",
   "Create Seg": "Create Seg",
   "Crosshairs": "Crosshairs",
-  "Depth": "Depth",
   "Download": "Download",
   "Downloading…": "Downloading…",
   "Dynamic": "Dynamic",
@@ -42,7 +38,6 @@
   "Rectangle": "Rectangle",
   "Redo": "Redo",
   "Remove Offline Copy": "Remove Offline Copy",
-  "Remove selected points": "Remove selected points",
   "Reset": "$t(Common:Reset)",
   "Reset to Defaults": "$t(Common:Reset) to Defaults",
   "ROI Window": "ROI Window",
@@ -61,5 +56,7 @@
   "Threshold Range": "Threshold Range",
   "Threshold Tool": "Threshold Tool",
   "Undo": "Undo",
-  "Zoom": "Zoom"
+  "Zoom": "Zoom",
+  "Lasso": "Lasso",
+  "Paint": "Paint"
 }

@@ -85,6 +85,20 @@ describe('loadSegmentation identity handling', () => {
     expect(segDisplaySet.labelmapSegments[0].sort()).toEqual([1, 2]);
   });
 
+  it('names the segmentation after its series description', async () => {
+    await loadSegmentation(
+      IMAGE_IDS, { SeriesDescription: 'Liver segmentation' }, new Uint16Array(12),
+      makeSegMetadata(), [], [[1, 300]]);
+
+    expect(mockCreateCanonicalSegmentation.mock.calls[0][0].label).toBe('Liver segmentation');
+  });
+
+  it('leaves the segmentation unnamed when the series has no description', async () => {
+    await loadSegmentation(IMAGE_IDS, {}, new Uint16Array(12), makeSegMetadata(), [], [[1, 300]]);
+
+    expect(mockCreateCanonicalSegmentation.mock.calls[0][0].label).toBeUndefined();
+  });
+
   it('places a remapped segment colour at its canonical voxel value', async () => {
     await loadSegmentation(
       IMAGE_IDS, {}, new Uint16Array(12), makeSegMetadata(), [], [[1, 300]]);

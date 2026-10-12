@@ -10,10 +10,11 @@ import {
 
 import i18n from '@ohif/i18n';
 
-import { EVALUATORS } from './constants';
-import { LABELMAP_TOOL_NAMES } from './segEditorTools';
-import { getSegEditorToolContext } from './segEditorToolContext';
 import { get3DToolState } from '../threeDTools/threeDToolState';
+
+import { EVALUATORS } from './constants';
+import { getSegEditorToolContext } from './segEditorToolContext';
+import { LABELMAP_TOOL_NAMES } from './segEditorTools';
 
 
 const disabled = disabledText => ({ disabled: true, isActive: false, disabledText });
@@ -114,19 +115,6 @@ export default function getSegEditorEvaluators({ servicesManager }) {
       // 3D palette Pointer: active while no 3D tool is
       name: EVALUATORS.pointer3D,
       evaluate: () => ({ disabled: get3DToolState().busy, isActive: !get3DToolState().activeTool }),
-    },
-    {
-      // Keep the Selection tool's removal depth option in step with the 3D tool state (Remove and
-      // Clear do nothing while no points are selected)
-      name: EVALUATORS.synchronizeSelectionOptions,
-      evaluate: ({ button }) => {
-        const { removalDepth } = get3DToolState();
-        (button?.props?.options ?? button?.options ?? []).forEach(option => {
-          if (option.id === 'removal-depth') {
-            option.value = removalDepth;
-          }
-        });
-      },
     },
     {
       // Keep the radius option in step with the brush size shared by the brush-based tools

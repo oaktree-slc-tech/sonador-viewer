@@ -75,3 +75,26 @@ export function addLabelmapTools(toolGroup) {
 
 /** Every labelmap tool name added by addLabelmapTools. */
 export const LABELMAP_TOOL_NAMES = Object.values(LABELMAP_TOOLS);
+
+/**
+ * Let a brush-based tool go passive without rejecting a preview it does not have.
+ *
+ * BrushTool.disableCursor() (run when the tool goes passive) rejects any pending preview, and the
+ * rejection asks the undo history whether the last edit holds preview voxels by walking every
+ * voxel of the labelmap: seconds on a large volume, on the main thread, for nothing when no
+ * preview is pending (the editor's brushes have the preview disabled). The tool's own edit memo
+ * is committed first, as the rejection would have done; without a preview element the rejection
+ * then returns at once.
+ *
+ * @param {Object} toolInstance - a Cornerstone3D tool instance (others are left alone)
+ * @returns {boolean} whether a rejection was skipped
+ */
+export function releaseIdlePreview(toolInstance) {
+  const previewData = toolInstance?._previewData;
+  if (!previewData || previewData.preview || !previewData.element) {
+    return false;
+  }
+  toolInstance.doneEditMemo?.();
+  previewData.element = null;
+  return true;
+}

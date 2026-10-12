@@ -3,12 +3,14 @@
 import { DoubleSide, Mesh, MeshBasicMaterial, OrthographicCamera, SphereGeometry } from 'three';
 
 import { ensureBoundsTree } from '../threejs/meshBvh';
+
 import {
   combineSelection,
   pointInPolygon,
-  selectionModeForEvent,
-  selectVerticesInLasso,
   SELECTION_MODES,
+  selectionModeForEvent,
+  selectTrianglesInLasso,
+  selectVerticesInLasso,
 } from './lassoSelection';
 
 
@@ -95,5 +97,36 @@ describe('combineSelection / selectionModeForEvent', () => {
     expect(selectionModeForEvent({ shiftKey: true })).toBe(SELECTION_MODES.add);
     expect(selectionModeForEvent({ ctrlKey: true })).toBe(SELECTION_MODES.subtract);
     expect(selectionModeForEvent({ metaKey: true, shiftKey: true })).toBe(SELECTION_MODES.subtract);
+  });
+});
+
+describe('selectTrianglesInLasso', () => {
+  it('selects the triangles whose centroid is inside the lasso and visible', () => {
+    const mesh = sphere();
+    const index = mesh.geometry.getIndex();
+    const position = mesh.geometry.getAttribute('position');
+    const centroidZ = t => [0, 1, 2].reduce((sum, k) => sum + position.getZ(index.getX(3 * t + k)), 0) / 3;
+
+    const selected = selectTrianglesInLasso({ mesh, camera: frontCamera(), lasso: FULL, occluders: [mesh] });
+
+    expect(selected.length).toBeGreaterThan(0);
+    expect(selected.length).toBeLessThan(index.count / 3);
+    selected.forEach(t => expect(centroidZ(t)).toBeGreaterThan(0)); // the near side only
+
+    const all = selectTrianglesInLasso({ mesh, camera: frontCamera(), lasso: FULL });
+    expect(all).toHaveLength(index.count / 3);
+    expect(selectTrianglesInLasso({ mesh, camera: frontCamera(), lasso: [0, 0, 1, 1] })).toEqual([]);
+  });
+
+  it('selects by centroid, so a triangle straddling the lasso edge counts once its centre is in', () => {
+    const mesh = sphere();
+    const half = [0, -1, 1, -1, 1, 1, 0, 1]; // the right half of the view
+    const index = mesh.geometry.getIndex();
+    const position = mesh.geometry.getAttribute('position');
+    const centroidX = t => [0, 1, 2].reduce((sum, k) => sum + position.getX(index.getX(3 * t + k)), 0) / 3;
+
+    const selected = selectTrianglesInLasso({ mesh, camera: frontCamera(), lasso: half });
+
+    selected.forEach(t => expect(centroidX(t)).toBeGreaterThanOrEqual(0));
   });
 });

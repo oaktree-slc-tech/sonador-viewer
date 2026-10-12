@@ -230,7 +230,9 @@ export default function SonadorMprSegmentationPanel({
       
       setTimeout(() => {
         const _seg = c3dSegmentations.state.getSegmentation(_ds.segmentationId);
-        if (_seg) {
+        // The table reads per-viewport state: until the segmentation is attached to a viewport the
+        // representation events that follow fill the table instead
+        if (_seg && c3dSegmentations.state.getViewportIdsWithSegmentation(_ds.segmentationId).length) {
 
           // Translate segmentation data to tableSeg and set first-run state
           setMprSegmentations([c3dSegUtils.c3dSeg2SegmentationTableData(_seg)]);
