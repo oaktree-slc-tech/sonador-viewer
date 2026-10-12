@@ -20,4 +20,11 @@ describe('getUserManagerForOpenIdConnectClient', () => {
 
     expect(returnVal).not.toBe(undefined);
   });
+
+  it('renews tokens itself instead of through the silent renew frame', () => {
+    const userManager = getUserManagerForOpenIdConnectClient({}, {});
+
+    expect(userManager.settings.automaticSilentRenew).toBe(false);
+    expect(userManager.events.addAccessTokenExpiring).toHaveBeenCalledTimes(1);
+  });
 });

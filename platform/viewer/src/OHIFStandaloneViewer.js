@@ -15,6 +15,7 @@ import NotFound from './pages/NotFound/NotFound';
 import SignedOut from './pages/SignedOut/SignedOut';
 import { isSigningOut } from './components/UserMenu/UserMenu';
 import * as RoutesUtil from './routes/routesUtil';
+import { REFUSED, sessionRenewal } from './utils/sonadorAccessToken';
 
 import './OHIFStandaloneViewer.css';
 import './variables.css';
@@ -202,11 +203,23 @@ function SignInSilentOrRedirectRoute({ userManager }) {
     }
 
     void userManager.getUser().then((user) => {
-      if (user) {
-        void userManager.signinSilent();
-      } else {
+      if (!user) {
         void userManager.signinRedirect();
+        return;
       }
+
+      sessionRenewal(userManager)
+        .renew()
+        .then((result) => {
+          if (result === REFUSED && !isSigningOut()) {
+            void userManager.signinRedirect();
+          }
+        })
+        .catch(() => {
+          if (!isSigningOut()) {
+            void userManager.signinRedirect();
+          }
+        });
     });
   }, [signingOut]);
 

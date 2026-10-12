@@ -1,6 +1,8 @@
 // https://github.com/maxmantz/redux-oidc/blob/master/docs/API.md
 import { createUserManager, loadUser } from 'redux-oidc';
 
+import { sessionRenewal } from './sonadorAccessToken.js';
+
 /**
  * Creates a userManager from oidcSettings;
  * loads the user into the provided redux store
@@ -22,12 +24,20 @@ export default function (store, oidcSettings) {
 
   const settings = {
     ...oidcSettings,
-    automaticSilentRenew: true,
+    // Renewal is driven below: oidc-client's silent renew runs in a frame that only carries the
+    // Sonador session cookie when the viewer shares Sonador's site.
+    automaticSilentRenew: false,
     revokeAccessTokenOnSignout: true,
     filterProtocolClaims: true,
   };
 
   const userManager = createUserManager(settings);
+
+  // A session that cannot be renewed is left to expire; the sign-in route then reauthenticates.
+  const renewal = sessionRenewal(userManager);
+  userManager.events.addAccessTokenExpiring(() => {
+    renewal.renew().catch(error => console.warn('Unable to renew the access token', error));
+  });
 
   loadUser(store, userManager);
 

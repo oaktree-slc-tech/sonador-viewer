@@ -18,44 +18,10 @@ import {
 import { useAppContext } from '../../context/AppContext';
 import UserManagerContext from '../../context/UserManagerContext';
 import AboutSonador from '../AboutSonador/AboutSonador';
+import { beginSignOut, endSignOut, isSigningOut } from '../../utils/signOutLatch';
 
 
-/**
- * Sign-out latch.
- *
- * `signoutRedirect()` calls `removeUser()` *before* it navigates. That clears `state.oidc.user`
- * synchronously, React re-renders, and OHIFStandaloneViewer flips to its unauthenticated route
- * tree while the browser is still sitting on a protected path. The "*" route there mounts
- * SignInSilentOrRedirectRoute, which immediately fires `signinRedirect()` -- and that navigation
- * beats the logout navigation that is still being assembled. The user is sent to the
- * authorization endpoint instead of the end session endpoint, the identity provider's session is
- * still live so it answers straight away, and they land back on the study list still signed in.
- *
- * That race is why logout has never worked (ohif-viewers#31): the browser never reaches Sonador's
- * logout URL at all, so no amount of server side correctness is ever exercised.
- *
- * The latch closes for the brief window between "logout requested" and "browser has navigated
- * away", and the sign-in routes refuse to act while it is set.
- *
- * Deliberately module scope rather than sessionStorage: the window it guards lives entirely
- * inside one document, and the navigation that ends it replaces that document. Persisting it
- * would outlive its purpose -- sessionStorage is per origin, so a viewer served from a different
- * origin than Sonador would keep the flag set after the logout navigation left, and refuse to
- * sign the user back in when they returned.
- */
-let signingOut = false;
-
-export function isSigningOut() {
-  return signingOut;
-}
-
-export function beginSignOut() {
-  signingOut = true;
-}
-
-export function endSignOut() {
-  signingOut = false;
-}
+export { isSigningOut, beginSignOut, endSignOut };
 
 /**
  * Start OpenID RP-initiated logout: clear the local OIDC user and hand the browser to Sonador's

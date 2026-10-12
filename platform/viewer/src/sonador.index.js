@@ -43,6 +43,7 @@ import App from './App.js';
 import OHIFLogo from './components/OHIFLogo/OHIFLogo.js';
 import SonadorMark from './components/OHIFLogo/SonadorMark.js';
 import { uiNotificationService } from '@ohif/core';
+import { whenSignedIn } from './utils/sonadorAccessToken';
 
 const initOHIFViewer = function () {
   // Initialize OHIF viewer
@@ -90,9 +91,20 @@ const initOHIFViewer = function () {
   if (window.sonador && window.sonador.host) {
     var sonador_pacsurl = window.sonador.host + window.sonador.api.pacs;
 
-    fetch(sonador_pacsurl, {
-      credentials: 'include',
-    })
+    // With OpenID configured the list is requested with the user's token, which also works for a
+    // viewer served from another site; otherwise it relies on the Sonador session cookie.
+    const oidc = window.config.oidc;
+    const signedIn = oidc && oidc.length ? whenSignedIn(window.store) : Promise.resolve(null);
+
+    signedIn
+      .then((user) =>
+        fetch(
+          sonador_pacsurl,
+          user
+            ? { headers: { Authorization: `Bearer ${user.access_token}` }, credentials: 'omit' }
+            : { credentials: 'include' }
+        )
+      )
       .then( async (response) => {
         if (!response.ok) {
           const errorText = await response.text();
