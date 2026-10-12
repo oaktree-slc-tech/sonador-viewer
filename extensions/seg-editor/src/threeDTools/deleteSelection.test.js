@@ -1,9 +1,18 @@
-// The 3D Selection tool's delete pipeline, with the workers replaced by in-process equivalents: fan
-// caps for the OpenCascade patches and a ray-parity voxelizer for polymorphic segmentation's.
+// The 3D Selection tool's delete pipeline, with the hole-filling worker replaced by fan caps and
+// the carve run in this thread.
 
-import { DeleteCancelledError, deleteSelection, DELETE_STEPS, withGridCorners } from './deleteSelection';
+import { isClosedManifold, uvSphere, verticesWhere } from './testing/meshes';
+import {
+  cutAndPatch,
+  DELETE_STEPS,
+  DeleteCancelledError,
+  deleteSelection,
+  editIndexBox,
+  repairSurface,
+  RIM_CLEANUPS,
+} from './deleteSelection';
+import { carveLabelmap } from './labelmapCarve';
 import { fanCap } from './meshCut';
-import { uvSphere, verticesWhere, voxelizeByParity } from './testing/meshes';
 
 
 // 1 mm labelmap, 32^3, centred on the world origin
@@ -24,12 +33,14 @@ function labelmapWith(fill) {
   return { scalarData, dimensions: [N, N, N], indexToWorld };
 }
 
+const patchHoles = async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'fitted' }));
+
 function run({ surface, selected, labelmap, segmentIndex = 1, depth = 0 }) {
   const removed = [];
   const steps = [];
   const deps = {
-    patchHoles: jest.fn(async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'fitted' }))),
-    voxelize: jest.fn(async s => voxelizeByParity(s, 24)),
+    patchHoles: jest.fn(patchHoles),
+    carve: jest.fn(args => carveLabelmap(args)),
     removeVoxels: jest.fn(indices => removed.push(...indices)),
   };
   return deleteSelection({
@@ -38,19 +49,170 @@ function run({ surface, selected, labelmap, segmentIndex = 1, depth = 0 }) {
     .then(result => ({ result, removed, steps, deps }));
 }
 
-describe('deleteSelection', () => {
-  // Segment 1: a 10 mm ball. Its surface: a sphere a little smaller than the voxels' extent, as a
-  // smoothed marching-cubes surface is. Segment 2 sits right above the ball.
-  const ball = ([x, y, z]) => Math.hypot(x, y, z) <= 10;
-  const labelmap = () => labelmapWith(p => (ball(p) ? 1 : p[2] > 10 && p[2] < 13 ? 2 : 0));
-  const surface = uvSphere({ radius: 9.6, segments: 16, rings: 16 });
+// Segment 1: a 10 mm ball. Its surface: a sphere a little smaller than the voxels' extent, as a
+// smoothed marching-cubes surface is. Segment 2 sits right above the ball.
+const ball = ([x, y, z]) => Math.hypot(x, y, z) <= 10;
+const labelmap = () => labelmapWith(p => (ball(p) ? 1 : p[2] > 10 && p[2] < 13 ? 2 : 0));
+const surface = uvSphere({ radius: 9.6, segments: 16, rings: 16 });
 
+describe('cutAndPatch', () => {
+  it('cuts the selected points out and closes the hole, returning a closed surface', async () => {
+    const selected = verticesWhere(surface.points, ([, , z]) => z > 6);
+    const steps = [];
+
+    const result = await cutAndPatch({ surface, selected, deps: { patchHoles }, onStep: step => steps.push(step) });
+
+    expect(steps).toEqual([DELETE_STEPS.cut, DELETE_STEPS.patch]);
+    expect(result).toMatchObject({ changed: true, holes: 1, cappedHoles: 0, patchErrors: [] });
+    expect(isClosedManifold(result.edited.polys)).toBe(true);
+    expect(result.edited.points.length).toBeLessThan(surface.points.length);
+    expect(result.diagnostics).toMatchObject({
+      input: { closed: true }, output: { closed: true }, openEdges: 0, methods: { fitted: 1 },
+    });
+    expect(result.edited.patchPolysOffset).toBeLessThan(result.edited.polys.length);
+    // The edit box covers the removed points and the hole's rim (the ring at z = 5.33)
+    expect(result.editBox.max[2]).toBeGreaterThanOrEqual(9.6);
+    expect(result.editBox.min[2]).toBeCloseTo(5.33, 1);
+    expect(result.selectedPoints).toHaveLength(selected.length * 3);
+  });
+
+  it('removes exactly the selected triangles, and counts their vertices as the removed points', async () => {
+    // The cap's triangles: every triangle whose vertices all lie above z = 6
+    const cells = [];
+    for (let t = 0; t < surface.polys.length / 4; t++) {
+      const above = [1, 2, 3].every(k => surface.points[3 * surface.polys[4 * t + k] + 2] > 6);
+      if (above) {
+        cells.push(t);
+      }
+    }
+
+    const result = await cutAndPatch({ surface, selectedTriangles: cells, deps: { patchHoles } });
+
+    expect(result.changed).toBe(true);
+    expect(result.holes).toBe(1);
+    expect(isClosedManifold(result.edited.polys)).toBe(true);
+    expect(result.edited.polys.length / 4).toBe(surface.polys.length / 4 - cells.length + result.edited.polys.subarray(result.edited.patchPolysOffset).length / 4);
+    const vertices = new Set();
+    cells.forEach(t => [1, 2, 3].forEach(k => vertices.add(surface.polys[4 * t + k])));
+    expect(result.selectedPoints).toHaveLength(vertices.size * 3);
+  });
+
+  it('leaves a piece far from the cut alone, and counts whatever the cleanup removed in the edit', async () => {
+    // The sphere plus a tetrahedron at x = 100, one surface. Removing one sphere triangle must
+    // not drop the tetrahedron as an island: the voxels of anything removed must lie in the edit
+    // box, and the tetrahedron's do not.
+    const tetra = { points: [100, 0, 0, 101, 0, 0, 100, 1, 0, 100, 0, 1], polys: [3, 0, 1, 2, 3, 0, 3, 1, 3, 1, 3, 2, 3, 0, 2, 3] };
+    const offset = surface.points.length / 3;
+    const two = {
+      points: Float32Array.from([...surface.points, ...tetra.points]),
+      polys: Int32Array.from([...surface.polys, ...tetra.polys.map((v, i) => (i % 4 === 0 ? v : v + offset))]),
+    };
+
+    const result = await cutAndPatch({ surface: two, selectedTriangles: [0], deps: { patchHoles } });
+
+    expect(result.changed).toBe(true);
+    expect(result.edited.polys.length / 4).toBe(two.polys.length / 4 - 1 + result.edited.polys.subarray(result.edited.patchPolysOffset).length / 4);
+    expect(result.diagnostics.islandsRemoved).toBe(0);
+    expect(result.editBox.max[0]).toBeLessThan(50);
+
+    // An island hanging off the rim is removed by the cleanup, and its vertices count as removed
+    // points, so the edit box reaches them
+    const island = {
+      points: Float32Array.from([...surface.points, 30, 0, 0, 30, 1, 0]),
+      polys: Int32Array.from([...surface.polys, 3, surface.polys[1], offset, offset + 1]),
+    };
+    const cleaned = await cutAndPatch({ surface: island, selectedTriangles: [0], options: { islandMaxTriangles: 1 }, deps: { patchHoles } });
+    // Three open edges: the ear pass takes it before the island pass would
+    expect(cleaned.diagnostics.earsRemoved + cleaned.diagnostics.islandsRemoved).toBe(1);
+    expect(cleaned.editBox.max[0]).toBeGreaterThanOrEqual(30);
+    expect(cleaned.selectedPoints.length / 3).toBeGreaterThanOrEqual(3 + 2);
+  });
+
+  it('runs the whole-mesh stages through the injected preparers', async () => {
+    const prepareCut = jest.fn(args => jest.requireActual('./deleteSelection').prepareCut(args));
+    const assembleCut = jest.fn(args => jest.requireActual('./deleteSelection').assembleCut(args));
+    const cells = [];
+    for (let t = 0; t < surface.polys.length / 4; t++) {
+      if ([1, 2, 3].every(k => surface.points[3 * surface.polys[4 * t + k] + 2] > 6)) {
+        cells.push(t);
+      }
+    }
+
+    const result = await cutAndPatch({ surface, selectedTriangles: cells, deps: { patchHoles, prepareCut, assembleCut } });
+
+    expect(prepareCut).toHaveBeenCalledTimes(1);
+    expect(assembleCut).toHaveBeenCalledTimes(1);
+    expect(result.changed).toBe(true);
+    expect(isClosedManifold(result.edited.polys)).toBe(true);
+  });
+
+  it('changes nothing for an empty selection', async () => {
+    const patch = jest.fn(patchHoles);
+    const result = await cutAndPatch({ surface, selected: [], deps: { patchHoles: patch } });
+
+    expect(result.changed).toBe(false);
+    expect(result.edited).toBeNull();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('removes a whole surface the selection covers completely, without a patch', async () => {
+    const result = await cutAndPatch({
+      surface, selected: verticesWhere(surface.points, () => true), deps: { patchHoles },
+    });
+
+    expect(result).toMatchObject({ changed: true, holes: 0, edited: null });
+  });
+
+  it('stops after the patch once cancelled', async () => {
+    let cancelled = false;
+    const deps = {
+      patchHoles: async loops => {
+        cancelled = true;
+        return patchHoles(loops);
+      },
+      isCancelled: () => cancelled,
+    };
+
+    await expect(cutAndPatch({
+      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6), deps,
+    })).rejects.toBeInstanceOf(DeleteCancelledError);
+  });
+
+  it('reports holes that could only be capped', async () => {
+    const result = await cutAndPatch({
+      surface,
+      selected: verticesWhere(surface.points, ([, , z]) => z > 6),
+      deps: { patchHoles: async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'cap', error: 'no fit' })) },
+    });
+
+    expect(result).toMatchObject({ holes: 1, cappedHoles: 1, patchErrors: ['no fit'] });
+  });
+});
+
+describe('editIndexBox', () => {
+  it('pads the edit box by three voxels and the removal depth', () => {
+    const editBox = { min: [0, 0, 0], max: [2, 2, 2] };
+    const map = labelmap();
+
+    expect(editIndexBox({ editBox, labelmap: map }).indexBox)
+      .toEqual({ min: [16 - 4, 16 - 4, 16 - 4], max: [16 + 2 + 4, 16 + 2 + 4, 16 + 2 + 4] });
+    expect(editIndexBox({ editBox, depth: 2, labelmap: map }).indexBox)
+      .toEqual({ min: [16 - 6, 16 - 6, 16 - 6], max: [16 + 2 + 6, 16 + 2 + 6, 16 + 2 + 6] });
+  });
+
+  it('is empty for an edit outside the labelmap', () => {
+    const editBox = { min: [100, 100, 100], max: [102, 102, 102] };
+    expect(editIndexBox({ editBox, labelmap: labelmap() }).indexBox).toBeNull();
+  });
+});
+
+describe('deleteSelection', () => {
   it('removes the cut-away cap of the segment and nothing else', async () => {
     const map = labelmap();
     const before = map.scalarData.slice();
     const selected = verticesWhere(surface.points, ([, , z]) => z > 6);
 
-    const { result, removed, steps } = await run({ surface, selected, labelmap: map });
+    const { result, removed, steps, deps } = await run({ surface, selected, labelmap: map });
 
     expect(steps).toEqual([DELETE_STEPS.cut, DELETE_STEPS.patch, DELETE_STEPS.voxelize, DELETE_STEPS.write]);
     expect(result).toMatchObject({ holes: 1, cappedHoles: 0, removedVoxels: removed.length });
@@ -60,6 +222,10 @@ describe('deleteSelection', () => {
       const [, , z] = indexToWorld([i % N, Math.floor(i / N) % N, Math.floor(i / (N * N))]);
       expect(z).toBeGreaterThan(3); // only near the removed cap (the hole's rim is at z = 4.6)
     });
+    // Only the neighbourhood of the edit was examined
+    const { indexBox } = deps.carve.mock.calls[0][0];
+    expect(indexBox.min[2]).toBeGreaterThan(16);
+    expect(deps.carve.mock.calls[0][0].boxData.length).toBeLessThan(N * N * N / 2);
   });
 
   it('removes the segment beneath a small selection down to the removal depth', async () => {
@@ -82,9 +248,9 @@ describe('deleteSelection', () => {
     const deps = {
       patchHoles: async loops => {
         cancelled = true; // e.g. the editor closed while the patches were being fitted
-        return loops.map(loop => ({ patch: fanCap(loop), method: 'fitted' }));
+        return patchHoles(loops);
       },
-      voxelize: jest.fn(async s => voxelizeByParity(s, 12)),
+      carve: jest.fn(args => carveLabelmap(args)),
       removeVoxels,
       isCancelled: () => cancelled,
     };
@@ -93,7 +259,7 @@ describe('deleteSelection', () => {
       surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6), segmentIndex: 1,
       labelmap: labelmap(), deps,
     })).rejects.toBeInstanceOf(DeleteCancelledError);
-    expect(deps.voxelize).not.toHaveBeenCalled();
+    expect(deps.carve).not.toHaveBeenCalled();
     expect(removeVoxels).not.toHaveBeenCalled();
   });
 
@@ -102,6 +268,7 @@ describe('deleteSelection', () => {
 
     expect(result.removedVoxels).toBe(0);
     expect(deps.patchHoles).not.toHaveBeenCalled();
+    expect(deps.carve).not.toHaveBeenCalled();
     expect(deps.removeVoxels).not.toHaveBeenCalled();
   });
 
@@ -111,42 +278,81 @@ describe('deleteSelection', () => {
     });
 
     expect(result.holes).toBe(0);
+    expect(result.edited).toBeNull();
     // Everything of the segment near the surface's bounds goes
     expect(removed.length).toBeGreaterThan(3500);
   });
 
-  it('reports holes that could only be capped', async () => {
-    const deps = {
-      patchHoles: async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'cap', error: 'no fit' })),
-      voxelize: async s => voxelizeByParity(s, 24),
-      removeVoxels: () => {},
-    };
-    const result = await deleteSelection({
-      surface,
-      selected: verticesWhere(surface.points, ([, , z]) => z > 6),
-      segmentIndex: 1,
-      labelmap: labelmap(),
-      deps,
+  it('writes nothing for an edit outside the labelmap', async () => {
+    const far = uvSphere({ radius: 5, segments: 12, rings: 8, center: [200, 200, 200] });
+    const { result, deps } = await run({
+      surface: far, selected: verticesWhere(far.points, ([, , z]) => z > 203), labelmap: labelmap(),
     });
 
-    expect(result).toMatchObject({ holes: 1, cappedHoles: 1, patchErrors: ['no fit'] });
-  });
-
-  it('voxelizes both surfaces on one grid', async () => {
-    const { deps } = await run({
-      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6), labelmap: labelmap(),
-    });
-
-    const [original, edited] = deps.voxelize.mock.calls.map(([s]) => s.points);
-    const corners = points => Array.from(points.slice(points.length - 6));
-    expect(corners(edited)).toEqual(corners(original));
+    expect(result.removedVoxels).toBe(0);
+    expect(deps.carve).not.toHaveBeenCalled();
   });
 });
 
-describe('withGridCorners', () => {
-  it('appends the box corners as unreferenced points', () => {
-    const out = withGridCorners({ points: Float32Array.from([1, 2, 3]), polys: [] },
-      { min: [0, 0, 0], max: [5, 5, 5] });
-    expect(Array.from(out.points)).toEqual([1, 2, 3, 0, 0, 0, 5, 5, 5]);
+describe('cutAndPatch options', () => {
+  const selected = verticesWhere(surface.points, ([, , z]) => z > 6);
+
+  it('passes the closure and constraint cap to the patcher', async () => {
+    const patch = jest.fn(patchHoles);
+    await cutAndPatch({ surface, selected, deps: { patchHoles: patch }, options: { closure: 'flat', maxConstraints: 8 } });
+    expect(patch).toHaveBeenCalledWith(expect.any(Array), { closure: 'flat', maxConstraints: 8 });
+  });
+
+  it('cleans the rim as the cleanup level asks', async () => {
+    const jagged = verticesWhere(surface.points, ([x, y, z]) => z > 3 && z < 7 && x > 0 && Math.abs(y) < 2);
+    const off = await cutAndPatch({ surface, selected: jagged, deps: { patchHoles }, options: { rimCleanup: RIM_CLEANUPS.off } });
+    const full = await cutAndPatch({ surface, selected: jagged, deps: { patchHoles }, options: { rimCleanup: RIM_CLEANUPS.full } });
+    expect(off.diagnostics.earsRemoved).toBe(0);
+    expect(full.diagnostics.earsRemoved).toBeGreaterThanOrEqual(0);
+    expect(isClosedManifold(off.edited.polys)).toBe(true);
+    expect(isClosedManifold(full.edited.polys)).toBe(true);
+  });
+
+  it('welds within the tolerance before cutting', async () => {
+    // Every vertex duplicated a hair away and each triangle given one duplicate: without a
+    // tolerance the triangles do not share vertices and every edge is open
+    const points = new Float32Array(surface.points.length * 2);
+    points.set(surface.points);
+    for (let i = 0; i < surface.points.length; i++) {
+      points[surface.points.length + i] = surface.points[i] + 1e-4;
+    }
+    const n = surface.points.length / 3;
+    const polys = [];
+    for (let p = 0; p < surface.polys.length; p += 4) {
+      const [a, b, c] = [surface.polys[p + 1], surface.polys[p + 2], surface.polys[p + 3]];
+      polys.push(3, a, b + n, c);
+    }
+    const shifted = { points, polys: Int32Array.from(polys) };
+    const loose = await cutAndPatch({ surface: shifted, selected, deps: { patchHoles }, options: { weldTolerance: 0 } });
+    const welded = await cutAndPatch({ surface: shifted, selected, deps: { patchHoles }, options: { weldTolerance: 0.01 } });
+    expect(loose.diagnostics.input.closed).toBe(false);
+    expect(welded.diagnostics.input.closed).toBe(true);
+  });
+});
+
+describe('repairSurface', () => {
+  it('closes the open rims of a cut surface without a selection', async () => {
+    const open = await cutAndPatch({
+      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6),
+      deps: { patchHoles: async loops => loops.map(() => ({ patch: { points: new Float64Array(0), triangles: new Int32Array(0) }, method: 'flat' })) },
+    });
+    expect(open.diagnostics.output.closed).toBe(false);
+
+    const repaired = await repairSurface({ surface: open.edited, deps: { patchHoles } });
+    expect(repaired.changed).toBe(true);
+    expect(repaired.holes).toBe(1);
+    expect(repaired.diagnostics.output.closed).toBe(true);
+    expect(isClosedManifold(repaired.edited.polys)).toBe(true);
+  });
+
+  it('changes nothing on a closed surface', async () => {
+    const result = await repairSurface({ surface, deps: { patchHoles } });
+    expect(result.changed).toBe(false);
+    expect(result.diagnostics.input.closed).toBe(true);
   });
 });

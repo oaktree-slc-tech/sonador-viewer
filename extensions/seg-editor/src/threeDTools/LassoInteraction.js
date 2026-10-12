@@ -1,8 +1,9 @@
 // Pointer and keyboard handling for the 3D Selection tool (ohif-viewers#142, FR-18/FR-19).
 //
-// While enabled, a left-button drag on the canvas draws a lasso (shown as an SVG outline over the
-// canvas) and reports it in normalized device coordinates with the selection mode from the
-// modifier keys held when the drag started (Shift adds, Ctrl/Cmd subtracts). Escape asks to clear
+// While enabled, a left-button drag on the canvas draws a lasso, or drags out a box when the shape
+// says so (either shown as an SVG outline over the canvas), and reports the polygon in normalized
+// device coordinates with the selection mode from the modifier keys held when the drag started
+// (Shift adds, Ctrl/Cmd subtracts). Escape asks to clear
 // the selection and Delete/Backspace to delete it. The other mouse buttons and the wheel are left
 // to the camera controls, which the caller rebinds (right rotates, middle pans).
 
@@ -11,6 +12,11 @@ import { selectionModeForEvent } from './lassoSelection.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MIN_POINT_SPACING_PX = 2;
+
+export const LASSO_SHAPES = {
+  lasso: 'lasso',
+  box: 'box',
+};
 
 function _isTextInput(target) {
   const tag = target?.tagName;
@@ -26,17 +32,20 @@ export default class LassoInteraction {
    * @param {Function} params.onClear - () => void
    * @param {Function} params.onDelete - () => void
    * @param {Window} [params.keyTarget] - receives the keyboard shortcuts (default: window)
+   * @param {string} [params.shape] - LASSO_SHAPES (default: lasso)
    */
-  constructor({ element, overlayParent, onLasso, onClear, onDelete, keyTarget }) {
+  constructor({ element, overlayParent, onLasso, onClear, onDelete, keyTarget, shape }) {
     this.element = element;
     this.overlayParent = overlayParent;
     this.onLasso = onLasso;
     this.onClear = onClear;
     this.onDelete = onDelete;
     this.keyTarget = keyTarget || (typeof window !== 'undefined' ? window : null);
+    this.shape = shape || LASSO_SHAPES.lasso;
 
     this.enabled = false;
     this._points = null;
+    this._start = null;
     this._mode = null;
     this._pointerId = null;
     this._svg = null;
@@ -77,6 +86,11 @@ export default class LassoInteraction {
     this._svg?.remove();
     this._svg = null;
     this._outline = null;
+  }
+
+  /** Draw a freehand lasso or drag out a box from now on (a drag in progress keeps its shape). */
+  setShape(shape) {
+    this.shape = shape === LASSO_SHAPES.box ? LASSO_SHAPES.box : LASSO_SHAPES.lasso;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -130,6 +144,7 @@ export default class LassoInteraction {
     }
     this._pointerId = null;
     this._points = null;
+    this._start = null;
     this._drawOutline();
   }
 
@@ -141,6 +156,8 @@ export default class LassoInteraction {
     this._pointerId = event.pointerId;
     this._mode = selectionModeForEvent(event);
     this._points = this._clientToLocal(event);
+    this._start = this._points.slice();
+    this._dragShape = this.shape;
     this.element.setPointerCapture?.(event.pointerId);
     this.element.addEventListener('pointermove', this._onPointerMove);
     this.element.addEventListener('pointerup', this._onPointerUp);
@@ -153,6 +170,12 @@ export default class LassoInteraction {
       return;
     }
     const [x, y] = this._clientToLocal(event);
+    if (this._dragShape === LASSO_SHAPES.box) {
+      const [sx, sy] = this._start;
+      this._points = [sx, sy, x, sy, x, y, sx, y];
+      this._drawOutline();
+      return;
+    }
     const n = this._points.length;
     if (Math.hypot(x - this._points[n - 2], y - this._points[n - 1]) >= MIN_POINT_SPACING_PX) {
       this._points.push(x, y);
@@ -179,7 +202,7 @@ export default class LassoInteraction {
     const ndc = new Array(points.length);
     for (let i = 0; i < points.length; i += 2) {
       ndc[i] = (points[i] / rect.width) * 2 - 1;
-      ndc[i + 1] = -((points[i + 1] / rect.height) * 2 - 1);
+      ndc[i + 1] = -((points[i + 1] / rect.height) * 2 - 1) || 0;
     }
     this.onLasso?.(ndc, mode);
   }

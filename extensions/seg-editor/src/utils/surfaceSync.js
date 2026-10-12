@@ -1,5 +1,5 @@
 // Keeps the editor's 3D surface in step with edits to the working segmentation (ohif-viewers#142,
-// FR-9 / AR-7).
+// FR-9 / AR-7, FR-25 / AR-17).
 //
 // The 2D views paint the working copy (`<source>::edit`); the surface is built from a separate
 // editor-local labelmap (`vol3d:<source>::edit`) whose voxels were copied once, at load. After
@@ -23,6 +23,11 @@
 // - The copy always runs, so a surface enabled later is computed from current voxels.
 // - Edits made before the surface exists (or while it is off) mark it stale; `refreshIfStale()`
 //   marks the labelmap modified again once the surface is available.
+// - Edits made for the surface itself (`withOwnEdit`: the labelmap writes that follow a surface
+//   edit, and their undo) only need the copy: the surface already shows them.
+// - Any other edit rebuilds the surface, but not while a surface edit's write is still queued
+//   (`isUpdateBlocked`): a rebuild then would show the labelmap without that edit. The rebuild
+//   waits, re-checking at the edit delay, until the writes have landed.
 
 import { eventTarget as c3dEventTarget } from '@cornerstonejs/core';
 import {
@@ -80,12 +85,18 @@ export function createSurfaceSync({
     waitForSurfaceUpdate = c3dWaitForSurfaceUpdate,
     isSurfaceUpdating = c3dIsSurfaceUpdating,
     updateTimeoutMs = SURFACE_UPDATE_TIMEOUT_MS,
+    isUpdateBlocked = () => false,
   } = deps;
 
   let timer = null;
   let surfaceStale = false;
   let stopped = false;
   let updating = false;
+  // An edit being made for the surface (withOwnEdit)
+  let ownEdit = false;
+  // Edits since the last copy: any at all, and any not made for the surface
+  let voxelsPending = false;
+  let foreignPending = false;
 
   function copyVoxels() {
     const source = getSourceVolume();
@@ -123,6 +134,7 @@ export function createSurfaceSync({
       onError(err);
       return false;
     }
+    voxelsPending = false;
 
     if (force || isSurfaceShown()) {
       updateSurface(reason);
@@ -133,15 +145,52 @@ export function createSurfaceSync({
     return true;
   }
 
+  // Apply the edits since the last copy: a copy, and a surface update if any edit was not made
+  // for the surface
+  function flush(reason) {
+    if (stopped || !voxelsPending) {
+      return false;
+    }
+    if (foreignPending) {
+      if (isUpdateBlocked()) {
+        log.debug(LOG_PREFIX, 'surface update waits for the queued surface edits');
+        schedule();
+        return false;
+      }
+      const done = copyAndUpdate(reason);
+      if (done) {
+        foreignPending = false;
+      }
+      return done;
+    }
+    try {
+      if (copyVoxels()) {
+        voxelsPending = false;
+        return true;
+      }
+    } catch (err) {
+      onError(err);
+    }
+    return false;
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      flush('2D edit');
+    }, delayMs);
+  }
+
   function onDataModified(evt) {
     if (stopped || evt?.detail?.segmentationId !== sourceSegmentationId) {
       return;
     }
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      copyAndUpdate('2D edit');
-    }, delayMs);
+    voxelsPending = true;
+    if (!ownEdit) {
+      foreignPending = true;
+    }
+    schedule();
   }
 
   // The surface updates of the vol3d segmentation, as the polySeg wrapper reports them
@@ -185,7 +234,22 @@ export function createSurfaceSync({
       if (!copyAndUpdate('re-enable', { force: true })) {
         return Promise.resolve(false);
       }
+      foreignPending = false;
       return outcome;
+    },
+
+    /**
+     * Run an edit of the working labelmap that the surface already shows (the write following a
+     * surface edit, or its undo): it is copied like any edit but never rebuilds the surface.
+     */
+    withOwnEdit(fn) {
+      const previous = ownEdit;
+      ownEdit = true;
+      try {
+        return fn();
+      } finally {
+        ownEdit = previous;
+      }
     },
 
     /** Detach. */
@@ -199,7 +263,7 @@ export function createSurfaceSync({
 
     // for tests
     get state() {
-      return { surfaceStale, scheduled: !!timer, stopped, updating };
+      return { surfaceStale, scheduled: !!timer, stopped, updating, voxelsPending, foreignPending };
     },
   };
 }

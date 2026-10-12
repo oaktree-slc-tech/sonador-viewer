@@ -1,47 +1,76 @@
-// The 3D Selection tool's delete (ohif-viewers#142, FR-20..FR-22): remove the selected points from
+// The 3D Selection tool's delete (ohif-viewers#142, FR-20..FR-27): remove the selected points from
 // a segment's surface, close the holes, and remove from the segment's labelmap the voxels the
-// edited surface no longer contains.
+// edited surface no longer contains. Two stages:
 //
-//   1. Cut (main thread): the triangles touching the selected vertices are removed, and the
-//      boundary loops of the resulting holes are found.
-//   2. Patch (hole-filling worker, OpenCascade): one smooth patch per hole, stitched to it.
-//   3. Voxelize (polymorphic segmentation worker): the original and the edited surfaces, on one
-//      grid.
-//   4. Carve (main thread): the segment's voxels the edit moved outside (labelmapCarve).
-//   5. Write: those voxels are cleared in the working labelmap, recorded for undo.
+//   cutAndPatch (foreground, before the surface is shown edited)
+//     1. Cut (prepareCut; the carve worker when the canvas runs it): the selected triangles (and
+//        any triangle touching a selected vertex) are removed, the rim is cleaned, and the
+//        boundary loops of the resulting holes are found.
+//     2. Patch (hole-filling worker, OpenCascade): one smooth patch per hole, stitched to it.
+//     3. Assemble (assembleCut; the carve worker again): the kept triangles and the patches become
+//        the edited surface, and its diagnostics are taken.
+//
+//   carveLabelmap (background, after the surface is shown edited; labelmapCarve)
+//     3. Voxelize both surfaces within the edit's index box, on the labelmap grid.
+//     4. Carve: the segment's voxels the edit moved outside.
 //
 // The steps that need workers or Cornerstone3D state are injected (`deps`), so the pipeline itself
-// is plain data in, plain data out.
+// is plain data in, plain data out. `deleteSelection` runs both stages in turn.
 
 import {
-  assembleSurface,
-  cutSurface,
-  findBoundaryLoops,
-  loopPositions,
-} from './meshCut.js';
-import {
-  computeCarvedVoxels,
-  createGridLookup,
-  createPointProximity,
+  carveLabelmap,
+  extractIndexBox,
   volumeAxes,
   worldBoxToIndexBox,
 } from './labelmapCarve.js';
+import {
+  assembleSurface,
+  findBoundaryLoopsDetailed,
+  loopPositions,
+} from './meshCut.js';
+import { cleanRim, conditionSurface, surfaceDiagnostics } from './meshRepair.js';
 
 
-/** Thrown when a delete is abandoned (its session or target became invalid) before writing. */
-export class DeleteCancelledError extends Error {
-  constructor(message = 'The removal was cancelled') {
+/** Thrown when an edit is abandoned (its session or target became invalid) before writing. */
+export class SurfaceEditCancelledError extends Error {
+  constructor(message = 'The edit was cancelled') {
     super(message);
-    this.name = 'DeleteCancelledError';
+    this.name = 'SurfaceEditCancelledError';
   }
 }
+
+export { SurfaceEditCancelledError as DeleteCancelledError };
 
 export const DELETE_STEPS = {
   cut: 'cut',
   patch: 'patch',
+  smooth: 'smooth',
   voxelize: 'voxelize',
   write: 'write',
 };
+
+// Labelmap voxels around the edit box examined for the carve, beyond the removal depth
+const EDIT_BOX_PADDING_VOXELS = 3;
+
+export const RIM_CLEANUPS = {
+  off: 'off',
+  light: 'light',
+  full: 'full',
+};
+
+// Ear-removal passes per rim cleanup level; islands are removed at every level but off
+const RIM_CLEANUP_PASSES = { [RIM_CLEANUPS.off]: 0, [RIM_CLEANUPS.light]: 1, [RIM_CLEANUPS.full]: 3 };
+
+/** Defaults of the cut-and-patch options (the 3D tool state holds the user's values). */
+export const EDIT_OPTION_DEFAULTS = Object.freeze({
+  closure: 'auto',
+  rimCleanup: RIM_CLEANUPS.full,
+  weldTolerance: 0.001,
+  islandMaxTriangles: 50,
+  maxConstraints: 12,
+});
+
+export const EMPTY_SURFACE = Object.freeze({ points: new Float32Array(0), polys: new Int32Array(0) });
 
 function _bounds(points, into = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }) {
   for (let v = 0; v < points.length; v += 3) {
@@ -57,22 +86,289 @@ function _pad(box, amount) {
   return { min: box.min.map(v => v - amount), max: box.max.map(v => v + amount) };
 }
 
+const _summary = diagnostics => ({
+  boundaryEdgeCount: diagnostics.boundaryEdgeCount,
+  nonManifoldEdgeCount: diagnostics.nonManifoldEdgeCount,
+  closed: diagnostics.closed,
+});
+
 /**
- * The surface with two extra, unreferenced points at the corners of `box`. The voxelizer sizes its
- * grid to the points' bounds, so giving both surfaces the same corners puts them on one grid.
+ * Assemble the edited surface from the kept triangles and the patches, and report on it. Plain
+ * data in and out, so it runs in the carve worker (segmentEdits.assembleCutInWorker).
+ *
+ * @param {Object} params
+ * @param {ArrayLike<number>} params.surfacePoints - the surface's flat xyz
+ * @param {ArrayLike<number>} params.kept - the kept triangles (canonical vertex triples)
+ * @param {Int32Array[]} params.loops - the holes' boundary loops (vertex indices)
+ * @param {Array} params.results - the patches, one per loop (patchHoles)
+ * @param {{ min, max }} params.editBox - the world box the edit can affect so far (grown here)
+ * @param {Float64Array} params.selectedPoints
+ * @param {Object} params.diagnostics
+ * @param {Object} params.options - EDIT_OPTION_DEFAULTS
  */
-export function withGridCorners({ points, polys }, box) {
-  const out = new Float32Array(points.length + 6);
-  out.set(points);
-  out.set(box.min, points.length);
-  out.set(box.max, points.length + 3);
-  return { points: out, polys };
+export function assembleCut({ surfacePoints, kept, loops, results, editBox, selectedPoints, diagnostics, options }) {
+  const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const loopPoints = loops.map(loop => loopPositions(surfacePoints, loop));
+  const patches = loops.map((loop, i) => ({ loop, patch: results[i].patch }));
+  const edited = kept.length
+    ? assembleSurface({ points: surfacePoints, triangles: kept, patches })
+    : null;
+
+  const box = { min: [...editBox.min], max: [...editBox.max] };
+  loopPoints.forEach(points => _bounds(points, box));
+  results.forEach(({ patch }) => _bounds(patch.points, box));
+
+  const methods = { fitted: 0, flat: 0, cap: 0 };
+  let fallbacks = 0;
+  results.forEach(result => {
+    methods[result.method] = (methods[result.method] || 0) + 1;
+    // Not closed the way the closure asked: a fit that fell back, or a fan
+    if (result.error || (result.method === 'cap' && opts.closure !== 'flat')) {
+      fallbacks++;
+    }
+  });
+  const output = edited ? _summary(surfaceDiagnostics(conditionSurface(edited).triangles)) : null;
+  return {
+    changed: true,
+    edited,
+    editBox: box,
+    selectedPoints,
+    holes: loops.length,
+    cappedHoles: fallbacks,
+    patchErrors: results.map(result => result.error).filter(Boolean),
+    diagnostics: { ...diagnostics, methods, fallbacks, output },
+  };
+}
+
+const _unchanged = diagnostics => ({
+  changed: false, edited: null, editBox: null, selectedPoints: new Float64Array(0),
+  holes: 0, cappedHoles: 0, patchErrors: [], diagnostics,
+});
+
+function _points(surfacePoints, vertices) {
+  const points = new Float64Array(vertices.length * 3);
+  vertices.forEach((v, i) => points.set(
+    [surfacePoints[3 * v], surfacePoints[3 * v + 1], surfacePoints[3 * v + 2]], 3 * i));
+  return points;
+}
+
+/**
+ * The cut before the patches: condition the surface, remove the selected triangles, clean the
+ * rim, and find the holes' boundary loops. Plain data in and out, so it runs in the carve worker
+ * (segmentEdits.prepareCutInWorker). The removed points, which the removal depth is measured
+ * from and the edit box starts from, are the selected vertices and the vertices of every removed
+ * triangle, the rim cleanup's included (nothing removed may fall outside the labelmap write).
+ *
+ * @param {Object} params - cutAndPatch's surface, selected, selectedTriangles and options
+ * @returns {{ changed: boolean, kept?: Int32Array, loops?: Int32Array[], loopPoints?: Float64Array[],
+ *   selectedPoints?: Float64Array, editBox?: Object, diagnostics: Object }}
+ */
+export function prepareCut({ surface, selected = [], selectedTriangles = [], options = {} }) {
+  const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const selectedVertices = new Set(selected);
+  const selectedCells = new Set(selectedTriangles);
+  const conditioned = conditionSurface(surface, { weldTolerance: opts.weldTolerance });
+  const input = _summary(surfaceDiagnostics(conditioned.triangles));
+  const selectedCanonical = new Set(Array.from(selectedVertices, v => conditioned.canonical[v]));
+  const keptRaw = [];
+  const rim = new Set();
+  let removedCount = 0;
+  const { triangles, source } = conditioned;
+  for (let t = 0; t < triangles.length; t += 3) {
+    const cell = source[t / 3];
+    const touchesVertex = selectedCanonical.has(triangles[t]) || selectedCanonical.has(triangles[t + 1])
+      || selectedCanonical.has(triangles[t + 2]);
+    if (selectedCells.has(cell) || touchesVertex) {
+      removedCount++;
+      rim.add(triangles[t]);
+      rim.add(triangles[t + 1]);
+      rim.add(triangles[t + 2]);
+      if (selectedCells.has(cell)) {
+        selectedVertices.add(surface.polys[4 * cell + 1]);
+        selectedVertices.add(surface.polys[4 * cell + 2]);
+        selectedVertices.add(surface.polys[4 * cell + 3]);
+      }
+    } else {
+      keptRaw.push(triangles[t], triangles[t + 1], triangles[t + 2]);
+    }
+  }
+  if (!removedCount) {
+    return _unchanged({ input });
+  }
+
+  const cleanup = cleanRim(keptRaw, {
+    passes: RIM_CLEANUP_PASSES[opts.rimCleanup] ?? 0,
+    islandMaxTriangles: opts.rimCleanup === RIM_CLEANUPS.off ? 0 : opts.islandMaxTriangles,
+    touching: rim,
+  });
+  // Whatever the cleanup removed is part of the edit too
+  cleanup.removed.forEach(v => selectedVertices.add(v));
+  const kept = cleanup.triangles;
+  const { loops, openEdges } = findBoundaryLoopsDetailed(kept);
+  const selectedPoints = _points(surface.points, Array.from(selectedVertices));
+  return {
+    changed: true,
+    kept,
+    loops,
+    loopPoints: loops.map(loop => loopPositions(surface.points, loop)),
+    selectedPoints,
+    editBox: _bounds(selectedPoints),
+    diagnostics: {
+      input,
+      degenerate: conditioned.degenerate,
+      duplicate: conditioned.duplicate,
+      earsRemoved: cleanup.earsRemoved,
+      islandsRemoved: cleanup.islandsRemoved,
+      openEdges,
+    },
+  };
+}
+
+/**
+ * A repair before the patches: condition the surface and find every boundary loop. Runs in the
+ * carve worker like prepareCut.
+ */
+export function prepareRepair({ surface, options = {} }) {
+  const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const conditioned = conditionSurface(surface, { weldTolerance: opts.weldTolerance });
+  const input = _summary(surfaceDiagnostics(conditioned.triangles));
+  const { loops, openEdges } = findBoundaryLoopsDetailed(conditioned.triangles);
+  const diagnostics = {
+    input, degenerate: conditioned.degenerate, duplicate: conditioned.duplicate,
+    earsRemoved: 0, islandsRemoved: 0, openEdges,
+  };
+  if (!loops.length) {
+    return _unchanged(diagnostics);
+  }
+  return {
+    changed: true,
+    kept: conditioned.triangles,
+    loops,
+    loopPoints: loops.map(loop => loopPositions(surface.points, loop)),
+    selectedPoints: new Float64Array(0),
+    editBox: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] },
+    diagnostics,
+  };
+}
+
+/**
+ * Cut the selected triangles out of a surface and close the holes: prepareCut, the patches, and
+ * assembleCut, each injectable so the whole-mesh stages can run in a worker.
+ *
+ * @param {Object} params
+ * @param {{ points: ArrayLike<number>, polys: ArrayLike<number> }} params.surface - the segment's
+ *   surface (world coordinates)
+ * @param {Iterable<number>} [params.selectedTriangles] - selected triangles of that surface (cell
+ *   indices of `polys`): removed as they are
+ * @param {Iterable<number>} [params.selected] - selected vertex indices: every triangle touching
+ *   one is removed
+ * @param {Object} [params.options] - EDIT_OPTION_DEFAULTS
+ * @param {Object} params.deps
+ * @param {Function} params.deps.patchHoles - async (loops: Float64Array[], options) => [{ patch, method, error }]
+ * @param {Function} [params.deps.prepareCut] - async or sync, prepareCut's shape (default: here)
+ * @param {Function} [params.deps.assembleCut] - async or sync, assembleCut's shape (default: here)
+ * @param {Function} [params.deps.isCancelled] - () => true once the delete must not continue
+ * @param {Function} [params.onStep] - (step) => void, for progress display
+ * @returns {Promise<{ changed: boolean, edited: { points, polys, patchPolysOffset }|null,
+ *   editBox: Object|null, selectedPoints: Float64Array, holes: number, cappedHoles: number,
+ *   patchErrors: string[], diagnostics: Object }>} `edited` is null when the whole surface was
+ *   removed; `selectedPoints` are the removed triangles' vertices (and the selected ones);
+ *   `editBox` is the world box around them, the hole boundaries and the patches; `diagnostics`
+ *   reports the input's and the result's open and non-manifold edges, the open chains no patch
+ *   could close, the rim cleanup, and the patch methods
+ */
+export async function cutAndPatch({
+  surface, selected = [], selectedTriangles = [], options = {}, deps, onStep = () => {},
+}) {
+  const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const { prepareCut: prepare = prepareCut, assembleCut: assemble = assembleCut } = deps;
+  const checkCancelled = () => {
+    if (deps.isCancelled?.()) {
+      throw new SurfaceEditCancelledError();
+    }
+  };
+
+  onStep(DELETE_STEPS.cut);
+  const prepared = await prepare({
+    surface, selected: Array.from(selected), selectedTriangles: Array.from(selectedTriangles), options: opts,
+  });
+  checkCancelled();
+  if (!prepared.changed) {
+    return prepared;
+  }
+
+  onStep(DELETE_STEPS.patch);
+  const results = prepared.loops.length
+    ? await deps.patchHoles(prepared.loopPoints, { closure: opts.closure, maxConstraints: opts.maxConstraints })
+    : [];
+  checkCancelled();
+
+  const assembled = await assemble({
+    surfacePoints: surface.points, kept: prepared.kept, loops: prepared.loops, results,
+    editBox: prepared.editBox, selectedPoints: prepared.selectedPoints, diagnostics: prepared.diagnostics,
+    options: opts,
+  });
+  checkCancelled();
+  return assembled;
+}
+
+/**
+ * Close the open rims of a surface without removing anything: the surface is conditioned and
+ * every boundary loop is patched. Nothing is written to the labelmap for a repair.
+ *
+ * @param {Object} params - as cutAndPatch, without `selected`; `deps.prepareRepair` injectable
+ * @returns {Promise<Object>} as cutAndPatch; `changed` is false when the surface has no open rim
+ */
+export async function repairSurface({ surface, options = {}, deps, onStep = () => {} }) {
+  const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const { prepareRepair: prepare = prepareRepair, assembleCut: assemble = assembleCut } = deps;
+  const checkCancelled = () => {
+    if (deps.isCancelled?.()) {
+      throw new SurfaceEditCancelledError();
+    }
+  };
+
+  onStep(DELETE_STEPS.cut);
+  const prepared = await prepare({ surface, options: opts });
+  checkCancelled();
+  if (!prepared.changed) {
+    return prepared;
+  }
+
+  onStep(DELETE_STEPS.patch);
+  const results = await deps.patchHoles(prepared.loopPoints, { closure: opts.closure, maxConstraints: opts.maxConstraints });
+  checkCancelled();
+
+  const assembled = await assemble({
+    surfacePoints: surface.points, kept: prepared.kept, loops: prepared.loops, results,
+    editBox: prepared.editBox, selectedPoints: prepared.selectedPoints, diagnostics: prepared.diagnostics,
+    options: opts,
+  });
+  checkCancelled();
+  return assembled;
+}
+
+/**
+ * The labelmap index box an edit can affect: its world box padded by a few voxels and the removal
+ * depth.
+ *
+ * @param {Object} params
+ * @param {{ min, max }} params.editBox
+ * @param {number} [params.depth]
+ * @param {{ dimensions: number[], indexToWorld: Function }} params.labelmap
+ * @returns {{ axes: Object, indexBox: { min, max }|null }}
+ */
+export function editIndexBox({ editBox, depth = 0, labelmap }) {
+  const axes = volumeAxes(labelmap.indexToWorld);
+  const voxelSize = Math.max(...[axes.di, axes.dj, axes.dk].map(v => Math.hypot(...v)));
+  const indexBox = worldBoxToIndexBox(
+    _pad(editBox, EDIT_BOX_PADDING_VOXELS * voxelSize + Math.max(depth, 0)), axes, labelmap.dimensions);
+  return { axes, indexBox };
 }
 
 /**
  * @param {Object} params
- * @param {{ points: ArrayLike<number>, polys: ArrayLike<number> }} params.surface - the segment's
- *   surface (world coordinates)
+ * @param {{ points, polys }} params.surface - the segment's surface (world coordinates)
  * @param {Iterable<number>} params.selected - selected vertex indices of that surface
  * @param {number} params.segmentIndex
  * @param {number} [params.depth] - removal depth (world units, mm): segment voxels within this
@@ -83,91 +379,59 @@ export function withGridCorners({ points, polys }, box) {
  * @param {Function} params.labelmap.indexToWorld - ([i, j, k]) => [x, y, z]
  * @param {Object} params.deps
  * @param {Function} params.deps.patchHoles - async (loops: Float64Array[]) => [{ patch, method, error }]
- * @param {Function} params.deps.voxelize - async ({ points, polys }) => voxelizer result
+ * @param {Function} [params.deps.carve] - async (args) => Int32Array (default: carveLabelmap in
+ *   this thread)
  * @param {Function} params.deps.removeVoxels - (indices: Int32Array) => void
  * @param {Function} [params.deps.isCancelled] - () => true once the delete must not continue;
  *   checked after each awaited stage, and so before the voxel write
  * @param {Function} [params.onStep] - (step) => void, for progress display
- * @returns {Promise<{ removedVoxels: number, holes: number, cappedHoles: number, patchErrors: string[] }>}
+ * @returns {Promise<{ removedVoxels: number, holes: number, cappedHoles: number, patchErrors: string[],
+ *   edited: { points, polys }|null }>}
  */
 export async function deleteSelection({
-  surface, selected, segmentIndex, depth = 0, labelmap, deps, onStep = () => {},
+  surface, selected, segmentIndex, depth = 0, labelmap, options, deps, onStep = () => {},
 }) {
   const checkCancelled = () => {
     if (deps.isCancelled?.()) {
-      throw new DeleteCancelledError();
+      throw new SurfaceEditCancelledError();
     }
   };
 
-  onStep(DELETE_STEPS.cut);
-  const selectedList = Array.from(selected);
-  const cut = cutSurface({ points: surface.points, polys: surface.polys, selected: selectedList });
-  if (!cut.removedCount) {
-    return { removedVoxels: 0, holes: 0, cappedHoles: 0, patchErrors: [] };
+  const cut = await cutAndPatch({ surface, selected, options, deps, onStep });
+  if (!cut.changed) {
+    return { removedVoxels: 0, holes: 0, cappedHoles: 0, patchErrors: [], edited: null };
   }
-  const loops = findBoundaryLoops(cut.triangles);
-  const loopPoints = loops.map(loop => loopPositions(surface.points, loop));
 
-  onStep(DELETE_STEPS.patch);
-  const results = loops.length ? await deps.patchHoles(loopPoints) : [];
-  checkCancelled();
-  const patches = loops.map((loop, i) => ({ loop, patch: results[i].patch }));
-  const edited = cut.triangles.length
-    ? assembleSurface({ points: surface.points, triangles: cut.triangles, patches })
-    : null;
-
-  // One voxelization grid for both surfaces, a little larger than either
   onStep(DELETE_STEPS.voxelize);
-  const bounds = _bounds(surface.points);
-  if (edited) {
-    _bounds(edited.points, bounds);
-  }
-  const extent = Math.max(...bounds.max.map((v, d) => v - bounds.min[d]));
-  const gridBox = _pad(bounds, extent * 0.02);
-
-  const originalGrid = await deps.voxelize(withGridCorners(surface, gridBox));
-  checkCancelled();
-  const editedGrid = edited ? await deps.voxelize(withGridCorners(edited, gridBox)) : null;
-  checkCancelled();
-
-  // Only the neighbourhood of the edit can change: the removed points, the hole boundaries and the
-  // patches, padded by a few labelmap voxels and one voxelizer cell
-  const selectedPoints = new Float64Array(selectedList.length * 3);
-  selectedList.forEach((v, i) => selectedPoints.set(
-    [surface.points[3 * v], surface.points[3 * v + 1], surface.points[3 * v + 2]], 3 * i));
-  const editBox = _bounds(selectedPoints);
-  loopPoints.forEach(points => _bounds(points, editBox));
-  results.forEach(({ patch }) => _bounds(patch.points, editBox));
-
-  const axes = volumeAxes(labelmap.indexToWorld);
-  const voxelSize = Math.max(...[axes.di, axes.dj, axes.dk].map(v => Math.hypot(...v)));
-  const gridSpacing = Math.max(...Array.from(originalGrid?.spacing || [0]));
-  const indexBox = worldBoxToIndexBox(
-    _pad(editBox, 3 * voxelSize + gridSpacing + Math.max(depth, 0)), axes, labelmap.dimensions);
-
-  const indices = indexBox
-    ? computeCarvedVoxels({
-      scalarData: labelmap.scalarData,
+  const { axes, indexBox } = editIndexBox({ editBox: cut.editBox, depth, labelmap });
+  let indices = new Int32Array(0);
+  if (indexBox) {
+    const carve = deps.carve || (args => carveLabelmap(args));
+    indices = await carve({
+      original: surface,
+      edited: cut.edited,
+      boxData: extractIndexBox(labelmap.scalarData, labelmap.dimensions, indexBox),
       dimensions: labelmap.dimensions,
       segmentIndex,
       axes,
       indexBox,
-      insideOriginal: createGridLookup(originalGrid),
-      insideEdited: editedGrid ? createGridLookup(editedGrid) : () => false,
-      nearRemoved: createPointProximity(selectedPoints, depth),
-    })
-    : new Int32Array(0);
+      selectedPoints: cut.selectedPoints,
+      depth,
+    });
+    checkCancelled();
+  }
 
   onStep(DELETE_STEPS.write);
   if (indices.length) {
     deps.removeVoxels(indices);
   }
 
-  const capped = results.filter(result => result.method !== 'fitted');
   return {
     removedVoxels: indices.length,
-    holes: loops.length,
-    cappedHoles: capped.length,
-    patchErrors: capped.map(result => result.error).filter(Boolean),
+    holes: cut.holes,
+    cappedHoles: cut.cappedHoles,
+    patchErrors: cut.patchErrors,
+    edited: cut.edited,
+    diagnostics: cut.diagnostics,
   };
 }

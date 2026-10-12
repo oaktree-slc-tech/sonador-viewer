@@ -14,12 +14,16 @@
 // - Geometry follows the surface: when Cornerstone3D updates it (2D edits via the surface sync),
 //   the meshes are rebuilt, and segments added or removed are added to or removed from the scene.
 //
-// - 3D tools (ohif-viewers#142, §10.2): with the Selection tool active, a left-button lasso
-//   selects the visible surface points of the active segment of the working segmentation (right
-//   rotates, middle pans, the wheel zooms), and Delete removes them after confirmation: the
-//   holes are patched, and the voxels the edited surface no longer contains are removed from the
-//   working labelmap (deleteSelection). The surface sync then rebuilds the surface from the
-//   labelmap, which updates the meshes here.
+// - 3D tools (ohif-viewers#142, §10.2, §11 and §13; ohif-viewers#148): the Lasso and Paint tools
+//   build one triangle selection of the active segment's surface, after three-mesh-bvh's
+//   lasso-selection and triangle-painting examples: a lasso (or box) over the view selects the
+//   visible triangles inside it, shown as their points over a faint face tint; a brush (a sphere
+//   on the surface under the pointer) paints the connected triangles it covers, shown as tinted
+//   faces (right rotates, middle pans, the wheel zooms). Delete removes the selected triangles:
+//   the holes are patched and the edited surface is shown at once (surfaceEdits), while the voxels
+//   it no longer contains are removed from the working labelmap in the background. Smooth evens
+//   the selected region out with its edge pinned, shown for Apply / Cancel, and the labelmap
+//   follows the moved surface the same way.
 //
 // The view stays mounted once created; while hidden its render loop is paused.
 
@@ -31,7 +35,20 @@ import {
 } from '@cornerstonejs/tools';
 import _ from 'lodash';
 import PropTypes from 'prop-types';
-import { BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three';
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DoubleSide,
+  Group,
+  LineBasicMaterial,
+  LineSegments,
+  Mesh,
+  MeshBasicMaterial,
+  Points,
+  PointsMaterial,
+  SphereGeometry,
+} from 'three';
 
 import {
   createSurfaceModel,
@@ -40,30 +57,69 @@ import {
   MIMETYPE_STL,
   surfaceToBufferGeometry,
 } from '@ohif/extension-viewerm3d';
+import { applyViewOrientationToModelView,LoadingIndicator } from '@ohif/extension-vtk';
 
-import { LoadingIndicator, applyViewOrientationToModelView } from '@ohif/extension-vtk';
-
-import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
-import { DeleteCancelledError, deleteSelection, DELETE_STEPS } from '../threeDTools/deleteSelection';
-import LassoInteraction from '../threeDTools/LassoInteraction';
-import { combineSelection, selectVerticesInLasso } from '../threeDTools/lassoSelection';
 import {
+  cutAndPatch,
+  DELETE_STEPS,
+  EMPTY_SURFACE,
+  repairSurface,
+  SurfaceEditCancelledError,
+} from '../threeDTools/deleteSelection';
+import LassoInteraction from '../threeDTools/LassoInteraction';
+import { combineSelection, SELECTION_MODES, selectTrianglesInLasso } from '../threeDTools/lassoSelection';
+import {
+  growTriangles,
+  largestConnectedTriangles,
+  polysToTriangles,
+  shrinkTriangles,
+  triangleComponents,
+  trianglesVertices,
+} from '../threeDTools/meshRepair';
+import { isOwnSurfaceWrite } from '../threeDTools/ownWrites';
+import PaintInteraction from '../threeDTools/PaintInteraction';
+import {
+  collectTrianglesInSphere,
+  connectedTriangles,
+  raycastSurfaces,
+} from '../threeDTools/paintSelection';
+import {
+  assembleCutInWorker,
+  diagnoseSurfaceInWorker,
   getLabelmapForEdit,
   patchHolesInWorker,
-  removeLabelmapVoxels,
-  voxelizeSurfaceInWorker,
+  prepareCutInWorker,
+  prepareRepairInWorker,
+  smoothInWorker,
+  triangleTopologyInWorker,
 } from '../threeDTools/segmentEdits';
+import { createSurfaceEditMemo, WRITE_KINDS } from '../threeDTools/surfaceEditMemo';
+import {
+  queueSurfaceEditWrite,
+  recordSurfaceEdit,
+  setCachedSurface,
+  SURFACE_CHANGED_REQUEST,
+} from '../threeDTools/surfaceEdits';
 import {
   begin3DToolJob,
   end3DToolJob,
+  get3DEditOptions,
+  get3DSmoothOptions,
   get3DToolState,
   handle3DToolRequest,
+  is3DSelectionTool,
   is3DTargetEditable,
+  PAINT_MODES,
+  set3DLastEdit,
+  set3DPreview,
   set3DSelectionCount,
+  set3DSurfaceHealth,
   set3DToolTarget,
+  setActive3DTool,
   subscribe3DToolState,
   THREE_D_TOOLS,
 } from '../threeDTools/threeDToolState';
+import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
 
 
 const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
@@ -71,21 +127,43 @@ const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
 // Camera bindings while a 3D tool owns the left button
 const TOOL_MOUSE_ACTIONS = { left: 'none', right: 'rotate', middle: 'pan', wheel: 'zoom' };
 
-const HIGHLIGHT_COLOR = 0xffd600;
+// Selection display, in tints of the segment's colour: faces a little over half way to white; the
+// brush's edges and points the same, subdued; the lasso's edges and points much nearer white, so
+// the two tools read differently at a glance
+const FACE_TINT_TOWARD_WHITE = 0.55;
+const PAINT_POINT_TINT_TOWARD_WHITE = 0.7;
+const LASSO_EDGE_TINT_TOWARD_WHITE = 0.8;
+const LASSO_POINT_TINT_TOWARD_WHITE = 0.95;
+const FALLBACK_SEGMENT_COLOR = '#ffd600';
+const WHITE = new Color(1, 1, 1);
+// Patches of an edit awaiting Apply / Cancel
+const PATCH_TINT_COLOR = 0x4fc3f7;
+// The original surface of the edited region, ghosted behind a preview for comparison
+const GHOST_COLOR = 0xffffff;
+// Open edges, and non-manifold edges, of the target's surface (Show mesh issues)
+const OPEN_EDGE_COLOR = 0xff5252;
+const NON_MANIFOLD_EDGE_COLOR = 0xffa726;
 
-// After a delete, the step that waits for the surface rebuilt from the labelmap
-const RENDER_STEP = 'render';
-
-// Longest wait for that rebuild before the status is cleared anyway
-export const SURFACE_UPDATE_TIMEOUT_MS = 60000;
-
-// Progress messages for the delete overlay (the render step uses the renderingMessage prop)
+// Progress messages for the edit overlay (the steps before the edited surface is shown)
 const DELETE_STEP_MESSAGES = {
   [DELETE_STEPS.cut]: 'Removing the selected points...',
   [DELETE_STEPS.patch]: 'Closing the surface...',
-  [DELETE_STEPS.voxelize]: 'Updating the segmentation...',
-  [DELETE_STEPS.write]: 'Updating the segmentation...',
+  [DELETE_STEPS.smooth]: 'Smoothing the selected points...',
 };
+
+// A smooth shown for Apply / Cancel is recomputed this long after its last setting change
+const SMOOTH_RERUN_DELAY_MS = 250;
+
+/** A tint of a CSS colour towards white (0: the colour, 1: white). */
+export function selectionTint(cssColor, towardWhite) {
+  const color = new Color();
+  try {
+    color.set(cssColor || FALLBACK_SEGMENT_COLOR);
+  } catch (err) {
+    color.set(FALLBACK_SEGMENT_COLOR);
+  }
+  return color.lerp(WHITE, towardWhite);
+}
 
 /** Segment surfaces currently in the geometry cache: [{ segmentIndex, geometryId, surface }] */
 export function getCachedSurfaces(segmentationId) {
@@ -193,10 +271,9 @@ export default class SegEditorSurfaceView extends Component {
     notify: PropTypes.func,
     // (error) => void: a delete failed
     onEditError: PropTypes.func,
-    // () => void: a delete changed the working labelmap; update the surface from it now
-    onLabelmapEdited: PropTypes.func,
-    // Status shown while the surface is rebuilt after a delete (the 3D tab's Rendering message)
-    renderingMessage: PropTypes.string,
+    // (fn) => fn(): runs a labelmap write made for the surface, which must not rebuild it
+    withOwnLabelmapEdit: PropTypes.func,
+    computeTopology: PropTypes.func,
     // i18n (react-i18next `t`, SegmentationEditor namespace)
     t: PropTypes.func,
   };
@@ -205,7 +282,9 @@ export default class SegEditorSurfaceView extends Component {
     active: true,
     surfaceReady: false,
     noSurfaceMessage: 'The 3D surface is not available yet.',
-    renderingMessage: 'Rendering ...',
+    withOwnLabelmapEdit: fn => fn(),
+    // The triangle topology of a surface, built off the main thread (tests inject a local one)
+    computeTopology: surface => triangleTopologyInWorker(surface),
     t: (key, options) => (options ? key.replace(/{{(\w+)}}/g, (_m, name) => options[name]) : key),
   };
 
@@ -228,13 +307,31 @@ export default class SegEditorSurfaceView extends Component {
 
     // 3D tools
     this._lasso = null;
+    this._paint = null;
     this._toolMouseActions = false;
-    this._selection = new Set();     // selected vertex indices of the target segment's mesh
+    this._selection = new Set();     // selected triangles (cells of the surface) of the target segment
     this._selectionGeometryId = null;
-    this._highlight = null;          // Points showing the selection
+    this._highlight = null;          // Group showing the selection: faces, edges, points
+    this._display = null;            // what the highlight was drawn for (tool, paint view toggle)
+    this._brush = null;              // Mesh: the Paint brush on the surface under the pointer
     this._confirming = false;
+    this._pendingEdit = null;        // an edit shown for Apply / Cancel
+    this._patchTint = null;          // Mesh tinting the pending edit's patches
+    this._issues = null;             // LineSegments showing the target surface's open edges
+    this._issuesShown = false;
+    this._topology = null;           // { points, topology, promise } of the target's surface (triangleTopology)
+    this._ghost = null;              // LineSegments: the edited region's original surface behind a preview
+    this._previewMesh = null;        // { geometryId, mesh }: the edited surface shown in place of the real mesh
+    this._selectionRevision = 0;     // bumped by Clear and interaction changes: invalidates in-flight selections
+    this._labelmapRevision = 0;      // bumped by every foreign edit of the working labelmap
+    this._interactionKey = null;     // the tool and whether it can select, as last applied
+    this._highlightFrame = null;     // a highlight redraw scheduled for the next frame (paint strokes)
+    this._smoothInFlight = false;    // a smooth preview recompute is running
+    this._smoothDirty = false;       // the settings changed again while it ran
+    this._health = null;             // { points, result } of the last surface diagnostics
+    this._smoothRerun = null;        // timer: recompute the smooth shown for Apply / Cancel
+    this._smoothRun = 0;             // invalidates a smooth recompute that was overtaken
     this._unsubscribers = [];
-    this._surfaceWaiters = new Map(); // geometryId -> resolve, waiting for a rebuilt surface
     this._generation = 0;             // bumped on unmount: invalidates pending deletes
   }
 
@@ -243,9 +340,14 @@ export default class SegEditorSurfaceView extends Component {
 
   _createModel({ geometryId, surface, segmentIndex }) {
     this._sources.set(geometryId, surface.points);
-    return createSurfaceModel({
+    const model = createSurfaceModel({
       geometryId, surface, color: this._segmentColor(segmentIndex), lightingModel: 'vtk',
     });
+    // The bounds tree is built with the mesh, not on the first hover or lasso
+    if (model.instance?.geometry) {
+      ensureBoundsTree(model.instance.geometry);
+    }
+    return model;
   }
 
   _loadInitialModels() {
@@ -259,32 +361,45 @@ export default class SegEditorSurfaceView extends Component {
     this.setState({ initialModels: surfaces.map(entry => this._createModel(entry)) });
   }
 
-  reconcileGeometry() {
+  reconcileGeometry({ keepSelection = false } = {}) {
     // Apply surface changes to the live scene: rebuild meshes whose surface points changed, add
-    // new segments' surfaces, and remove surfaces that no longer exist.
+    // new segments' surfaces, and remove surfaces that no longer exist. A surface that kept its
+    // vertices (a smooth) keeps the selection on it, moved to the new positions.
     if (!this.api) {
       return;
     }
 
     const surfaces = getCachedSurfaces(this.props.segmentationId);
     const current = new Set(surfaces.map(({ geometryId }) => geometryId));
+    // A preview never writes the cache, so a change to the surface it was made from is someone
+    // else's (a slice edit or import rebuilding it): the preview no longer applies
+    const previewed = this._pendingEdit?.geometryId;
+    let previewStale = !!previewed && !current.has(previewed);
 
     surfaces.forEach(entry => {
       const { geometryId, surface } = entry;
       const mesh = this.api.getModelInstance(geometryId);
 
+      if (geometryId === previewed && surface.points !== this._pendingEdit.before.points) {
+        previewStale = true;
+      }
       if (!mesh) {
         this.api.addModel(this._createModel(entry));
       } else if (this._sources.get(geometryId) !== surface.points) {
         const previous = mesh.geometry;
+        const sameVertices = keepSelection && this._sources.get(geometryId)?.length === surface.points.length;
         mesh.geometry = surfaceToBufferGeometry(surface);
         releaseBoundsTree(previous);
         previous?.dispose();
+        ensureBoundsTree(mesh.geometry);
         this._sources.set(geometryId, surface.points);
         if (geometryId === this._selectionGeometryId) {
-          this.clearSelection(); // the selected indices refer to the old surface
+          if (sameVertices) {
+            this._updateHighlight(this.api.getModels().find(model => model.geometryId === geometryId));
+          } else {
+            this.clearSelection(); // the selected indices refer to the old surface
+          }
         }
-        this._surfaceUpdated(geometryId);
       }
     });
 
@@ -295,31 +410,20 @@ export default class SegEditorSurfaceView extends Component {
         }
         releaseBoundsTree(model.instance?.geometry);
         disposeSurfaceModel(this.api.removeModel(model.geometryId));
-        this._surfaceUpdated(model.geometryId);
         this._sources.delete(model.geometryId);
       }
     });
+
+    if (previewStale) {
+      this._dropStalePreview();
+    }
   }
 
-  _surfaceUpdated(geometryId) {
-    this._surfaceWaiters.get(geometryId)?.();
-  }
-
-  waitForSurfaceUpdate(geometryId, timeoutMs = SURFACE_UPDATE_TIMEOUT_MS) {
-    // Resolves once the mesh of `geometryId` is rebuilt or removed, or after the timeout
-    return new Promise(resolve => {
-      const timer = setTimeout(done, timeoutMs);
-      const waiters = this._surfaceWaiters;
-      function done() {
-        clearTimeout(timer);
-        if (waiters.get(geometryId) === done) {
-          waiters.delete(geometryId);
-        }
-        resolve();
-      }
-      waiters.get(geometryId)?.();
-      waiters.set(geometryId, done);
-    });
+  _onSurfaceChanged(options) {
+    // A surface edit (or its undo) changed a cached surface: follow it
+    this.reconcileGeometry({ keepSelection: !!options?.keepSelection });
+    this.publishTarget();
+    this._refreshSurfaceHealth();
   }
 
   // -----------------------------------------------------------------------------------------
@@ -372,7 +476,13 @@ export default class SegEditorSurfaceView extends Component {
       if (!_.isNumber(segmentIndex)) {
         return;
       }
-      this.api.setModelVisibility(geometryId, this._segmentVisible(segmentIndex));
+      // While an edit of this surface is previewed, the preview mesh is shown in its place
+      const visible = this._segmentVisible(segmentIndex);
+      const previewing = this._previewMesh?.geometryId === geometryId;
+      this.api.setModelVisibility(geometryId, visible && !previewing);
+      if (previewing) {
+        this._previewMesh.mesh.visible = visible;
+      }
       this.api.setModelWireframe(geometryId, this._segmentLocked(segmentIndex));
       const color = this._segmentColor(segmentIndex);
       if (color) {
@@ -474,14 +584,20 @@ export default class SegEditorSurfaceView extends Component {
       disabledReason = t('The selected segment has no 3D surface yet');
     }
 
+    // The target's topology is built ahead of the first stroke
+    if (!disabledReason) {
+      this._topologyFor(this._targetModel(segmentIndex));
+    }
+    const color = segmentIndex ? this._segmentColor(segmentIndex) : undefined;
     const previous = get3DToolState().target;
     if (previous?.segmentIndex !== segmentIndex || disabledReason) {
       this.clearSelection();
     }
     if (previous?.segmentIndex !== segmentIndex || previous?.label !== label
-        || previous?.disabledReason !== disabledReason) {
-      set3DToolTarget({ segmentIndex, label, disabledReason });
+        || previous?.disabledReason !== disabledReason || previous?.color !== color) {
+      set3DToolTarget({ segmentIndex, label, color, disabledReason });
     }
+    this._refreshSurfaceHealth();
   }
 
   _apply3DToolState(state = get3DToolState()) {
@@ -490,57 +606,406 @@ export default class SegEditorSurfaceView extends Component {
     if (!this.api || !this._lasso) {
       return;
     }
-    const selecting = !!this.props.active
-      && state.activeTool === THREE_D_TOOLS.Selection
-      && is3DTargetEditable(state);
+    const tool = state.activeTool;
+    const selecting = !!this.props.active && is3DSelectionTool(tool) && is3DTargetEditable(state);
+    const painting = tool === THREE_D_TOOLS.Paint;
+    const interactionKey = `${tool}|${selecting}`;
+    if (interactionKey !== this._interactionKey) {
+      // A lasso or stroke still waiting for the topology belongs to the interaction that started it
+      this._interactionKey = interactionKey;
+      this._selectionRevision += 1;
+    }
 
+    this._lasso.setShape?.(state.lassoShape);
     if (selecting) {
-      this._lasso.enable();
+      (painting ? this._lasso : this._paint)?.disable();
+      (painting ? this._paint : this._lasso)?.enable();
       if (!this._toolMouseActions) {
         this.api.setMouseActions(TOOL_MOUSE_ACTIONS);
         this._toolMouseActions = true;
       }
     } else {
       this._lasso.disable();
+      this._paint?.disable();
       if (this._toolMouseActions) {
         this.api.setMouseActions(null);
         this._toolMouseActions = false;
       }
     }
+    if (this._brush) {
+      this._brush.scale.setScalar(state.paintRadius);
+    }
 
-    if (state.activeTool !== THREE_D_TOOLS.Selection && this._selection.size) {
+    // The selection is kept between the two selection tools, and dropped with them
+    if (!is3DSelectionTool(tool) && this._selection.size) {
       this.clearSelection();
+    }
+
+    // The selection is shown for the tool in use: points over a faint tint for the lasso, tinted
+    // faces with subdued points and edges for the brush
+    const display = tool;
+    if (display !== this._display) {
+      this._display = display;
+      if (this._selection.size && state.target) {
+        this._updateHighlight(this._targetModel(state.target.segmentIndex));
+      }
+    }
+
+    if (!!state.showIssues !== this._issuesShown) {
+      this._issuesShown = !!state.showIssues;
+      this._refreshSurfaceHealth({ force: true });
+    }
+
+    // A smooth shown for Apply / Cancel follows its settings
+    if (this._pendingEdit?.kind === 'smooth' && this._smoothOptionsChanged(state)) {
+      this._scheduleSmoothRerun();
     }
   }
 
-  selectWithLasso(lasso, mode) {
+  // -----------------------------------------------------------------------------------------
+  // Surface health (open and non-manifold edges of the target's surface)
+
+  _targetSurface() {
+    const { target } = get3DToolState();
+    const model = target && this._targetModel(target.segmentIndex);
+    const surface = model && c3dCache.getGeometry(model.geometryId)?.data;
+    return surface?.points?.length ? { model, surface } : null;
+  }
+
+  _refreshSurfaceHealth({ force = false } = {}) {
+    // Diagnose the target's surface in the worker (once per surface version), publish the counts,
+    // and draw the edges while the overlay is on
+    const found = this._targetSurface();
+    if (!found) {
+      this._health = null;
+      this._removeIssuesOverlay();
+      set3DSurfaceHealth(null);
+      return;
+    }
+    const { model, surface } = found;
+    if (this._health?.points === surface.points) {
+      if (force && this._health.result) {
+        this._updateIssuesOverlay(model, surface, this._health.result);
+      }
+      return;
+    }
+    const entry = { points: surface.points, result: null };
+    this._health = entry;
+    const generation = this._generation;
+    Promise.resolve()
+      .then(() => diagnoseSurfaceInWorker(surface, { weldTolerance: get3DToolState().weldTolerance }))
+      .then(result => {
+        if (!this._isMounted || this._generation !== generation || this._health !== entry) {
+          return;
+        }
+        entry.result = result;
+        set3DSurfaceHealth({
+          boundaryEdgeCount: result.boundaryEdgeCount,
+          nonManifoldEdgeCount: result.nonManifoldEdgeCount,
+          degenerate: result.degenerate || 0,
+          duplicate: result.duplicate || 0,
+          closed: result.closed,
+          triangles: Math.floor(surface.polys.length / 4),
+        });
+        this._updateIssuesOverlay(model, surface, result);
+      })
+      .catch(err => {
+        console.error('[SegEditorSurfaceView] surface diagnostics failed', err);
+      });
+  }
+
+  _updateIssuesOverlay(model, surface, result) {
+    this._removeIssuesOverlay();
+    if (!this._issuesShown || !this.api?.scene || !model?.instance) {
+      return;
+    }
+    const segments = [];
+    const colors = [];
+    const push = (edges, color) => {
+      const rgb = [((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255];
+      for (let e = 0; e < edges.length; e += 2) {
+        [edges[e], edges[e + 1]].forEach(v => {
+          segments.push(surface.points[3 * v], surface.points[3 * v + 1], surface.points[3 * v + 2]);
+          colors.push(...rgb);
+        });
+      }
+    };
+    push(result.boundaryEdges || [], OPEN_EDGE_COLOR);
+    push(result.nonManifoldEdges || [], NON_MANIFOLD_EDGE_COLOR);
+    if (!segments.length) {
+      return;
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(Float32Array.from(segments), 3));
+    geometry.setAttribute('color', new BufferAttribute(Float32Array.from(colors), 3));
+    const material = new LineBasicMaterial({ vertexColors: true, depthTest: false });
+    this._issues = new LineSegments(geometry, material);
+    this._issues.renderOrder = 2;
+    this._issues.matrixAutoUpdate = false;
+    this._issues.matrix.copy(model.instance.matrixWorld);
+    this.api.scene.add(this._issues);
+  }
+
+  _removeIssuesOverlay() {
+    if (this._issues) {
+      this._issues.parent?.remove(this._issues);
+      this._issues.geometry.dispose();
+      this._issues.material.dispose();
+      this._issues = null;
+    }
+  }
+
+  async selectWithLasso(lasso, mode) {
     const { target } = get3DToolState();
     const model = target && this._targetModel(target.segmentIndex);
     if (!model?.instance || !this.api) {
       return;
     }
 
-    // Every visible mesh can hide points of the target
+    // Every visible mesh can hide faces of the target
     const occluders = this.api.getModels()
       .map(({ instance }) => instance)
       .filter(instance => instance?.visible);
-    occluders.forEach(instance => ensureBoundsTree(instance.geometry));
 
-    const lassoed = selectVerticesInLasso({
+    const lassoed = selectTrianglesInLasso({
       mesh: model.instance, camera: this.api.getCamera(), lasso, occluders,
     });
+    let topology = null;
+    if (get3DToolState().connectedOnly) {
+      // Waits for the topology; Clear, a tool change or a new surface meanwhile drops this lasso,
+      // and the selection is read only after the wait, so lassos and strokes apply in order
+      const revision = this._selectionRevision;
+      const points = this._sources.get(model.geometryId);
+      topology = await this._topologyReady(model);
+      if (!topology || !this._selectionStillCurrent(revision, model, points)) {
+        return;
+      }
+    }
     const current = this._selectionGeometryId === model.geometryId ? this._selection : new Set();
-    this._setSelection(model, combineSelection(current, lassoed, mode));
+    let selection = combineSelection(current, lassoed, mode);
+    if (topology && selection.size) {
+      selection = largestConnectedTriangles(selection, topology);
+    }
+    this._setSelection(model, selection);
   }
 
-  _setSelection(model, selection) {
+  _selectionStillCurrent(revision, model, points) {
+    // An in-flight selection still applies: no Clear or interaction change since it started, and
+    // the same surface of the same target
+    return this._isMounted
+      && revision === this._selectionRevision
+      && this._sources.get(model.geometryId) === points
+      && get3DToolState().target?.segmentIndex === model.segmentIndex;
+  }
+
+  _brushHit(ndc) {
+    // The surface under the pointer, when it is the target's: the stroke will paint there, and
+    // the brush is shown there
+    const { target } = get3DToolState();
+    const model = target && this._targetModel(target.segmentIndex);
+    if (!model?.instance || !this.api) {
+      this._hideBrush();
+      return null;
+    }
+    const visible = this.api.getModels()
+      .map(({ instance }) => instance)
+      .filter(instance => instance?.visible);
+    const hit = raycastSurfaces({ camera: this.api.getCamera(), ndc, objects: visible });
+    if (!hit || hit.object !== model.instance) {
+      this._hideBrush();
+      return null;
+    }
+    this._showBrush(model, hit.point);
+    return { model, hit };
+  }
+
+  async selectWithBrush(ndc, { erase = false } = {}) {
+    // Paint (§13): the brush is a sphere on the surface under the pointer; the stroke selects
+    // (or erases) the target's triangles it covers that are connected to the one it hit
+    const found = this._brushHit(ndc);
+    if (!found) {
+      return;
+    }
+    const { model, hit } = found;
+    const revision = this._selectionRevision;
+    const points = this._sources.get(model.geometryId);
+    const topology = await this._topologyReady(model);
+    if (!topology || !this._selectionStillCurrent(revision, model, points)) {
+      return;
+    }
+    const state = get3DToolState();
+    const center = model.instance.worldToLocal(hit.point.clone());
+    const collected = collectTrianglesInSphere({
+      geometry: model.instance.geometry,
+      center: [center.x, center.y, center.z],
+      radius: state.paintRadius,
+    });
+    const painted = connectedTriangles({ collected, seed: hit.faceIndex, topology });
+    const erasing = erase || state.paintMode === PAINT_MODES.erase;
+    const current = this._selectionGeometryId === model.geometryId ? this._selection : new Set();
+    // The highlight is redrawn once per frame during a stroke, and the regions are counted once,
+    // when the stroke ends
+    this._setSelection(model,
+      combineSelection(current, painted, erasing ? SELECTION_MODES.subtract : SELECTION_MODES.add),
+      { countRegions: false, defer: true });
+  }
+
+  _onStrokeEnd() {
+    const { target } = get3DToolState();
+    const model = target && this._targetModel(target.segmentIndex);
+    if (model && this._selectionGeometryId === model.geometryId) {
+      this._setSelection(model, this._selection);
+    }
+  }
+
+  _showBrush(model, point) {
+    if (!this.api?.scene) {
+      return;
+    }
+    const tint = selectionTint(this._segmentColor(model.segmentIndex), FACE_TINT_TOWARD_WHITE);
+    if (!this._brush) {
+      const material = new MeshBasicMaterial({
+        color: tint, transparent: true, opacity: 0.35, depthTest: false,
+      });
+      this._brush = new Mesh(new SphereGeometry(1, 24, 16), material);
+      this._brush.renderOrder = 3;
+      this.api.scene.add(this._brush);
+    } else {
+      this._brush.material.color.copy(tint);
+    }
+    this._brush.position.copy(point);
+    this._brush.scale.setScalar(get3DToolState().paintRadius);
+    this._brush.visible = true;
+  }
+
+  _hideBrush() {
+    if (this._brush) {
+      this._brush.visible = false;
+    }
+  }
+
+  _removeBrush() {
+    if (this._brush) {
+      this._brush.parent?.remove(this._brush);
+      this._brush.geometry.dispose();
+      this._brush.material.dispose();
+      this._brush = null;
+    }
+  }
+
+  _topologyFor(model) {
+    // Triangle topology of the target's surface, built off the main thread and kept while the
+    // surface's points stay the same: the topology when it is ready, else null (a build starts)
+    const surface = c3dCache.getGeometry(model.geometryId)?.data;
+    if (!surface) {
+      return null;
+    }
+    if (this._topology?.points === surface.points) {
+      return this._topology.topology;
+    }
+    this._ensureTopology(model, surface);
+    return null;
+  }
+
+  _ensureTopology(model, surface) {
+    if (this._topology?.points === surface.points) {
+      return this._topology.promise;
+    }
+    const entry = { points: surface.points, topology: null, promise: null };
+    this._topology = entry;
+    entry.promise = Promise.resolve()
+      .then(() => this.props.computeTopology({ points: surface.points, polys: surface.polys }))
+      .then(topology => {
+        if (this._topology !== entry) {
+          return null;
+        }
+        entry.topology = topology;
+        // A selection made before the topology was ready gets its region count now
+        if (this._isMounted && this._selection.size && this._selectionGeometryId === model.geometryId) {
+          this._publishSelection(model);
+        }
+        return topology;
+      })
+      .catch(err => {
+        if (this._topology === entry) {
+          this._topology = null;
+        }
+        console.error('[SegEditorSurfaceView] surface topology failed', err);
+        return null;
+      });
+    return entry.promise;
+  }
+
+  _topologyReady(model) {
+    // The target's topology, awaited while it is built
+    const surface = c3dCache.getGeometry(model.geometryId)?.data;
+    if (!surface) {
+      return Promise.resolve(null);
+    }
+    const ready = this._topologyFor(model);
+    return ready ? Promise.resolve(ready) : this._ensureTopology(model, surface);
+  }
+
+  async reshapeSelection(kind) {
+    // Grow the selection by one ring of triangles, or shrink it by its edge triangles
+    const { target } = get3DToolState();
+    const model = target && this._targetModel(target.segmentIndex);
+    if (!model || !this._selection.size || this._selectionGeometryId !== model.geometryId) {
+      return false;
+    }
+    const revision = this._selectionRevision;
+    const points = this._sources.get(model.geometryId);
+    const topology = await this._topologyReady(model);
+    if (!topology || !this._selectionStillCurrent(revision, model, points)
+        || this._selectionGeometryId !== model.geometryId) {
+      return false;
+    }
+    const next = kind === 'grow'
+      ? growTriangles(this._selection, topology)
+      : shrinkTriangles(this._selection, topology);
+    this._setSelection(model, next);
+    return true;
+  }
+
+  _setSelection(model, selection, { countRegions = true, defer = false } = {}) {
     this._selection = selection;
     this._selectionGeometryId = selection.size ? model.geometryId : null;
-    this._updateHighlight(model);
-    set3DSelectionCount(selection.size);
+    if (defer && typeof requestAnimationFrame === 'function') {
+      if (this._highlightFrame === null) {
+        this._highlightFrame = requestAnimationFrame(() => {
+          this._highlightFrame = null;
+          if (this._isMounted) {
+            this._updateHighlight(model);
+          }
+        });
+      }
+    } else {
+      this._cancelHighlightFrame();
+      this._updateHighlight(model);
+    }
+    this._publishSelection(model, { countRegions });
+  }
+
+  _cancelHighlightFrame() {
+    if (this._highlightFrame !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._highlightFrame);
+    }
+    this._highlightFrame = null;
+  }
+
+  _publishSelection(model, { countRegions = true } = {}) {
+    const selection = this._selection;
+    const polys = c3dCache.getGeometry(model.geometryId)?.data?.polys;
+    const topology = countRegions && selection.size ? this._topologyFor(model) : null;
+    set3DSelectionCount(selection.size, {
+      points: polys && selection.size ? trianglesVertices(selection, polys).size : 0,
+      regions: topology ? triangleComponents(selection, topology).length : (selection.size ? 1 : 0),
+    });
   }
 
   clearSelection() {
+    this._cancelHighlightFrame();
+    this._selectionRevision += 1;
     if (!this._selection.size && !this._highlight) {
       return;
     }
@@ -550,155 +1015,182 @@ export default class SegEditorSurfaceView extends Component {
     set3DSelectionCount(0);
   }
 
-  _updateHighlight(model) {
-    if (this._highlight) {
-      this._highlight.parent?.remove(this._highlight);
-      this._highlight.geometry.dispose();
-      this._highlight.material.dispose();
-      this._highlight = null;
-    }
-    if (!model || !this._selection.size || !this.api?.scene) {
+  _removeHighlight() {
+    if (!this._highlight) {
       return;
     }
-
-    const source = model.instance.geometry.getAttribute('position');
-    const positions = new Float32Array(this._selection.size * 3);
-    let i = 0;
-    this._selection.forEach(v => {
-      positions[i++] = source.getX(v);
-      positions[i++] = source.getY(v);
-      positions[i++] = source.getZ(v);
+    this._highlight.parent?.remove(this._highlight);
+    this._highlight.children.forEach(child => {
+      child.geometry.dispose();
+      child.material.dispose();
     });
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(positions, 3));
-    const material = new PointsMaterial({
-      color: HIGHLIGHT_COLOR, size: 4, sizeAttenuation: false, depthTest: false,
-    });
-    this._highlight = new Points(geometry, material);
-    this._highlight.renderOrder = 1;
-    this._highlight.matrixAutoUpdate = false;
-    this._highlight.matrix.copy(model.instance.matrixWorld);
-    this.api.scene.add(this._highlight);
+    this._highlight = null;
   }
 
-  async deleteSelectedPoints() {
-    // Delete (FR-19..FR-22): confirm, then remove the points from the segment and its labelmap
-    const { editSegmentationId, confirm, notify, onEditError, t } = this.props;
+  _updateHighlight(model) {
+    // The selection over the target's mesh, in its own geometry (the selected triangles' vertices,
+    // compacted): the faces tinted, their edges, and their points. The lasso shows near-white
+    // points and edges over a faint tint; the brush shows the tint, with subdued points and edges
+    // so the topology stays readable.
+    this._removeHighlight();
+    const polys = model && c3dCache.getGeometry(model.geometryId)?.data?.polys;
+    if (!model?.instance || !polys || !this._selection.size || !this.api?.scene) {
+      return;
+    }
+    const painting = get3DToolState().activeTool === THREE_D_TOOLS.Paint;
+    const color = this._segmentColor(model.segmentIndex);
+    const faceTint = selectionTint(color, FACE_TINT_TOWARD_WHITE);
+    const edgeTint = painting ? faceTint : selectionTint(color, LASSO_EDGE_TINT_TOWARD_WHITE);
+    const pointTint = selectionTint(color, painting ? PAINT_POINT_TINT_TOWARD_WHITE : LASSO_POINT_TINT_TOWARD_WHITE);
+
+    // A smooth's selection is drawn on the previewed positions while its preview is shown
+    const shown = this._previewMesh?.geometryId === model.geometryId ? this._previewMesh.mesh : model.instance;
+    const source = shown.geometry.getAttribute('position');
+    const local = new Map();
+    const positions = [];
+    const faceIndex = [];
+    const edgeIndex = [];
+    const at = v => {
+      let index = local.get(v);
+      if (index === undefined) {
+        index = local.size;
+        local.set(v, index);
+        positions.push(source.getX(v), source.getY(v), source.getZ(v));
+      }
+      return index;
+    };
+    this._selection.forEach(t => {
+      const a = at(polys[4 * t + 1]);
+      const b = at(polys[4 * t + 2]);
+      const c = at(polys[4 * t + 3]);
+      faceIndex.push(a, b, c);
+      edgeIndex.push(a, b, b, c, c, a);
+    });
+    const position = new BufferAttribute(Float32Array.from(positions), 3);
+
+    const group = new Group();
+    group.renderOrder = 1;
+    group.matrixAutoUpdate = false;
+    group.matrix.copy(model.instance.matrixWorld);
+
+    const faces = new BufferGeometry();
+    faces.setAttribute('position', position);
+    faces.setIndex(new BufferAttribute(Uint32Array.from(faceIndex), 1));
+    group.add(new Mesh(faces, new MeshBasicMaterial({
+      color: faceTint, transparent: true, opacity: painting ? 0.6 : 0.2, side: DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    })));
+
+    const edges = new BufferGeometry();
+    edges.setAttribute('position', position);
+    edges.setIndex(new BufferAttribute(Uint32Array.from(edgeIndex), 1));
+    group.add(new LineSegments(edges, new LineBasicMaterial({
+      color: edgeTint, transparent: true, opacity: painting ? 0.5 : 0.7, depthTest: false,
+    })));
+
+    const points = new BufferGeometry();
+    points.setAttribute('position', position);
+    group.add(new Points(points, new PointsMaterial({
+      color: pointTint, size: painting ? 2 : 4, sizeAttenuation: false, depthTest: false,
+    })));
+
+    this._highlight = group;
+    this.api.scene.add(group);
+  }
+
+  /**
+   * One flow for every edit of the target's surface (Remove, Smooth, Repair): the guards, the
+   * target checks before and after the computation, the busy latch and step overlay, the preview
+   * or commit, and the failure report. `compute` returns the edit (its `after`, `editBox`,
+   * `write`, and what the summary needs), null when there was nothing to do (it has told the
+   * user), or false when it refused (likewise).
+   */
+  async _runSurfaceEdit({
+    title, cancelledMessage, step, needsSelection = true, confirmFirst = null, compute,
+  }) {
+    const { editSegmentationId, notify, t } = this.props;
     const state = get3DToolState();
     const { target } = state;
     const model = target && this._targetModel(target.segmentIndex);
-    if (this._confirming || state.busy || !this._selection.size || !is3DTargetEditable(state)
-        || !model || model.geometryId !== this._selectionGeometryId || !editSegmentationId) {
+    if (this._confirming || state.busy || !is3DTargetEditable(state) || !model || !editSegmentationId || !this.api) {
+      return false;
+    }
+    if (needsSelection && (!this._selection.size || model.geometryId !== this._selectionGeometryId)) {
       return false;
     }
 
-    const count = this._selection.size;
-    const segmentName = target.label || t('Segment {{index}}', { index: target.segmentIndex });
-    this._confirming = true;
-    let confirmed = false;
-    try {
-      confirmed = confirm ? await confirm({
-        title: t('Remove selected points'),
-        message: t('Remove {{points}} selected points from "{{segment}}"? The surface is closed where the points were, and the segment\'s voxels outside it are removed.', {
-          points: count, segment: segmentName,
-        }),
-        confirmText: t('Remove'),
-        cancelText: t('Cancel'),
-      }) : true;
-    } finally {
-      this._confirming = false;
-    }
-    if (!confirmed || !this.api) {
-      return false;
+    if (confirmFirst) {
+      this._confirming = true;
+      let confirmed = false;
+      try {
+        confirmed = await confirmFirst({ model, state });
+      } finally {
+        this._confirming = false;
+      }
+      if (!confirmed || !this.api) {
+        return false;
+      }
     }
 
     // The selection must still refer to the surface the mesh was built from
     const surface = c3dCache.getGeometry(model.geometryId)?.data;
     const labelmap = getLabelmapForEdit(editSegmentationId);
     if (!surface || this._sources.get(model.geometryId) !== surface.points || !labelmap) {
-      this.clearSelection();
-      notify?.({
-        type: 'warning',
-        title: t('Remove selected points'),
-        message: t('The segment changed while the points were selected. Select them again.'),
-      });
+      if (needsSelection) {
+        this.clearSelection();
+        notify?.({
+          type: 'warning',
+          title,
+          message: t('The segment changed while the faces were selected. Select them again.'),
+        });
+      }
       return false;
     }
 
     const selected = Array.from(this._selection);
     const { segmentIndex } = target;
-
-    // Everything below awaits workers. The write is committed only if, at that moment, this view
-    // is still the one that started the delete, and the target is still unlocked and edited in
-    // the same labelmap volume.
+    const before = { points: surface.points, polys: surface.polys };
+    // The computation awaits workers. The edit is applied only if, at that moment, this view is
+    // still the one that started it, the surface is the one it was computed from, and the target
+    // is still unlocked and edited in the same labelmap volume.
     const generation = this._generation;
-    const stillValid = () => this._isMounted && this._generation === generation
-      && !!c3dSegmentations.state.getSegmentation(editSegmentationId)?.segments?.[segmentIndex]
-      && !this._segmentLocked(segmentIndex)
-      && getLabelmapForEdit(editSegmentationId)?.volume === labelmap.volume;
+    // A foreign edit of the working labelmap during the computation makes its input stale even
+    // before the surface is rebuilt from it (the rebuild is debounced)
+    const labelmapRevision = this._labelmapRevision;
+    const validity = this._validityCheck(editSegmentationId, segmentIndex, labelmap.volume);
+    const stillValid = () => validity() && this._labelmapRevision === labelmapRevision;
 
     const job = begin3DToolJob();
-    this.setState({ deleteStep: DELETE_STEPS.cut });
+    this._toolBeforeEdit = state.activeTool;
+    this.setState({ deleteStep: step });
     try {
-      const result = await deleteSelection({
-        surface,
-        selected,
-        segmentIndex,
-        depth: state.removalDepth,
-        labelmap,
-        deps: {
-          patchHoles: loops => patchHolesInWorker(loops),
-          voxelize: voxelizeSurfaceInWorker,
-          isCancelled: () => !stillValid(),
-          removeVoxels: indices => {
-            if (!stillValid()) {
-              throw new DeleteCancelledError();
-            }
-            removeLabelmapVoxels({ segmentationId: editSegmentationId, volume: labelmap.volume, indices });
-          },
-        },
-        onStep: step => this._isMounted && this.setState({ deleteStep: step }),
+      const edit = await compute({
+        model, surface, before, selected, segmentIndex, state, stillValid,
+        onStep: next => this._isMounted && this.setState({ deleteStep: next }),
       });
-      this.clearSelection();
-
-      // The edit is complete once the surface has been rebuilt from the labelmap
-      if (result.removedVoxels && this._isMounted) {
-        this.setState({ deleteStep: RENDER_STEP });
-        const updated = this.waitForSurfaceUpdate(model.geometryId);
-        this.props.onLabelmapEdited?.();
-        await updated;
+      if (!stillValid() || this._sources.get(model.geometryId) !== surface.points) {
+        throw new SurfaceEditCancelledError();
       }
-
-      if (!result.removedVoxels) {
-        notify?.({
-          type: 'info',
-          title: t('Remove selected points'),
-          message: t('No voxels of the segment were inside the removed part, so the segmentation is unchanged.'),
-        });
-      } else if (result.cappedHoles) {
-        notify?.({
-          type: 'warning',
-          title: t('Remove selected points'),
-          message: t('{{holes}} hole(s) could not be closed smoothly and were closed flat.', {
-            holes: result.cappedHoles,
-          }),
-        });
+      if (edit === null) {
+        return true;
+      }
+      if (edit === false) {
+        return false;
+      }
+      if (!edit.keepSelection) {
+        this.clearSelection();
+      }
+      const full = {
+        ...edit, geometryId: model.geometryId, segmentIndex, before, labelmapVolume: labelmap.volume, stillValid,
+      };
+      if (edit.previewAlways || state.previewEnabled) {
+        this._startPreview(model, full);
+      } else {
+        this._commitEdit(full);
       }
       return true;
     } catch (err) {
-      if (err instanceof DeleteCancelledError) {
-        // Nothing was written. Say so only while the same editor session is still open (the
-        // segment was locked or removed meanwhile); a closed editor has nobody to tell.
-        if (this._isMounted && this._generation === generation) {
-          notify?.({
-            type: 'warning',
-            title: t('Remove selected points'),
-            message: t('The segment changed while the points were being removed, so nothing was removed.'),
-          });
-        }
-      } else if (this._isMounted && this._generation === generation) {
-        onEditError?.(err);
-      }
+      this._reportEditFailure(err, generation, title, cancelledMessage);
       return false;
     } finally {
       end3DToolJob(job);
@@ -708,19 +1200,605 @@ export default class SegEditorSurfaceView extends Component {
     }
   }
 
-  _createLasso(api) {
-    this._lasso = new LassoInteraction({
+  _cutDeps(stillValid) {
+    // The whole-mesh stages run in the carve worker, the patches in the hole-filling worker
+    return {
+      prepareCut: args => prepareCutInWorker(args),
+      prepareRepair: args => prepareRepairInWorker(args),
+      assembleCut: args => assembleCutInWorker(args),
+      patchHoles: (loops, options) => patchHolesInWorker(loops, options),
+      isCancelled: () => !stillValid(),
+    };
+  }
+
+  deleteSelectedPoints() {
+    // Delete (FR-19..FR-22, §12): confirm (or preview), then remove the faces from the segment
+    // and its labelmap
+    const { confirm, notify, t } = this.props;
+    const title = t('Remove selected faces');
+    return this._runSurfaceEdit({
+      title,
+      cancelledMessage: t('The segment changed while the faces were being removed, so nothing was removed.'),
+      step: DELETE_STEPS.cut,
+      // With the preview on, the edit itself is the confirmation (Apply / Cancel)
+      confirmFirst: ({ state }) => (confirm && !state.previewEnabled ? confirm({
+        title,
+        message: t('Remove {{faces}} selected faces from "{{segment}}"? The surface is closed where they were, and the segment\'s voxels outside it are removed.', {
+          faces: this._selection.size,
+          segment: state.target.label || t('Segment {{index}}', { index: state.target.segmentIndex }),
+        }),
+        confirmText: t('Remove'),
+        cancelText: t('Cancel'),
+      }) : true),
+      compute: async ({ before, selected, state, stillValid, onStep }) => {
+        const cut = await cutAndPatch({
+          surface: before,
+          selectedTriangles: selected,
+          options: get3DEditOptions(),
+          deps: this._cutDeps(stillValid),
+          onStep,
+        });
+        if (!cut.changed) {
+          this.clearSelection();
+          notify?.({
+            type: 'info',
+            title,
+            message: t('The selected faces are not part of the surface, so nothing was removed.'),
+          });
+          return null;
+        }
+        const depth = state.removalDepth;
+        return {
+          selected,
+          after: cut.edited || EMPTY_SURFACE,
+          editBox: cut.editBox,
+          selectedPoints: cut.selectedPoints,
+          depth,
+          write: { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth },
+          cut,
+          repair: false,
+        };
+      },
+    });
+  }
+
+  smoothSelection() {
+    // Smooth (ohif-viewers#148, FR-1..FR-10): the selected region is evened out with its edge
+    // pinned (or eased) and shown for Apply / Cancel; the labelmap follows the moved surface once
+    // applied
+    const { notify, t } = this.props;
+    const title = t('Smooth selected faces');
+    return this._runSurfaceEdit({
+      title,
+      cancelledMessage: t('The segment changed while the faces were being smoothed, so nothing was changed.'),
+      step: DELETE_STEPS.smooth,
+      compute: async ({ before, selected }) => {
+        const options = get3DSmoothOptions();
+        const result = await smoothInWorker({ surface: before, selectedTriangles: selected, options });
+        if (!result.changed) {
+          notify?.({
+            type: 'info',
+            title,
+            message: t('Select a region with an interior to smooth: the edge of the selection is pinned.'),
+          });
+          return null;
+        }
+        if (result.flipped || result.degenerate) {
+          notify?.({
+            type: 'warning',
+            title,
+            message: t('The smoothing would fold the surface over itself. Lower the strength or the passes.'),
+          });
+          return false;
+        }
+        return {
+          kind: 'smooth',
+          selected,
+          after: result.after,
+          editBox: result.editBox,
+          write: { kind: WRITE_KINDS.smooth },
+          keepSelection: true,
+          previewAlways: true,
+          moved: result.moved,
+          options,
+        };
+      },
+    });
+  }
+
+  repairSurface() {
+    // Close the open rims of the target's surface (nothing is written to the labelmap)
+    const { notify, t } = this.props;
+    const title = t('Repair surface');
+    return this._runSurfaceEdit({
+      title,
+      cancelledMessage: t('The surface could not be repaired. It is unchanged.'),
+      step: DELETE_STEPS.patch,
+      needsSelection: false,
+      compute: async ({ before, stillValid, onStep }) => {
+        const cut = await repairSurface({
+          surface: before,
+          options: get3DEditOptions(),
+          deps: this._cutDeps(stillValid),
+          onStep,
+        });
+        if (!cut.changed) {
+          notify?.({ type: 'info', title, message: t('The surface has no open rims to close.') });
+          return null;
+        }
+        return {
+          after: cut.edited,
+          editBox: cut.editBox,
+          selectedPoints: cut.selectedPoints,
+          depth: 0,
+          write: { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth: 0 },
+          cut,
+          repair: true,
+        };
+      },
+    });
+  }
+
+  _smoothOptionsChanged(state) {
+    const options = this._pendingEdit?.options;
+    return !!options && (options.strength !== state.smoothStrength
+      || options.passes !== state.smoothPasses || options.feather !== state.smoothFeather);
+  }
+
+  _scheduleSmoothRerun() {
+    clearTimeout(this._smoothRerun);
+    this._smoothRerun = setTimeout(() => {
+      this._smoothRerun = null;
+      this._rerunSmoothPreview();
+    }, SMOOTH_RERUN_DELAY_MS);
+  }
+
+  async _rerunSmoothPreview() {
+    // The smooth shown for Apply / Cancel, recomputed with the current settings. One recompute
+    // runs at a time: settings changed while it runs are taken up once, when it is done, so the
+    // worker never works on a request already superseded. A result that would fold the surface
+    // leaves the one shown in place.
+    const edit = this._pendingEdit;
+    if (!edit || edit.kind !== 'smooth' || !this.api) {
+      return;
+    }
+    if (this._smoothInFlight) {
+      this._smoothDirty = true;
+      return;
+    }
+    const { notify, onEditError, t } = this.props;
+    if (!this._previewIsCurrent(edit)) {
+      this._dropStalePreview();
+      return;
+    }
+    const options = get3DSmoothOptions();
+    edit.options = options;
+    this._smoothRun += 1;
+    const run = this._smoothRun;
+    this._smoothInFlight = true;
+    this._smoothDirty = false;
+    try {
+      const result = await smoothInWorker({ surface: edit.before, selectedTriangles: edit.selected, options });
+      if (run !== this._smoothRun || this._pendingEdit !== edit || !this._isMounted) {
+        return;
+      }
+      if (!result.changed || result.flipped || result.degenerate) {
+        notify?.({
+          type: 'warning',
+          title: t('Smooth selected faces'),
+          message: t('The smoothing would fold the surface over itself. Lower the strength or the passes.'),
+        });
+        return;
+      }
+      if (!this._previewIsCurrent(edit)) {
+        this._dropStalePreview();
+        return;
+      }
+      edit.after = result.after;
+      edit.editBox = result.editBox;
+      edit.moved = result.moved;
+      // The recompute updates the preview mesh only; the cache is written on Apply
+      this._updatePreviewMesh(edit.after);
+      const model = this._targetModel(edit.segmentIndex);
+      if (model && this._selectionGeometryId === model.geometryId) {
+        this._updateHighlight(model);
+      }
+      set3DPreview(this._editSummary(edit));
+    } catch (err) {
+      if (this._isMounted && this._pendingEdit === edit) {
+        onEditError?.(err);
+      }
+    } finally {
+      this._smoothInFlight = false;
+      if (this._smoothDirty && this._pendingEdit === edit && this._isMounted) {
+        this._smoothDirty = false;
+        this._rerunSmoothPreview();
+      }
+    }
+  }
+
+  _validityCheck(editSegmentationId, segmentIndex, labelmapVolume) {
+    const generation = this._generation;
+    return () => this._isMounted && this._generation === generation
+      && !!c3dSegmentations.state.getSegmentation(editSegmentationId)?.segments?.[segmentIndex]
+      && !this._segmentLocked(segmentIndex)
+      && getLabelmapForEdit(editSegmentationId)?.volume === labelmapVolume;
+  }
+
+  _reportEditFailure(err, generation, title, cancelledMessage) {
+    const { notify, onEditError } = this.props;
+    if (err instanceof SurfaceEditCancelledError) {
+      // Nothing was changed. Say so only while the same editor session is still open (the
+      // segment was locked or removed meanwhile); a closed editor has nobody to tell.
+      if (this._isMounted && this._generation === generation) {
+        notify?.({ type: 'warning', title, message: cancelledMessage });
+      }
+    } else if (this._isMounted && this._generation === generation) {
+      onEditError?.(err);
+    }
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Edits: preview, apply, cancel, repair
+
+  _editSummary(edit) {
+    if (edit.kind === 'smooth') {
+      return { kind: 'smooth', points: edit.moved };
+    }
+    const { diagnostics = {}, holes = 0 } = edit.cut;
+    return {
+      points: edit.selectedPoints ? edit.selectedPoints.length / 3 : 0,
+      holes,
+      methods: diagnostics.methods || {},
+      closed: diagnostics.output?.closed,
+      openEdges: diagnostics.openEdges || 0,
+      repair: !!edit.repair,
+    };
+  }
+
+  _startPreview(model, edit) {
+    // Show the edited surface on the canvas only (ohif-viewers#148 FR-2, §5.2): a preview mesh in
+    // place of the real one, the new patches tinted and the original faces ghosted behind it. The
+    // cached surface, the VTK view, the labelmap and the history are untouched until Apply
+    // (Enter); Cancel (Escape) just takes the preview away.
+    this._pendingEdit = edit;
+    this._showPreviewMesh(model, edit.after);
+    if (edit.cut) {
+      this._showPatchTint(model, edit.after);
+    }
+    this._showGhost(model, edit);
+    if (edit.keepSelection && this._selectionGeometryId === model.geometryId) {
+      this._updateHighlight(model);
+    }
+    set3DPreview(this._editSummary(edit));
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this._onPreviewKey);
+    }
+  }
+
+  _endPreview() {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this._onPreviewKey);
+    }
+    clearTimeout(this._smoothRerun);
+    this._smoothRerun = null;
+    this._smoothRun += 1;
+    this._smoothDirty = false;
+    this._removePatchTint();
+    this._removeGhost();
+    this._removePreviewMesh();
+    const edit = this._pendingEdit;
+    this._pendingEdit = null;
+    // The real mesh comes back, and a kept selection is drawn on it again
+    this.syncPresentation();
+    const model = edit && this._targetModel(edit.segmentIndex);
+    if (model && this._selectionGeometryId === model.geometryId) {
+      this._updateHighlight(model);
+    }
+    set3DPreview(null);
+    this._restoreTool();
+  }
+
+  _showPreviewMesh(model, surface) {
+    this._removePreviewMesh();
+    if (!this.api?.scene || !model?.instance) {
+      return;
+    }
+    const material = model.instance.material?.clone
+      ? model.instance.material.clone()
+      : new MeshBasicMaterial({ color: this._segmentColor(model.segmentIndex) || FALLBACK_SEGMENT_COLOR });
+    const mesh = new Mesh(surfaceToBufferGeometry(surface), material);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(model.instance.matrixWorld);
+    this._previewMesh = { geometryId: model.geometryId, mesh };
+    this.api.scene.add(mesh);
+    this.syncPresentation();
+  }
+
+  _updatePreviewMesh(surface) {
+    const preview = this._previewMesh;
+    if (!preview) {
+      return;
+    }
+    const previous = preview.mesh.geometry;
+    preview.mesh.geometry = surfaceToBufferGeometry(surface);
+    previous?.dispose?.();
+  }
+
+  _removePreviewMesh() {
+    const preview = this._previewMesh;
+    if (!preview) {
+      return;
+    }
+    this._previewMesh = null;
+    preview.mesh.parent?.remove(preview.mesh);
+    preview.mesh.geometry?.dispose?.();
+    preview.mesh.material?.dispose?.();
+  }
+
+  _previewIsCurrent(edit) {
+    // The preview still applies: the cached surface is the one it was made from, nothing else
+    // has edited the working labelmap since, and the target is still editable in the same volume
+    return !edit.stale
+      && c3dCache.getGeometry(edit.geometryId)?.data?.points === edit.before.points
+      && (!edit.stillValid || edit.stillValid());
+  }
+
+  _dropStalePreview() {
+    // The segment changed under a preview: take it away without writing anything, and say so
+    const edit = this._pendingEdit;
+    if (!edit) {
+      return;
+    }
+    edit.stale = true;
+    this._endPreview();
+    const { notify, t } = this.props;
+    if (this._isMounted) {
+      notify?.({
+        type: 'warning',
+        title: edit.kind === 'smooth' ? t('Smooth selected faces')
+          : edit.repair ? t('Repair surface') : t('Remove selected faces'),
+        message: t('The segment changed while the edit was shown, so it was not applied. Make the edit again.'),
+      });
+    }
+  }
+
+  _onLabelmapModified = (evt) => {
+    // A foreign edit of the working labelmap (a slice edit, an import): counted whether or not a
+    // preview is shown, so a computation running when it lands is refused too (its stillValid
+    // check compares the count); a preview shown now no longer applies
+    if (isOwnSurfaceWrite() || evt?.detail?.segmentationId !== this.props.editSegmentationId) {
+      return;
+    }
+    this._labelmapRevision += 1;
+    const edit = this._pendingEdit;
+    if (edit) {
+      edit.stale = true;
+      this._dropStalePreview();
+    }
+  };
+
+  _showGhost(model, edit) {
+    // The original surface of the edited region, as a faint wireframe behind the preview, so the
+    // result can be compared with what it replaces (ohif-viewers#148, FR-2)
+    this._removeGhost();
+    const cells = edit.selected;
+    if (!cells?.length || !this.api?.scene || !model?.instance) {
+      return;
+    }
+    const { points, polys } = edit.before;
+    const local = new Map();
+    const positions = [];
+    const edges = [];
+    const at = v => {
+      let index = local.get(v);
+      if (index === undefined) {
+        index = local.size;
+        local.set(v, index);
+        positions.push(points[3 * v], points[3 * v + 1], points[3 * v + 2]);
+      }
+      return index;
+    };
+    cells.forEach(t => {
+      const a = at(polys[4 * t + 1]);
+      const b = at(polys[4 * t + 2]);
+      const c = at(polys[4 * t + 3]);
+      edges.push(a, b, b, c, c, a);
+    });
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(Float32Array.from(positions), 3));
+    geometry.setIndex(new BufferAttribute(Uint32Array.from(edges), 1));
+    const material = new LineBasicMaterial({ color: GHOST_COLOR, transparent: true, opacity: 0.35, depthTest: false });
+    this._ghost = new LineSegments(geometry, material);
+    this._ghost.renderOrder = 1;
+    this._ghost.matrixAutoUpdate = false;
+    this._ghost.matrix.copy(model.instance.matrixWorld);
+    this.api.scene.add(this._ghost);
+  }
+
+  _removeGhost() {
+    if (this._ghost) {
+      this._ghost.parent?.remove(this._ghost);
+      this._ghost.geometry.dispose();
+      this._ghost.material.dispose();
+      this._ghost = null;
+    }
+  }
+
+  _abandonPreview() {
+    // The preview never wrote anything, so taking it away is all there is to do
+    if (this._pendingEdit) {
+      this._endPreview();
+    }
+  }
+
+  _restoreTool() {
+    // The tool in use when the edit started stays in use after it (FR-37)
+    const tool = this._toolBeforeEdit;
+    this._toolBeforeEdit = null;
+    if (tool && this._isMounted && get3DToolState().activeTool !== tool) {
+      setActive3DTool(tool);
+    }
+  }
+
+  _onPreviewKey = (event) => {
+    const tag = event.target?.tagName;
+    if (event.defaultPrevented || tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelPreview();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      this.applyPreview();
+    }
+  };
+
+  applyPreview() {
+    // Apply only what the preview was made from: a surface or labelmap changed meanwhile refuses it
+    const edit = this._pendingEdit;
+    if (!edit) {
+      return false;
+    }
+    if (!this._previewIsCurrent(edit)) {
+      this._dropStalePreview();
+      return false;
+    }
+    this._endPreview();
+    this._commitEdit(edit);
+    return true;
+  }
+
+  cancelPreview() {
+    // The surface goes back, and so does the selection the edit was made from, so the options
+    // can be changed and the edit tried again without selecting the points anew
+    const edit = this._pendingEdit;
+    if (!edit) {
+      return false;
+    }
+    this._endPreview();
+    const model = edit.selected?.length ? this._targetModel(edit.segmentIndex) : null;
+    if (model && model.geometryId === edit.geometryId
+        && this._sources.get(edit.geometryId) === edit.before.points) {
+      this._setSelection(model, new Set(edit.selected));
+    }
+    return true;
+  }
+
+  _commitEdit(edit) {
+    // Record the edit in the shared history and apply it: the surface shown and, behind it, the
+    // labelmap written (FR-23/FR-24): a removal clears the voxels the surface no longer contains,
+    // a smooth moves the segment with the surface. A repair changes the surface only.
+    const { notify, t } = this.props;
+    const memo = createSurfaceEditMemo({
+      geometryId: edit.geometryId,
+      segmentIndex: edit.segmentIndex,
+      before: edit.before,
+      after: edit.after,
+      editBox: edit.editBox,
+      write: edit.write || { kind: WRITE_KINDS.delete, selectedPoints: edit.selectedPoints, depth: edit.depth },
+      keepSelection: !!edit.keepSelection,
+      labelmapVolume: edit.labelmapVolume,
+      deps: {
+        setSurface: (id, next, options) => setCachedSurface(this.props.segmentationId, id, next, options),
+        queueWrite: pending => this._queueWrite(pending),
+        withOwnEdit: this.props.withOwnLabelmapEdit,
+      },
+    });
+    if (edit.repair) {
+      memo.surfaceOnly = true;
+    }
+    recordSurfaceEdit(memo);
+    set3DLastEdit(this._editSummary(edit));
+    this._restoreTool();
+
+    const { cut } = edit;
+    if (cut?.cappedHoles) {
+      notify?.({
+        type: 'warning',
+        title: edit.repair ? t('Repair surface') : t('Remove selected faces'),
+        message: t('{{holes}} hole(s) could not be closed smoothly and were closed flat.', {
+          holes: cut.cappedHoles,
+        }),
+      });
+    }
+  }
+
+  _showPatchTint(model, after) {
+    this._removePatchTint();
+    const offset = after.patchPolysOffset;
+    if (!this.api?.scene || !model?.instance || !(offset < after.polys.length)) {
+      return;
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(Float32Array.from(after.points), 3));
+    geometry.setIndex(new BufferAttribute(polysToTriangles(after.polys.subarray(offset)), 1));
+    const material = new MeshBasicMaterial({
+      color: PATCH_TINT_COLOR, transparent: true, opacity: 0.6, depthTest: true,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
+    this._patchTint = new Mesh(geometry, material);
+    this._patchTint.renderOrder = 1;
+    this._patchTint.matrixAutoUpdate = false;
+    this._patchTint.matrix.copy(model.instance.matrixWorld);
+    this.api.scene.add(this._patchTint);
+  }
+
+  _removePatchTint() {
+    if (this._patchTint) {
+      this._patchTint.parent?.remove(this._patchTint);
+      this._patchTint.geometry.dispose();
+      this._patchTint.material.dispose();
+      this._patchTint = null;
+    }
+  }
+
+  _queueWrite(memo) {
+    // The labelmap write that follows a surface edit (and a redo's). The callbacks are the
+    // layout's, so they outlive this canvas.
+    const { editSegmentationId, notify, onEditError, withOwnLabelmapEdit, t } = this.props;
+    const smooth = memo.write?.kind === WRITE_KINDS.smooth;
+    return queueSurfaceEditWrite(memo, {
+      editSegmentationId,
+      withOwnEdit: withOwnLabelmapEdit,
+      onRefused: () => notify?.({
+        type: 'warning',
+        title: smooth ? t('Smooth selected faces') : t('Remove selected faces'),
+        message: smooth
+          ? t('The segment changed before the 2D views could be updated. Undo the smoothing to restore the surface.')
+          : t('The segment changed before the 2D views could be updated. Undo the removal to restore the surface.'),
+      }),
+      onError: error => onEditError?.(error),
+    });
+  }
+
+  _createInteractions(api) {
+    const shared = {
       element: api.renderer.domElement,
       overlayParent: api.container,
-      onLasso: (lasso, mode) => this.selectWithLasso(lasso, mode),
       onClear: () => {
-        if (!this._confirming) {
+        if (this._pendingEdit) {
+          this.cancelPreview();
+        } else if (!this._confirming) {
           this.clearSelection();
         }
       },
       onDelete: () => {
         this.deleteSelectedPoints();
       },
+    };
+    this._lasso = new LassoInteraction({
+      ...shared,
+      shape: get3DToolState().lassoShape,
+      onLasso: (lasso, mode) => this.selectWithLasso(lasso, mode),
+    });
+    this._paint = new PaintInteraction({
+      ...shared,
+      onPaint: (ndc, options) => this.selectWithBrush(ndc, options),
+      onHover: ndc => this._brushHit(ndc),
+      onLeave: () => this._hideBrush(),
+      onStrokeEnd: () => this._onStrokeEnd(),
     });
   }
 
@@ -730,7 +1808,7 @@ export default class SegEditorSurfaceView extends Component {
     this.matchReferenceCamera();
     this.syncPresentation();
     api.setRenderingPaused(!this.props.active);
-    this._createLasso(api);
+    this._createInteractions(api);
     this.publishTarget();
     this._apply3DToolState();
   }
@@ -741,10 +1819,18 @@ export default class SegEditorSurfaceView extends Component {
     c3dEventTarget.addEventListener(Events.SEGMENTATION_MODIFIED, this._onSegmentationModified);
     c3dEventTarget.addEventListener(
       Events.SEGMENTATION_REPRESENTATION_MODIFIED, this._onRepresentationModified);
+    c3dEventTarget.addEventListener(Events.SEGMENTATION_DATA_MODIFIED, this._onLabelmapModified);
     this._unsubscribers.push(
       subscribe3DToolState(this._apply3DToolState),
       handle3DToolRequest('deleteSelection', () => this.deleteSelectedPoints()),
+      handle3DToolRequest('smoothSelection', () => this.smoothSelection()),
       handle3DToolRequest('clearSelection', () => this.clearSelection()),
+      handle3DToolRequest('growSelection', () => this.reshapeSelection('grow')),
+      handle3DToolRequest('shrinkSelection', () => this.reshapeSelection('shrink')),
+      handle3DToolRequest('applyPreview', () => this.applyPreview()),
+      handle3DToolRequest('cancelPreview', () => this.cancelPreview()),
+      handle3DToolRequest('repairSurface', () => this.repairSurface()),
+      handle3DToolRequest(SURFACE_CHANGED_REQUEST, options => this._onSurfaceChanged(options)),
     );
     this._loadInitialModels();
   }
@@ -784,17 +1870,30 @@ export default class SegEditorSurfaceView extends Component {
     }
 
     this._generation += 1;
+    clearTimeout(this._smoothRerun);
+    this._smoothRerun = null;
     c3dEventTarget.removeEventListener(Events.SEGMENTATION_MODIFIED, this._onSegmentationModified);
     c3dEventTarget.removeEventListener(
       Events.SEGMENTATION_REPRESENTATION_MODIFIED, this._onRepresentationModified);
+    c3dEventTarget.removeEventListener(Events.SEGMENTATION_DATA_MODIFIED, this._onLabelmapModified);
     this._isMounted = false;
     this._unsubscribers.forEach(unsubscribe => unsubscribe());
     this._unsubscribers = [];
 
-    [...this._surfaceWaiters.values()].forEach(done => done());
     this._lasso?.dispose();
     this._lasso = null;
+    this._paint?.dispose();
+    this._paint = null;
+    this._removeBrush();
     this.clearSelection();
+    // An edit still shown for Apply / Cancel is cancelled with the canvas: the preview wrote
+    // nothing, so its overlays and listener go and nothing enters the history. (The replacement
+    // canvas starts clean; the user can make the edit again.)
+    this._abandonPreview();
+    this._removeIssuesOverlay();
+    this._health = null;
+    set3DPreview(null);
+    set3DSurfaceHealth(null);
     set3DToolTarget(null);
 
     // M3DModelView releases its renderer; the meshes are owned here
@@ -823,10 +1922,8 @@ export default class SegEditorSurfaceView extends Component {
     const { deleteStep } = this.state;
     return (
       <div style={style}>
-        {deleteStep && (
-          <LoadingIndicator loadingMessage={deleteStep === RENDER_STEP
-            ? this.props.renderingMessage
-            : this.props.t(DELETE_STEP_MESSAGES[deleteStep])} />
+        {deleteStep && DELETE_STEP_MESSAGES[deleteStep] && (
+          <LoadingIndicator loadingMessage={this.props.t(DELETE_STEP_MESSAGES[deleteStep])} />
         )}
         <M3DModelView
           modelType={MIMETYPE_STL}

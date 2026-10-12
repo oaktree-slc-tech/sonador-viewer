@@ -89,57 +89,125 @@ export function cutSurface({ points, polys, selected }) {
 }
 
 /**
- * The boundary loops of a triangle mesh: closed chains of edges used by exactly one triangle,
- * each loop in the winding of the triangles around it. A vertex shared by two holes is visited
- * once per hole.
+ * The boundary loops of a triangle mesh, with the open edges no loop could use.
+ *
+ * Each loop follows the rim edges (edges used by one triangle) in the winding of the triangles
+ * around it. Where the rim touches itself (a vertex with several rim edges leaving it) the next
+ * edge is the one reached by rotating around the vertex through the kept triangles, so two holes
+ * that share a vertex give two loops. A loop that still comes back to a vertex it holds (a
+ * non-manifold junction) is split there. A rim edge whose walk reaches a dead end (non-manifold
+ * input) is reported as open and left out.
  *
  * @param {ArrayLike<number>} triangles - flat triangle vertex indices
- * @returns {number[][]} loops of vertex indices (first vertex not repeated)
+ * @returns {{ loops: number[][], openEdges: number }} loops of vertex indices (first vertex not
+ *   repeated)
  */
-export function findBoundaryLoops(triangles) {
-  const edgeCount = new Map();
-  const key = (a, b) => (a < b ? `${a}_${b}` : `${b}_${a}`);
-  for (let t = 0; t < triangles.length; t += 3) {
+export function findBoundaryLoopsDetailed(triangles) {
+  const halfEdges = new Map(); // "a>b" -> triangle index (first one, for non-manifold input)
+  const triangleCount = triangles.length / 3;
+  for (let t = 0; t < triangleCount; t++) {
     for (let e = 0; e < 3; e++) {
-      const k = key(triangles[t + e], triangles[t + ((e + 1) % 3)]);
-      edgeCount.set(k, (edgeCount.get(k) || 0) + 1);
-    }
-  }
-
-  // Directed boundary half-edges, keyed by their start vertex
-  const outgoing = new Map();
-  for (let t = 0; t < triangles.length; t += 3) {
-    for (let e = 0; e < 3; e++) {
-      const a = triangles[t + e];
-      const b = triangles[t + ((e + 1) % 3)];
-      if (edgeCount.get(key(a, b)) === 1) {
-        if (!outgoing.has(a)) {
-          outgoing.set(a, []);
-        }
-        outgoing.get(a).push(b);
+      const key = `${triangles[3 * t + e]}>${triangles[3 * t + ((e + 1) % 3)]}`;
+      if (!halfEdges.has(key)) {
+        halfEdges.set(key, t);
       }
     }
   }
+  const vertexAfter = (t, v) => {
+    for (let e = 0; e < 3; e++) {
+      if (triangles[3 * t + e] === v) {
+        return triangles[3 * t + ((e + 1) % 3)];
+      }
+    }
+    return -1;
+  };
+
+  // Rim half-edges, keyed by their start vertex
+  const rim = new Set();
+  halfEdges.forEach((t, key) => {
+    const [a, b] = key.split('>');
+    if (!halfEdges.has(`${b}>${a}`)) {
+      rim.add(key);
+    }
+  });
+
+  // The rim half-edge leaving `v` in the fan of triangles that contains the arrival triangle `t`
+  const nextAround = (v, t) => {
+    const visited = new Set();
+    let current = t;
+    while (current !== undefined && !visited.has(current)) {
+      visited.add(current);
+      const w = vertexAfter(current, v);
+      if (w < 0) {
+        return null;
+      }
+      const twin = halfEdges.get(`${w}>${v}`);
+      if (twin === undefined) {
+        const key = `${v}>${w}`;
+        return rim.has(key) ? key : null;
+      }
+      current = twin;
+    }
+    return null;
+  };
 
   const loops = [];
-  for (const start of outgoing.keys()) {
-    while (outgoing.get(start).length) {
-      const loop = [start];
-      let current = outgoing.get(start).pop();
-      while (current !== start) {
-        const next = outgoing.get(current);
-        if (!next || !next.length) {
-          break; // open chain (non-manifold input); dropped
-        }
-        loop.push(current);
-        current = next.pop();
-      }
-      if (current === start && loop.length >= 3) {
-        loops.push(loop);
-      }
+  const used = new Set();
+  let openEdges = 0;
+  rim.forEach(startKey => {
+    if (used.has(startKey)) {
+      return;
     }
-  }
-  return loops;
+    const chain = [];
+    let key = startKey;
+    let closed = false;
+    while (key && !used.has(key)) {
+      used.add(key);
+      const [a, b] = key.split('>').map(Number);
+      chain.push(a);
+      const next = nextAround(b, halfEdges.get(key));
+      if (next === startKey) {
+        closed = true;
+        break;
+      }
+      key = next;
+    }
+    if (!closed) {
+      openEdges += chain.length;
+      return;
+    }
+    // Split at repeated vertices
+    const seen = new Map();
+    let loop = [];
+    for (const v of chain) {
+      if (seen.has(v)) {
+        const at = seen.get(v);
+        const inner = loop.slice(at);
+        if (inner.length >= 3) {
+          loops.push(inner);
+        }
+        loop = loop.slice(0, at);
+        seen.clear();
+        loop.forEach((u, i) => seen.set(u, i));
+      }
+      seen.set(v, loop.length);
+      loop.push(v);
+    }
+    if (loop.length >= 3) {
+      loops.push(loop);
+    }
+  });
+  return { loops, openEdges };
+}
+
+/**
+ * The boundary loops of a triangle mesh (findBoundaryLoopsDetailed without the open edge count).
+ *
+ * @param {ArrayLike<number>} triangles
+ * @returns {number[][]}
+ */
+export function findBoundaryLoops(triangles) {
+  return findBoundaryLoopsDetailed(triangles).loops;
 }
 
 const _position = (points, v) => [points[3 * v], points[3 * v + 1], points[3 * v + 2]];
@@ -289,12 +357,17 @@ export function stitchPatch({ loopPoints, constraintIndices, patchPoints, patchT
   let order = boundary.slice();
   const rotate = order.findIndex(node => nodeToLoop.get(node) === constraintIndices[0]);
   order = order.slice(rotate).concat(order.slice(0, rotate));
+  let reversed = false;
   if (constraintIndices.length > 2) {
     const next = order.slice(1).find(node => nodeToLoop.has(node));
     if (nodeToLoop.get(next) !== constraintIndices[1]) {
       order = [order[0], ...order.slice(1).reverse()];
+      reversed = true;
     }
   }
+  // The strips below traverse the chords in the loop's direction, so the patch must traverse
+  // them the other way: its winding runs with the loop unless the boundary had to be reversed
+  const flipCore = !reversed;
 
   // Output nodes: loop vertices first, then patch nodes that are not constraint vertices
   const patchToOut = new Int32Array(patchCount).fill(-1);
@@ -315,8 +388,14 @@ export function stitchPatch({ loopPoints, constraintIndices, patchPoints, patchT
 
   const triangles = [];
   for (let t = 0; t < patchTriangles.length; t += 3) {
-    triangles.push(patchToOut[patchTriangles[t]], patchToOut[patchTriangles[t + 1]],
-      patchToOut[patchTriangles[t + 2]]);
+    const a = patchToOut[patchTriangles[t]];
+    const b = patchToOut[patchTriangles[t + 1]];
+    const c = patchToOut[patchTriangles[t + 2]];
+    if (flipCore) {
+      triangles.push(a, c, b);
+    } else {
+      triangles.push(a, b, c);
+    }
   }
 
   // Zip each span: loop vertices a..b against the patch boundary nodes a..b
@@ -382,8 +461,8 @@ export function stitchPatch({ loopPoints, constraintIndices, patchPoints, patchT
  * @param {ArrayLike<number>} params.triangles - kept triangles (original vertex indices)
  * @param {Array<{ loop: number[], patch: { points: Float64Array, triangles: Int32Array } }>} params.patches
  *   patches in loop-local indices (nodes 0..n-1 are the loop's vertices)
- * @returns {{ points: Float32Array, polys: Int32Array }} a Cornerstone3D surface (unused original
- *   points are dropped)
+ * @returns {{ points: Float32Array, polys: Int32Array, patchPolysOffset: number }} a Cornerstone3D
+ *   surface (unused original points are dropped); the patches' cells start at `patchPolysOffset`
  */
 export function assembleSurface({ points, triangles, patches }) {
   const remap = new Map();
@@ -402,6 +481,7 @@ export function assembleSurface({ points, triangles, patches }) {
   for (let t = 0; t < triangles.length; t += 3) {
     polys.push(3, use(triangles[t]), use(triangles[t + 1]), use(triangles[t + 2]));
   }
+  const patchPolysOffset = polys.length;
 
   patches.forEach(({ loop, patch }) => {
     const loopCount = loop.length;
@@ -420,5 +500,5 @@ export function assembleSurface({ points, triangles, patches }) {
     }
   });
 
-  return { points: Float32Array.from(outPoints), polys: Int32Array.from(polys) };
+  return { points: Float32Array.from(outPoints), polys: Int32Array.from(polys), patchPolysOffset };
 }

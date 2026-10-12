@@ -80,7 +80,6 @@ export const EVALUATORS = {
   segmentation: 'segEditor.evaluate.segmentation',
   synchronizeDrawingRadius: 'segEditor.evaluate.synchronizeDrawingRadius',
   threeDTool: 'segEditor.evaluate.3dTool',
-  synchronizeSelectionOptions: 'segEditor.evaluate.synchronizeSelectionOptions',
   pointer2D: 'segEditor.evaluate.pointer2D',
   pointer3D: 'segEditor.evaluate.pointer3D',
 };

@@ -1,6 +1,6 @@
 // The Segmentation Editor's import commands: file window, source readers, the import and its report
 
-import createImportCommands, { IMPORT_FILE_TYPES, formatBounds, isImportableSeries, volumeFileKind } from './importCommands';
+import createImportCommands, { formatBounds, IMPORT_FILE_TYPES, isImportableSeries, volumeFileKind } from './importCommands';
 
 jest.mock('@ohif/core', () => ({
   __esModule: true,
@@ -26,6 +26,7 @@ jest.mock('@cornerstonejs/tools', () => ({
 }), { virtual: true });
 jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({ init: () => {} }), { virtual: true });
 jest.mock('../threeDTools/registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
+jest.mock('../threeDTools/registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 jest.mock('./pickLocalFiles.js', () => ({ pickLocalFiles: jest.fn() }));
 
 

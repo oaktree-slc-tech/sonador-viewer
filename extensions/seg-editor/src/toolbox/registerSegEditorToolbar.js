@@ -5,10 +5,11 @@
 import { eventTarget as c3dEventTarget } from '@cornerstonejs/core';
 import { Enums as c3dToolsEnums } from '@cornerstonejs/tools';
 
+import { subscribe3DToolState, THREE_D_TOOLS } from '../threeDTools/threeDToolState';
+
 import { HISTORY_BUTTONS, POINTER_BUTTONS, SECTIONS } from './constants';
 import { subscribeSegEditorToolContext } from './segEditorToolContext';
 import { getToolbarButtons } from './toolbarButtons';
-import { subscribe3DToolState, THREE_D_TOOLS } from '../threeDTools/threeDToolState';
 
 
 // Events after which the palette state may have changed: tool bindings, and segments added or
@@ -50,7 +51,7 @@ export function registerSegEditorToolbar(servicesManager) {
   toolbarService.updateSection(SECTIONS.imagingTools,
     ['WindowLevel', 'Zoom', 'Pan', HISTORY_BUTTONS.undo, HISTORY_BUTTONS.redo]);
   toolbarService.updateSection(SECTIONS.threeDToolbox, [SECTIONS.threeDTools]);
-  toolbarService.updateSection(SECTIONS.threeDTools, [POINTER_BUTTONS.threeD, THREE_D_TOOLS.Selection]);
+  toolbarService.updateSection(SECTIONS.threeDTools, [POINTER_BUTTONS.threeD, THREE_D_TOOLS.Lasso, THREE_D_TOOLS.Paint]);
 
   toolbarService.registerEventForToolbarUpdate(c3dEventTarget, C3D_REFRESH_EVENTS);
   subscribeSegEditorToolContext(() => toolbarService.refreshToolbarState({}));

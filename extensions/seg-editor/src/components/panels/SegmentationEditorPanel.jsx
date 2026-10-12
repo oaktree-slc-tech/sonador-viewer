@@ -389,7 +389,9 @@ export default function SonadorSegmentationEditorPanel({
 
       setTimeout(() => {
         const _seg = c3dSegmentations.state.getSegmentation(_ds.segmentationId);
-        if (_seg) {
+        // The table reads per-viewport state: until the segmentation is attached to a viewport the
+        // representation events that follow fill the table instead
+        if (_seg && c3dSegmentations.state.getViewportIdsWithSegmentation(_ds.segmentationId).length) {
 
           // Translate segmentation data to tableSeg and set first-run state
           setEditorSegmentations([c3dSegUtils.c3dSeg2SegmentationTableData(_seg)]);
@@ -480,7 +482,7 @@ export default function SonadorSegmentationEditorPanel({
                 <SegmentationTable.AddSegmentRow />
               </div>
 
-              <div className={styles.panelSegments}>
+              <div className={`${styles.panelSegments} ${styles.panelSegmentsBounded}`}>
                 <SegmentationTable.Segments>
                   <SegmentationTable.SegmentStatistics.Body />
                 </SegmentationTable.Segments>
@@ -489,9 +491,11 @@ export default function SonadorSegmentationEditorPanel({
            </div>
 
           </SegmentationTable.Expanded>
-        </SegmentationTable>
 
-        <SegEditorToolPalette commandsManager={commandsManager} displaySetInstanceUID={displaySetInstanceUID} />
+          {/* The tool palettes belong to the section: collapsing Segmentation Editor hides them
+              with the segment list */}
+          <SegEditorToolPalette commandsManager={commandsManager} displaySetInstanceUID={displaySetInstanceUID} />
+        </SegmentationTable>
       </TooltipProvider>
 
     </div>

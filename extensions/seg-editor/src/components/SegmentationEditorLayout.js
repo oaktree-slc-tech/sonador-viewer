@@ -49,11 +49,12 @@ import {
 import {
   init as c3dPolySegInit,
   computeSurfaceData as c3dComputeSurfaceData,
-  updateSurfaceData as c3dUpdateSurfaceData,
 } from '@cornerstonejs/polymorphic-segmentation';
 
 
 import OHIF, { display } from "@ohif/core";
+import { waitForSurfaceUpdate } from '@ohif/core/src/utils/polySegSingleFlight';
+import { SURFACE_UPDATE_TIMEOUT_MS } from '../utils/surfaceSync';
 import {
   cornerstone3dUtils as c3dUtils,
   Cornerstone3DLabelmapBaseView,
@@ -145,21 +146,27 @@ class SegmentationEditorBaseViewport extends Cornerstone3DSegmentationViewerBase
           segmentationService.removeSegment(labelmapInstance3dUID, segmentIndex);
         }
 
-        // Trigger a render of the surface data so that the volumeLabelMap instance matches
+        // Wait for the surface update the removal causes, so that the volumeLabelMap instance matches
         if (segVol3d && segmentationId == labelmapInstance3dUID) {
 
-          // Check that segment was removed (if not remove it by force) and render new surfaces (if there are segments)
+          // Clearing the segment marked the vol3d labelmap modified, which queues the library's
+          // (serialized) surface update while a Surface representation is attached; the waiter
+          // must be taken before that update is queued.
+          const surfaceUpdated = component.props.segEditorSurfaceRenderingEnabled && component.state.surfaceModelInit
+            ? waitForSurfaceUpdate(labelmapInstance3dUID, { timeoutMs: SURFACE_UPDATE_TIMEOUT_MS })
+            : null;
+
+          // Check that segment was removed (if not remove it by force) and wait for the new surfaces (if there are segments)
           await c3dUtils.forceClearSegment(segmentationId, segmentIndex, { checkOnly: true });
           if (_seg && _.values(_seg.segments).length > 0) {
 
-            // Skip the surface recompute while the surface toggle is off (AR-5): the labelmap
-            // stays in sync above, and re-enabling the toggle recomputes the full surface.
-            if (component.props.segEditorSurfaceRenderingEnabled) {
-              try {
-                await c3dUpdateSurfaceData(labelmapInstance3dUID);
-              } catch (err) {
+            // Skip the wait while the surface toggle is off (AR-5): the labelmap stays in sync
+            // above, and re-enabling the toggle recomputes the full surface.
+            if (surfaceUpdated) {
+              const outcome = await surfaceUpdated;
+              if (outcome?.error) {
                 console.error('[SegmentationEditorBaseViewport:evt:segment-removed] Unable to update surface data due to an error. '
-                  + 'segmentationId='+labelmapInstance3dUID+' segmentIndex='+segmentIndex, err);
+                  + 'segmentationId='+labelmapInstance3dUID+' segmentIndex='+segmentIndex, outcome.error);
               }
             }
           } else {

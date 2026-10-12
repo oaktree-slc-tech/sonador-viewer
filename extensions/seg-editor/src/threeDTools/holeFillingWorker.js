@@ -5,28 +5,33 @@
 import { expose } from 'comlink';
 
 import { loadOpenCascade } from '../threejs/openCascade.js';
-import { patchHole } from './holePatches.js';
+
+import { CLOSURES, patchHole } from './holePatches.js';
 
 
 const holeFilling = {
   /**
-   * @param {{ loops: Float64Array[] }} args - flat xyz of each hole's boundary
+   * @param {{ loops: Float64Array[], options?: Object }} args - flat xyz of each hole's boundary,
+   *   and patchHole's options (closure, maxConstraints)
    * @param {Function} [progressCallback] - (progress: 0..100) => void
    * @returns {Promise<Array<{ patch, method, error }>>}
    */
-  async patchHoles({ loops }, progressCallback) {
+  async patchHoles({ loops, options = {} }, progressCallback) {
     let oc = null;
     let loadError;
-    try {
-      oc = await loadOpenCascade();
-    } catch (err) {
-      loadError = `OpenCascade could not be loaded: ${err?.message || err}`;
+    const needsFit = options.closure !== CLOSURES.flat;
+    if (needsFit) {
+      try {
+        oc = await loadOpenCascade();
+      } catch (err) {
+        loadError = `OpenCascade could not be loaded: ${err?.message || err}`;
+      }
     }
 
     const results = [];
     for (let i = 0; i < loops.length; i++) {
-      const result = patchHole(oc, loops[i]);
-      results.push(loadError ? { ...result, error: loadError } : result);
+      const result = patchHole(oc, loops[i], options);
+      results.push(loadError && result.error ? { ...result, error: loadError } : result);
       progressCallback?.(Math.round(((i + 1) / loops.length) * 100));
     }
     return results;

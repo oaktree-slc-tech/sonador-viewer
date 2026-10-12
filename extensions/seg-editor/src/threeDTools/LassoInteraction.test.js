@@ -1,6 +1,6 @@
 // Pointer and keyboard handling of the 3D Selection tool
 
-import LassoInteraction from './LassoInteraction';
+import LassoInteraction, { LASSO_SHAPES } from './LassoInteraction';
 import { SELECTION_MODES } from './lassoSelection';
 
 
@@ -102,6 +102,21 @@ describe('LassoInteraction', () => {
 
     element.dispatch('pointerup', { pointerId: 1, clientX: 150, clientY: 60 });
     expect(outline.attributes.points).toBe('');
+  });
+
+  it('drags out a box when the shape says so, and keeps a drag\'s shape if it changes mid-way', () => {
+    const { element, lasso, onLasso, overlayParent } = setup();
+    lasso.setShape(LASSO_SHAPES.box);
+
+    element.dispatch('pointerdown', { button: 0, pointerId: 1, clientX: 100, clientY: 50 });
+    element.dispatch('pointermove', { pointerId: 1, clientX: 200, clientY: 50 });
+    lasso.setShape(LASSO_SHAPES.lasso);
+    element.dispatch('pointermove', { pointerId: 1, clientX: 200, clientY: 100 });
+    expect(overlayParent.children[0].children[0].attributes.points).toBe('0,0 100,0 100,50 0,50 0,0');
+    element.dispatch('pointerup', { pointerId: 1, clientX: 200, clientY: 100 });
+
+    // The box from the canvas corner to its centre: a rectangle in view coordinates
+    expect(onLasso).toHaveBeenCalledWith([-1, 1, 0, 1, 0, 0, -1, 0], SELECTION_MODES.replace);
   });
 
   it('ignores other buttons, and too-short drags', () => {

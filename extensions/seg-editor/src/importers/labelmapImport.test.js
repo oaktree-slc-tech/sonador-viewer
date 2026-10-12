@@ -1,8 +1,8 @@
 // Importing segments into the working segmentation: numbering, rasterizing and the merge
 
-import { volumeAxes } from '../threeDTools/labelmapCarve';
-
 import { resetPolySegInFlight } from '@ohif/core/src/utils/polySegSingleFlight';
+
+import { volumeAxes } from '../threeDTools/labelmapCarve';
 
 import {
   _resetImportChains,
@@ -21,6 +21,7 @@ jest.mock('@cornerstonejs/tools', () => ({
 jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({ init: () => {} }), { virtual: true });
 jest.mock('@ohif/extension-viewerm3d', () => ({}), { virtual: true });
 jest.mock('../threeDTools/registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
+jest.mock('../threeDTools/registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 
 
 // A 4 x 4 x 4 unit labelmap, with segment 1 painted at the first two voxels

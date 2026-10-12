@@ -749,7 +749,8 @@ export function createCanonicalSegmentation(params) {
   // @input params.labelmapIndex (num): the slot within that series
   // @input params.colorLUTIndex (num): the legacy colour LUT index for this labelmap
   // @input params.referencedVolumeId (str): the image volume id, when one is already known
-  // @input params.label (str): the segmentation's name, for segmentations created in the viewer
+  // @input params.label (str): the segmentation's name: the series description of a loaded SEG, or
+  //   the name given to a segmentation created in the viewer
   // @returns the canonical read-model (see `getCanonicalSegmentation`)
 
   const {

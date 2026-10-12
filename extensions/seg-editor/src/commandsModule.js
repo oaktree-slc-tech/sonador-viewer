@@ -25,10 +25,11 @@ import { getSegEditorLayout } from './layouts/segEditorLayouts';
 import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
 import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
 import { redoSegEditorEdit, undoSegEditorEdit } from './toolbox/segEditorHistory';
-import { LABELMAP_TOOL_NAMES } from './toolbox/segEditorTools';
+import { LABELMAP_TOOL_NAMES, releaseIdlePreview } from './toolbox/segEditorTools';
 import {
   get3DToolState,
   request3DToolAction,
+  set3DToolOption,
   setActive3DTool,
   setRemovalDepth,
 } from './threeDTools/threeDToolState';
@@ -111,6 +112,7 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
 
       const activeToolName = toolGroup.getActivePrimaryMouseButtonTool();
       if (activeToolName && activeToolName !== toolName) {
+        releaseIdlePreview(toolGroup.getToolInstance?.(activeToolName));
         toolGroup.getToolConfiguration(activeToolName)?.disableOnPassive
           ? toolGroup.setToolDisabled(activeToolName)
           : toolGroup.setToolPassive(activeToolName);
@@ -229,6 +231,13 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
 
     setSegEditor3DRemovalDepth({ value }) {
       setRemovalDepth(value);
+    },
+
+    setSegEditor3DOption({ option, value }) {
+      // Selection tool settings (closure, rim cleanup, preview, ...); the palette rows follow the
+      // state through their evaluator
+      set3DToolOption(option, value);
+      _refreshToolbar();
     },
 
     requestSegEditor3DAction({ request }) {

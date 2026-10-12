@@ -5,6 +5,7 @@ import {
   cutSurface,
   fanCap,
   findBoundaryLoops,
+  findBoundaryLoopsDetailed,
   loopPositions,
   polysToTriangles,
   sampleLoop,
@@ -193,5 +194,64 @@ describe('stitchPatch / assembleSurface', () => {
 
     expect(open.points.length / 3).toBe(sphere.points.length / 3 - 1);
     expect([...edgeUse(open.polys).values()].filter(count => count === 1)).toHaveLength(8);
+  });
+});
+
+describe('findBoundaryLoopsDetailed', () => {
+  it('separates two holes that share a vertex', () => {
+    // Two squares joined at vertex 0, each a hole in a fan of triangles around it: the kept
+    // triangles are the fans' outer rings
+    //   square A: 0,1,2,3 (hole)   ring vertices 10..13 outside each edge
+    //   square B: 0,4,5,6 (hole)   ring vertices 20..23
+    const fan = (loop, ring) => {
+      const triangles = [];
+      for (let i = 0; i < 4; i++) {
+        const a = loop[i];
+        const b = loop[(i + 1) % 4];
+        const r = ring[i];
+        const r2 = ring[(i + 1) % 4];
+        // Two triangles per edge, outside the hole: (b, a, r) and (b, r, r2)
+        triangles.push(b, a, r, b, r, r2);
+      }
+      return triangles;
+    };
+    const triangles = Int32Array.from([...fan([0, 1, 2, 3], [10, 11, 12, 13]), ...fan([0, 4, 5, 6], [20, 21, 22, 23])]);
+
+    const { loops } = findBoundaryLoopsDetailed(triangles);
+    const holes = loops.filter(loop => loop.includes(0));
+    expect(holes).toHaveLength(2);
+    expect(holes.map(loop => loop.length)).toEqual([4, 4]);
+    expect(holes.map(loop => [...loop].sort((a, b) => a - b))).toEqual(
+      expect.arrayContaining([[0, 1, 2, 3], [0, 4, 5, 6]]));
+  });
+
+  it('reports the rim edges of a non-manifold input it cannot close', () => {
+    // A fin: edge (0, 1) used by three triangles, each with its own open edges
+    const triangles = Int32Array.from([0, 1, 2, 1, 0, 3, 0, 1, 4]);
+    const { loops, openEdges } = findBoundaryLoopsDetailed(triangles);
+    expect(loops.length + openEdges).toBeGreaterThan(0);
+    expect(openEdges).toBeGreaterThan(0);
+  });
+});
+
+describe('stitchPatch orientation', () => {
+  it('winds the fitted core with the strips, whichever way the core came', () => {
+    const loop = Float64Array.from([0, 0, 0, 2, 0, 0, 2, 2, 0, 0, 2, 0]);
+    const constraintIndices = [0, 1, 2, 3];
+    const core = { points: Float64Array.from([0, 0, 0, 2, 0, 0, 2, 2, 0, 0, 2, 0, 1, 1, 0]) };
+    const forward = Int32Array.from([0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4]);
+    const backward = Int32Array.from([1, 0, 4, 2, 1, 4, 3, 2, 4, 0, 3, 4]);
+
+    [forward, backward].forEach(patchTriangles => {
+      const patch = stitchPatch({ loopPoints: loop, constraintIndices, patchPoints: core.points, patchTriangles });
+      const polys = [];
+      for (let i = 0; i < 4; i++) {
+        polys.push(3, i, (i + 1) % 4, 9); // a rim fan wound with the loop, apex beyond the patch
+      }
+      for (let t = 0; t < patch.triangles.length; t += 3) {
+        polys.push(3, patch.triangles[t], patch.triangles[t + 1], patch.triangles[t + 2]);
+      }
+      expect(isClosedManifold(polys)).toBe(true);
+    });
   });
 });

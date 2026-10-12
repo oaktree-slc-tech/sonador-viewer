@@ -90,3 +90,16 @@
 .palette :global(.bg-muted.mt-1.h-auto) {
   margin-top: 0.75rem;
 }
+
+// 4. The toolbox title rows are subsections of the Segmentation Editor section, styled as the
+//    Measurements panel's Measurements / Findings rows (MeasurementTable.styl): the segmentation
+//    header's surface and vertical padding, 16px light type.
+.palette :global(.seg-editor-toolbox-title) {
+  margin: 0 0 0.35rem;
+  padding: 0.5rem 0 0.5rem 14px;
+  line-height: 24px;
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--text-primary-color);
+  background-color: var(--ui-gray-dark);
+}

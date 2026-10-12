@@ -77,8 +77,10 @@
       display: flex
       flex-direction: column
 
+    // The section header reads as the Segmentations panel's "Segmentation Editor" header: the
+    // same type, size and weight, with room above it and the groups close beneath it
     h3
-      margin: 0
+      margin: 14px 0 0
       flex: 0 0 auto
 
       // The trigger is a bare button: no preflight in the viewer, so its chrome is reset here,
@@ -87,11 +89,51 @@
         appearance: none
         border: 0
         font: inherit
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+        height: 63px
+        margin: 0 0 -6px
+        color: var(--text-secondary-color)
         background-color: var(--ui-gray-darker)
+
+        span
+          font-size: 22px
+          font-weight: 300
+          line-height: 63px
+          padding: 0 10px 0 3px
 
     .measurementTableScroll
       flex: 1 1 auto
       min-height: 0
+
+    // The groups (Measurements, Findings) are subsections of Annotations: their header row reads
+    // as the Segmentation Editor's segmentation header (the row with the segmentation's name):
+    // the same surface, vertical padding, type size and weight; the count keeps its blue
+    .tableListHeader
+      height: auto
+      line-height: 24px
+      margin-top: 0
+      padding: 0.5rem 0
+      background-color: var(--ui-gray-dark)
+      align-items: center
+      border-top-width: 3px
+      border-bottom-width: 2px
+
+      .tableListHeaderTitle
+        color: var(--text-primary-color)
+        font-size: 16px
+        font-weight: 300
+        line-height: 24px
+        padding: 0 10px 0 14px
+
+      .numberOfItems
+        color: var(--ui-sky-blue)
+        font-size: 16px
+        font-weight: 300
+        height: auto
+        line-height: 24px
+        max-width: none
+        padding-right: 12px
+        text-align: right
 
   .measurementTableFooter
     padding: 10px
