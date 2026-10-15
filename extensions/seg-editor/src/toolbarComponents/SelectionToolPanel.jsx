@@ -1,22 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { useSystem } from '@ohif/core';
-import {
-  Button,
-  Icons,
-  Input,
-  Label,
-  Slider,
-  Switch,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@ohif/ui-next';
+import { Button, Icons, Label, Switch } from '@ohif/ui-next';
 
 import { editSummary } from '../threeDTools/editSummary';
 import {
@@ -36,6 +23,10 @@ import {
   THREE_D_TOOLS,
 } from '../threeDTools/threeDToolState';
 import { SEG_EDITOR_COMMAND_CONTEXT } from '../toolbox/constants';
+import { setPreviewColor, usePreviewColor } from '../utils/previewColor';
+import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/segEditorUnits';
+
+import { AdvancedField, Card, ColorSwatch, SegmentedRow, SliderRow, Tip, ToggleRow } from './panelControls';
 
 
 // The 3D Selection tool's panel (ohif-viewers#142, §12), as three grouped cards: what is selected,
@@ -58,41 +49,6 @@ const SEGMENT_LABELS = {
   lasso: 'Freehand', box: 'Box', paint: 'Paint', erase: 'Erase',
   auto: 'Auto', smooth: 'Smooth', flat: 'Flat', off: 'Off', light: 'Light', full: 'Full',
 };
-
-/** The number of decimals a step is given to, so stepped values do not drift (0.1 + 0.1 ...). */
-function decimalsOf(step) {
-  const text = String(step);
-  const index = text.indexOf('.');
-  return index < 0 ? 0 : text.length - index - 1;
-}
-
-/**
- * Step a setting with the mouse wheel while the pointer is over an element: up raises it by one
- * step, down lowers it. The listener is bound natively and non-passive, so the wheel adjusts the
- * value instead of scrolling the panel (React's own wheel handler is passive).
- */
-function useWheelStep(ref, { value, step, onChange, disabled }) {
-  const latest = useRef({ value, step, onChange, disabled });
-  latest.current = { value, step, onChange, disabled };
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return undefined;
-    }
-    const onWheel = event => {
-      const current = latest.current;
-      if (current.disabled || !event.deltaY) {
-        return;
-      }
-      event.preventDefault();
-      const direction = event.deltaY < 0 ? 1 : -1;
-      const next = Number((current.value + direction * current.step).toFixed(decimalsOf(current.step)));
-      current.onChange(next);
-    };
-    element.addEventListener('wheel', onWheel, { passive: false });
-    return () => element.removeEventListener('wheel', onWheel);
-  }, [ref]);
-}
 
 /** A gentle wave: Smooth. */
 function SmoothIcon(props) {
@@ -134,232 +90,12 @@ const ACTIONS = [
   },
 ];
 
+// Advanced removal settings; `length` ones are in the surface's units, the others are counts
 const ADVANCED = [
-  { key: 'maxConstraints', label: 'Patch constraints', unit: '', step: 1 },
-  { key: 'weldTolerance', label: 'Weld tolerance', unit: '', step: 0.001 },
-  { key: 'islandMaxTriangles', label: 'Drop islands under', unit: 'tri', step: 1 },
+  { key: 'maxConstraints', label: 'Patch constraints', unit: 'pts', unitHint: 'Boundary points', step: 1 },
+  { key: 'weldTolerance', label: 'Weld tolerance', length: true, step: 0.001 },
+  { key: 'islandMaxTriangles', label: 'Drop islands under', unit: 'tris', unitHint: 'Triangles', step: 1 },
 ];
-
-/**
- * A setting as a number field: typed or stepped values apply as they are entered (the state
- * clamps them to the slider's range), and an unfinished entry is put back on blur.
- */
-function NumberField({ id, label, value, range, disabled, onChange }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-
-  const change = event => {
-    const text = event.target.value;
-    setDraft(text);
-    const next = Number(text);
-    if (text !== '' && Number.isFinite(next)) {
-      onChange(next);
-    }
-  };
-
-  return (
-    <Input
-      id={id}
-      type="number"
-      inputMode="decimal"
-      min={range.min}
-      max={range.max}
-      step={range.step}
-      value={draft}
-      disabled={disabled}
-      className="h-6 w-16 px-1.5 text-right text-xs tabular-nums"
-      aria-label={label}
-      onChange={change}
-      onBlur={() => setDraft(String(value))}
-      data-cy={id}
-    />
-  );
-}
-
-NumberField.propTypes = {
-  id: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  value: PropTypes.number.isRequired,
-  range: PropTypes.shape({ min: PropTypes.number, max: PropTypes.number, step: PropTypes.number }).isRequired,
-  disabled: PropTypes.bool,
-  onChange: PropTypes.func.isRequired,
-};
-
-/**
- * A numeric setting: its label and number field on one line, the slider beneath. The wheel steps
- * it while the pointer is over the row.
- */
-function SliderRow({ id, label, hint, value, range, disabled, onChange }) {
-  const row = useRef(null);
-  useWheelStep(row, { value, step: range.step, onChange, disabled });
-  return (
-    <div ref={row} className="flex flex-col gap-3 pb-1 pt-0.5">
-      <div className="flex items-center justify-between">
-        <Tip text={hint}>
-          <label htmlFor={`${id}-value`} className="text-[13px]">{label}</label>
-        </Tip>
-        <NumberField id={`${id}-value`} label={label} value={value} range={range} disabled={disabled} onChange={onChange} />
-      </div>
-      <Slider
-        min={range.min}
-        max={range.max}
-        step={range.step}
-        value={[value]}
-        disabled={disabled}
-        aria-label={label}
-        onValueChange={([next]) => onChange(next)}
-        data-cy={id}
-      />
-    </div>
-  );
-}
-
-SliderRow.propTypes = {
-  id: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  hint: PropTypes.string,
-  value: PropTypes.number.isRequired,
-  range: PropTypes.shape({ min: PropTypes.number, max: PropTypes.number, step: PropTypes.number }).isRequired,
-  disabled: PropTypes.bool,
-  onChange: PropTypes.func.isRequired,
-};
-
-function Tip({ text, content, children }) {
-  if (!text && !content) {
-    return children;
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[240px] text-xs">{content || text}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-Tip.propTypes = { text: PropTypes.string, content: PropTypes.node, children: PropTypes.node };
-
-/** An inset grouped section: a small uppercase label, an optional trailing action, then rows. */
-function Card({ title, action, warning, dataCy, children }) {
-  return (
-    <section
-      className={`flex flex-col gap-2.5 rounded-md border bg-popover/40 px-3 py-2.5 ${warning ? 'border-[#e8b04c]/60' : 'border-input/60'}`}
-      aria-label={title}
-      data-cy={dataCy}
-    >
-      <header className="flex min-h-5 items-center justify-between gap-2">
-        <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">{title}</span>
-        {action}
-      </header>
-      {children}
-    </section>
-  );
-}
-
-Card.propTypes = {
-  title: PropTypes.string.isRequired,
-  action: PropTypes.node,
-  warning: PropTypes.bool,
-  dataCy: PropTypes.string,
-  children: PropTypes.node,
-};
-
-/** Label leading, switch trailing, with an optional one-line description under the label. */
-function ToggleRow({ id, label, description, hint, checked, disabled, onChange }) {
-  return (
-    <div className="flex min-h-7 items-center justify-between gap-3 py-0.5">
-      <Tip text={hint}>
-        <Label htmlFor={id} className="min-w-0 cursor-pointer text-[13px] font-normal leading-snug">
-          {label}
-          {description && <span className="text-muted-foreground mt-1.5 block text-xs leading-snug">{description}</span>}
-        </Label>
-      </Tip>
-      <Switch id={id} checked={!!checked} disabled={disabled} onCheckedChange={onChange} data-cy={id} />
-    </div>
-  );
-}
-
-ToggleRow.propTypes = {
-  id: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  description: PropTypes.string,
-  hint: PropTypes.string,
-  checked: PropTypes.bool,
-  disabled: PropTypes.bool,
-  onChange: PropTypes.func.isRequired,
-};
-
-/** An Advanced number field: label leading, input trailing, the wheel stepping it over the row. */
-function AdvancedField({ id, label, unit, step, value, range, disabled, onChange, t }) {
-  const row = useRef(null);
-  useWheelStep(row, { value, step, onChange, disabled });
-  return (
-    <label ref={row} htmlFor={id} className="flex items-center justify-between gap-2 text-xs">
-      <span>{t(label)}</span>
-      <span className="flex items-center gap-1">
-        <input
-          id={id}
-          type="number"
-          className="bg-muted text-foreground w-16 rounded border-0 px-1 py-0.5 text-right text-xs"
-          min={range.min}
-          max={range.max}
-          step={step}
-          value={value}
-          disabled={disabled}
-          data-cy={id}
-          onChange={event => onChange(event.target.value)}
-        />
-        <span className="text-muted-foreground w-6">{unit ? t(unit) : ''}</span>
-      </span>
-    </label>
-  );
-}
-
-AdvancedField.propTypes = {
-  id: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  unit: PropTypes.string,
-  step: PropTypes.number.isRequired,
-  value: PropTypes.number.isRequired,
-  range: PropTypes.shape({ min: PropTypes.number, max: PropTypes.number }).isRequired,
-  disabled: PropTypes.bool,
-  onChange: PropTypes.func.isRequired,
-  t: PropTypes.func.isRequired,
-};
-
-/** Label leading, segmented control trailing. */
-function SegmentedRow({ id, label, hint, value, values, disabled, onChange, t }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <Tip text={hint}><span className="text-[13px]">{label}</span></Tip>
-      <Tabs value={value} onValueChange={onChange}>
-        <TabsList className="bg-muted inline-flex h-7 gap-0.5 rounded p-0.5">
-          {values.map(item => (
-            <TabsTrigger
-              key={item}
-              value={item}
-              disabled={disabled}
-              className="h-6 min-w-[44px] rounded px-2 text-xs"
-              data-cy={`${id}-${item}`}
-            >
-              {t(SEGMENT_LABELS[item])}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-    </div>
-  );
-}
-
-SegmentedRow.propTypes = {
-  id: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  hint: PropTypes.string,
-  value: PropTypes.string,
-  values: PropTypes.arrayOf(PropTypes.string).isRequired,
-  disabled: PropTypes.bool,
-  onChange: PropTypes.func.isRequired,
-  t: PropTypes.func.isRequired,
-};
 
 export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const { t } = useTranslation('SegmentationEditor');
@@ -368,6 +104,25 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => subscribe3DToolState(setState), []);
+
+  // Lengths are in the reference series' patient units: mm, or the grid's steps without spacing
+  const units = useSegEditorUnits();
+  const lengthUnit = t(units.length);
+  const lengthHint = units.length === LENGTH_UNITS.generic ? t(GENERIC_UNIT_HINT) : undefined;
+  const segments = key => SEGMENTS[key].map(value => ({ value, label: t(SEGMENT_LABELS[value]) }));
+
+  // The colour a pending edit's changed faces are drawn in (a user preference, also on the
+  // Settings page's Seg Editor section)
+  const previewColor = usePreviewColor();
+  const previewSwatch = id => (
+    <ColorSwatch
+      id={id}
+      label={t('Preview colour')}
+      hint={t('The colour an edit awaiting Apply is drawn in. Also in Settings > General > Seg Editor.')}
+      value={previewColor}
+      onChange={setPreviewColor}
+    />
+  );
 
   const {
     target, selectionCount, selectionPoints, selectionRegions, preview, surfaceHealth, lastEdit,
@@ -396,7 +151,10 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   // The action row of a card while its edit is shown for Apply / Cancel
   const previewRow = (note, applyLabel, cancelCy, applyCy) => (
     <div className="flex flex-col gap-2 pt-2">
-      <p className="text-muted-foreground text-xs" role="status">{note}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-muted-foreground text-xs" role="status">{note}</p>
+        {previewSwatch(`${applyCy}-color`)}
+      </div>
       <div className="flex gap-2 pt-1">
         <Button variant="secondary" size="lg" className="flex-1" onClick={() => request('cancelPreview')} data-cy={cancelCy}>
           {t('Cancel')}
@@ -477,15 +235,16 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
               label={t('Brush')}
               hint={t('Paint adds faces to the selection, Erase takes them out. Ctrl erases while held.')}
               value={state.paintMode}
-              values={SEGMENTS.paintMode}
+              items={segments('paintMode')}
               disabled={!!preview}
               onChange={value => set('paintMode', value)}
-              t={t}
             />
             <SliderRow
               id="seg-editor-paint-radius"
               label={t('Brush size')}
-              hint={t("Radius of the brush, in the surface's units")}
+              hint={t('Radius of the brush')}
+              unit={lengthUnit}
+              unitHint={lengthHint}
               value={state.paintRadius}
               range={PAINT_RADIUS}
               disabled={!!preview}
@@ -499,10 +258,9 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
               label={t('Shape')}
               hint={t('Freehand draws an outline; Box drags out a rectangle')}
               value={state.lassoShape}
-              values={SEGMENTS.lassoShape}
+              items={segments('lassoShape')}
               disabled={!!preview}
               onChange={value => set('lassoShape', value)}
-              t={t}
             />
             <ToggleRow
               id="seg-editor-connected-only"
@@ -559,25 +317,25 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
             label={t('Closure')}
             hint={t('How the hole is filled: flat for small holes and smooth for larger ones, or always one of them')}
             value={state.closure}
-            values={SEGMENTS.closure}
+            items={segments('closure')}
             disabled={!!preview}
             onChange={value => set('closure', value)}
-            t={t}
           />
           <SegmentedRow
             id="seg-editor-rim-cleanup"
             label={t('Rim cleanup')}
             hint={t('Loose triangles and small islands are removed along the cut before the hole is filled')}
             value={state.rimCleanup}
-            values={SEGMENTS.rimCleanup}
+            items={segments('rimCleanup')}
             disabled={!!preview}
             onChange={value => set('rimCleanup', value)}
-            t={t}
           />
           <SliderRow
             id="seg-editor-depth"
             label={t('Depth')}
             hint={t("Also removes the segment's voxels within this distance of the removed points in the 2D views")}
+            unit={lengthUnit}
+            unitHint={lengthHint}
             value={state.removalDepth}
             range={REMOVAL_DEPTH}
             disabled={!!preview}
@@ -592,31 +350,31 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
           >
             <span className={`inline-block transition-transform ${advancedOpen ? 'rotate-90' : ''}`} aria-hidden="true">▸</span>
             <span className="truncate">
-              {advancedOpen ? t('Advanced') : t('Advanced: {{constraints}} patch constraints, weld {{weld}}, islands under {{island}}', {
-                constraints: state.maxConstraints, weld: state.weldTolerance, island: state.islandMaxTriangles,
+              {advancedOpen ? t('Advanced') : t('Advanced: {{constraints}} patch constraints, weld {{weld}} {{unit}}, islands under {{island}} tris', {
+                constraints: state.maxConstraints, weld: state.weldTolerance, unit: lengthUnit, island: state.islandMaxTriangles,
               })}
             </span>
           </button>
           {advancedOpen && (
             <div className="border-input/60 flex flex-col gap-2 border-l-2 pl-3">
-              {ADVANCED.map(({ key, label, unit, step }) => (
+              {ADVANCED.map(({ key, label, unit, unitHint, length, step }) => (
                 <AdvancedField
                   key={key}
                   id={`seg-editor-advanced-${key}`}
-                  label={label}
-                  unit={unit}
+                  label={t(label)}
+                  unit={length ? lengthUnit : t(unit)}
+                  unitHint={length ? lengthHint : t(unitHint)}
                   step={step}
                   value={state[key]}
                   range={EDIT_SETTINGS[key]}
                   disabled={!!preview}
                   onChange={value => set(key, value)}
-                  t={t}
                 />
               ))}
             </div>
           )}
           {previewingRemoval
-            ? previewRow(t('Preview: the new patches are shown in blue. Enter applies, Esc cancels.'), t('Apply'),
+            ? previewRow(t('Preview: the new patches are highlighted. Enter applies, Esc cancels.'), t('Apply'),
               'seg-editor-cancel-preview', 'seg-editor-apply-preview')
             : (
               <div className="flex items-center gap-3 pt-0.5">
@@ -627,16 +385,29 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
                   checked={state.previewEnabled}
                   onChange={value => set('previewEnabled', value)}
                 />
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  className="flex-1"
-                  disabled={!editable || !hasSelection}
-                  onClick={() => request('deleteSelection')}
-                  data-cy="seg-editor-remove-selection"
+                {previewSwatch('seg-editor-preview-color')}
+                {/* The counts are in the tip so the label fits beside the toggle and the swatch.
+                    The tip hangs on a wrapper: a disabled button takes no pointer events. */}
+                <Tip
+                  text={hasSelection
+                    ? t('Removes {{faces}} faces, {{points}} points, in {{regions}} region(s)', {
+                      faces: number(selectionCount), points: number(selectionPoints), regions: selectionRegions,
+                    })
+                    : t('Select faces to remove')}
                 >
-                  {hasSelection ? t('Remove {{count}} faces', { count: number(selectionCount) }) : t('Remove faces')}
-                </Button>
+                  <span className="flex min-w-0 flex-1" data-cy="seg-editor-remove-selection-tip">
+                    <Button
+                      variant="destructive"
+                      size="lg"
+                      className="w-full"
+                      disabled={!editable || !hasSelection}
+                      onClick={() => request('deleteSelection')}
+                      data-cy="seg-editor-remove-selection"
+                    >
+                      {t('Remove')}
+                    </Button>
+                  </span>
+                </Tip>
               </div>
             )}
         </Card>
@@ -672,7 +443,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
             onChange={value => set('smoothFeather', value)}
           />
           {previewingSmooth
-            ? previewRow(t('Preview: the smoothed surface is shown. Changing the settings updates it. Enter applies, Esc cancels.'), t('Apply'),
+            ? previewRow(t('Preview: the smoothed faces are highlighted. Changing the settings updates them. Enter applies, Esc cancels.'), t('Apply'),
               'seg-editor-cancel-smooth', 'seg-editor-apply-smooth')
             : (
               <Button
@@ -721,7 +492,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
           <p className="text-muted-foreground text-xs">{t('{{count}} triangles', { count: number(health.triangles) })}</p>
         )}
         {previewingRepair
-          ? previewRow(t('Preview: the closed rims are shown in blue. Enter applies, Esc cancels.'), t('Apply repair'),
+          ? previewRow(t('Preview: the patches closing the rims are highlighted. Enter applies, Esc cancels.'), t('Apply repair'),
             'seg-editor-cancel-repair', 'seg-editor-apply-repair')
           : (
             <Tip text={t('Closes every open edge with the Closure and Advanced settings. Changes the 3D surface only.')}>

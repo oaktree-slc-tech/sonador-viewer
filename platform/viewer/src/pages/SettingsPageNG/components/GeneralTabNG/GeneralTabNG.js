@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
-import i18n from '@ohif/i18n';
 import {
   DownloadManagerService,
   DownloadManagerServiceEvents,
@@ -10,36 +9,43 @@ import {
   RETRY_ATTEMPTS_DEFAULT,
   RETRY_ATTEMPTS_MAX,
   RETRY_ATTEMPTS_MIN,
+  SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
+  SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
   UserPreferencesService,
   UserPreferencesServiceEvents,
 } from '@ohif/core';
-import { Numeric } from '@ohif/ui-next';
+import i18n from '@ohif/i18n';
 import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CaretDownIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
+import { Numeric } from '@ohif/ui-next';
 
+import { showSaveOutcome } from '../../../../components/UserPreferences/saveOutcomeNotification';
 import {
   ARCHIVE_TRANSFER_DEFAULT,
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
-  PREFERENCES_VERSION,
   PREFERENCE_SECTIONS,
+  PREFERENCES_VERSION,
   RETRY_ATTEMPTS_PREFERENCE_KEY,
 } from '../../../../constants/preferences';
 import { createHydrationLatch } from '../../../../lib/preferenceHydration';
 import { useUpdateUserPreferenceSection } from '../../../../queries/preferences';
-import { showSaveOutcome } from '../../../../components/UserPreferences/saveOutcomeNotification';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import TabFooterNG from '../TabFooterNG/TabFooterNG';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
 import styles from './GeneralTabNG.module.scss';
+import previewColorStyles from './PreviewColorOption.module.css';
 
 // Latch keys for the fields on this tab.
 const ARCHIVE_FIELD = 'archiveTransfer';
 const RETRY_FIELD = 'retryAttempts';
 const LOCKED_MODELS_FIELD = 'lockedModelsWarning';
+const PREVIEW_COLOR_FIELD = 'segEditorPreviewColor';
 
 const lockedModelsWarningDefault = () =>
   UserPreferencesService?.GENERAL_DEFAULTS?.[LOCKED_MODELS_WARNING_PREFERENCE_KEY] ?? true;
+const previewColorDefault = () =>
+  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY] ?? SEG_EDITOR_PREVIEW_COLOR_DEFAULT;
 
 export default function GeneralTabNG() {
   // The preferences namespace, which is where every string on this surface is registered. Without
@@ -181,6 +187,9 @@ export default function GeneralTabNG() {
         if (key === LOCKED_MODELS_WARNING_PREFERENCE_KEY) {
           setLockedModelsWarning(current => latch.accept(LOCKED_MODELS_FIELD, value, current));
         }
+        if (key === SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY) {
+          setPreviewColor(current => latch.accept(PREVIEW_COLOR_FIELD, value, current));
+        }
       }
     );
     return unsubscribe;
@@ -189,6 +198,19 @@ export default function GeneralTabNG() {
   const handleLockedModelsWarningChange = (event) => {
     latch.markEdited(LOCKED_MODELS_FIELD);
     setLockedModelsWarning(event.target.checked);
+  };
+
+  // The Segmentation Editor's preview colour: what a 3D edit awaiting Apply is drawn in (Blender
+  // orange by default). Also set from the editor's 3D panel, whose changes this form follows until
+  // the field is edited here. The server does not accept the key yet, so the service keeps it in
+  // this browser and it is not in the section POST below (UserPreferencesService local-only keys).
+  const [previewColor, setPreviewColor] = useState(
+    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY) ?? previewColorDefault()
+  );
+
+  const handlePreviewColorChange = (event) => {
+    latch.markEdited(PREVIEW_COLOR_FIELD);
+    setPreviewColor(event.target.value);
   };
 
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
@@ -202,6 +224,8 @@ export default function GeneralTabNG() {
     // Recorded only: the wholesale save below carries the value, so the service's own write is
     // not wanted here.
     UserPreferencesService?.setGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY, lockedModelsWarning, { persist: false });
+    // Local-only for now: the service keeps it in this browser (see above)
+    UserPreferencesService?.setGeneral?.(SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, previewColor.toLowerCase(), { persist: false });
 
     // `language` rides along because a section POST replaces the section's values wholesale --
     // sending the toggle alone would erase a stored language preference.
@@ -229,9 +253,11 @@ export default function GeneralTabNG() {
     latch.markEdited(ARCHIVE_FIELD);
     latch.markEdited(RETRY_FIELD);
     latch.markEdited(LOCKED_MODELS_FIELD);
+    latch.markEdited(PREVIEW_COLOR_FIELD);
     setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
     setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
     setLockedModelsWarning(lockedModelsWarningDefault());
+    setPreviewColor(previewColorDefault());
   };
 
   return (
@@ -330,6 +356,24 @@ export default function GeneralTabNG() {
               <span>{t('LockedModelsWarningLabel')}</span>
             </label>
             <p className={styles.optionHelp}>{t('LockedModelsWarningHelp')}</p>
+          </div>
+        </div>
+
+        {/* The Segmentation Editor's own settings: the colour a pending 3D edit is drawn in. */}
+        <div className={classNames(styles.wrapper, styles.wrapperTop)}>
+          <p className={styles.label}>{t('SegEditor')}</p>
+          <div className={styles.optionContainer}>
+            <label className={classNames(styles.option, previewColorStyles.option)} htmlFor="seg-editor-preview-color">
+              <input
+                id="seg-editor-preview-color"
+                className={previewColorStyles.swatch}
+                type="color"
+                value={previewColor}
+                onChange={handlePreviewColorChange}
+              />
+              <span>{t('SegEditorPreviewColorLabel')}</span>
+            </label>
+            <p className={styles.optionHelp}>{t('SegEditorPreviewColorHelp')}</p>
           </div>
         </div>
       </div>

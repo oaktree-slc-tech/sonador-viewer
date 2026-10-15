@@ -28,6 +28,8 @@ jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({ init: () => {} }),
 jest.mock('../threeDTools/registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
 jest.mock('../threeDTools/registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 jest.mock('./pickLocalFiles.js', () => ({ pickLocalFiles: jest.fn() }));
+// The scale check's dialog is UI (the viewer's dialog shell); the tests answer through `askRescale`
+jest.mock('../components/confirmDialog', () => ({ callConfirmDialog: jest.fn() }));
 
 
 const SEG = { displaySetInstanceUID: 'seg', Modality: 'SEG' };
@@ -65,6 +67,8 @@ function setup({ segmentationId = 'work', deps = {}, logger = true } = {}) {
     getStudies: jest.fn(() => ['study']),
     fetchInstanceBytes: jest.fn(async () => Uint8Array.from([7, 8, 9])),
     setStatus: jest.fn(),
+    // An image calibrated in millimetres, unless a test says otherwise
+    getUnits: jest.fn(() => ({ length: 'mm' })),
     ...deps,
   };
   const { actions, definitions } = createImportCommands({ servicesManager: { services }, deps: allDeps });
@@ -212,6 +216,102 @@ describe('importStlModels', () => {
 
     expect(notifications(services)).toContainEqual(['error', 'The import failed: boom']);
     console.error.mockRestore();
+  });
+});
+
+describe('importStlModels: the model scale', () => {
+  // A 200 mm image at the origin, and a femur 300 mm long inside it, as read and in metres
+  const IMAGE = { min: [0, 0, 0], max: [200, 200, 200] };
+  const model = (label, scale) => ({
+    label,
+    surface: { points: Float32Array.from([20, 20, 20, 180, 40, 40, 40, 180, 40].map(v => v * scale)), polys: [] },
+  });
+
+  function scaleSetup(models, answer, { length = 'mm' } = {}) {
+    const askRescale = jest.fn(async () => answer);
+    const env = setup({
+      deps: {
+        readStlFiles: jest.fn(async () => ({ models })),
+        getImageBounds: jest.fn(() => IMAGE),
+        getUnits: jest.fn(() => ({ length })),
+        askRescale,
+      },
+    });
+    env.deps.pickFiles.mockResolvedValue([file('femur.stl')]);
+    return { ...env, askRescale };
+  }
+
+  it('imports a model that fits the image as millimetres without asking', async () => {
+    const { actions, deps, askRescale } = scaleSetup([model('femur', 1)]);
+    await actions.importStlModels();
+    expect(askRescale).not.toHaveBeenCalled();
+    expect(deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBe(180);
+  });
+
+  it('offers to rescale a model in metres, and rescales it on confirm', async () => {
+    const { actions, deps, askRescale } = scaleSetup([model('femur', 0.001)], 'confirm');
+    await actions.importStlModels();
+
+    expect(askRescale).toHaveBeenCalledTimes(1);
+    const question = askRescale.mock.calls[0][0];
+    expect(question.message).toBe('femur may be in metres rather than millimetres. Read as millimetres, it is 0.16 mm across and does not fit the image (200 mm across). Rescaled from metres, it is 160 mm across.');
+    expect(question.confirmText).toBe('Rescale from m');
+    expect(question.alternateText).toBe('Import as-is');
+    expect(deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(180, 3);
+    // No status over the view while the dialog asks
+    expect(deps.setStatus.mock.calls.map(([, message]) => message)).toEqual([
+      'Reading 1 file(s)...', null, 'Placing 1 segment(s) on the image grid...', null,
+    ]);
+  });
+
+  it('imports the model as it is on Import as-is, and nothing on Cancel', async () => {
+    const asIs = scaleSetup([model('femur', 0.001)], 'alternate');
+    await asIs.actions.importStlModels();
+    expect(asIs.deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(0.18, 6);
+
+    const cancelled = scaleSetup([model('femur', 0.001)], 'cancel');
+    expect(await cancelled.actions.importStlModels()).toBeUndefined();
+    expect(cancelled.deps.importInto).not.toHaveBeenCalled();
+  });
+
+  it('asks once per unit, naming every model in it, and leaves the millimetre models alone', async () => {
+    const { actions, deps, askRescale } = scaleSetup(
+      [model('femur', 0.001), model('tibia', 0.001), model('patella', 1)], 'confirm');
+    await actions.importStlModels();
+    expect(askRescale).toHaveBeenCalledTimes(1);
+    expect(askRescale.mock.calls[0][0].message).toMatch(/^femur, tibia may be in metres/);
+    const points = deps.importInto.mock.calls[0][0].payload.models.map(m => m.surface.points[3]);
+    expect(points[0]).toBeCloseTo(180, 3);
+    expect(points[1]).toBeCloseTo(180, 3);
+    expect(points[2]).toBe(180);
+  });
+
+  it('does not infer a unit on an image without pixel spacing, whose grid steps are not millimetres', async () => {
+    // The same metres-sized model on the same 0-200 grid: calibrated, a conversion is offered;
+    // uncalibrated, the 200 steps say nothing about millimetres, so nothing is suggested or scaled
+    const calibrated = scaleSetup([model('femur', 0.001)], 'confirm');
+    await calibrated.actions.importStlModels();
+    expect(calibrated.askRescale).toHaveBeenCalledTimes(1);
+
+    const uncalibrated = scaleSetup([model('femur', 0.001)], 'confirm', { length: 'units' });
+    await uncalibrated.actions.importStlModels();
+    expect(uncalibrated.askRescale).not.toHaveBeenCalled();
+    expect(uncalibrated.deps.getImageBounds).not.toHaveBeenCalled();
+    expect(uncalibrated.deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(0.18, 6);
+    expect(notifications(uncalibrated.services)).toContainEqual(['info',
+      'The image has no pixel spacing, so the scale of the models could not be checked. They are placed as read, in the image grid\'s units.']);
+  });
+
+  it('skips the check when the image bounds are not available', async () => {
+    const { actions, deps, askRescale } = scaleSetup([model('femur', 0.001)]);
+    deps.getImageBounds.mockImplementation(() => {
+      throw new Error('no labelmap');
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await actions.importStlModels();
+    warn.mockRestore();
+    expect(askRescale).not.toHaveBeenCalled();
+    expect(deps.importInto).toHaveBeenCalled();
   });
 });
 

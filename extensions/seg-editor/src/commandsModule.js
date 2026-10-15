@@ -24,7 +24,7 @@ import { Enums as SegEditEnums } from './enums';
 import { getSegEditorLayout } from './layouts/segEditorLayouts';
 import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
 import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
-import { redoSegEditorEdit, undoSegEditorEdit } from './toolbox/segEditorHistory';
+import { redoSegEditorEdit, segEditorHistoryDroppedEdits, undoSegEditorEdit } from './toolbox/segEditorHistory';
 import { LABELMAP_TOOL_NAMES, releaseIdlePreview } from './toolbox/segEditorTools';
 import {
   get3DToolState,
@@ -65,7 +65,65 @@ export function segmentationHasContent(segmentationId, {
   return false;
 }
 
-const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
+// The segment identity that a save would carry: which segments there are, and their names
+function _segmentIdentity(segmentation) {
+  return Object.values(segmentation?.segments || {})
+    .filter(Boolean)
+    .map(segment => `${segment.segmentIndex}:${segment.label ?? ''}`)
+    .sort()
+    .join('|');
+}
+
+function _sameVoxels(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether the editor's working copy of a segmentation loaded from DICOM differs from the
+ * segmentation it was forked from: the work closing the editor would lose (the editor never
+ * writes to the source; ohif-viewers#136 note 37810).
+ *
+ * - An edit still in the undo history counts: the 3D edits whose labelmap write is queued or
+ *   changed no voxel (a Repair) are there, and undoing every edit leaves nothing to lose.
+ * - So does an edit the history's ring has dropped (segEditorHistory tracks the session): it can
+ *   no longer be undone, and it may have changed only the surface, which the comparison below
+ *   cannot see.
+ * - Otherwise the voxels and the segments (their indices and names) are compared with the
+ *   source's, which covers what the history does not hold (imports, segments added, removed or
+ *   renamed).
+ *
+ * Unknown counts as modified, so nothing is discarded unasked.
+ */
+export function workingCopyHasChanges(workingSegmentationId, {
+  history = c3dUtilities.HistoryMemo.DefaultHistoryMemo,
+  droppedEdits = segEditorHistoryDroppedEdits,
+  getSegmentation = id => c3dSegmentations.state.getSegmentation(id),
+  getRegistration = id => cornerstone3dUtils.getLabelmapRegistration(id),
+  getVoxels = id => cornerstone3dUtils.getSegmentationVoxels(id),
+} = {}) {
+  if (history?.canUndo || droppedEdits(history)) {
+    return true;
+  }
+  // Reading the voxels first rebuilds the registration that names the source, if it has gone
+  const workingVoxels = getVoxels(workingSegmentationId);
+  const sourceSegmentationId = getRegistration(workingSegmentationId)?.workingCopyOf;
+  const sourceVoxels = sourceSegmentationId && getVoxels(sourceSegmentationId);
+  if (!workingVoxels || !sourceVoxels) {
+    return true;
+  }
+  return _segmentIdentity(getSegmentation(workingSegmentationId)) !== _segmentIdentity(getSegmentation(sourceSegmentationId))
+    || !_sameVoxels(workingVoxels, sourceVoxels);
+}
+
+const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
 
   // Reference cache for segmentation editor API instances
   let apis = {};
@@ -283,23 +341,37 @@ const commandsModule = ({ servicesManager, commandsManager, appConfig }) => {
 
   const actions = {
     async closeSegEditor({ viewports } = {}) {
-      // Exit Segmentation Editor. A segmentation created in the viewer exists only in memory, so
-      // closing on one with painted voxels asks first (ohif-viewers#143, FR-10).
+      // Exit Segmentation Editor. Closing discards the editor's working copy, so it asks first when
+      // that loses work: a segmentation created in the viewer exists only in memory, and closing
+      // on one with painted voxels discards it (ohif-viewers#143, FR-10); a segmentation loaded
+      // from DICOM is never edited in place, and closing discards the changes made to its copy.
       const { activeViewportIndex, viewportSpecificData } = viewports || {};
       const displaySetInstanceUID = viewportSpecificData?.[activeViewportIndex]?.displaySetInstanceUID;
       const _ds = displaySetInstanceUID
         && DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
       const workingSegmentationId = _ds?.segmentationId;
 
-      if (workingSegmentationId
-          && cornerstone3dUtils.getInMemorySegmentationInfo(workingSegmentationId)
-          && segmentationHasContent(workingSegmentationId)) {
-        const t = key => i18n.t(key, { ns: 'SegmentationEditor' });
+      const t = key => i18n.t(key, { ns: 'SegmentationEditor' });
+      let prompt = null;
+      if (workingSegmentationId) {
+        if (cornerstone3dUtils.getInMemorySegmentationInfo(workingSegmentationId)) {
+          prompt = segmentationHasContent(workingSegmentationId) && {
+            title: t('Discard Segmentation?'),
+            message: t('This segmentation has not been saved. Closing the editor discards it.'),
+          };
+        } else {
+          prompt = workingCopyHasChanges(workingSegmentationId) && {
+            title: t('Discard Changes?'),
+            message: t('This segmentation has changes that have not been saved. Closing the editor discards them.'),
+          };
+        }
+      }
+
+      if (prompt) {
         const discard = await callConfirmDialog({
           uiDialogService: servicesManager.services.UIDialogService,
           id: 'seg-editor-discard-confirm',
-          title: t('Discard Segmentation?'),
-          message: t('This segmentation has not been saved. Closing the editor discards it.'),
+          ...prompt,
           confirmText: t('Discard'),
           cancelText: t('Cancel'),
         });

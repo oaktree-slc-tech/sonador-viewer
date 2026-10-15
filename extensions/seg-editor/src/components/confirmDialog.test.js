@@ -88,4 +88,30 @@ describe('callConfirmDialog', () => {
     await expect(answer).resolves.toEqual({ confirmed: false, suppressed: false });
     expect(uiDialogService.dismiss).toHaveBeenCalledTimes(1);
   });
+
+  it('names the choice with an alternate action', async () => {
+    const ask = () => {
+      const { uiDialogService, props } = service();
+      const answer = callConfirmDialog({
+        uiDialogService, id: 'd', title: 't', message: 'm', confirmText: 'Rescale', cancelText: 'Cancel',
+        alternateText: 'Import as-is',
+      });
+      return { answer, props, uiDialogService };
+    };
+
+    const alternate = ask();
+    expect(alternate.props().alternateText).toBe('Import as-is');
+    alternate.props().onAlternate();
+    alternate.props().onConfirm({});
+    await expect(alternate.answer).resolves.toBe('alternate');
+    expect(alternate.uiDialogService.dismiss).toHaveBeenCalledTimes(1);
+
+    const confirmed = ask();
+    confirmed.props().onConfirm({});
+    await expect(confirmed.answer).resolves.toBe('confirm');
+
+    const cancelled = ask();
+    cancelled.props().onCancel();
+    await expect(cancelled.answer).resolves.toBe('cancel');
+  });
 });

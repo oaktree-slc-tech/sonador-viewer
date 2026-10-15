@@ -3,6 +3,8 @@
 
 import {
   LOCKED_MODELS_WARNING_PREFERENCE_KEY as KEY,
+  SEG_EDITOR_PREVIEW_COLOR_DEFAULT as PREVIEW_DEFAULT,
+  SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY as PREVIEW_KEY,
   UserPreferencesServiceClass,
   UserPreferencesServiceEvents as EVENTS,
 } from './UserPreferencesService';
@@ -84,5 +86,78 @@ describe('UserPreferencesService', () => {
 
   it('refuses a key it does not hold', () => {
     expect(() => service.setGeneral('theme', 'dark')).toThrow('Unknown general preference');
+  });
+});
+
+describe('UserPreferencesService: local-only keys (the Seg Editor preview colour)', () => {
+  // The server's general-section allowlist does not know the preview colour yet, so it is kept in
+  // the browser and never sent with the section (a section with an unknown key is refused)
+  function memoryStorage(initial = {}) {
+    const items = { ...initial };
+    return {
+      items,
+      getItem: key => (key in items ? items[key] : null),
+      setItem: jest.fn((key, value) => {
+        items[key] = String(value);
+      }),
+    };
+  }
+  const STORED = `sonador.preferences.general.${PREVIEW_KEY}`;
+
+  it('defaults to Blender orange, and leaves the key out of the section values', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage() });
+    expect(service.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
+    expect(PREVIEW_DEFAULT).toBe('#ff8500');
+    expect(service.isLocalOnly(PREVIEW_KEY)).toBe(true);
+    expect(service.getGeneralValues()).toEqual({ [KEY]: true });
+  });
+
+  it('keeps a choice in the browser, without a section write, and reads it back in a new session', async () => {
+    const storage = memoryStorage();
+    const persist = jest.fn(() => Promise.resolve());
+    const service = new UserPreferencesServiceClass({ storage });
+    service.setPersistence(persist);
+
+    await service.setGeneral(PREVIEW_KEY, '#33aaff');
+
+    expect(service.getGeneral(PREVIEW_KEY)).toBe('#33aaff');
+    expect(storage.items[STORED]).toBe('"#33aaff"');
+    expect(persist).not.toHaveBeenCalled();
+    expect(service.getGeneralValues()).not.toHaveProperty(PREVIEW_KEY);
+    // Also when a Settings form saves the section itself
+    await service.setGeneral(PREVIEW_KEY, '#00ff00', { persist: false });
+    expect(storage.items[STORED]).toBe('"#00ff00"');
+
+    const next = new UserPreferencesServiceClass({ storage });
+    expect(next.getGeneral(PREVIEW_KEY)).toBe('#00ff00');
+  });
+
+  it('is not overridden by hydration, and ignores a malformed stored value', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage({ [STORED]: '"#123456"' }) });
+    service.applyHydratedGeneral({ [PREVIEW_KEY]: '#abcdef' });
+    expect(service.getGeneral(PREVIEW_KEY)).toBe('#123456');
+
+    const broken = new UserPreferencesServiceClass({ storage: memoryStorage({ [STORED]: '"orange"' }) });
+    expect(broken.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
+    const unparsable = new UserPreferencesServiceClass({ storage: memoryStorage({ [STORED]: '{' }) });
+    expect(unparsable.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
+  });
+
+  it('refuses a value that is not a #rrggbb colour', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage() });
+    expect(() => service.setGeneral(PREVIEW_KEY, 'orange')).toThrow('Invalid value');
+    expect(() => service.setGeneral(PREVIEW_KEY, 0xff8500)).toThrow('Invalid value');
+    expect(service.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
+  });
+
+  it('keeps the value for the session when the browser storage fails', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const storage = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    const service = new UserPreferencesServiceClass({ storage });
+    expect(service.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
+    await service.setGeneral(PREVIEW_KEY, '#010203');
+    expect(service.getGeneral(PREVIEW_KEY)).toBe('#010203');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

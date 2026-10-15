@@ -20,8 +20,9 @@ export function is3DSelectionTool(toolName) {
 // distance of the removed points are removed too
 export const REMOVAL_DEPTH = { min: 0, max: 20, step: 0.5, default: 2 };
 
-// Brush radius of the Paint selector (surface units)
-export const PAINT_RADIUS = { min: 0.5, max: 50, step: 0.5, default: 5 };
+// Brush radius of the Paint selector (surface units: mm on a calibrated series). Faces are picked
+// in a small neighbourhood; a wider brush is a lasso's job, so the radius stops at 5 and steps finely
+export const PAINT_RADIUS = { min: 0.1, max: 5, step: 0.1, default: 1 };
 
 // Smooth: the Laplacian step per pass, and the number of passes (ohif-viewers#148, FR-8)
 export const SMOOTH_STRENGTH = { min: 0.1, max: 0.9, step: 0.025, default: 0.5 };
@@ -72,7 +73,7 @@ export const EDIT_SETTINGS = {
   previewEnabled: { default: true, boolean: true },
   // Open and non-manifold edges drawn on the canvas
   showIssues: { default: false, boolean: true },
-  // Vertices closer than this (mm) are one vertex
+  // Vertices closer than this (surface units) are one vertex
   weldTolerance: { default: 0.001, min: 0, max: 1 },
   // Largest edge-connected piece removed as an island after a cut (triangles)
   islandMaxTriangles: { default: 50, min: 0, max: 10000 },

@@ -29,13 +29,16 @@ function _notify() {
  * @param {string} context.toolGroupId - the editor's 2D tool group
  * @param {string[]} [context.viewportIds] - the 2D (Axial/Coronal/Sagittal) viewport ids
  * @param {string} [context.segmentationId] - the editor's working segmentation
+ * @param {string} [context.referenceVolumeId] - the image volume the segmentation is drawn on (its
+ *   metadata gives the units the palettes' settings are shown in)
  */
-export function setSegEditorToolContext({ toolGroupId, viewportIds, segmentationId }) {
+export function setSegEditorToolContext({ toolGroupId, viewportIds, segmentationId, referenceVolumeId }) {
   _context = {
     ...(_context?.toolGroupId === toolGroupId ? _context : {}),
     toolGroupId,
     ...(viewportIds ? { viewportIds: [...viewportIds] } : {}),
     ...(segmentationId ? { segmentationId } : {}),
+    ...(referenceVolumeId ? { referenceVolumeId } : {}),
   };
   _notify();
 }
@@ -60,7 +63,8 @@ export function clearSegEditorToolContext(toolGroupId) {
 
 /**
  * @returns {{ toolGroupId: string, toolGroup: Object|undefined, viewportIds: string[],
- *   segmentationId: string|undefined, activeViewportId: string|undefined }|null} the active
+ *   segmentationId: string|undefined, referenceVolumeId: string|undefined,
+ *   activeViewportId: string|undefined }|null} the active
  *   viewport defaults to the first 2D viewport
  */
 export function getSegEditorToolContext() {
@@ -73,6 +77,7 @@ export function getSegEditorToolContext() {
     toolGroup: ToolGroupManager.getToolGroup(_context.toolGroupId),
     viewportIds: _context.viewportIds ?? [],
     segmentationId: _context.segmentationId,
+    referenceVolumeId: _context.referenceVolumeId,
     activeViewportId: _context.activeViewportId ?? _context.viewportIds?.[0],
   };
 }
