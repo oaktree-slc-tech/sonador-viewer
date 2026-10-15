@@ -53,6 +53,8 @@ import { getToolbarUITypeEntries } from './ToolBarService/toolbarModuleEntries';
 import UserPreferencesService, {
   UserPreferencesServiceEvents,
   LOCKED_MODELS_WARNING_PREFERENCE_KEY,
+  SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
+  SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
 } from './UserPreferencesService/UserPreferencesService';
 
 import ServicesManager from './ServicesManager.js';
@@ -100,6 +102,8 @@ export {
   UserPreferencesService,
   UserPreferencesServiceEvents,
   LOCKED_MODELS_WARNING_PREFERENCE_KEY,
+  SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
+  SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
   pubSubServiceInterface,
   PubSubService,
   ToolbarService,

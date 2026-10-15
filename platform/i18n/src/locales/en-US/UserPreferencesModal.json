@@ -16,6 +16,9 @@
   "ResetDefaultMessage": "Preferences successfully reset to default. <br /> You must <strong>Save</strong> to perform this action.",
   "Save": "$t(Buttons:Save)",
   "SaveMessage": "Preferences saved",
+  "SegEditor": "Seg Editor",
+  "SegEditorPreviewColorHelp": "The colour a 3D edit awaiting Apply is drawn in: the faces a Remove, Smooth or Repair will change, with their edges and vertices. Blender's orange by default. Kept in this browser for now.",
+  "SegEditorPreviewColorLabel": "Preview colour",
   "Segmentation": "Segmentation",
   "User Preferences": "User Preferences"
 }

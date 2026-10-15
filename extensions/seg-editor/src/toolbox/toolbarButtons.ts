@@ -21,6 +21,7 @@ import {
   LABELMAP_TOOLS,
   MAX_SEGMENTATION_DRAWING_RADIUS,
   MIN_SEGMENTATION_DRAWING_RADIUS,
+  OPTION_UNITS,
   POINTER_BUTTONS,
   SEGMENTATION_DRAWING_RADIUS_STEP,
   SEG_EDITOR_COMMAND_CONTEXT,
@@ -45,8 +46,11 @@ const activateWorkingSegmentation = command('activateSelectedSegmentationOfType'
   segmentationRepresentationType: 'Labelmap',
 });
 
+// The option cards show the unit after the value (mm, or generic units on a series without pixel
+// spacing), so the radius is named without one
 const radiusOption = (id: string, toolNames: string[]) => ({
-  name: tb('Radius (mm)'),
+  name: tb('Radius'),
+  unit: OPTION_UNITS.length,
   id,
   type: 'range',
   explicitRunOnly: true,
@@ -215,6 +219,7 @@ export function getToolbarButtons() {
             name: tb('Threshold Range'),
             type: 'double-range',
             id: 'threshold-range',
+            unit: OPTION_UNITS.intensity,
             min: -1000,
             max: 1000,
             step: 1,

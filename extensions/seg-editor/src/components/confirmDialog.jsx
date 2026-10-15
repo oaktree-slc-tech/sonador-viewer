@@ -6,6 +6,9 @@
 // suppression checkbox ("Don't ask again") beneath its message. Its state is reported with the
 // user's answer and is only meaningful when they proceed: cancelling a warning is not a request
 // to stop being warned.
+//
+// A dialog that offers two ways forward (Rescale / Import as-is) carries an alternate action
+// beside Cancel; the answer then names the choice.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
@@ -49,7 +52,7 @@ export function confirmDialogKeyAction(event, root) {
 
 export function ConfirmDialog({
   headerTitle, message, confirmText, cancelText, onConfirm, onCancel, rootClass = '',
-  suppressionLabel, suppressionId = 'confirm-dialog-suppress',
+  suppressionLabel, suppressionId = 'confirm-dialog-suppress', alternateText, onAlternate,
 }) {
   const rootRef = useRef(null);
   const [suppressed, setSuppressed] = useState(false);
@@ -95,6 +98,11 @@ export function ConfirmDialog({
           <FooterAction.Secondary className="btn btn-default" onClick={cancel}>
             {cancelText}
           </FooterAction.Secondary>
+          {alternateText && (
+            <FooterAction.Secondary className="btn btn-default" onClick={() => onAlternate?.()} data-cy="confirm-dialog-alternate">
+              {alternateText}
+            </FooterAction.Secondary>
+          )}
           <FooterAction.Primary className="btn btn-primary" onClick={confirm} data-cy="confirm-dialog-confirm">
             {confirmText}
           </FooterAction.Primary>
@@ -116,6 +124,9 @@ ConfirmDialog.propTypes = {
   /** Shows the suppression checkbox with this label */
   suppressionLabel: PropTypes.string,
   suppressionId: PropTypes.string,
+  /** Shows a second way forward, between Cancel and the primary action */
+  alternateText: PropTypes.string,
+  onAlternate: PropTypes.func,
 };
 
 
@@ -130,19 +141,24 @@ ConfirmDialog.propTypes = {
  * @param {string} params.confirmText
  * @param {string} params.cancelText
  * @param {string} [params.suppressionLabel] - offer a "don't ask again" checkbox with this label
- * @returns {Promise<boolean|{ confirmed: boolean, suppressed: boolean }>} true when confirmed;
- *   with a suppression checkbox, the answer and the checkbox's state (`suppressed` is only ever
- *   true with `confirmed`)
+ * @param {string} [params.alternateText] - offer a second way forward with this label
+ * @returns {Promise<boolean|{ confirmed: boolean, suppressed: boolean }|'confirm'|'alternate'|'cancel'>}
+ *   true when confirmed; with a suppression checkbox, the answer and the checkbox's state
+ *   (`suppressed` is only ever true with `confirmed`); with an alternate action, the choice made
  */
 export function callConfirmDialog({
-  uiDialogService, id, title, message, confirmText, cancelText, suppressionLabel,
+  uiDialogService, id, title, message, confirmText, cancelText, suppressionLabel, alternateText,
 }) {
   return new Promise(resolve => {
     let settled = false;
-    const settle = (confirmed, { suppressed = false } = {}) => {
+    const settle = (confirmed, { suppressed = false, alternate = false } = {}) => {
       if (!settled) {
         settled = true;
         uiDialogService.dismiss({ id });
+        if (alternateText) {
+          resolve(alternate ? 'alternate' : confirmed ? 'confirm' : 'cancel');
+          return;
+        }
         resolve(suppressionLabel
           ? { confirmed, suppressed: confirmed && !!suppressed }
           : confirmed);
@@ -164,8 +180,10 @@ export function callConfirmDialog({
         rootClass: 'sonadorSimpleInputDialog',
         suppressionLabel,
         suppressionId: `${id}-suppress`,
+        alternateText,
         onConfirm: answer => settle(true, answer),
         onCancel: () => settle(false),
+        onAlternate: () => settle(false, { alternate: true }),
       },
     });
   });

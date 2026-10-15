@@ -30,6 +30,9 @@ jest.mock('@ohif/extension-vtk', () => ({ Enums: { CORNERSTONE: {} } }));
 // The Selection tool's panel component imports the ui-next controls, which need a browser
 jest.mock('@ohif/ui-next', () => ({}));
 jest.mock('@ohif/core', () => ({ useSystem: () => ({}) }));
+// The option cards read the reference series' units through Cornerstone3D
+jest.mock('@cornerstonejs/core', () => ({ cache: {}, metaData: {} }), { virtual: true });
+jest.mock('@cornerstonejs/tools', () => ({ ToolGroupManager: {} }), { virtual: true });
 
 function collectLabels(buttons) {
   const labels = [];
@@ -55,9 +58,11 @@ describe('palette labels', () => {
     expect(buttonValues.has(label)).toBe(true);
   });
 
-  it('uses the OHIF v3 radius label', () => {
+  it('names the radius without its unit, which the option card shows after the value', () => {
     const brush = getToolbarButtons().find(button => button.id === 'Brush');
-    expect(brush.props.options.find(option => option.id === 'brush-radius').name).toBe('Radius (mm)');
+    const radius = brush.props.options.find(option => option.id === 'brush-radius');
+    expect(radius.name).toBe('Radius');
+    expect(radius.unit).toBe('length');
   });
 
   it('resolves the evaluator messages', () => {

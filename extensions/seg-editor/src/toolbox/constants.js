@@ -3,15 +3,22 @@
 import { Enums as SegEditEnums } from '../enums';
 
 
+// What a palette option's value is measured in (an option's `unit`): a length in the reference
+// series' patient units, or an intensity (HU on a CT series). The option cards resolve them.
+export const OPTION_UNITS = {
+  length: 'length',
+  intensity: 'intensity',
+};
+
 // Commands run by the palette buttons live in the editor's command context
 export const SEG_EDITOR_COMMAND_CONTEXT = SegEditEnums.ACTIVE_VIEWPORT;
 
 // Brush radius (mm). OHIF v3 starts at 25 and allows up to 99.5, which is coarse for slice
-// editing; the editor starts at 5 and caps the radius at 25 (a 50 mm stroke).
-export const MIN_SEGMENTATION_DRAWING_RADIUS = 0.5;
-export const SEGMENTATION_DRAWING_RADIUS_STEP = 0.25;
-export const MAX_SEGMENTATION_DRAWING_RADIUS = 25;
-export const DEFAULT_SEGMENTATION_DRAWING_RADIUS = 5;
+// editing; the editor matches the 3D Paint brush: 0.1 to 5 in steps of 0.1, starting at 2.
+export const MIN_SEGMENTATION_DRAWING_RADIUS = 0.1;
+export const SEGMENTATION_DRAWING_RADIUS_STEP = 0.1;
+export const MAX_SEGMENTATION_DRAWING_RADIUS = 5;
+export const DEFAULT_SEGMENTATION_DRAWING_RADIUS = 2;
 
 // Slice imaging tools that can hold the primary (left) mouse binding
 export const IMAGING_TOOLS = {

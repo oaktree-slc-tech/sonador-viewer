@@ -1,7 +1,13 @@
 // Undo / redo through Cornerstone3D's own history class (the one DefaultHistoryMemo is an instance
 // of), with labelmap-style memos: a brush stroke and a 3D delete
 
-import { clearSegEditorHistory, redoSegEditorEdit, undoSegEditorEdit } from './segEditorHistory';
+import {
+  clearSegEditorHistory,
+  redoSegEditorEdit,
+  segEditorHistoryDroppedEdits,
+  trackSegEditorHistory,
+  undoSegEditorEdit,
+} from './segEditorHistory';
 
 jest.mock('@cornerstonejs/core', () => ({ utilities: { HistoryMemo: {} } }), { virtual: true });
 
@@ -54,5 +60,65 @@ describe('segEditorHistory', () => {
     expect(history.size).toBe(10);
     expect(undoSegEditorEdit(history)).toBe(false);
     expect(voxels).toEqual([0]);
+  });
+
+  describe('tracking the edits the ring drops', () => {
+    const memo = () => ({ restoreMemo: () => {} });
+
+    it('notes an edit pushed over a full ring, which no undo can reach any more', () => {
+      const history = new HistoryMemo('test', 3);
+      const untrack = trackSegEditorHistory(history);
+      [1, 2, 3].forEach(() => history.push(memo()));
+      expect(segEditorHistoryDroppedEdits(history)).toBe(false);
+
+      history.push(memo()); // the first edit falls off the ring
+      expect(segEditorHistoryDroppedEdits(history)).toBe(true);
+      while (undoSegEditorEdit(history));
+      expect(history.canUndo).toBe(false);
+      expect(segEditorHistoryDroppedEdits(history)).toBe(true);
+
+      // A new session starts clean
+      clearSegEditorHistory(history);
+      expect(segEditorHistoryDroppedEdits(history)).toBe(false);
+      untrack();
+    });
+
+    it('does not count undone edits replaced by a new one, or a grouped memo, as dropped', () => {
+      const history = new HistoryMemo('test', 3);
+      const untrack = trackSegEditorHistory(history);
+      [1, 2, 3].forEach(() => history.push(memo()));
+      history.undo();
+      history.push(memo()); // takes the undone edit's slot
+      expect(segEditorHistoryDroppedEdits(history)).toBe(false);
+
+      history.undo();
+      history.startGroupRecording();
+      history.push(memo()); // joins the group entry
+      history.endGroupRecording();
+      expect(segEditorHistoryDroppedEdits(history)).toBe(false);
+      untrack();
+    });
+
+    it('notes a grouped entry started over a full ring', () => {
+      const history = new HistoryMemo('test', 2);
+      const untrack = trackSegEditorHistory(history);
+      [1, 2].forEach(() => history.push(memo()));
+      history.startGroupRecording();
+      history.push(memo());
+      history.endGroupRecording();
+      expect(segEditorHistoryDroppedEdits(history)).toBe(true);
+      untrack();
+    });
+
+    it('stops tracking without leaving anything on the history', () => {
+      const history = new HistoryMemo('test', 1);
+      const untrack = trackSegEditorHistory(history);
+      untrack();
+      expect(Object.prototype.hasOwnProperty.call(history, 'push')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(history, 'initializeGroupItem')).toBe(false);
+      history.push(memo());
+      history.push(memo());
+      expect(segEditorHistoryDroppedEdits(history)).toBe(false);
+    });
   });
 });

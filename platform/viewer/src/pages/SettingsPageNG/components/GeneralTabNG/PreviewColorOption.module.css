@@ -1,0 +1,45 @@
+/*
+ * Seg Editor preview colour (Settings > General > Seg Editor): the browser's colour input as a
+ * round swatch in the study-list palette's #60646d outline, white on hover and focus like the
+ * other fields on this tab.
+ */
+
+.option {
+  column-gap: 12px;
+}
+
+.swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #60646d;
+  border-radius: 50%;
+  background: none;
+  appearance: none;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.swatch:focus-visible {
+  border-color: #fff;
+}
+
+.option:hover .swatch {
+  border-color: #fff;
+}
+
+/* Separate rules: a browser drops a whole rule whose selector list has one it does not know */
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.swatch::-webkit-color-swatch {
+  border: 0;
+  border-radius: 50%;
+}
+
+.swatch::-moz-color-swatch {
+  border: 0;
+  border-radius: 50%;
+}

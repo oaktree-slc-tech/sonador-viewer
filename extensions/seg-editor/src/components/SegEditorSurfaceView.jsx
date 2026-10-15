@@ -71,7 +71,6 @@ import { combineSelection, SELECTION_MODES, selectTrianglesInLasso } from '../th
 import {
   growTriangles,
   largestConnectedTriangles,
-  polysToTriangles,
   shrinkTriangles,
   triangleComponents,
   trianglesVertices,
@@ -83,6 +82,13 @@ import {
   connectedTriangles,
   raycastSurfaces,
 } from '../threeDTools/paintSelection';
+import {
+  changedTriangles,
+  createChangeOverlay,
+  disposeChangeOverlay,
+  setChangeOverlayColor,
+  updateChangeOverlay,
+} from '../threeDTools/previewOverlay';
 import {
   assembleCutInWorker,
   diagnoseSurfaceInWorker,
@@ -120,6 +126,7 @@ import {
   THREE_D_TOOLS,
 } from '../threeDTools/threeDToolState';
 import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
+import { getPreviewColor, subscribePreviewColor } from '../utils/previewColor';
 
 
 const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
@@ -136,10 +143,10 @@ const LASSO_EDGE_TINT_TOWARD_WHITE = 0.8;
 const LASSO_POINT_TINT_TOWARD_WHITE = 0.95;
 const FALLBACK_SEGMENT_COLOR = '#ffd600';
 const WHITE = new Color(1, 1, 1);
-// Patches of an edit awaiting Apply / Cancel
-const PATCH_TINT_COLOR = 0x4fc3f7;
-// The original surface of the edited region, ghosted behind a preview for comparison
-const GHOST_COLOR = 0xffffff;
+// The original surface of the edited region, ghosted behind a preview for comparison: faint
+// enough to recede behind the change overlay, which is what a preview is about
+const GHOST_COLOR = 0xbdbdbd;
+const GHOST_OPACITY = 0.12;
 // Open edges, and non-manifold edges, of the target's surface (Show mesh issues)
 const OPEN_EDGE_COLOR = 0xff5252;
 const NON_MANIFOLD_EDGE_COLOR = 0xffa726;
@@ -316,7 +323,7 @@ export default class SegEditorSurfaceView extends Component {
     this._brush = null;              // Mesh: the Paint brush on the surface under the pointer
     this._confirming = false;
     this._pendingEdit = null;        // an edit shown for Apply / Cancel
-    this._patchTint = null;          // Mesh tinting the pending edit's patches
+    this._changeOverlay = null;      // Group drawing the faces a pending edit changes (previewOverlay)
     this._issues = null;             // LineSegments showing the target surface's open edges
     this._issuesShown = false;
     this._topology = null;           // { points, topology, promise } of the target's surface (triangleTopology)
@@ -1033,6 +1040,10 @@ export default class SegEditorSurfaceView extends Component {
     // points and edges over a faint tint; the brush shows the tint, with subdued points and edges
     // so the topology stays readable.
     this._removeHighlight();
+    // While an edit of this surface is previewed, its change overlay is drawn instead
+    if (model && this._pendingEdit?.geometryId === model.geometryId) {
+      return;
+    }
     const polys = model && c3dCache.getGeometry(model.geometryId)?.data?.polys;
     if (!model?.instance || !polys || !this._selection.size || !this.api?.scene) {
       return;
@@ -1397,12 +1408,9 @@ export default class SegEditorSurfaceView extends Component {
       edit.after = result.after;
       edit.editBox = result.editBox;
       edit.moved = result.moved;
-      // The recompute updates the preview mesh only; the cache is written on Apply
+      // The recompute updates the preview mesh and its overlay only; the cache is written on Apply
       this._updatePreviewMesh(edit.after);
-      const model = this._targetModel(edit.segmentIndex);
-      if (model && this._selectionGeometryId === model.geometryId) {
-        this._updateHighlight(model);
-      }
+      this._updateChangeOverlay(edit);
       set3DPreview(this._editSummary(edit));
     } catch (err) {
       if (this._isMounted && this._pendingEdit === edit) {
@@ -1458,18 +1466,16 @@ export default class SegEditorSurfaceView extends Component {
 
   _startPreview(model, edit) {
     // Show the edited surface on the canvas only (ohif-viewers#148 FR-2, §5.2): a preview mesh in
-    // place of the real one, the new patches tinted and the original faces ghosted behind it. The
+    // place of the real one, the faces it changes drawn in the preview colour (faces, edges and
+    // vertices, as Blender draws a selection) and the original faces ghosted behind it. The
     // cached surface, the VTK view, the labelmap and the history are untouched until Apply
-    // (Enter); Cancel (Escape) just takes the preview away.
+    // (Enter); Cancel (Escape) just takes the preview away. The selection is not drawn while the
+    // preview is up: a smooth's selection is the faces the overlay shows.
     this._pendingEdit = edit;
     this._showPreviewMesh(model, edit.after);
-    if (edit.cut) {
-      this._showPatchTint(model, edit.after);
-    }
+    this._showChangeOverlay(model, edit);
     this._showGhost(model, edit);
-    if (edit.keepSelection && this._selectionGeometryId === model.geometryId) {
-      this._updateHighlight(model);
-    }
+    this._removeHighlight();
     set3DPreview(this._editSummary(edit));
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this._onPreviewKey);
@@ -1484,7 +1490,7 @@ export default class SegEditorSurfaceView extends Component {
     this._smoothRerun = null;
     this._smoothRun += 1;
     this._smoothDirty = false;
-    this._removePatchTint();
+    this._removeChangeOverlay();
     this._removeGhost();
     this._removePreviewMesh();
     const edit = this._pendingEdit;
@@ -1507,6 +1513,11 @@ export default class SegEditorSurfaceView extends Component {
     const material = model.instance.material?.clone
       ? model.instance.material.clone()
       : new MeshBasicMaterial({ color: this._segmentColor(model.segmentIndex) || FALLBACK_SEGMENT_COLOR });
+    // Pushed back in depth, so the change overlay's edges and vertices on its surface win the depth
+    // test where they are in front, and are hidden behind it
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
     const mesh = new Mesh(surfaceToBufferGeometry(surface), material);
     mesh.matrixAutoUpdate = false;
     mesh.matrix.copy(model.instance.matrixWorld);
@@ -1580,7 +1591,8 @@ export default class SegEditorSurfaceView extends Component {
 
   _showGhost(model, edit) {
     // The original surface of the edited region, as a faint wireframe behind the preview, so the
-    // result can be compared with what it replaces (ohif-viewers#148, FR-2)
+    // result can be compared with what it replaces (ohif-viewers#148, FR-2). It is drawn through
+    // the preview mesh but under the change overlay, and kept dim so the overlay stands out.
     this._removeGhost();
     const cells = edit.selected;
     if (!cells?.length || !this.api?.scene || !model?.instance) {
@@ -1608,7 +1620,7 @@ export default class SegEditorSurfaceView extends Component {
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(Float32Array.from(positions), 3));
     geometry.setIndex(new BufferAttribute(Uint32Array.from(edges), 1));
-    const material = new LineBasicMaterial({ color: GHOST_COLOR, transparent: true, opacity: 0.35, depthTest: false });
+    const material = new LineBasicMaterial({ color: GHOST_COLOR, transparent: true, opacity: GHOST_OPACITY, depthTest: false, depthWrite: false });
     this._ghost = new LineSegments(geometry, material);
     this._ghost.renderOrder = 1;
     this._ghost.matrixAutoUpdate = false;
@@ -1725,32 +1737,39 @@ export default class SegEditorSurfaceView extends Component {
     }
   }
 
-  _showPatchTint(model, after) {
-    this._removePatchTint();
-    const offset = after.patchPolysOffset;
-    if (!this.api?.scene || !model?.instance || !(offset < after.polys.length)) {
+  _showChangeOverlay(model, edit) {
+    this._removeChangeOverlay();
+    if (!this.api?.scene || !model?.instance) {
       return;
     }
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new BufferAttribute(Float32Array.from(after.points), 3));
-    geometry.setIndex(new BufferAttribute(polysToTriangles(after.polys.subarray(offset)), 1));
-    const material = new MeshBasicMaterial({
-      color: PATCH_TINT_COLOR, transparent: true, opacity: 0.6, depthTest: true,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    const overlay = createChangeOverlay({
+      points: edit.after.points, triangles: changedTriangles(edit), color: getPreviewColor(),
     });
-    this._patchTint = new Mesh(geometry, material);
-    this._patchTint.renderOrder = 1;
-    this._patchTint.matrixAutoUpdate = false;
-    this._patchTint.matrix.copy(model.instance.matrixWorld);
-    this.api.scene.add(this._patchTint);
+    if (!overlay) {
+      return;
+    }
+    overlay.matrixAutoUpdate = false;
+    overlay.matrix.copy(model.instance.matrixWorld);
+    this._changeOverlay = overlay;
+    this.api.scene.add(overlay);
   }
 
-  _removePatchTint() {
-    if (this._patchTint) {
-      this._patchTint.parent?.remove(this._patchTint);
-      this._patchTint.geometry.dispose();
-      this._patchTint.material.dispose();
-      this._patchTint = null;
+  _updateChangeOverlay(edit) {
+    if (this._changeOverlay) {
+      updateChangeOverlay(this._changeOverlay, { points: edit.after.points, triangles: changedTriangles(edit) });
+    }
+  }
+
+  _onPreviewColor = color => {
+    if (this._changeOverlay) {
+      setChangeOverlayColor(this._changeOverlay, color);
+    }
+  };
+
+  _removeChangeOverlay() {
+    if (this._changeOverlay) {
+      disposeChangeOverlay(this._changeOverlay);
+      this._changeOverlay = null;
     }
   }
 
@@ -1822,6 +1841,7 @@ export default class SegEditorSurfaceView extends Component {
     c3dEventTarget.addEventListener(Events.SEGMENTATION_DATA_MODIFIED, this._onLabelmapModified);
     this._unsubscribers.push(
       subscribe3DToolState(this._apply3DToolState),
+      subscribePreviewColor(this._onPreviewColor),
       handle3DToolRequest('deleteSelection', () => this.deleteSelectedPoints()),
       handle3DToolRequest('smoothSelection', () => this.smoothSelection()),
       handle3DToolRequest('clearSelection', () => this.clearSelection()),

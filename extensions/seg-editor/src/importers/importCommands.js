@@ -9,19 +9,27 @@
 // Each source becomes an import payload (importers/*) that importIntoSegmentation numbers and
 // writes; what was added, and what was empty or overlapped, is reported through the
 // notification service. A failure is logged and shown, and leaves the segmentation as it was.
+// STL files carry no unit: a model that does not look like millimetres against the image is
+// offered for rescaling before it is placed (stlScale.js). The check needs an image calibrated in
+// millimetres; on one without pixel spacing the grid's steps say nothing about a model's unit.
 
 import OHIF from '@ohif/core';
 import { isSTLDisplaySet, setActionStatus } from '@ohif/extension-viewerm3d';
 import i18n from '@ohif/i18n';
 
+import { callConfirmDialog } from '../components/confirmDialog';
+import { volumeAxes } from '../threeDTools/labelmapCarve.js';
+import { getLabelmapForEdit } from '../threeDTools/segmentEdits.js';
 import { getSegEditorToolContext } from '../toolbox/segEditorToolContext';
+import { getSegEditorUnits, LENGTH_UNITS } from '../utils/segEditorUnits';
 
 import { createStudyFrameResolver, parseDicomSeg } from './dicomSeg.js';
-import { importIntoSegmentation } from './labelmapImport.js';
+import { importIntoSegmentation, labelmapWorldBounds } from './labelmapImport.js';
 import { parseNifti } from './nifti.js';
 import { parseNrrd } from './nrrd.js';
 import { pickLocalFiles } from './pickLocalFiles.js';
 import { modelsFromM3DSeries, modelsFromStlFiles } from './stlModels.js';
+import { modelsNeedingRescale, rescaleModel } from './stlScale.js';
 
 
 const { DisplaySetApi } = OHIF.display;
@@ -60,6 +68,17 @@ export function formatBounds(bounds) {
   }
   const mm = value => Math.round(value);
   return ['x', 'y', 'z'].map((axis, d) => `${axis} ${mm(bounds.min[d])} to ${mm(bounds.max[d])}`).join(', ') + ' mm';
+}
+
+/** A length for a message: three significant figures, without trailing zeros ('0.3', '1200'). */
+export function formatLength(value) {
+  return String(Number(Number(value).toPrecision(3)));
+}
+
+/** The world bounds of a segmentation's labelmap grid, or null when it is not available. */
+function _imageBounds(segmentationId) {
+  const labelmap = getLabelmapForEdit(segmentationId);
+  return labelmap ? labelmapWorldBounds({ dimensions: labelmap.dimensions, axes: volumeAxes(labelmap.indexToWorld) }) : null;
 }
 
 function _toArrayBuffer(bytes) {
@@ -103,6 +122,15 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
     isImportable = isImportableSeries,
     // What the import is doing, shown over the editor's 3D view (keyed by the working segmentation)
     setStatus = setActionStatus,
+    // The image grid's bounds, which an STL model's scale is judged against, and the units they
+    // are in (the check runs only on a grid calibrated in millimetres)
+    getImageBounds = _imageBounds,
+    getUnits = getSegEditorUnits,
+    // Asks how models that do not look like millimetres are imported: 'confirm' (rescale),
+    // 'alternate' (as they are) or 'cancel'
+    askRescale = options => callConfirmDialog({
+      uiDialogService: servicesManager?.services?.UIDialogService, ...options,
+    }),
   } = deps;
 
   const notify = options => servicesManager?.services?.UINotificationService?.show(options);
@@ -216,6 +244,63 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
     }
   }
 
+  /**
+   * STL models with the scale the user chose: each group of models that looks to be in another
+   * unit than millimetres is offered for rescaling. Resolves undefined when the user cancels.
+   */
+  async function _checkStlScale(title, segmentationId, payload, status) {
+    if (getUnits().length !== LENGTH_UNITS.mm) {
+      notify({
+        type: 'info',
+        title,
+        message: t('The image has no pixel spacing, so the scale of the models could not be checked. They are placed as read, in the image grid\'s units.'),
+      });
+      return payload;
+    }
+    let imageBounds = null;
+    try {
+      imageBounds = getImageBounds(segmentationId);
+    } catch (error) {
+      console.warn('[SegEditor-import] The image bounds are not available; the STL scale is not checked', error);
+    }
+    if (!imageBounds) {
+      return payload;
+    }
+    const rescaled = new Map();
+    for (const { suggestion, models } of modelsNeedingRescale(payload.models, imageBounds)) {
+      const names = models.map(model => model.label).join(', ');
+      // The dialog asks over the view: no status behind it
+      status(null);
+      const answer = await askRescale({
+        id: 'seg-editor-stl-scale',
+        title: t('Check the model scale'),
+        message: t('{{models}} may be in {{unit}} rather than millimetres. Read as millimetres, it is {{extent}} mm across and does not fit the image ({{image}} mm across). Rescaled from {{unit}}, it is {{scaled}} mm across.', {
+          models: names,
+          unit: t(suggestion.name),
+          extent: formatLength(suggestion.extent),
+          image: formatLength(Math.max(...[0, 1, 2].map(d => imageBounds.max[d] - imageBounds.min[d]))),
+          scaled: formatLength(suggestion.scaledExtent),
+        }),
+        confirmText: t('Rescale from {{unit}}', { unit: suggestion.unit }),
+        alternateText: t('Import as-is'),
+        cancelText: t('Cancel'),
+      });
+      if (answer === 'cancel' || answer === false) {
+        return undefined;
+      }
+      if (answer === 'confirm' || answer === true) {
+        models.forEach(model => rescaled.set(model, suggestion.factor));
+      }
+    }
+    if (!rescaled.size) {
+      return payload;
+    }
+    return {
+      ...payload,
+      models: payload.models.map(model => (rescaled.has(model) ? rescaleModel(model, rescaled.get(model)) : model)),
+    };
+  }
+
   const importingModels = (title, count) => notify({
     type: 'info', title, message: t('Importing {{count}} model(s)...', { count }),
   });
@@ -230,7 +315,7 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
         }
         importingModels(title, files.length);
         status(t('Reading {{count}} file(s)...', { count: files.length }));
-        return readStlFiles(files);
+        return _checkStlScale(title, workingSegmentationId(), await readStlFiles(files), status);
       });
     },
 

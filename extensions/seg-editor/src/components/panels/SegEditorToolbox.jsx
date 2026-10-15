@@ -1,14 +1,17 @@
 // The Segmentation Editor's toolbox: OHIF v3's Toolbox (extensions/cornerstone/src/utils/Toolbox.tsx)
 // without its collapsible section. The palettes sit inside the Segmentation Editor section of the
 // panel, which collapses them together with the segment list; a second level of collapsing would
-// only hide the tools. The inner markup is the Toolbox's, so the palette's styling applies.
+// only hide the tools. The inner markup is the Toolbox's, so the palette's styling applies. The
+// active tool's options are drawn as cards (ToolOptionCards) rather than with v3's ToolSettings.
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { useActiveToolOptions, useSystem, useToolbar } from '@ohif/core';
-import { Icons, ToolSettings } from '@ohif/ui-next';
+import { Icons } from '@ohif/ui-next';
+
+import ToolOptionCards from '../../toolbarComponents/ToolOptionCards';
 
 
 export default function SegEditorToolbox({ buttonSectionId, title }) {
@@ -21,7 +24,10 @@ export default function SegEditorToolbox({ buttonSectionId, title }) {
   const { toolbarButtons: toolboxSections, onInteraction } = useToolbar({
     buttonSection: buttonSectionId,
   });
-  const { activeToolOptions } = useActiveToolOptions({ buttonSectionId });
+  const { activeToolOptions, activeToolButtonId } = useActiveToolOptions({ buttonSectionId });
+  const activeToolLabel = activeToolButtonId
+    ? toolbarService.getButtonProps(activeToolButtonId)?.label
+    : undefined;
 
   if (!toolboxSections.length) {
     return null;
@@ -83,7 +89,7 @@ export default function SegEditorToolbox({ buttonSectionId, title }) {
         })}
         {activeToolOptions && (
           <div className="bg-muted mt-1 h-auto px-2">
-            <ToolSettings options={activeToolOptions} />
+            <ToolOptionCards title={activeToolLabel} options={activeToolOptions} />
           </div>
         )}
       </div>

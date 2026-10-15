@@ -134,6 +134,15 @@ jest.mock('../threeDTools/deleteSelection', () => ({
   cutAndPatch: jest.fn(),
   repairSurface: jest.fn(),
 }));
+// The preview colour is a user preference (@ohif/core); the tests set it here
+const mockPreviewColor = { value: '#ff8500', listeners: new Set() };
+jest.mock('../utils/previewColor', () => ({
+  getPreviewColor: () => mockPreviewColor.value,
+  subscribePreviewColor: listener => {
+    mockPreviewColor.listeners.add(listener);
+    return () => mockPreviewColor.listeners.delete(listener);
+  },
+}));
 jest.mock('../threeDTools/surfaceEdits', () => ({
   SURFACE_CHANGED_REQUEST: 'surfaceChanged',
   setCachedSurface: jest.fn(),
@@ -565,11 +574,11 @@ describe('SegEditorSurfaceView 3D tools', () => {
     expect(api.setMouseActions).toHaveBeenCalledWith(expect.objectContaining({ left: 'none' }));
 
     // Hovering over the target shows the brush there, at the brush radius
-    set3DToolOption('paintRadius', 7);
+    set3DToolOption('paintRadius', 3);
     raycastSurfaces.mockReturnValueOnce(hitOn(target.instance));
     view._brushHit([0, 0]);
     expect(view._brush.visible).toBe(true);
-    expect(view._brush.scale.x).toBe(7);
+    expect(view._brush.scale.x).toBe(3);
     expect(api.scene.add).toHaveBeenCalledWith(view._brush);
     // Over another mesh, or nothing, it hides
     raycastSurfaces.mockReturnValueOnce(hitOn(other.instance));
@@ -583,7 +592,7 @@ describe('SegEditorSurfaceView 3D tools', () => {
     raycastSurfaces.mockReturnValueOnce(hitOn(target.instance, 0));
     collectTrianglesInSphere.mockReturnValueOnce([0, 1]);
     await view.selectWithBrush([0, 0], { erase: false });
-    expect(collectTrianglesInSphere).toHaveBeenCalledWith(expect.objectContaining({ center: [1, 0, 0], radius: 7 }));
+    expect(collectTrianglesInSphere).toHaveBeenCalledWith(expect.objectContaining({ center: [1, 0, 0], radius: 3 }));
     expect([...view._selection].sort()).toEqual([0, 1, 4]);
     expect(get3DToolState()).toMatchObject({ selectionCount: 3, selectionPoints: 3, selectionRegions: 1 });
     view._onStrokeEnd();
@@ -930,8 +939,17 @@ describe('SegEditorSurfaceView 3D tools', () => {
       expect(get3DToolState().preview).toEqual({
         points: 1, holes: 1, methods: { fitted: 1 }, closed: true, openEdges: 0, repair: false,
       });
-      expect(view._patchTint).not.toBeNull();
-      expect(api.scene.add).toHaveBeenCalledWith(view._patchTint);
+      expect(view._changeOverlay).not.toBeNull();
+      expect(api.scene.add).toHaveBeenCalledWith(view._changeOverlay);
+      // The new patch faces, as faces, edges and vertices in the preview colour (Blender orange)
+      const faces = view._changeOverlay.getObjectByName('faces');
+      expect(faces.material.color.getHexString()).toBe('ff8500');
+      expect(view._changeOverlay.getObjectByName('vertices').geometry.getAttribute('position').count).toBeGreaterThan(0);
+      // The preview mesh is pushed back, so the overlay's edges and vertices show on its surface
+      expect(view._previewMesh.mesh.material.polygonOffsetFactor).toBe(1);
+      // A colour picked while the preview is up recolours it
+      mockPreviewColor.listeners.forEach(listener => listener('#33aaff'));
+      expect(faces.material.color.getHexString()).toBe('33aaff');
       // No further edit while the preview is up
       expect(get3DToolState().busy).toBe(false);
       expect(await view.deleteSelectedPoints()).toBe(false);
@@ -947,7 +965,7 @@ describe('SegEditorSurfaceView 3D tools', () => {
       expect(queueSurfaceEditWrite).toHaveBeenCalledTimes(1);
       expect(get3DToolState().preview).toBeNull();
       expect(get3DToolState().lastEdit).toMatchObject({ holes: 1, closed: true });
-      expect(view._patchTint).toBeNull();
+      expect(view._changeOverlay).toBeNull();
       expect(view._previewMesh).toBeNull();
     });
 
@@ -1029,7 +1047,7 @@ describe('SegEditorSurfaceView 3D tools', () => {
         expect(queueSurfaceEditWrite).not.toHaveBeenCalled();
         expect(listeners.has('keydown')).toBe(false);
         expect(get3DToolState().preview).toBeNull();
-        expect(view._patchTint).toBeNull();
+        expect(view._changeOverlay).toBeNull();
         expect(view._ghost).toBeNull();
         expect(view._previewMesh).toBeNull();
       } finally {
@@ -1043,6 +1061,9 @@ describe('SegEditorSurfaceView 3D tools', () => {
 
       expect(view._ghost).not.toBeNull();
       expect(api.scene.add).toHaveBeenCalledWith(view._ghost);
+      // Faint and drawn under the change overlay, so the overlay is what stands out
+      expect(view._ghost.material.opacity).toBeLessThanOrEqual(0.15);
+      expect(view._ghost.renderOrder).toBeLessThan(view._changeOverlay.children[0].renderOrder);
 
       request3DToolAction('cancelPreview');
       expect(view._ghost).toBeNull();
@@ -1104,7 +1125,7 @@ describe('SegEditorSurfaceView 3D tools', () => {
       const { view, notify, geometryId } = previewed();
       await view.deleteSelectedPoints();
       expect(view._pendingEdit).not.toBeNull();
-      expect(view._patchTint).not.toBeNull();
+      expect(view._changeOverlay).not.toBeNull();
 
       const rebuilt = rebuild(view, geometryId);
       view._onSurfaceChanged();
@@ -1361,11 +1382,18 @@ describe('SegEditorSurfaceView 3D tools', () => {
       expect(recordSurfaceEdit).not.toHaveBeenCalled();
       expect(get3DToolState().preview).toEqual({ kind: 'smooth', points: 2 });
       expect([...view._selection]).toEqual([0, 2]); // kept across the moved surface
-      expect(view._patchTint).toBeNull();
+      // Every face the smooth moves is drawn in the preview colour, in place of the selection
+      // highlight: the moved point 0 is in all 6 faces, though only 2 are selected
+      const overlay = view._changeOverlay;
+      expect(overlay.children.map(part => part.name)).toEqual(['faces', 'edges', 'vertices']);
+      expect(overlay.getObjectByName('faces').geometry.index.count).toBe(6 * 3);
+      expect(view._highlight).toBeNull();
       expect(get3DToolState().busy).toBe(false);
       expect(view.state.deleteStep).toBeNull();
 
       expect(request3DToolAction('applyPreview')).toBe(true);
+      expect(view._changeOverlay).toBeNull();
+      expect(view._highlight).not.toBeNull(); // the kept selection is drawn again
       expect(setCachedSurface).toHaveBeenCalledWith(SEG, geometryId, expect.objectContaining({ polys: original.polys }), { keepSelection: true });
       expect(recordSurfaceEdit).toHaveBeenCalledTimes(1);
       const [memo] = queueSurfaceEditWrite.mock.calls[0];
@@ -1389,8 +1417,11 @@ describe('SegEditorSurfaceView 3D tools', () => {
       expect(smoothInWorker).toHaveBeenLastCalledWith(expect.objectContaining({
         options: { strength: 0.5, passes: 6, feather: true },
       }));
-      // The recompute updates the preview mesh only
+      // The recompute updates the preview mesh and its overlay only
       expect(shown.geometry.from).toBe(again.after.points);
+      expect([...view._changeOverlay.getObjectByName('faces').geometry.getAttribute('position').array])
+        .toContain(0.5); // the moved vertex
+      expect(view._changeOverlay.getObjectByName('faces').geometry.index.count).toBe(6 * 3);
       expect(setCachedSurface).not.toHaveBeenCalled();
       expect(get3DToolState().preview).toEqual({ kind: 'smooth', points: 3 });
 

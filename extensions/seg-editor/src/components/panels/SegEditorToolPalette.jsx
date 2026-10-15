@@ -4,16 +4,7 @@ import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
 import { Icon } from '@ohif/ui';
-import {
-  Icons,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@ohif/ui-next';
+import { Icons, Tabs, TabsContent, TabsList, TabsTrigger } from '@ohif/ui-next';
 
 import { SECTIONS, SEG_EDITOR_COMMAND_CONTEXT } from '../../toolbox/constants';
 
@@ -29,22 +20,21 @@ export const PALETTES = {
   threeD: '3d',
 };
 
-// Palette tabs are icons with a tooltip, as the OHIF v3 side panel tabs are. The Labelmap palette
-// uses v3's segmentation-panel icon; the 3D palette the cube the 2D MPR toolbar button uses (a
-// viewer icon, so it is drawn with the viewer's Icon).
+// Palette tabs, marked as the 3D tools' action row marks its actions (Remove / Smooth / Repair):
+// the active tab filled (the secondary button's surface) at full strength, the other ghosted and
+// muted. Each tab names its palette beside its icon: the Labelmap palette uses v3's
+// segmentation-panel icon; the 3D palette the cube the 2D MPR toolbar button uses (a viewer icon,
+// so it is drawn with the viewer's Icon).
 const PALETTE_TABS = [
   { value: PALETTES.labelmap, iconName: 'tab-segmentation', label: 'Labelmap Tools' },
   { value: PALETTES.threeD, legacyIconName: 'cube', label: '3D Tools' },
 ];
 
-// OHIF v3 SidePanel tab styling (getTabClassNames / getTabIconClassNames)
 const TAB_CLASSES =
-  'text-foreground bg-primary/10 hover:bg-primary/20 hover:text-primary h-[28px] w-[68px] ' +
-  'rounded-none p-0 first:rounded-l last:rounded-r data-[state=active]:shadow-none ' +
-  'data-[state=active]:bg-primary/10';
-const TAB_ICON_CLASSES =
-  'flex h-full w-full items-center justify-center group-data-[state=active]:bg-primary/20 ' +
-  'group-data-[state=active]:rounded';
+  'h-7 min-w-0 flex-1 gap-1.5 rounded px-2 text-xs font-normal shadow-none transition-colors ' +
+  'text-muted-foreground hover:bg-primary/25 hover:text-primary ' +
+  'data-[state=active]:bg-secondary/85 data-[state=active]:text-secondary-foreground ' +
+  'data-[state=active]:shadow-none data-[state=active]:hover:bg-secondary';
 
 
 function _initialPalette(displaySetInstanceUID, defaultPalette) {
@@ -84,32 +74,25 @@ export default function SegEditorToolPalette({
   return (
     <div className={`seg-editor-palette ${styles.palette ?? ''}`}>
       <Tabs value={palette} onValueChange={onPaletteChange} className="w-full">
-        <div className="bg-muted flex justify-center py-2">
-          <TabsList className="h-auto gap-[2px] rounded-none bg-transparent p-0 hover:bg-transparent">
+        <div className="bg-muted px-2 py-2">
+          <TabsList
+            className="flex h-auto w-full gap-1 rounded-none bg-transparent p-0 hover:bg-transparent"
+            aria-label={t('Tool palette')}
+          >
             {PALETTE_TABS.map(({ value, iconName, legacyIconName, label }) => (
-              <Tooltip key={value}>
-                <TooltipTrigger asChild>
-                  <TabsTrigger
-                    value={value}
-                    aria-label={t(label)}
-                    data-cy={`seg-editor-palette-${value}`}
-                    className={`group ${TAB_CLASSES}`}
-                  >
-                    <span className={TAB_ICON_CLASSES}>
-                      {legacyIconName ? (
-                        <Icon name={legacyIconName} className="text-primary" style={{ width: '20px', height: '20px' }} />
-                      ) : (
-                        <Icons.ByName
-                          name={iconName}
-                          className="text-primary"
-                          style={{ width: '22px', height: '22px' }}
-                        />
-                      )}
-                    </span>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{t(label)}</TooltipContent>
-              </Tooltip>
+              <TabsTrigger
+                key={value}
+                value={value}
+                data-cy={`seg-editor-palette-${value}`}
+                className={TAB_CLASSES}
+              >
+                {legacyIconName ? (
+                  <Icon name={legacyIconName} className="flex-none" style={{ width: '16px', height: '16px' }} />
+                ) : (
+                  <Icons.ByName name={iconName} className="flex-none" style={{ width: '18px', height: '18px' }} />
+                )}
+                <span className="truncate">{t(label)}</span>
+              </TabsTrigger>
             ))}
           </TabsList>
         </div>
