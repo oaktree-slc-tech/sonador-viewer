@@ -34,7 +34,7 @@ import TabFooterNG from '../TabFooterNG/TabFooterNG';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
 import styles from './GeneralTabNG.module.scss';
-import previewColorStyles from './PreviewColorOption.module.css';
+import previewColorStyles from './PreviewColorOption.module.scss';
 
 // Latch keys for the fields on this tab.
 const ARCHIVE_FIELD = 'archiveTransfer';
