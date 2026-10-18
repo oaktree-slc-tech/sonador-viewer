@@ -1,0 +1,13 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  aria-labelledby="title"
+  width="1em"
+  height="1em"
+  fill="currentColor"
+>
+  <title id="title">Dot Circle Paused</title>
+  <path fill-rule="evenodd" d="M176 16a160 160 0 1 1 0 320a160 160 0 1 1 0-320zm0 38a122 122 0 1 0 0 244a122 122 0 1 0 0-244zm0 60a62 62 0 1 1 0 124a62 62 0 1 1 0-124z"/>
+  <rect x="336" y="272" width="64" height="232" rx="14"/>
+  <rect x="440" y="272" width="64" height="232" rx="14"/>
+</svg>

@@ -27,13 +27,23 @@ const TOOLS = {
 }
 
 
+// Adjust control states while cropping is enabled (ohif-viewers#155 §3.1). ACTIVE: crop box
+// visible and holding the Primary binding. PAUSED: box visible, Rotate/Pan holds Primary.
+// OFF: box hidden, the volume stays cropped.
+const CROP_ADJUST = {
+  OFF: 'off',
+  ACTIVE: 'active',
+  PAUSED: 'paused',
+}
+
+
 const EVENTS = {
 
   // Volume Viewer Data Events
   VOLVIEWER_ACTIVATE_TOOL: 'api-event::vol-viewer::volume::tool-enable',
 
   // Tool activation-state changes. Payload: { tool: <TOOLS code>, displaySetInstanceUID,
-  // state: 'active' | 'inactive' | 'hidden' }. 'hidden' fires when a tool is force-disabled
+  // state: 'active' | 'inactive' | 'hidden', toolMode, adjustState: <CROP_ADJUST value> }. 'hidden' fires when a tool is force-disabled
   // because its dependency turned off (e.g. cropping when volume rendering is disabled).
   VOLVIEWER_TOOL_STATE: 'api-event::vol-viewer::volume::tool-state',
 
@@ -44,9 +54,9 @@ const EVENTS = {
 
 
 const Enums = {
-  VIEWPORT, ACTIVE_VIEWPORT, EVENTS, TOOLS,
+  VIEWPORT, ACTIVE_VIEWPORT, EVENTS, TOOLS, CROP_ADJUST,
   VOLVIEWER_ID, VOLVIEWER_RENDER_ID, VOLVIEWER_TOOLGROUP_ID, VOLVIEWER_VOI_SYNC_ID,
 }
 
 export default Enums;
-export { Enums, EVENTS, TOOLS };
+export { Enums, EVENTS, TOOLS, CROP_ADJUST };

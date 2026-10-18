@@ -36,12 +36,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     c3dAddTool(C3dTrackballRotateTool);
   }
 
-  const _triggerToolStateEvent = ({ tool, displaySetInstanceUID, state, toolMode }) => {
+  const _triggerToolStateEvent = ({ tool, displaySetInstanceUID, state, toolMode, adjustState }) => {
     // Broadcast a tool activation-state change so widgets and other components can synchronize
     // without polling tool groups (AR-4 on ohif-viewers#122). toolMode rides along on every
     // mode change (FR-9).
     DisplaySetApi.Instance.displaySetService.triggerApiEvent(VolViewerEnums.EVENTS.VOLVIEWER_TOOL_STATE, {
-      tool, displaySetInstanceUID, state, toolMode,
+      tool, displaySetInstanceUID, state, toolMode, adjustState,
     });
   };
 
@@ -61,10 +61,14 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
   const _publishToolMode = ({ toolMode, displaySetInstanceUID }) => {
     // Record the tool mode on the displaySet — volumeViewerToolMode drives the Rotate/Pan
-    // widget highlights and volumeCropSelectActive the Adjust widget — and broadcast the mode
+    // widget highlights and volumeCropAdjustState the Adjust widget — and broadcast the mode
     // change through the tool-state event (FR-9). The mode widgets are all attribute-driven so
     // their active states stay mutually exclusive regardless of whether the mode changed via a
     // toolbar click, a command, or the FR-9 auto-transitions.
+    //
+    // Entering select makes Adjust ACTIVE; leaving it while ACTIVE pauses it. OFF is only set
+    // explicitly (Adjust toggle, cropping deactivation). The last navigation mode is kept in
+    // volumeCropReturnMode so turning Adjust off hands Primary back to it.
 
     if (!displaySetInstanceUID) {
       return;
@@ -84,8 +88,22 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     }
 
     const selectActive = _mode == VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT;
-    if (!_.isNil(_ds.volumeCropSelectActive) && !!_ds.volumeCropSelectActive !== selectActive) {
-      _ds.volumeCropSelectActive = selectActive;
+    if (!_.isNil(_ds.volumeCropAdjustState)) {
+      let _adjust = _ds.volumeCropAdjustState;
+      if (selectActive) {
+        _adjust = VolViewerEnums.CROP_ADJUST.ACTIVE;
+      } else if (_adjust == VolViewerEnums.CROP_ADJUST.ACTIVE) {
+        _adjust = VolViewerEnums.CROP_ADJUST.PAUSED;
+      }
+
+      if (_adjust !== _ds.volumeCropAdjustState) {
+        _ds.volumeCropAdjustState = _adjust;
+        changed = true;
+      }
+    }
+
+    if (!selectActive && !_.isNil(_ds.volumeCropReturnMode) && _ds.volumeCropReturnMode !== _mode) {
+      _ds.volumeCropReturnMode = _mode;
       changed = true;
     }
 
@@ -96,8 +114,34 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     _triggerToolStateEvent({
       tool: VolViewerEnums.TOOLS.VOLVIEWER_TOOL_CROP, displaySetInstanceUID,
       state: _ds.volumeCroppingEnabled === true ? 'active' : 'inactive',
-      toolMode: _mode,
+      toolMode: _mode, adjustState: _ds.volumeCropAdjustState,
     });
+  };
+
+  const _returnToolMode = (_ds) => {
+    // Navigation mode that takes Primary back when Adjust is turned off or cropping ends
+    const _mode = _ds?.volumeCropReturnMode;
+    return (_mode && _mode != VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT)
+      ? _mode : VolViewerEnums.TOOLS.VOLVIEWER_TOOL_DEFAULT;
+  };
+
+  const _applyCropHandlesVisibility = (volumeTools, displaySetInstanceUID) => {
+    // Show the crop box handles unless Adjust is OFF. Re-applied after every mode change:
+    // setToolActive and setClippingPlanesVisible(true) both reset handle visibility.
+
+    const croppingTool = volumeTools.getToolInstance(C3dVolumeCroppingTool.toolName);
+    if (!croppingTool?.sphereStates?.length || croppingTool.mode === c3dToolsEnums.ToolModes.Disabled) {
+      return;
+    }
+
+    const _ds = displaySetInstanceUID
+      ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID) : undefined;
+    const visible = _ds?.volumeCroppingEnabled === true
+      && _ds.volumeCropAdjustState !== VolViewerEnums.CROP_ADJUST.OFF;
+
+    if (croppingTool.getHandlesVisible() !== visible) {
+      croppingTool.setHandlesVisible(visible);
+    }
   };
 
   const actions = {
@@ -172,7 +216,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         if (toolMode == VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT && displaySetInstanceUID) {
           const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
           if (_ds?.volumeCroppingEnabled !== true) {
-            toolMode = VolViewerEnums.TOOLS.VOLVIEWER_TOOL_DEFAULT;
+            toolMode = _returnToolMode(_ds);
           }
         }
 
@@ -200,7 +244,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
             ]
           });
 
-          // Handles stay visible but receive no input outside select
+          // Handles receive no input outside select
           _parkCroppingToolInput(volumeTools);
 
         } else if (toolMode == VolViewerEnums.TOOLS.VOLVIEWER_TOOL_PAN) {
@@ -212,7 +256,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
             ]
           });
 
-          // Handles stay visible but receive no input outside select
+          // Handles receive no input outside select
           _parkCroppingToolInput(volumeTools);
 
         } else if (toolMode == VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT) {
@@ -248,6 +292,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
         // Publish the mode change: widget state on the displaySet + tool-state event (FR-9)
         _publishToolMode({ toolMode, displaySetInstanceUID });
+        _applyCropHandlesVisibility(volumeTools, displaySetInstanceUID);
       }
     },
 
@@ -327,14 +372,18 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         return;
       }
 
-      // Revert select to default before disabling (FR-9): the signal handler runs synchronously,
-      // restoring the navigation bindings on Primary and clearing volumeCropSelectActive while
+      // Turn Adjust off and revert select to the navigation mode before disabling (FR-9): the
+      // signal handler runs synchronously, restoring the navigation bindings on Primary while
       // the cropping tool still exists in an active state.
       const _ds = displaySetInstanceUID
         ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID) : undefined;
-      if (_ds?.volumeCropSelectActive) {
+      if (_ds && !_.isNil(_ds.volumeCropAdjustState) && _ds.volumeCropAdjustState !== VolViewerEnums.CROP_ADJUST.OFF) {
+        _ds.volumeCropAdjustState = VolViewerEnums.CROP_ADJUST.OFF;
+        DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+      }
+      if (_ds?.volumeViewerToolMode == VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT) {
         DisplaySetApi.Instance.displaySetService.triggerApiEvent(VolViewerEnums.EVENTS.VOLVIEWER_ACTIVATE_TOOL, {
-          displaySetInstanceUID, tool: VolViewerEnums.TOOLS.VOLVIEWER_TOOL_DEFAULT,
+          displaySetInstanceUID, tool: _returnToolMode(_ds),
         });
       }
 
@@ -353,6 +402,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       _triggerToolStateEvent({
         tool: VolViewerEnums.TOOLS.VOLVIEWER_TOOL_CROP, displaySetInstanceUID, state,
+        adjustState: _ds?.volumeCropAdjustState,
       });
     },
 
@@ -438,6 +488,37 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         VolViewerEnums.EVENTS.VOLVIEWER_ACTIVATE_TOOL, {
           displaySetInstanceUID: viewportData.displaySetInstanceUID,
           tool: VolViewerEnums.TOOLS.VOLVIEWER_TOOL_SELECT,
+        });
+    },
+
+    toggleVolumeCropAdjust: ({ viewports }) => {
+      // Toolbar entry point for Adjust (ohif-viewers#155 §3.2): ACTIVE turns the crop box off
+      // and hands Primary back to the navigation mode; PAUSED and OFF (re-)enter select.
+
+      const { activeViewportIndex, viewportSpecificData } = viewports;
+      const viewportData = viewportSpecificData[activeViewportIndex];
+      if (!viewportData?.displaySetInstanceUID) {
+        return;
+      }
+
+      const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(viewportData.displaySetInstanceUID);
+      if (_ds?.volumeCroppingEnabled !== true) {
+        return;
+      }
+
+      if (_ds.volumeCropAdjustState !== VolViewerEnums.CROP_ADJUST.ACTIVE) {
+        actions.enableVolumeSelectTool({ viewports });
+        return;
+      }
+
+      // OFF is recorded before the mode change so the handles hide as part of it
+      _ds.volumeCropAdjustState = VolViewerEnums.CROP_ADJUST.OFF;
+      DisplaySetApi.Instance.displaySetService.addDisplaySets([_ds]);
+
+      DisplaySetApi.Instance.displaySetService.triggerApiEvent(
+        VolViewerEnums.EVENTS.VOLVIEWER_ACTIVATE_TOOL, {
+          displaySetInstanceUID: _ds.displaySetInstanceUID,
+          tool: _returnToolMode(_ds),
         });
     },
 
@@ -527,6 +608,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     enableVolumeSelectTool: {
       commandFn: actions.enableVolumeSelectTool,
+      storeContexts: ['viewports'],
+      options: {},
+    },
+    toggleVolumeCropAdjust: {
+      commandFn: actions.toggleVolumeCropAdjust,
       storeContexts: ['viewports'],
       options: {},
     },
