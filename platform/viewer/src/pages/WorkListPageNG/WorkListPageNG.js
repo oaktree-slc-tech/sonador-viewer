@@ -47,7 +47,7 @@ export default function WorkListPageNG() {
     setWorkListColumnOrder,
   } = useStudiesTableFiltersAndColumnsStore();
 
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(search?.trim(), 500);
 
   const {
     debouncedSort,

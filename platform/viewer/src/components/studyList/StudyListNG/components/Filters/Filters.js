@@ -92,10 +92,12 @@ export default function Filters({
   const defaultEndDate = getDateEntryFromRange(today, appConfig.studyListDateFilterNumDays, 'end');
   const { search = '' } = qs.parse(location.search.replace('?', ''));
 
+  // Encode the value: a raw trailing space is stripped when the URL is parsed (so a space could
+  // never be typed), and characters such as `&`, `#` or `+` would be read back as something else.
   const handleChangeSearch = (event) => {
     navigate({
       pathname: location.pathname,
-      search: event.target.value ? `search=${event.target.value}` : undefined,
+      search: event.target.value ? qs.stringify({ search: event.target.value }) : undefined,
     });
   };
 

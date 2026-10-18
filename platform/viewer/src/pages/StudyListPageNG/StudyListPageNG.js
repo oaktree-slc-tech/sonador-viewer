@@ -46,7 +46,7 @@ export default function StudyListPageNG() {
     setAllStudiesColumnOrder,
   } = useStudiesTableFiltersAndColumnsStore();
 
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(search?.trim(), 500);
   const debouncedFilters = useDebounce(studyListPageFilters, 500);
 
   const {

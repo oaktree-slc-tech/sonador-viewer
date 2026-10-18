@@ -45,7 +45,7 @@ export default function SharedWithMePageNG() {
     setSharedColumnOrder,
   } = useStudiesTableFiltersAndColumnsStore();
 
-  const debouncedSearch = useDebounce(search, 500);
+  const debouncedSearch = useDebounce(search?.trim(), 500);
   const debouncedFilters = useDebounce(sharedWithMePageFilters, 500);
 
   const {
