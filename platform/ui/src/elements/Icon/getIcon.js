@@ -36,6 +36,7 @@ import cube3dSolid from './icons/cube-3d-solid.svg';
 import tags from './icons/tags.svg';
 import database from './icons/database.svg';
 import dotCircle from './icons/dot-circle.svg';
+import dotCirclePaused from './icons/dot-circle-paused.svg';
 import edit from './icons/edit.svg';
 import ellipseCircle from './icons/ellipse-circle.svg';
 import ellipseH from './icons/ellipse-h.svg';
@@ -125,6 +126,7 @@ const ICONS = {
   viewer3d01,
   crosshairs,
   'dot-circle': dotCircle,
+  'dot-circle-paused': dotCirclePaused,
   'angle-left': angleLeft,
   '3d-rotate': d3Rotate,
   plus,

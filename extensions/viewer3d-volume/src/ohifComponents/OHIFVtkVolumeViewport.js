@@ -15,7 +15,7 @@ import {
 import { eventTypes as uiEvents } from "@ohif/ui";
 
 import ConnectedVTKVolumeViewport from "../connectedComponents/ConnectedVTKVolumeViewport.js";
-import { TOOLS as VolViewerTools } from '../enums';
+import { TOOLS as VolViewerTools, CROP_ADJUST as VolViewerCropAdjust } from '../enums';
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -110,7 +110,8 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
 
             displaySet.imageVolumeRenderingEnabled = imageVolumeRenderingEnabled;
             displaySet.volumeCroppingEnabled = false;
-            displaySet.volumeCropSelectActive = false;
+            displaySet.volumeCropAdjustState = VolViewerCropAdjust.OFF;
+            displaySet.volumeCropReturnMode = VolViewerTools.VOLVIEWER_TOOL_DEFAULT;
             displaySet.volumeViewerToolMode = VolViewerTools.VOLVIEWER_TOOL_DEFAULT;
             displaySet.stableViewport = true;
 
@@ -284,7 +285,8 @@ class OHIFVtkVolumeViewport extends OHIFVtkBaseViewport {
           _ds.imageVolumeRenderingEnabled = undefined;
           _ds.segmentationSurfaceEnabled = undefined;
           _ds.volumeCroppingEnabled = undefined;
-          _ds.volumeCropSelectActive = undefined;
+          _ds.volumeCropAdjustState = undefined;
+          _ds.volumeCropReturnMode = undefined;
           _ds.volumeViewerToolMode = undefined;
           _ds.segmentationId = undefined;
           _ds.stableViewport = false;

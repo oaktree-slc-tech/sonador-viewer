@@ -4,7 +4,7 @@ import Viewer3DCTToolbarButton from './toolbarComponents/Viewer3DToolbarButton';
 import ViewerImageRenderingEnabledToolbarButton from './toolbarComponents/ViewerImageRenderingEnabledToolbarButton';
 import ViewerSegmentationSurfaceEnabledToolbarButton from './toolbarComponents/ViewerSegmentationSurfaceEnabledToolbarButton';
 import ViewerVolumeCroppingToolbarButton from './toolbarComponents/ViewerVolumeCroppingToolbarButton';
-import ViewerVolumeCropSelectToolbarButton from './toolbarComponents/ViewerVolumeCropSelectToolbarButton';
+import ViewerVolumeCropAdjustToolbarButton from './toolbarComponents/ViewerVolumeCropAdjustToolbarButton';
 import ViewerVolumeRotateToolbarButton from './toolbarComponents/ViewerVolumeRotateToolbarButton';
 import ViewerVolumePanToolbarButton from './toolbarComponents/ViewerVolumePanToolbarButton';
 
@@ -93,14 +93,14 @@ const definitions = [
     commandOptions: {},
   },
   {
-    // Select ("Adjust") mode: crop-handle interaction on the Primary binding. Hidden unless
-    // cropping is enabled; active state tracks displaySet.volumeCropSelectActive.
+    // Adjust: shows/hides the crop box and gives it the Primary binding. Hidden unless cropping
+    // is enabled; state tracks displaySet.volumeCropAdjustState (active / paused / off).
     id: 'CTVolumeCropSelect',
     label: 'Adjust',
     icon: 'dot-circle',
-    CustomComponent: ViewerVolumeCropSelectToolbarButton,
+    CustomComponent: ViewerVolumeCropAdjustToolbarButton,
     type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'enableVolumeSelectTool',
+    commandName: 'toggleVolumeCropAdjust',
     commandOptions: {},
   },
   {

@@ -285,7 +285,7 @@ class Cornerstone3DVolumeViewport extends Cornerstone3DLabelmapBaseView {
   activateTools(mode) {
     // Activate viewport tools. Binding changes are delegated to the central command
     // (which deactivates before applying the new mode, publishes the mode through the
-    // tool-state event, and keeps the select-widget displaySet state current); tool-mode
+    // tool-state event, and keeps the Adjust widget displaySet state current); tool-mode
     // state tracking and the re-render remain viewport concerns.
 
     const component = this;
