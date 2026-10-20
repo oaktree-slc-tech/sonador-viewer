@@ -350,6 +350,89 @@ describe('toLegacyImage', () => {
     expect(image.intercept).toBe(0);
   });
 
+  // Color layout, the other place the two stacks' contracts differ.
+  //
+  // A 2x2 RGB frame as the Cornerstone3D loader leaves it (`useRGBA` false): three bytes a pixel.
+  function rgbFrame() {
+    const rgb = new Uint8Array([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
+    return {
+      ...makeC3dImage('wadors:sc/1', rgb),
+      color: true,
+      rgba: false,
+      minPixelValue: 10,
+      maxPixelValue: 120,
+      windowWidth: undefined,
+      windowCenter: undefined,
+    };
+  }
+
+  it('hands the legacy stack color pixels four bytes a pixel, which is how it indexes them', () => {
+    // The renderer and cornerstone-tools' getRGBPixels both step by four. Read at that stride, a
+    // three-byte frame repeats in strips, bands, and runs out three quarters of the way down.
+    const image = toLegacyImage(rgbFrame(), 'wadors:sc/1');
+
+    expect(image.rgba).toBe(true);
+    expect(Array.from(image.getPixelData())).toEqual([
+      10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255,
+    ]);
+  });
+
+  it('leaves the Cornerstone3D image and its three-byte array untouched', () => {
+    const c3dImage = rgbFrame();
+    const rgb = c3dImage.getPixelData();
+    const image = toLegacyImage(c3dImage, 'wadors:sc/1');
+
+    image.getPixelData();
+
+    expect(c3dImage.getPixelData()).toBe(rgb);
+    expect(rgb).toHaveLength(12);
+    expect(c3dImage.rgba).toBe(false);
+    expect(c3dImage.windowWidth).toBeUndefined();
+    expect(Object.getPrototypeOf(image)).toBe(c3dImage);
+  });
+
+  it('expands once, on first read, and hands back the same array after that', () => {
+    const c3dImage = rgbFrame();
+    const getRgb = jest.spyOn(c3dImage, 'getPixelData');
+    const image = toLegacyImage(c3dImage, 'wadors:sc/1');
+    const callsBeforeRead = getRgb.mock.calls.length;
+
+    const first = image.getPixelData();
+
+    expect(image.getPixelData()).toBe(first);
+    expect(getRgb.mock.calls.length).toBe(callsBeforeRead + 1);
+  });
+
+  it('gives color the window the old loader did, since the legacy color LUT has no fallback', () => {
+    const image = toLegacyImage(rgbFrame(), 'wadors:sc/1');
+
+    expect(image.windowWidth).toBe(255);
+    expect(image.windowCenter).toBe(127);
+  });
+
+  it('leaves a frame that is already RGBA alone', () => {
+    const rgbaFrame = {
+      ...makeC3dImage('wadors:sc/2', new Uint8Array(16)),
+      color: true,
+      rgba: true,
+    };
+
+    expect(toLegacyImage(rgbaFrame, 'wadors:sc/2')).toBe(rgbaFrame);
+  });
+
+  it('does not guess at a color frame whose length is not three bytes a pixel', () => {
+    const odd = { ...makeC3dImage('wadors:sc/3', new Uint8Array(10)), color: true, rgba: false };
+
+    expect(toLegacyImage(odd, 'wadors:sc/3')).toBe(odd);
+  });
+
+  it('leaves grayscale pixels shared, not copied', () => {
+    const gray = makeC3dImage('wadors:mr/2');
+    const image = toLegacyImage(gray, 'wadors:mr/2');
+
+    expect(image.getPixelData()).toBe(gray.getPixelData());
+  });
+
   it('rejects an image the legacy cache would choke on later', () => {
     // The legacy cache throws on a missing sizeInBytes inside a promise callback, where the
     // imageId is out of scope; failing here names the image instead.
