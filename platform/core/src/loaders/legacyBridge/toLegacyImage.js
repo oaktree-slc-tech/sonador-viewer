@@ -10,9 +10,9 @@
 // and held once. Anything that rebuilt the object would silently reintroduce the second copy this
 // phase exists to remove.
 //
-// One field pair does have to be reconciled, because the two stacks read it differently, and that
-// is the one case where the legacy side gets a view rather than the image. See
-// `withLegacyModalityTransform`.
+// Two things do have to be reconciled, because the two stacks read them differently, and those
+// are the cases where the legacy side gets a view rather than the image: the modality transform
+// (see `withLegacyModalityTransform`) and the layout of color pixels (see `withLegacyColorLayout`).
 
 /**
  * Reconcile `slope` and `intercept` with pixel data the loader has already rescaled.
@@ -43,9 +43,94 @@ function withLegacyModalityTransform(image) {
     return image;
   }
 
-  const view = Object.create(image);
+  const view = createLegacyView(image);
   view.slope = 1;
   view.intercept = 0;
+
+  return view;
+}
+
+/**
+ * Hand the legacy stack color pixels in the layout it indexes them by.
+ *
+ * Every legacy reader of color pixels steps through them four bytes at a time: the renderer's
+ * `storedColorPixelDataToCanvasImageData` reads R, G, B and skips one, `storedRGBA...` copies all
+ * four, and cornerstone-tools' `getRGBPixels` (Probe, ROI stats) indexes `4 * (y * columns + x)`.
+ * cornerstone-wado-image-loader honoured that: `useRGBA` defaulted to true, so a color frame was
+ * decoded to RGBA and flagged `rgba: true`. The Cornerstone3D loader defaults it to false and keeps
+ * three bytes a pixel, which is what its own viewports and volumes expect.
+ *
+ * Read at a stride of four, a three-byte frame does not fail -- it draws. Each canvas row consumes
+ * a row and a third of source, so the picture repeats in vertical strips, R, G and B rotate from
+ * pixel to pixel into banding, and the loop runs out of data three quarters of the way down,
+ * leaving the bottom of the canvas blank. That is how every RGB, YBR and palette color series
+ * looked in the classic 2D viewport and in thumbnails once the bridge took over decoding.
+ *
+ * Changing the loader's `useRGBA` instead would hand Cornerstone3D's own consumers a layout they
+ * no longer expect, so the expansion happens here, on the legacy side only. It is the one place
+ * the bridge holds a second copy of pixels, and it is built on first read rather than up front:
+ * an image that only ever reaches Cornerstone3D viewports, or is evicted before the legacy stack
+ * draws it, never pays for it. The copy lives on the view, so it goes when the mirror entry does.
+ * `sizeInBytes` still reports the Cornerstone3D frame: the legacy cache's total must stay in step
+ * with Cornerstone3D's so that its LRU never runs first (see cacheMirror.js).
+ *
+ * The window is reset to the one the old loader gave every color image, 255/127. Cornerstone3D
+ * leaves it undefined for a color frame with no VOI LUT module, and the legacy color LUT has no
+ * fallback of its own for a missing window.
+ *
+ * @param {object} image - a Cornerstone3D image, or a view over one
+ * @returns {object} the image, or a view over it with RGBA pixels
+ */
+function withLegacyColorLayout(image) {
+  if (!image.color || image.rgba) {
+    return image;
+  }
+
+  const pixelCount = image.rows * image.columns;
+  const pixelData = image.getPixelData();
+  if (!pixelCount || pixelData.length !== pixelCount * 3) {
+    // Not a layout this knows how to expand. Left as it is rather than guessed at.
+    return image;
+  }
+
+  const view = createLegacyView(image);
+  let rgba;
+
+  view.getPixelData = () => {
+    if (!rgba) {
+      rgba = expandRgbToRgba(image.getPixelData(), pixelCount);
+    }
+    return rgba;
+  };
+  view.rgba = true;
+  view.windowWidth = 255;
+  view.windowCenter = 127;
+
+  return view;
+}
+
+function expandRgbToRgba(rgb, pixelCount) {
+  const rgba = new Uint8ClampedArray(pixelCount * 4);
+
+  for (let source = 0, target = 0; target < rgba.length; source += 3, target += 4) {
+    rgba[target] = rgb[source];
+    rgba[target + 1] = rgb[source + 1];
+    rgba[target + 2] = rgb[source + 2];
+    rgba[target + 3] = 255;
+  }
+
+  return rgba;
+}
+
+/**
+ * A view over a Cornerstone3D image for the legacy side: assignments land on the view, reads fall
+ * through to the image.
+ *
+ * @param {object} image - a Cornerstone3D image
+ * @returns {object} the view
+ */
+function createLegacyView(image) {
+  const view = Object.create(image);
 
   // A prototype only isolates *assignments*. Two of the slots the legacy renderer uses are objects
   // it mutates through, so an inherited one would be written into -- the Cornerstone3D image's,
@@ -100,5 +185,5 @@ export default function toLegacyImage(image, imageId) {
     );
   }
 
-  return withLegacyModalityTransform(image);
+  return withLegacyColorLayout(withLegacyModalityTransform(image));
 }
