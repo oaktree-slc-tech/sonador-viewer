@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import OHIF from '@ohif/core';
 
 import OHIFCornerstoneViewportOverlay from './components/OHIFCornerstoneViewportOverlay';
+import SeriesTagHoverTooltip from './components/SeriesTagHoverTooltip';
 import checkForSRAnnotations from './tools/checkForSRAnnotations';
 import ConnectedCornerstoneViewport from './ConnectedCornerstoneViewport';
 import { uiNotificationService } from '@ohif/core';
@@ -199,11 +200,14 @@ export default function OHIFCornerstoneViewport({
     }
 
     return (
-      <OHIFCornerstoneViewportOverlay
-        {...props}
-        inconsistencyWarnings={inconsistencyWarnings}
-        SRLabels={filteredSRLabels}
-      />
+      <>
+        <OHIFCornerstoneViewportOverlay
+          {...props}
+          inconsistencyWarnings={inconsistencyWarnings}
+          SRLabels={filteredSRLabels}
+        />
+        <SeriesTagHoverTooltip viewportIndex={viewportIndex} />
+      </>
     );
   };
 

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { PanelSection, ScrollArea } from '@ohif/ui-next';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Icons, PanelSection, ScrollArea } from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
 
@@ -47,6 +47,7 @@ const MeasurementTable = ({
   const [activeDisplaySet, setActiveDisplaySet] = useState(null);
   const [selectedKey, setSelectedKey] = useState(null);
   const [savePending, setSavePending] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState([]);
 
   const pendingCount = useMemo(() => {
     // Calculate the number of pending measurements
@@ -190,16 +191,38 @@ const MeasurementTable = ({
     );
   };
 
-  const getMeasurementsGroups = () => {
-    // Retrieve measurements by group
+  const groupKey = (measureGroup, idx) => measureGroup.groupId || `group-${idx}`;
 
-    return measurementCollection.map((measureGroup, idx) => {
-      return (
-        <TableList key={idx} customHeader={getCustomHeader(measureGroup)}>
-          {getMeasurements(measureGroup)}
-        </TableList>
-      );
-    });
+  const getMeasurementsGroups = () => {
+    // Each group (Measurements, Findings, ...) is a collapsible sub-section of Annotations. Groups
+    // are open unless the user has collapsed them, so a group that appears later starts open.
+    const keys = measurementCollection.map(groupKey);
+
+    return (
+      <Accordion
+        type="multiple"
+        className="measurementGroups"
+        value={keys.filter(key => !collapsedGroups.includes(key))}
+        onValueChange={open => setCollapsedGroups(keys.filter(key => !open.includes(key)))}
+      >
+        {measurementCollection.map((measureGroup, idx) => (
+          <AccordionItem key={groupKey(measureGroup, idx)} value={groupKey(measureGroup, idx)} className="measurementGroup">
+            <AccordionTrigger asChild>
+              <button type="button" className="tableListHeader measurementGroupHeader">
+                {getCustomHeader(measureGroup)}
+                <span className="measurementGroupToggle" aria-hidden="true">
+                  <Icons.Minus className="measurementGroupCollapse" />
+                  <Icons.Plus className="measurementGroupExpand" />
+                </span>
+              </button>
+            </AccordionTrigger>
+            <AccordionContent>
+              <TableList headless>{getMeasurements(measureGroup)}</TableList>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    );
   };
 
   const getTimepointsHeader = () => {

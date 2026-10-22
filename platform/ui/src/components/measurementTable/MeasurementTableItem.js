@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
+import { Tooltip as HoverTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/ui-next';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableListItem } from '../tableList';
@@ -10,6 +11,7 @@ import { Tooltip } from '../tooltip';
 
 import { Icon } from './../../elements/Icon';
 
+import { subscribeSeriesMetadata } from './metadataEventConcerns';
 import './MeasurementTableItem.styl';
 
 const { measurements } = OHIF;
@@ -23,6 +25,37 @@ const ColoredCircle = ({ color }) => {
 
 ColoredCircle.propTypes = {
   color: PropTypes.string.isRequired,
+};
+
+
+// Label line clipped with an ellipsis; hovering shows the full text when it does not fit
+const TruncatedLabel = ({ text }) => {
+  const ref = useRef(null);
+  const [open, setOpen] = useState(false);
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <HoverTooltip open={open} onOpenChange={next => setOpen(next && ref.current && ref.current.scrollWidth > ref.current.clientWidth)}>
+        <TooltipTrigger asChild>
+          <div ref={ref} className="measurementLabel">{text}</div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" className="measurementLabelTooltip">{text}</TooltipContent>
+      </HoverTooltip>
+    </TooltipProvider>
+  );
+};
+
+
+TruncatedLabel.propTypes = {
+  text: PropTypes.string.isRequired,
+};
+
+
+// A Series Tag finding with a custom background is marked by a band of that color on the inside
+// right edge of its index cell
+const seriesTagBand = seriesTagDisplay => {
+  const background = seriesTagDisplay && seriesTagDisplay.color && seriesTagDisplay.color.Background;
+  return background ? { boxShadow: `inset -5px 0 0 ${background}` } : undefined;
 };
 
 
@@ -45,27 +78,34 @@ const MeasurementTableItem = ({
   const { t } = useTranslation('MeasurementTable');
 
   const [collapsed, setCollapsed] = useState(true);
-  const [refVisible, setRefVisible] = useState(false);
   
   const isReadOnly = useMemo(() => {
     return measurementData.isReadOnly;
   }, [measurementData]);
 
-  // Measuement reference metadata
+  // Series Tags describe a whole series: their meta line shows the series, not the image
+  const isSeriesTag = Boolean(measurementData.seriesTagDisplay);
+
+  // Measurement reference metadata, recomputed when the reference or the series metadata changes
+  const { refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID } = measurementData;
+  const [metadataVersion, setMetadataVersion] = useState(0);
+
+  useEffect(
+    () => subscribeSeriesMetadata(DicomMetadataStore, refSeriesInstanceUID, () => setMetadataVersion(version => version + 1)),
+    [refSeriesInstanceUID]
+  );
+
   const refMeta = useMemo(() => {
+    const identifiers = OHIF.utils.referenceIdentifiers(DicomMetadataStore, {
+      StudyInstanceUID: refStudyInstanceUID, SeriesInstanceUID: refSeriesInstanceUID, SOPInstanceUID: refSOPInstanceUID,
+    });
 
-    // Retrieve instance from DICOM meta store
-    const refDcm = DicomMetadataStore.getInstance(
-      measurementData.refStudyInstanceUID, measurementData.refSeriesInstanceUID, measurementData.refSOPInstanceUID);
-    if (refDcm) {
-
-      // Unpack reference data and mark ref as visible
-      setRefVisible(true);
-      return _.pick(refDcm, 'SeriesNumber', 'SeriesDescription', 'Modality', 'InstanceNumber' );
+    // A measurement's line includes its image, so it needs the instance; a Series Tag needs only its series
+    if (!identifiers || (!isSeriesTag && identifiers.InstanceNumber === undefined)) {
+      return null;
     }
-
-    return {};
-  }, [isSelected]);
+    return identifiers;
+  }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, metadataVersion]);
 
   const getActionButton = (btnLabel, onClickCallback) => {
     return (
@@ -140,6 +180,7 @@ const MeasurementTableItem = ({
         itemKey={measurementData.measurementId}
         itemClass={`measurementItem ${itemClass} ${hasWarningClass}`}
         itemIndex={itemIndex}
+        itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
         onItemClick={handleItemClick}
       >
         <div>
@@ -158,15 +199,15 @@ const MeasurementTableItem = ({
             )}
             </div>
           </div>
-          {refVisible && Boolean(refMeta) && (<div className="referenceMeta">
-            <span className="refSxNum">Ser: <b>{refMeta.SeriesNumber}</b></span>
-            <span className="refImgNum">Img: {refMeta.InstanceNumber}</span>
-            <span className="refSxModality">Modality: {refMeta.Modality}</span>
+          {refMeta && (<div className="referenceMeta">
+            <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
+            {!isSeriesTag && (
+              <span className="refItem refImgNum"><span className="refLabel">I:</span><span className="refValue">{refMeta.InstanceNumber}</span></span>
+            )}
+            <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
           </div>)}
           {measurementData && Boolean((measurementData.label || '').replace('...', '')) && (
-            <div className="measurementLabel">
-              {t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })}
-            </div>
+            <TruncatedLabel text={t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })} />
           )}
           {isSelected && measurementData.isVisible && !Boolean(isReadOnly) && <div className="rowActions">{actionButtons}</div>}
         </div>
@@ -176,6 +217,19 @@ const MeasurementTableItem = ({
 
   const getDataDisplayText = () => {
     // Retrieve the display text for the measurement 
+
+    const { seriesTagDisplay } = measurementData;
+    if (seriesTagDisplay && seriesTagDisplay.value) {
+      const { color, value, meaning } = seriesTagDisplay;
+      return (
+        <div className="measurementDisplayText">
+          <span style={color.Value ? { color: color.Value } : undefined}>{value}</span>
+          {meaning && (
+            <span className="seriesTagMeaning" style={color.Meaning ? { color: color.Meaning } : undefined}>{meaning}</span>
+          )}
+        </div>
+      );
+    }
 
     return measurementData.data.map((data, index) => {
       return (

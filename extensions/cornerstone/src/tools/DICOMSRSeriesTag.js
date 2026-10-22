@@ -10,6 +10,8 @@ import csTools, {
 
 import cornerstone from 'cornerstone-core';
 
+import { displayAttributes } from '@ohif/core';
+
 import TOOL_NAMES from './constants/toolNames';
 
 
@@ -36,11 +38,20 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
     const defaultProps = {
       mixins: [],
       name: TOOL_NAMES.DICOM_SR_SERIES_TAG,
-      padding: 6, windowPadding: 20, maxTextChars: 64, valHexColor: '#8AD0A8', textHexColor: '#C0C7F8',
+      padding: 6, windowPadding: 20, maxTextChars: 64,
     }
 
     const initialProps = Object.assign(defaultProps, props);
     super(initialProps);
+
+    // Canvas regions of the tags drawn on each element, used for hover lookups
+    this._tagRegions = new WeakMap();
+  }
+
+  getTagAtCanvasPoint(element, x, y) {
+    // Tag drawn at the canvas point (canvas pixels): `{ left, top, right, bottom, data }`
+    const regions = this._tagRegions.get(element) || [];
+    return regions.find(r => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) || null;
   }
 
   renderToolData(evt) {
@@ -52,6 +63,8 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
     
     // Retrieve tool state for the current element
     const toolState = getToolState(element, this.name);
+    const regions = [];
+    this._tagRegions.set(element, regions);
     if (!toolState || !toolState.data || toolState.data.length == 0) {
       return;
     }
@@ -70,7 +83,7 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
 
     // Calculate height/width of the tags to draw
     const _tags = [];    
-    const { padding, windowPadding, maxTextChars, valHexColor, textHexColor } = this.initialConfiguration;
+    const { padding, windowPadding, maxTextChars } = this.initialConfiguration;
     
     for (let i = 0; i < toolState.data.length; i++) {
       const data = toolState.data[toolState.data.length-(i+1)];
@@ -90,6 +103,7 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
 
       // Combine value/text into a single textbox
       _tags.push({
+        data, color: displayAttributes.resolveFindingColor(this.name, data),
         value: _val, text: _text, valWidth, textWidth,
         width, height: csTools.textStyle.getFontSize()+2*padding,
       });
@@ -130,19 +144,21 @@ export default class DICOMSRSeriesTagTool extends BaseTool {
       // Render each row instance
       _.each(_r, (_t) => {
 
+        const left = canvasOffsetX-padding, top = canvasOffsetY-_t.height-padding/2;
+        const right = canvasOffsetX+_t.width, bottom = canvasOffsetY+padding/2;
+        regions.push({ left, top, right, bottom, data: _t.data });
+
         // Draw value, text, and bounding box for tag
         draw(context, ctx => {
 
-          // Draw bounding box for tag
-          drawRect(ctx, element,
-            { x: canvasOffsetX-padding, y: canvasOffsetY-_t.height-padding/2 },
-            { x: canvasOffsetX+_t.width, y: canvasOffsetY+padding/2 }, {
-              color: 'white', lineWidth: 1, fill: false, dashed: false,
+          // Draw bounding box for tag, filled with the background color when one is set
+          drawRect(ctx, element, { x: left, y: top }, { x: right, y: bottom }, {
+              color: _t.color.Border, lineWidth: 1, fillStyle: _t.color.Background || undefined, dashed: false,
             }, 'canvas');
 
           // Draw tag value and text
-          drawTextBox(ctx, _t.value, canvasOffsetX, canvasOffsetY-_t.height, valHexColor);
-          drawTextBox(ctx, _t.text, canvasOffsetX+_t.valWidth, canvasOffsetY-_t.height, textHexColor);
+          drawTextBox(ctx, _t.value, canvasOffsetX, canvasOffsetY-_t.height, _t.color.Value);
+          drawTextBox(ctx, _t.text, canvasOffsetX+_t.valWidth, canvasOffsetY-_t.height, _t.color.Meaning);
         });
 
         // Move x render position

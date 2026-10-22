@@ -1,5 +1,6 @@
 import { CodeNameCodeSequenceValues } from '../../enums';
 import { parseExtendedMeta } from '../../utils/dcmsrExtendedMeta';
+import { parseDisplayAttributes } from '../../utils/dcmsrDisplayAttributes';
 
 import getSequenceAsArray from './getSequenceAsArray';
 import processMeasurement from './processMeasurement';
@@ -36,6 +37,7 @@ const getMeasurements = (ImagingMeasurementReportContentSequence) => {
         textPath: 'metadata.text',
         locationPath: 'metadata.location',
       });
+      parseDisplayAttributes(MeasurementGroup, measurement, { path: 'displayAttributes' });
 
       measurements.push(measurement);
     }

@@ -90,6 +90,7 @@ export const SONADOR_CLIENT = `${SONADOR_MANUFACTURER}-Client`;
 export const SONADOR_SCHEME_VERSION_01 = '0.1';
 export const SONADOR_SCHEME_VERSION_02 = '0.2';
 export const SONADOR_SCHEME_VERSION_03 = '0.3';
+export const SONADOR_SCHEME_VERSION_04 = '0.4';
 export const SONADOR_SCHEME_VERSION = SONADOR_SCHEME_VERSION_03;
 
 export const SONADOR_SEG = `${SONADOR_MANUFACTURER}-SEG`;
@@ -188,6 +189,30 @@ export const DCMSR_MEASUREMENT_LOCATION = {
 }
 
 
+// Sonador Viewer Display Attributes
+
+// Properties which control how a measurement is rendered. Encoded as a CONTAINER (CONTAINS)
+// holding a `Color` CONTAINER with one TEXT item per color role. SR content items cannot carry
+// RecommendedDisplayCIELabValue, so each TEXT value is the DICOM CIELab triple (`L\a\b`, 0-65535).
+// The code values exceed 16 characters and are written as LongCodeValue.
+
+const displayAttributeCode = (value, meaning) => ({
+  value: `${SONADOR_MANUFACTURER}-${value}`,
+  schemeDesignator: DCMSR_SONADOR_SR.value,
+  meaning,
+  schemeVersion: SONADOR_SCHEME_VERSION_04,
+});
+
+export const DCMSR_DISPLAY_ATTRIBUTES = displayAttributeCode('DisplayAttributes', 'Display attributes');
+export const DCMSR_DISPLAY_COLOR = displayAttributeCode('DisplayAttributes.Color', 'Display color');
+export const DCMSR_DISPLAY_COLOR_ROLES = {
+  Background: displayAttributeCode('DisplayAttributes.Color.Background', 'Background color (CIELab)'),
+  Border: displayAttributeCode('DisplayAttributes.Color.Border', 'Border color (CIELab)'),
+  Value: displayAttributeCode('DisplayAttributes.Color.Value', 'Coded value color (CIELab)'),
+  Meaning: displayAttributeCode('DisplayAttributes.Color.Meaning', 'Code meaning color (CIELab)'),
+};
+
+
 // Structured Export of Sonador Code Values
 
 export const SonadorCodeValues = {
@@ -207,6 +232,9 @@ export const SonadorCodeValues = {
   DCMSR_MEASUREMENT_DESCRIPTION,
   DCMSR_MEASUREMENT_TEXT,
   DCMSR_MEASUREMENT_LOCATION,
+  DCMSR_DISPLAY_ATTRIBUTES,
+  DCMSR_DISPLAY_COLOR,
+  DCMSR_DISPLAY_COLOR_ROLES,
 }
 
 

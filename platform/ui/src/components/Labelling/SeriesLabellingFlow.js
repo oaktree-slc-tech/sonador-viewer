@@ -3,7 +3,7 @@ import _ from 'lodash';
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
-import { sonador } from '@ohif/core';
+import { displayAttributes, sonador } from '@ohif/core';
 
 import Icon from '../../elements/Icon/Icon.js';
 import SelectTree from '../selectTree/SelectTree.js';
@@ -12,6 +12,17 @@ import LabellingFlow from './LabellingFlow.js';
 import LabellingTransition from './LabellingTransition.js';
 
 import './LabellingFlow.css';
+
+
+// A tag with a custom background (one that differs from the default display profile) is marked by
+// a band of that color on the inside left edge of its option
+const customBackgroundBand = meta => {
+  const { SERIES_TAG_TOOL, getDisplayColor, resolveDisplayColor } = displayAttributes;
+  const background = getDisplayColor(meta).Background;
+  return background && background !== resolveDisplayColor(SERIES_TAG_TOOL).Background
+    ? { boxShadow: `inset 5px 0 0 ${background}` }
+    : undefined;
+};
 
 
 const SeriesTagLabellingFlow = ({
@@ -62,7 +73,7 @@ const SeriesTagLabellingFlow = ({
     if (data.value) {
       const t = seriesTags.find((_t) => _t.value == data.value);
       if (t) {
-        _.extend(data, _.pick(t, 'group', 'scheme', 'schemeVersion'));
+        _.extend(data, _.pick(t, 'group', 'scheme', 'schemeVersion', 'meta'));
       }
     }
 
@@ -86,6 +97,8 @@ const SeriesTagLabellingFlow = ({
               group: selectedGroup?.id ? selectedGroup.id : undefined,
               scheme: t.SchemeDesignator,
               schemeVersion: t.SchemeVersion,
+              meta: t.Meta,
+              labelStyle: customBackgroundBand(t.Meta),
             };
           }));
         } else {
