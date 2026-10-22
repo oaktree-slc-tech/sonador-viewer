@@ -7,7 +7,7 @@ import { connect } from 'react-redux';
 import cornerstone from 'cornerstone-core';
 import moment from 'moment';
 
-import OHIF, { DICOMSR, DicomMetadataStore } from '@ohif/core';
+import OHIF, { DICOMSR, DicomMetadataStore, displayAttributes } from '@ohif/core';
 import { MeasurementTable } from '@ohif/ui';
 
 import { commandsManager } from '../../App';
@@ -155,6 +155,32 @@ function getWarningsForMeasurement(toolName, options) {
 }
 
 
+export function seriesTagDisplay(toolType, measurement, measurementMeta, measurementData) {
+  // Custom colors of a Series Tag finding for the measurements table: those that differ from the
+  // default display profile. Value and Meaning color the text, Background marks the index cell;
+  // otherwise the table's own colors are used.
+  if (toolType !== DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG) {
+    return undefined;
+  }
+
+  const carrier = measurement.displayAttributes || measurementData.displayAttributes || measurementMeta.displayAttributes;
+  const stored = displayAttributes.getDisplayColor({ displayAttributes: carrier });
+  const defaults = displayAttributes.resolveDisplayColor(toolType);
+  const color = {};
+  ['Background', 'Value', 'Meaning'].forEach(role => {
+    if (stored[role] && stored[role] !== defaults[role]) {
+      color[role] = stored[role];
+    }
+  });
+
+  return {
+    color,
+    value: measurement.value || measurementData.value,
+    meaning: measurementMeta.text || measurementData.text || measurement.text,
+  };
+}
+
+
 function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasurementData) {
   // Convert the provided measurement to the meaurements table item schema
 
@@ -203,9 +229,11 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       warningTitle,
       warningList,
       data: getDataForEachMeasurementNumber(measurementNumberList, timepoints, displayFunction),
-      refStudyInstanceUID: measurement.StudyInstanceUID,
-      refSeriesInstanceUID: measurement.SeriesInstanceUID,
-      refSOPInstanceUID: measurement.SOPInstanceUID,
+      seriesTagDisplay: seriesTagDisplay(toolType, measurement, measurementMeta, measurementData),
+      // Measurement-service records carry the reference UIDs as referenceStudyUID / referenceSeriesUID
+      refStudyInstanceUID: measurement.StudyInstanceUID || measurement.referenceStudyUID || measurementMeta.StudyInstanceUID,
+      refSeriesInstanceUID: measurement.SeriesInstanceUID || measurement.referenceSeriesUID || measurementMeta.SeriesInstanceUID,
+      refSOPInstanceUID: measurement.SOPInstanceUID || measurementMeta.SOPInstanceUID,
     };
 
     return tableMeasurement;

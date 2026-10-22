@@ -160,7 +160,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
       // Initialize series tag measurement data, add measurement type and toolType to structure
       measurementData = measurementData || {};
-      if (!measurementData.toolType || !measurement.type) {
+      if (!measurementData.toolType || !measurementData.type) {
 
         _.extend(measurementData, {
           toolType: cornerstoneToolEnums.DICOM_SR_SERIES_TAG,
@@ -209,7 +209,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                       });
                     }
                   },
-                  updateLabelling: ({ value, text, description, scheme, schemeVersion, group }) => {
+                  updateLabelling: ({ value, text, description, scheme, schemeVersion, group, meta }) => {
                     // Update measurement service with tag value
 
                     // Add tag to measurement API
@@ -236,6 +236,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                     measurementData.text = text || measurementData.text || '';
                     measurementData.scheme = scheme || measurementData.metadata?.scheme || measurementData.scheme;
                     measurementData.schemeVersion = schemeVersion || measurementData.metadata?.scheme || measurementData.schemeVersion
+
+                    // The resolved colors are copied into the finding so the saved SR keeps them
+                    if (value) {
+                      measurementData.displayAttributes = OHIF.displayAttributes.resolveDisplayAttributes(
+                        OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, meta);
+                    }
 
                     // Update measurements table
                     commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);

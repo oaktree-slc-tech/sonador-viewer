@@ -71,7 +71,9 @@
     display: flex
     flex-direction: column
 
-    > div, > div > div, [role="region"], [role="region"] > div, [role="region"] > div > div
+    // Child combinators keep the chain to the Annotations accordion; the groups nested inside it
+    // are accordions too and must keep their natural height
+    > div, > div > div, > div > div > [role="region"], > div > div > [role="region"] > div, > div > div > [role="region"] > div > div
       flex: 1 1 auto
       min-height: 0
       display: flex
@@ -79,7 +81,7 @@
 
     // The section header reads as the Segmentations panel's "Segmentation Editor" header: the
     // same type, size and weight, with room above it and the groups close beneath it
-    h3
+    > div > div > h3
       margin: 14px 0 0
       flex: 0 0 auto
 
@@ -105,6 +107,49 @@
       flex: 1 1 auto
       min-height: 0
 
+    // The accordion content sets Tailwind's text-base (16px); rows use the page's 14px text
+    .tableList
+      font-size: 14px
+      line-height: 1.42857143
+
+    .measurementGroups
+      h3
+        margin: 0
+
+      .measurementGroupHeader
+        appearance: none
+        display: flex
+        width: 100%
+        overflow: hidden
+        border-style: solid
+        border-color: var(--primary-background-color)
+        border-width: 3px 0 2px
+        font: inherit
+        text-align: left
+        cursor: pointer
+
+        .tableListHeaderTitle
+          flex: 1
+          max-width: none
+
+      .measurementGroupToggle
+        display: flex
+        align-items: center
+        padding-right: 10px
+        color: #FFFFFF
+
+        // The Plus icon has a fixed stroke color
+        svg
+          width: 20px
+          height: 20px
+
+          [stroke]:not([stroke="none"])
+            stroke: currentColor
+
+      .measurementGroupHeader[data-state="open"] .measurementGroupExpand,
+      .measurementGroupHeader[data-state="closed"] .measurementGroupCollapse
+        display: none
+
     // The groups (Measurements, Findings) are subsections of Annotations: their header row reads
     // as the Segmentation Editor's segmentation header (the row with the segmentation's name):
     // the same surface, vertical padding, type size and weight; the count keeps its blue
@@ -121,14 +166,14 @@
       .tableListHeaderTitle
         color: var(--text-primary-color)
         font-size: 16px
-        font-weight: 300
+        font-weight: 400
         line-height: 24px
         padding: 0 10px 0 14px
 
       .numberOfItems
         color: var(--ui-sky-blue)
         font-size: 16px
-        font-weight: 300
+        font-weight: 400
         height: auto
         line-height: 24px
         max-width: none

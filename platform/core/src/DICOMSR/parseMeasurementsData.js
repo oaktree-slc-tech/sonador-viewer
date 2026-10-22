@@ -8,6 +8,7 @@ import log from '../log';
 import measurements from '../measurements';
 import MeasurementReport from './SCOORD3D/MeasurementReport';
 import { encodeExtendedMeta } from './utils/dcmsrExtendedMeta';
+import { encodeDisplayAttributes } from './utils/dcmsrDisplayAttributes';
 
 const { getImageIdForImagePath, MeasurementApi } = measurements;
 
@@ -108,6 +109,7 @@ const parseMeasurementsData = (measurementsData, options) => {
         // Encoded extended attributes from measurement instance and broadcast via measurement service
         // to allow plugins to modify sequence data.
         encodeExtendedMeta(measurement, srItem);
+        encodeDisplayAttributes(measurement, srItem);
         measurementApi.measurementService._broadcastEvent(measurementApi.measurementService.EVENTS.MEASUREMENTS_DATASYNC, {
           apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_MEASUREMENT, measurement, srItem,
         });

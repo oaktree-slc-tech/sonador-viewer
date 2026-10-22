@@ -23,6 +23,7 @@ import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements';
 import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
+import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 
 const {
   CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION, Cornerstone3D: Cornerstone3dSR,
@@ -147,7 +148,10 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   // Rehydrate measurement instances via Cornerstone3D
   let storedMeasurementByAnnotationType = Cornerstone3dSR.sr.measurementReport.generateToolState(
     instanceSR, sopInstanceUIDToImageId, options.metaData, undefined, {
-      onContentItemParse: (toolType, annotation, srItem) => { parseExtendedMeta(srItem, annotation); },
+      onContentItemParse: (toolType, annotation, srItem) => {
+        parseExtendedMeta(srItem, annotation);
+        parseDisplayAttributes(srItem, annotation);
+      },
     });
 
   console.log('[DICOM-SR:parseDicomStructuredReport:hydratableMeasurements] measurements retrieved from DICOM-SR by toolType', 

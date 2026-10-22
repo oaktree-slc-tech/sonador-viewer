@@ -51,10 +51,8 @@ The viewer can:
 
 ## The Sonador Platform
 
-Sonador exists to help healthcare providers, researchers, and developers **store, visualize, and
-quantify** imaging and complex health data using standards-based, collaborative, and scalable
-building blocks — without proprietary vendor lock-in. The platform is organized into complementary
-subsystems:
+Sonador helps healthcare providers, researchers, and developers **store, visualize, and quantify**
+imaging and health data with standards-based building blocks. The platform has four subsystems:
 
 | Subsystem | Role |
 | --------- | ---- |
@@ -64,9 +62,7 @@ subsystems:
 | **Sonador Viewer** | *This repository* — the browser-based viewer that ties the platform together |
 
 Sonador is developed by [Oak-Tree Technologies](https://www.oak-tree.tech) and
-[Sonador AI](https://eu.sonador.ai) as part of a mission to advance human health with personalized
-care driven by proven, standards-compliant, open technology. **Community contributions are welcomed
-and greatly appreciated.**
+[Sonador AI](https://eu.sonador.ai).
 
 ## How Sonador Relates to OHIF
 
@@ -88,26 +84,14 @@ What Sonador adds or changes on top of upstream OHIF:
 - **Sonador platform integration.** Authentication, access control (ACL), study-list collaboration,
   worklists, series tagging, and secure sharing are wired into the Sonador web application.
 
-> The M3D / Three.js integration and the polymorphic segmentation surfaces are the clearest points
-> of differentiation from upstream OHIF — they are what turn the viewer from an image reader into a
-> 3D surgical-planning and research tool.
-
 ## Where the Source Lives
 
-**The canonical home of the Sonador source code is the Oak-Tree GitLab**, under the
-[Medical Imaging group](https://code.oak-tree.tech/oak-tree/medical-imaging). That is where active
-development happens, where CI/CD runs, and where issues and merge requests should be filed.
+**The Oak-Tree GitLab is the source of truth** for Sonador, under the
+[Medical Imaging group](https://code.oak-tree.tech/oak-tree/medical-imaging): development, CI/CD,
+releases, issues, and merge requests all happen there. Some Sonador repositories also have GitHub
+mirrors under [`oaktree-slc-tech`](https://github.com/oaktree-slc-tech), which track GitLab.
 
-To make community participation easier, Sonador also maintains **read-friendly mirrors on GitHub**
-under the [`oaktree-slc-tech`](https://github.com/oaktree-slc-tech) organization. These mirrors exist
-to lower the barrier for community developers who prefer the GitHub workflow.
-
-> **Policy:** GitHub mirrors are provided **for community development and convenience**, but the
-> **Oak-Tree GitLab is the source of truth.** Canonical history, releases, and review happen on
-> GitLab; mirrors track it.
-
-> ⚠️ **The Sonador Viewer does not yet have a public GitHub mirror — one is coming shortly.** Until
-> then, develop the viewer against the GitLab repository.
+> ⚠️ The Sonador Viewer has no GitHub mirror. Develop it against the GitLab repository.
 
 ## Highlights from the 0.4 Release
 
@@ -237,21 +221,20 @@ Especially relevant pages for viewer developers:
 
 ## Getting Involved
 
-We want contributing to be approachable whether you are fixing a typo or building a new extension.
+Contributions of any size are welcome, from typo fixes to new extensions.
 
-1. **Find a reason to participate.** If you work with medical images — as a clinician, researcher,
-   or engineer — Sonador is built to be customized for *your* workflow without forking.
+1. **Pick or open an issue.** Browse issues on the
+   [Oak-Tree GitLab](https://code.oak-tree.tech/oak-tree/medical-imaging). For anything beyond a
+   small fix, describe the change in an issue first so the approach can be agreed before you write
+   code.
 2. **Get tooling set up quickly.** Follow [Getting Started](#getting-started); the dev environment
    runs entirely in the browser against any DICOMweb source.
 3. **Build your skills.** The [documentation](#documentation) walks through the architecture and the
    patterns the codebase relies on.
-4. **Find a task.** Browse issues on the
-   [Oak-Tree GitLab](https://code.oak-tree.tech/oak-tree/medical-imaging) (or the community
-   [GitHub mirrors](https://github.com/oaktree-slc-tech)) and pick something that fits.
-5. **Ask a human.** Open an issue or merge request — maintainers are happy to help you land your
-   first change.
-6. **Get credited.** Contributions are recognized in release notes and project history; thank you
-   for helping the platform grow.
+4. **Make the change on a branch.** Branch from `master`, add or update tests, and run
+   `yarn test:unit` for the packages you touched.
+5. **Open a merge request on GitLab.** Reference the issue, describe what changed and how you
+   verified it, and ask maintainers for help in the merge request if you get stuck.
 
 Please review [`CONTRIBUTING.md`](CONTRIBUTING.md) and our
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) before opening a merge request.

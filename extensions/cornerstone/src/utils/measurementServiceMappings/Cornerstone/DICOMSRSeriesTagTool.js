@@ -5,6 +5,8 @@
 // @attr scheme (str): encoding scheme that the value and text are taken from
 // @attr schemeVersion (str): version of the encoding scheme which defines
 //    the attribute.
+// @attr displayAttributes (object): `{ Color: { Background, Value, Meaning } }` colors of the
+//    rendered tag
 
 import _ from 'lodash';
 
@@ -66,6 +68,8 @@ const DICOMSRSeriesTagTool = {
       visible: isVisible,
       value: measurement.value || measurementData.value || measurementMeta.value,
       text: measurementMeta.text || measurementData.text || measurement.text,
+      displayAttributes: _.cloneDeep(measurement.displayAttributes || measurementData.displayAttributes
+        || measurementMeta.displayAttributes),
     });
     annotation.metadata = _.extend(measurementMeta || {}, {
       _id, referencedImageId,
@@ -102,6 +106,12 @@ const DICOMSRSeriesTagTool = {
     // Add tag value to measurement root and measurement data sections
     measurement.data.value = value;
     measurement.value = value;
+
+    const displayAttributes = csToolsAnnotation.displayAttributes || measurementData.displayAttributes
+      || annotation.displayAttributes || annotation.data?.displayAttributes;
+    if (displayAttributes) {
+      measurement.data.displayAttributes = _.cloneDeep(displayAttributes);
+    }
     _.extend(measurement.metadata, {
       scheme, schemeVersion,
       measurementNumber: csToolsAnnotation.measurementNumber || measurementMeta.measurementNumber || measurementData.measurementNumber

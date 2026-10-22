@@ -17,7 +17,7 @@
 // the locally cached state (localStorage / zustand persist / redux) in effect -- it must be a
 // no-op on error, never a crash or an error dialog.
 
-import { DownloadManagerService, redux, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
+import { DownloadManagerService, displayAttributes, redux, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
 import i18n from '@ohif/i18n';
 
 import { getUserPreferences } from '../api/preferences';
@@ -284,6 +284,10 @@ export const initUserPreferences = async () => {
 
     // (3) Apply, skipping keys with pending queued writes (FR-20).
     if (document) {
+      // Site display attribute defaults (read-only); the built-in profile applies without them
+      if (document.site) {
+        displayAttributes.setSiteDisplayAttributes(document.site.displayAttributes);
+      }
       applyViewerSections(document.viewer);
       applyStudylist(document.studylist);
       // The general holders now carry the stored values (or the built-in defaults when nothing

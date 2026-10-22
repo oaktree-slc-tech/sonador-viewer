@@ -14,6 +14,7 @@ import makeDeferred from './makeDeferred';
 import ObjectPath from './objectPath';
 import * as progressTrackingUtils from './progressTrackingUtils';
 import Queue from './Queue';
+import referenceIdentifiers from './referenceIdentifiers';
 import resolveObjectPath from './resolveObjectPath';
 import sortBy from './sortBy.js';
 import {
@@ -182,6 +183,7 @@ export {
   cornerstone3dUtils,
   cornerstoneUtils,
   buildButtonCommands,
+  referenceIdentifiers,
 };
 
 

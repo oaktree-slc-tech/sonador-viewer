@@ -6,16 +6,19 @@ import { useSelector } from 'react-redux';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import PropTypes from 'prop-types';
 
-import OHIF, { redux, sonador } from '@ohif/core';
+import OHIF, { displayAttributes, redux, sonador } from '@ohif/core';
 import { uiNotificationService } from '@ohif/core';
 import ModalNG from '@ohif/ui/src/components/ModalNG/ModalNG';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/ui-next';
 import { ReactComponent as CancelIcon } from '@ohif/ui/src/elements/Icon/icons/times.svg';
 import { ReactComponent as AddCircleIcon } from '@ohif/ui/src/elements/Svg/svgs/add-circle.svg';
 import { ReactComponent as EditIcon } from '@ohif/ui/src/elements/Svg/svgs/edit.svg';
+import { ReactComponent as GearIcon } from '@ohif/ui/src/elements/Svg/svgs/gear.svg';
 import { ReactComponent as RemoveIcon } from '@ohif/ui/src/elements/Svg/svgs/trash-bin.svg';
 
 import { createSeriesTag, getTagList, removeSeriesTag,updateSeriesTag } from '../../../../api/ext';
 import GroupSearch from '../../../../components/GroupSearch/GroupSearch';
+import DisplayAttributesDialog from '../../../../components/DisplayAttributes/DisplayAttributesDialog';
 
 import globalTableStyles from '../../../../styles/globalTableStyles.module.scss';
 import settingsPanelTableStyles from '../../../../styles/settingsPanelTableStyles.module.scss';
@@ -25,9 +28,19 @@ import styles from './SeriesTags.module.scss';
 const headers = [
   { label: 'Value', id: 'value' },
   { label: 'Meaning', id: 'meaning' },
-  { label: 'Scheme Designator', id: 'scheme-designator' },
-  { label: 'Scheme Version', id: 'scheme-version' },  
+  { label: 'Scheme', id: 'scheme-designator' },
+  { label: 'Version', id: 'scheme-version' },
+  { label: 'Display', id: 'display' },
 ];
+
+// Tag fields written to the API
+const TAG_FIELDS = ['Value', 'Meaning', 'SchemeDesignator', 'SchemeVersion', 'Meta'];
+
+const tagFields = tag => _.omitBy(_.pick(tag, TAG_FIELDS), _.isNil);
+
+const tagColor = tag => displayAttributes.getDisplayColor(tag?.Meta);
+
+const tagMeta = color => (_.isEmpty(color) ? null : { DisplayAttributes: { Color: color } });
 
 
 export default function SeriesTagsTabNG() {
@@ -137,6 +150,7 @@ export default function SeriesTagsTabNG() {
   });
 
   const [tags, setTags] = useState([]);
+  const [displayEditIndex, setDisplayEditIndex] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [tagToDelete, setTagToDelete] = useState(null);
 
@@ -224,18 +238,13 @@ export default function SeriesTagsTabNG() {
     setTags((prevState) => {
       return prevState.map((tag, tagIndex) => {
         if (idx == tagIndex) {
-          let isUpdated = false;
+          const next = { ...tag, [fieldType]: val };
           if (tag.ID) {
             const origTag = tagResponse.find(t => t.ID == tag.ID);
-            const initVal = origTag?.[fieldType];
-            isUpdated = val !== initVal
+            next.isUpdated = !_.isEqual(tagFields(next), tagFields(origTag));
           }
 
-          return {
-            ...tag,
-            [fieldType]: val,
-            isUpdated,
-          }
+          return next;
         }
 
         return tag;
@@ -257,7 +266,7 @@ export default function SeriesTagsTabNG() {
         console.log('Create new tag: ', t);
         createTagMutate({
           group: selectedGroup,
-          payload: _.pick(t, 'Value', 'Meaning', 'SchemeDesignator', 'SchemeVersion'),          
+          payload: tagFields(t),
         });
       });
     }
@@ -267,7 +276,7 @@ export default function SeriesTagsTabNG() {
         updateTagMutate({
           group: selectedGroup,
           tagId: tag.ID,
-          payload: _.pick(tag, 'Value', 'Meaning', 'SchemeDesignator', 'SchemeVersion'),
+          payload: { ..._.pick(tag, TAG_FIELDS), Meta: tag.Meta || null },
         });
       });
     }
@@ -340,6 +349,7 @@ export default function SeriesTagsTabNG() {
     {selectedGroup && aclTag && (
       <>
       <div className={styles.tagList}>
+        <TooltipProvider delayDuration={200}>
         <div className={styles.tableScroll}>
         <table>
           <thead>
@@ -360,8 +370,9 @@ export default function SeriesTagsTabNG() {
               onEdit={handleEdit}
               onCancelEdit={handleCancelRowEdit}
               onRemove={removeTagItem}
+              onEditDisplay={setDisplayEditIndex}
               aclModify={aclTagModify}
-            />            
+            />
           ))}
           {(tags?.length == 0) && (
             <tr><td colSpan={headers.length + 1 + (aclTagModify ? 1 : 0)}>
@@ -373,6 +384,7 @@ export default function SeriesTagsTabNG() {
           </tbody>
         </table>
         </div>
+        </TooltipProvider>
 
         {changesPending && (
           <div className={styles.footer}>
@@ -383,6 +395,19 @@ export default function SeriesTagsTabNG() {
               Save
             </button>
           </div>
+        )}
+
+        {displayEditIndex !== null && tags[displayEditIndex] && (
+          <DisplayAttributesDialog
+            isOpen
+            color={tagColor(tags[displayEditIndex])}
+            preview={{ value: tags[displayEditIndex].Value, meaning: tags[displayEditIndex].Meaning }}
+            onApply={(color) => {
+              handleChange(displayEditIndex, 'Meta', tagMeta(color));
+              setDisplayEditIndex(null);
+            }}
+            onClose={() => setDisplayEditIndex(null)}
+          />
         )}
 
         {showDeleteConfirm && (
@@ -434,16 +459,39 @@ export default function SeriesTagsTabNG() {
 }
 
 
+function RowAction({ label, onClick, children }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button onClick={onClick} aria-label={label}>{children}</button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className={styles.tooltipContent}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+
+RowAction.propTypes = {
+  label: PropTypes.string.isRequired,
+  onClick: PropTypes.func.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
+
 function TagRow({
-    tag: { ID, Value, Meaning, SchemeDesignator, SchemeVersion, isEditMode },
+    tag,
     index,
     onChange,
     onEdit,
     onCancelEdit,
     onRemove,
+    onEditDisplay,
     aclModify=false,
   }) {
     // Table row for displaying tags
+  const { ID, Value, Meaning, SchemeDesignator, SchemeVersion, isEditMode } = tag;
+  const color = displayAttributes.resolveDisplayColor(displayAttributes.SERIES_TAG_TOOL, tagColor(tag));
+
   return (
     <tr className={settingsPanelTableStyles.listItem}>
       <td className={settingsPanelTableStyles.listItemNumber}>{index+1}</td>
@@ -471,7 +519,7 @@ function TagRow({
           <p>{SchemeDesignator}</p>
         )}
       </td>
-      <td>
+      <td className={styles.versionCell}>
         {isEditMode ? (
           <input type="text" value={SchemeVersion}
               onChange={(e) => onChange(index, 'SchemeVersion', e.target.value)} />
@@ -479,22 +527,32 @@ function TagRow({
           <p>{SchemeVersion}</p>
         )}
       </td>
+      <td>
+        <span className={styles.displayChip} style={{ backgroundColor: color.Background || 'transparent', borderColor: color.Border }}
+          data-cy="series-tag-display-chip">
+          <span style={{ color: color.Value }}>{Value || 'Value'}</span>
+          <span style={{ color: color.Meaning }}>{Meaning || 'Meaning'}</span>
+        </span>
+      </td>
 
       {aclModify && <td className={settingsPanelTableStyles.stickyActions}>
         <div className={settingsPanelTableStyles.rowActions}>
+          <RowAction label={`Modify display attributes for "${Meaning || Value || 'new tag'}"`} onClick={() => onEditDisplay(index)}>
+            <GearIcon />
+          </RowAction>
           {ID && !isEditMode && (
-            <button onClick={() => onEdit(index)}>
+            <RowAction label="Edit" onClick={() => onEdit(index)}>
               <EditIcon />
-            </button>
+            </RowAction>
           )}
           {ID && isEditMode && (
-            <button onClick={() => onCancelEdit(index)}>
+            <RowAction label="Cancel" onClick={() => onCancelEdit(index)}>
               <CancelIcon />
-            </button>
+            </RowAction>
           )}
-          <button onClick={() => onRemove(ID || index, ID ? 'existing' : 'new')}>
+          <RowAction label="Remove" onClick={() => onRemove(ID || index, ID ? 'existing' : 'new')}>
             <RemoveIcon />
-          </button>
+          </RowAction>
         </div>
       </td>}
     </tr>
@@ -509,6 +567,7 @@ TagRow.propTypes = {
     meaning: PropTypes.string,
     schemeDesignator: PropTypes.string,
     schemeVersion: PropTypes.string,
+    Meta: PropTypes.object,
     isEditMode: PropTypes.bool,
     isUpdated: PropTypes.bool,
   }).isRequired,
@@ -517,5 +576,6 @@ TagRow.propTypes = {
   onEdit: PropTypes.func.isRequired,
   onCancelEdit: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,
+  onEditDisplay: PropTypes.func.isRequired,
   aclModify: PropTypes.bool.isRequired,
 };

@@ -39,6 +39,27 @@
   // Plain block: scrolling belongs to .tableScroll below, not to the section wrapper, so the
   // footer and the delete-confirmation modal are never trapped inside a scrollport.
   min-width: 0;
+
+  // Scoped here: settingsPanelTableStyles styles every table element
+  :where(th), :where(td) {
+    padding: 12px 4px;
+  }
+
+  td input,
+  td p {
+    min-width: 128px;
+    max-width: 176px;
+  }
+
+  td input {
+    padding: 8px 10px;
+  }
+
+  td.versionCell input,
+  td.versionCell p {
+    min-width: 64px;
+    max-width: 88px;
+  }
 }
 
 .tableScroll {
@@ -81,4 +102,20 @@
 
 .footer {
   bottom: 10px;
+}
+
+
+.displayChip {
+  display: inline-flex;
+  column-gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid #FFFFFF;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+
+// ui-next tooltips portal to document.body; stack them above the settings panel and its modals
+.tooltipContent {
+  z-index: 1080;
 }

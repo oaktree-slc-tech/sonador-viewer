@@ -27,6 +27,7 @@ import { releaseRetainedInstances } from './loaders/instanceRetrieval';
 import measurements from './measurements';
 
 import display from './display';
+import displayAttributes from './displayAttributes';
 import { ViewportRefsProvider, useViewportRef } from './hooks/useViewportRef';
 import { useToolbar, useActiveToolOptions } from './hooks';
 
@@ -148,6 +149,7 @@ const OHIF = {
   viewer: {},
 
   display,
+  displayAttributes,
   useViewportRef,
   ViewportRefsProvider,
   measurements,
@@ -220,6 +222,7 @@ export {
   DICOMSR,
 
   display,
+  displayAttributes,
   useViewportRef,
   ViewportRefsProvider,
   measurements,
