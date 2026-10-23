@@ -96,7 +96,9 @@ export function cutSurface({ points, polys, selected }) {
  * edge is the one reached by rotating around the vertex through the kept triangles, so two holes
  * that share a vertex give two loops. A loop that still comes back to a vertex it holds (a
  * non-manifold junction) is split there. A rim edge whose walk reaches a dead end (non-manifold
- * input) is reported as open and left out.
+ * input) is reported as open and left out. An edge two triangles traverse the same way (one of
+ * them wound the wrong way round) is not a rim: it is an inconsistent edge, which the
+ * diagnostics report and a patch cannot close (ohif-viewers#149, FR-3).
  *
  * @param {ArrayLike<number>} triangles - flat triangle vertex indices
  * @returns {{ loops: number[][], openEdges: number }} loops of vertex indices (first vertex not
@@ -104,13 +106,18 @@ export function cutSurface({ points, polys, selected }) {
  */
 export function findBoundaryLoopsDetailed(triangles) {
   const halfEdges = new Map(); // "a>b" -> triangle index (first one, for non-manifold input)
+  const uses = new Map();      // undirected "a_b" -> number of triangles using the edge
   const triangleCount = triangles.length / 3;
   for (let t = 0; t < triangleCount; t++) {
     for (let e = 0; e < 3; e++) {
-      const key = `${triangles[3 * t + e]}>${triangles[3 * t + ((e + 1) % 3)]}`;
+      const a = triangles[3 * t + e];
+      const b = triangles[3 * t + ((e + 1) % 3)];
+      const key = `${a}>${b}`;
       if (!halfEdges.has(key)) {
         halfEdges.set(key, t);
       }
+      const undirected = a < b ? `${a}_${b}` : `${b}_${a}`;
+      uses.set(undirected, (uses.get(undirected) || 0) + 1);
     }
   }
   const vertexAfter = (t, v) => {
@@ -122,11 +129,12 @@ export function findBoundaryLoopsDetailed(triangles) {
     return -1;
   };
 
-  // Rim half-edges, keyed by their start vertex
+  // Rim half-edges (their edge is used by one triangle only), keyed by their start vertex
   const rim = new Set();
   halfEdges.forEach((t, key) => {
     const [a, b] = key.split('>');
-    if (!halfEdges.has(`${b}>${a}`)) {
+    const undirected = Number(a) < Number(b) ? `${a}_${b}` : `${b}_${a}`;
+    if (uses.get(undirected) === 1) {
       rim.add(key);
     }
   });

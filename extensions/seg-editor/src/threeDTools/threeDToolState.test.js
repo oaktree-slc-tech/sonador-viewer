@@ -3,6 +3,7 @@
 import {
   adjustPendingWrites,
   begin3DToolJob,
+  effectiveWeldTolerance,
   end3DToolJob,
   get3DEditOptions,
   get3DSmoothOptions,
@@ -10,12 +11,15 @@ import {
   handle3DToolRequest,
   is3DSelectionTool,
   is3DTargetEditable,
+  MAX_CONSTRAINTS,
   PAINT_RADIUS,
   REMOVAL_DEPTH,
   request3DToolAction,
   reset3DToolState,
   set3DPreview,
   set3DSelectionCount,
+  set3DUnsynchronizedEdits,
+  set3DSurfaceHealth,
   set3DToolBusy,
   set3DToolOption,
   set3DToolTarget,
@@ -124,17 +128,50 @@ describe('threeDToolState', () => {
     expect(set3DToolOption('closure', 'bogus')).toBe(false);
     expect(set3DToolOption('connectedOnly', 'yes')).toBe(true);
     expect(set3DToolOption('maxConstraints', 100)).toBe(true);
-    expect(set3DToolOption('weldTolerance', 'x')).toBe(false);
+    expect(set3DToolOption('weldFraction', 'x')).toBe(false);
+    expect(set3DToolOption('weldTolerance', 0.5)).toBe(false); // the earlier world-unit setting is gone
     expect(set3DToolOption('unknown', 1)).toBe(false);
-    expect(get3DToolState()).toMatchObject({ closure: 'flat', connectedOnly: true, maxConstraints: 32 });
+    expect(get3DToolState()).toMatchObject({ closure: 'flat', connectedOnly: true, maxConstraints: MAX_CONSTRAINTS.max });
     expect(get3DEditOptions()).toEqual({
-      closure: 'flat', rimCleanup: 'full', weldTolerance: 0.001, islandMaxTriangles: 50, maxConstraints: 32,
+      closure: 'flat', rimCleanup: 'full', weldTolerance: 0, islandMaxTriangles: 50, maxConstraints: 8,
     });
 
     reset3DToolState();
     expect(get3DToolState().closure).toBe('flat');
     reset3DToolState({ settings: true });
     expect(get3DToolState().closure).toBe('auto');
+  });
+
+  it('clamps a stored setting from an earlier range when the editor reopens', () => {
+    // A constraint cap of 32 and a weld fraction of 1 from an earlier session: the restore path
+    // goes through the same validation as the setter (ohif-viewers#149, AR-6)
+    set3DToolOption('closure', 'flat');
+    get3DToolState().maxConstraints = 32; // as a persisted raw value would land
+    get3DToolState().weldFraction = 1;
+    get3DToolState().smoothPasses = 'many';
+
+    reset3DToolState();
+
+    expect(get3DToolState()).toMatchObject({ closure: 'flat', maxConstraints: 8, weldFraction: 0.1, smoothPasses: 3 });
+  });
+
+  it('derives the weld from the surface statistics, for the developer tools only', () => {
+    expect(set3DToolOption('weldFraction', 0.5)).toBe(true); // capped at a tenth of p1
+    expect(get3DToolState().weldFraction).toBe(0.1);
+    const health = { edges: { p1: 0.4 } };
+
+    expect(effectiveWeldTolerance(0.1, health, { developerTools: true })).toBeCloseTo(0.04, 9);
+    expect(effectiveWeldTolerance(0.1, health)).toBe(0);
+    expect(effectiveWeldTolerance(0, health, { developerTools: true })).toBe(0);
+    // Missing or invalid statistics mean an exact weld, never an unbounded one
+    expect(effectiveWeldTolerance(0.1, null, { developerTools: true })).toBe(0);
+    expect(effectiveWeldTolerance(0.1, { edges: { p1: 0 } }, { developerTools: true })).toBe(0);
+    expect(effectiveWeldTolerance(0.1, { edges: { p1: NaN } }, { developerTools: true })).toBe(0);
+
+    set3DSurfaceHealth(health);
+    expect(get3DEditOptions(undefined, { developerTools: true }).weldTolerance).toBeCloseTo(0.04, 9);
+    expect(get3DEditOptions().weldTolerance).toBe(0);
+    expect(get3DEditOptions(get3DToolState(), { surfaceHealth: { edges: { p1: 1 } }, developerTools: true }).weldTolerance).toBeCloseTo(0.1, 9);
   });
 
   it('validates the Lasso, Paint and Smooth settings', () => {
@@ -196,5 +233,28 @@ describe('threeDToolState', () => {
     unregisterOld();
 
     expect(request3DToolAction('clearSelection')).toBe('new');
+  });
+});
+
+describe('synchronization state', () => {
+  beforeEach(() => reset3DToolState());
+
+  it('publishes how many applied edits the 2D views have not received, and only changes', () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribe3DToolState(listener);
+    expect(get3DToolState().unsynchronizedEdits).toBe(0);
+
+    set3DUnsynchronizedEdits(2);
+    set3DUnsynchronizedEdits(2);
+    expect(get3DToolState().unsynchronizedEdits).toBe(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    set3DUnsynchronizedEdits(-1);
+    expect(get3DToolState().unsynchronizedEdits).toBe(0);
+    set3DUnsynchronizedEdits(NaN);
+    expect(get3DToolState().unsynchronizedEdits).toBe(0);
+    reset3DToolState();
+    expect(get3DToolState().unsynchronizedEdits).toBe(0);
+    unsubscribe();
   });
 });

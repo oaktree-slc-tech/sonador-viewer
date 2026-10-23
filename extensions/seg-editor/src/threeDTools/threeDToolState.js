@@ -47,9 +47,18 @@ export const SELECTION_ACTIONS = {
   repair: 'repair',
 };
 
+// The developer-only weld, as a fraction of the target surface's first-percentile edge length
+// (ohif-viewers#149 FR-1, #151 FR-4): exact by default, never above a tenth of p1. The world
+// value is derived from the current surface's statistics when an edit runs (effectiveWeldTolerance).
+export const WELD_FRACTION = { min: 0, max: 0.1, step: 0.005, default: 0 };
+
+// Most boundary vertices a smooth patch is fitted to: at most eight, and two attempts per hole
+// (ohif-viewers#149, FR-7)
+export const MAX_CONSTRAINTS = { min: 4, max: 8, step: 1, default: 8 };
+
 // Selection tool settings kept across editor sessions, with their allowed values
 export const EDIT_SETTINGS = {
-  removalDepth: { default: REMOVAL_DEPTH.default },
+  removalDepth: { default: REMOVAL_DEPTH.default, min: REMOVAL_DEPTH.min, max: REMOVAL_DEPTH.max },
   // The lasso: freehand or a box (LASSO_SHAPES)
   lassoShape: { default: LASSO_SHAPES.lasso, values: Object.values(LASSO_SHAPES) },
   // The brush: paint or erase (PAINT_MODES), and its radius
@@ -73,13 +82,33 @@ export const EDIT_SETTINGS = {
   previewEnabled: { default: true, boolean: true },
   // Open and non-manifold edges drawn on the canvas
   showIssues: { default: false, boolean: true },
-  // Vertices closer than this (surface units) are one vertex
-  weldTolerance: { default: 0.001, min: 0, max: 1 },
+  // Vertices closer than this fraction of the surface's p1 edge length are one vertex
+  // (developer tools only; the world value is derived per surface version)
+  weldFraction: { default: WELD_FRACTION.default, min: WELD_FRACTION.min, max: WELD_FRACTION.max },
   // Largest edge-connected piece removed as an island after a cut (triangles)
   islandMaxTriangles: { default: 50, min: 0, max: 10000 },
   // Most boundary vertices a smooth patch is fitted to
-  maxConstraints: { default: 12, min: 4, max: 32 },
+  maxConstraints: { default: MAX_CONSTRAINTS.default, min: MAX_CONSTRAINTS.min, max: MAX_CONSTRAINTS.max, integer: true },
 };
+
+/**
+ * A setting's value made valid: enumerations must hold it, numbers are clamped (integers
+ * rounded), booleans coerced. Undefined when the value cannot be made valid.
+ */
+function _coerceSetting(setting, value) {
+  if (setting.values) {
+    return setting.values.includes(value) ? value : undefined;
+  }
+  if (setting.boolean) {
+    return !!value;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return undefined;
+  }
+  const clamped = Math.min(setting.max, Math.max(setting.min, number));
+  return setting.integer ? Math.round(clamped) : clamped;
+}
 
 const INITIAL_STATE = {
   // The active 3D tool (THREE_D_TOOLS), or null
@@ -99,10 +128,18 @@ const INITIAL_STATE = {
   // An edit shown on the canvas awaiting Apply / Cancel: its summary ({ kind, points, holes,
   // methods, closed, openEdges, repair }), or null
   preview: null,
-  // Open and non-manifold edge counts of the target segment's surface, or null while unknown
+  // The target segment's surface health, or null while unknown: open, non-manifold and
+  // inconsistent edge counts, `closed`, pre-existing degenerate and duplicate triangles, the
+  // triangle count, the edge-length statistics ({ p1, p50, mean, edgeCount, sampleSize, sampled })
+  // and the effective weld
   surfaceHealth: null,
   // Summary of the last edit applied in this session, or null
   lastEdit: null,
+  // Applied edits of the target's surface the 2D views have not received (surface-only results
+  // and refused or failed writes still in force): the 3D surface is ahead of the labelmap while
+  // this is above zero, and further edits stay surface-only (ohif-viewers#152's synchronization
+  // choices follow)
+  unsynchronizedEdits: 0,
   // Selection tool settings (EDIT_SETTINGS; kept across editor sessions, like the brush radius)
   ...Object.fromEntries(Object.entries(EDIT_SETTINGS).map(([key, setting]) => [key, setting.default])),
 };
@@ -209,21 +246,11 @@ export function set3DToolOption(key, value) {
     setRemovalDepth(value);
     return true;
   }
-  if (setting.values) {
-    if (!setting.values.includes(value)) {
-      return false;
-    }
-    _set({ [key]: value });
-  } else if (setting.boolean) {
-    _set({ [key]: !!value });
-  } else {
-    const number = Number(value);
-    if (!Number.isFinite(number)) {
-      return false;
-    }
-    const clamped = Math.min(setting.max, Math.max(setting.min, number));
-    _set({ [key]: setting.integer ? Math.round(clamped) : clamped });
+  const valid = _coerceSetting(setting, value);
+  if (valid === undefined) {
+    return false;
   }
+  _set({ [key]: valid });
   return true;
 }
 
@@ -233,10 +260,43 @@ export function get3DSmoothOptions(state = _state) {
   return { strength: smoothStrength, passes: smoothPasses, feather: smoothFeather };
 }
 
-/** The current cut-and-patch options (deleteSelection's EDIT_OPTION_DEFAULTS keys). */
-export function get3DEditOptions(state = _state) {
-  const { closure, rimCleanup, weldTolerance, islandMaxTriangles, maxConstraints } = state;
-  return { closure, rimCleanup, weldTolerance, islandMaxTriangles, maxConstraints };
+/**
+ * The world weld tolerance an edit runs with (ohif-viewers#149 FR-1, #151 FR-4): the stored
+ * fraction of the target surface's first-percentile edge length, from the current surface
+ * health. Without the developer tools, or without finite positive statistics, the weld is exact.
+ *
+ * @param {number} weldFraction - the stored setting
+ * @param {{ edges?: { p1?: number } }|null} surfaceHealth
+ * @param {{ developerTools?: boolean }} [options]
+ * @returns {number} world units
+ */
+export function effectiveWeldTolerance(weldFraction, surfaceHealth, { developerTools = false } = {}) {
+  const fraction = _coerceSetting(EDIT_SETTINGS.weldFraction, weldFraction);
+  const p1 = surfaceHealth?.edges?.p1;
+  if (!developerTools || !fraction || !Number.isFinite(p1) || !(p1 > 0)) {
+    return 0;
+  }
+  return fraction * p1;
+}
+
+/**
+ * The current cut-and-patch options (deleteSelection's EDIT_OPTION_DEFAULTS keys), with the weld
+ * resolved to world units against the surface health.
+ *
+ * @param {Object} [state]
+ * @param {Object} [options]
+ * @param {Object|null} [options.surfaceHealth] - defaults to the state's
+ * @param {boolean} [options.developerTools] - the developer tools flag (segEditorDeveloper)
+ */
+export function get3DEditOptions(state = _state, { surfaceHealth = state.surfaceHealth, developerTools = false } = {}) {
+  const { closure, rimCleanup, weldFraction, islandMaxTriangles, maxConstraints } = state;
+  return {
+    closure,
+    rimCleanup,
+    weldTolerance: effectiveWeldTolerance(weldFraction, surfaceHealth, { developerTools }),
+    islandMaxTriangles,
+    maxConstraints,
+  };
 }
 
 /** An edit awaiting Apply / Cancel (its summary), or null once decided. */
@@ -250,6 +310,14 @@ export function set3DSurfaceHealth(surfaceHealth) {
 
 export function set3DLastEdit(lastEdit) {
   _set({ lastEdit: lastEdit || null });
+}
+
+/** How many applied edits of the target's surface the 2D views have not received. */
+export function set3DUnsynchronizedEdits(count) {
+  const next = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  if (next !== _state.unsynchronizedEdits) {
+    _set({ unsynchronizedEdits: next });
+  }
 }
 
 /**
@@ -271,11 +339,19 @@ export function request3DToolAction(request, options) {
   return _requestHandlers.get(request)?.(options);
 }
 
-/** Back to the initial state (editor closed; tests). Settings are kept unless `settings` is set. */
+/**
+ * Back to the initial state (editor closed; tests). Settings are kept unless `settings` is set;
+ * a kept value is made valid again on the way (a value stored by an earlier version of the
+ * ranges, such as a constraint cap of 32, comes back clamped).
+ */
 export function reset3DToolState({ settings = false } = {}) {
-  const kept = settings
-    ? {}
-    : Object.fromEntries(Object.keys(EDIT_SETTINGS).map(key => [key, _state[key]]));
+  const kept = {};
+  if (!settings) {
+    Object.entries(EDIT_SETTINGS).forEach(([key, setting]) => {
+      const valid = _coerceSetting(setting, _state[key]);
+      kept[key] = valid === undefined ? setting.default : valid;
+    });
+  }
   _state = { ...INITIAL_STATE, ...kept };
   _busyOwner = null;
   _requestHandlers.clear();

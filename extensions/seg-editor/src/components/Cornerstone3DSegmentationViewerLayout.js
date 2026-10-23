@@ -83,6 +83,7 @@ import { clearSegEditorHistory, trackSegEditorHistory } from '../toolbox/segEdit
 import { terminateHoleFillingWorker } from '../threeDTools/registerHoleFillingWorker';
 import { terminateLabelmapCarveWorker } from '../threeDTools/registerLabelmapCarveWorker';
 import { cancelSurfaceEditWrites, pendingSurfaceEditWrites } from '../threeDTools/surfaceEdits';
+import { resetSyncLedger } from '../threeDTools/syncLedger';
 import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
@@ -1201,6 +1202,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component._untrackHistory?.();
       component._untrackHistory = trackSegEditorHistory();
       clearSegEditorHistory();
+      resetSyncLedger();
 
       // Editor key bindings (A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo)
       if (component.props.commandsManager) {
@@ -1906,6 +1908,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     reset3DToolState();
     // Recorded edits reference this session's labelmaps: they must not be replayable in the next
     clearSegEditorHistory();
+    resetSyncLedger();
     component._untrackHistory?.();
     component._untrackHistory = undefined;
     component._detachKeyBindings?.();

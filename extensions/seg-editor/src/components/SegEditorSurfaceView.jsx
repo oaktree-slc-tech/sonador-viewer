@@ -66,6 +66,7 @@ import {
   repairSurface,
   SurfaceEditCancelledError,
 } from '../threeDTools/deleteSelection';
+import { buildEditCase } from '../threeDTools/editCase';
 import LassoInteraction from '../threeDTools/LassoInteraction';
 import { combineSelection, SELECTION_MODES, selectTrianglesInLasso } from '../threeDTools/lassoSelection';
 import {
@@ -106,8 +107,11 @@ import {
   setCachedSurface,
   SURFACE_CHANGED_REQUEST,
 } from '../threeDTools/surfaceEdits';
+import { validateEditGeometry } from '../threeDTools/surfaceValidity';
+import { publishSyncLedger, trackSurfaceEditMemo, unsynchronizedEdits } from '../threeDTools/syncLedger';
 import {
   begin3DToolJob,
+  effectiveWeldTolerance,
   end3DToolJob,
   get3DEditOptions,
   get3DSmoothOptions,
@@ -127,6 +131,7 @@ import {
 } from '../threeDTools/threeDToolState';
 import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
 import { getPreviewColor, subscribePreviewColor } from '../utils/previewColor';
+import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
 
 
 const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
@@ -147,9 +152,56 @@ const WHITE = new Color(1, 1, 1);
 // enough to recede behind the change overlay, which is what a preview is about
 const GHOST_COLOR = 0xbdbdbd;
 const GHOST_OPACITY = 0.12;
-// Open edges, and non-manifold edges, of the target's surface (Show mesh issues)
-const OPEN_EDGE_COLOR = 0xff5252;
-const NON_MANIFOLD_EDGE_COLOR = 0xffa726;
+// Open, non-manifold and inconsistently wound edges of the target's surface (Show mesh issues);
+// the panel's legend and counts name them, so the colours are not the only cue
+export const ISSUE_COLORS = {
+  boundary: 0xff5252,
+  nonManifold: 0xffa726,
+  inconsistent: 0xce93d8,
+};
+
+// Console records of the 3D edits (ohif-viewers#149, FR-11): one per operation exit and per fit
+// attempt, never in a hot loop
+export const DEBUG_PREFIX = '[SegEditor3D]';
+
+// Why an edit could not start (FR-9): the notice each guard sends
+const REFUSALS = {
+  confirming: 'Answer the open confirmation first.',
+  busy: 'Another edit is still running. Wait for it to finish.',
+  previewPending: 'Finish or cancel the edit shown first: Enter applies, Esc cancels.',
+  noTarget: 'Select a segment to edit.',
+  noCanvas: 'The 3D surface is not available.',
+  noSelection: 'Select faces first.',
+  stale: 'The segment changed while the faces were selected. Select them again.',
+  staleSurface: 'The surface changed since it was last checked. Try again.',
+};
+
+// What failed the data-integrity checks of a result (surfaceValidity.INVALID_REASONS), for the notice
+const INVALID_GEOMETRY_TEXT = {
+  nonFinitePoints: 'non-finite coordinate(s)',
+  malformedPoints: 'malformed coordinate array',
+  malformedCells: 'malformed cell(s)',
+  invalidIndices: 'index(es) out of range',
+  nonFiniteBox: 'unbounded extent',
+};
+const INVALID_GEOMETRY_WHERE = {
+  before: 'input surface',
+  after: 'result',
+  patch: 'patch',
+  editBox: 'edit region',
+};
+
+// Why an applied edit stayed on the surface alone (edit.surfaceOnlyReason)
+const SURFACE_ONLY_REASONS = {
+  // The result has open, non-manifold or inverted edges (of either origin)
+  defects: 'defects',
+  // An earlier edit of this surface has not reached the 2D views
+  unsynchronized: 'unsynchronized',
+  // The surface's diagnosis did not complete, so it is not known to be sound
+  unchecked: 'unchecked',
+  // A repair never writes
+  repair: 'repair',
+};
 
 // Progress messages for the edit overlay (the steps before the edited surface is shown)
 const DELETE_STEP_MESSAGES = {
@@ -335,7 +387,9 @@ export default class SegEditorSurfaceView extends Component {
     this._highlightFrame = null;     // a highlight redraw scheduled for the next frame (paint strokes)
     this._smoothInFlight = false;    // a smooth preview recompute is running
     this._smoothDirty = false;       // the settings changed again while it ran
-    this._health = null;             // { points, result } of the last surface diagnostics
+    this._health = null;             // { points, weld, result, promise } of the last surface diagnostics
+    this._lastEditCase = null;       // the last edit, for the developer export (threeDTools/editCase)
+    this._lastEditId = 0;            // identifies the edit the Last-edit line describes
     this._smoothRerun = null;        // timer: recompute the smooth shown for Apply / Cancel
     this._smoothRun = 0;             // invalidates a smooth recompute that was overtaken
     this._unsubscribers = [];
@@ -605,6 +659,9 @@ export default class SegEditorSurfaceView extends Component {
       set3DToolTarget({ segmentIndex, label, color, disabledReason });
     }
     this._refreshSurfaceHealth();
+    // The synchronization ledger (threeDTools/syncLedger) lives with the session, not with this
+    // canvas: a remounted canvas starts from it
+    publishSyncLedger();
   }
 
   _apply3DToolState(state = get3DToolState()) {
@@ -662,6 +719,10 @@ export default class SegEditorSurfaceView extends Component {
       this._issuesShown = !!state.showIssues;
       this._refreshSurfaceHealth({ force: true });
     }
+    // The health follows the effective conditioning too, not only the surface version
+    if (this._health && this._health.weldFraction !== this._weldFraction()) {
+      this._refreshSurfaceHealth();
+    }
 
     // A smooth shown for Apply / Cancel follows its settings
     if (this._pendingEdit?.kind === 'smooth' && this._smoothOptionsChanged(state)) {
@@ -679,9 +740,67 @@ export default class SegEditorSurfaceView extends Component {
     return surface?.points?.length ? { model, surface } : null;
   }
 
+  _developerTools() {
+    return isDeveloperToolsEnabled();
+  }
+
+  // The developer weld fraction in force (0 without the developer tools)
+  _weldFraction() {
+    return this._developerTools() ? get3DToolState().weldFraction || 0 : 0;
+  }
+
+  /**
+   * The edge statistics of exactly this surface version, or null while its diagnosis is pending
+   * or failed. The published health is not read for this: it is cleared when the surface changes,
+   * and a diagnosis still running must never lend another surface's p1 to this one's weld cap.
+   */
+  _statisticsFor(points) {
+    const entry = this._health;
+    if (!entry || entry.points !== points) {
+      return null;
+    }
+    return entry.result?.edges || entry.statistics || null;
+  }
+
+  /**
+   * Whether a Smooth result is written: from the worker's diagnosis of the result as the write
+   * would voxelize it (`written`, smoothAndDiagnose) and from the ledger of the surface's earlier
+   * edits. Decided for the first result and again for every live recompute, since each is a new
+   * result; Apply re-checks the ledger once more.
+   *
+   * @returns {{ write, surfaceOnly, surfaceOnlyReason, defects }}
+   */
+  _smoothWriteDecision(geometryId, result) {
+    const written = result.written || null;
+    const sound = written?.closed === true;
+    const synchronized = unsynchronizedEdits(geometryId) === 0;
+    const writable = sound && synchronized;
+    return {
+      write: writable ? { kind: WRITE_KINDS.smooth } : null,
+      surfaceOnly: !writable,
+      surfaceOnlyReason: !written ? SURFACE_ONLY_REASONS.unchecked
+        : !sound ? SURFACE_ONLY_REASONS.defects
+          : !synchronized ? SURFACE_ONLY_REASONS.unsynchronized : null,
+      defects: written && !sound ? written : null,
+    };
+  }
+
+  // The cut-and-patch options of an edit, with the weld resolved against the statistics of the
+  // surface it edits (exact when they are not known yet)
+  _editOptions(points) {
+    const edges = this._statisticsFor(points);
+    return get3DEditOptions(get3DToolState(), {
+      surfaceHealth: edges ? { edges } : null, developerTools: this._developerTools(),
+    });
+  }
+
   _refreshSurfaceHealth({ force = false } = {}) {
-    // Diagnose the target's surface in the worker (once per surface version), publish the counts,
-    // and draw the edges while the overlay is on
+    // Diagnose the target's surface in the worker (once per surface version and effective
+    // conditioning), publish the counts and edge statistics, and draw the edges while the
+    // overlay is on. A requested weld is a fraction of the surface's p1 edge length, which the
+    // first diagnosis of a surface measures: that one runs exact, and a second one follows at
+    // the derived tolerance when a fraction is set. A new surface version clears the published
+    // health at once, so nothing reads the previous surface's counts or statistics meanwhile.
     const found = this._targetSurface();
     if (!found) {
       this._health = null;
@@ -690,34 +809,56 @@ export default class SegEditorSurfaceView extends Component {
       return;
     }
     const { model, surface } = found;
-    if (this._health?.points === surface.points) {
+    const weldFraction = this._weldFraction();
+    const sameSurface = this._health?.points === surface.points;
+    const statistics = sameSurface ? this._statisticsFor(surface.points) : null;
+    const weldTolerance = effectiveWeldTolerance(weldFraction, statistics && { edges: statistics }, {
+      developerTools: this._developerTools(),
+    });
+    if (sameSurface && this._health.weldFraction === weldFraction && this._health.weldTolerance === weldTolerance) {
       if (force && this._health.result) {
         this._updateIssuesOverlay(model, surface, this._health.result);
       }
       return;
     }
-    const entry = { points: surface.points, result: null };
+    if (!sameSurface) {
+      this._removeIssuesOverlay();
+      set3DSurfaceHealth(null);
+    }
+    const entry = { points: surface.points, weldFraction, weldTolerance, result: null, statistics, promise: null };
     this._health = entry;
     const generation = this._generation;
-    Promise.resolve()
-      .then(() => diagnoseSurfaceInWorker(surface, { weldTolerance: get3DToolState().weldTolerance }))
+    entry.promise = Promise.resolve()
+      .then(() => diagnoseSurfaceInWorker(surface, { weldTolerance }))
       .then(result => {
         if (!this._isMounted || this._generation !== generation || this._health !== entry) {
-          return;
+          return null;
         }
         entry.result = result;
         set3DSurfaceHealth({
           boundaryEdgeCount: result.boundaryEdgeCount,
           nonManifoldEdgeCount: result.nonManifoldEdgeCount,
+          inconsistentEdgeCount: result.inconsistentEdgeCount || 0,
           degenerate: result.degenerate || 0,
           duplicate: result.duplicate || 0,
           closed: result.closed,
           triangles: Math.floor(surface.polys.length / 4),
+          edges: result.edges || null,
+          conditioning: result.conditioning || null,
+          weldTolerance,
         });
         this._updateIssuesOverlay(model, surface, result);
+        // The fraction could not be resolved before the statistics existed: resolve it now
+        if (weldFraction > 0 && weldTolerance === 0 && result.edges?.p1 > 0) {
+          this._refreshSurfaceHealth();
+        }
+        return result;
       })
       .catch(err => {
+        // The health stays unknown: the panel keeps "checking", edits run with the exact weld,
+        // and a Smooth cannot be written (its soundness is unknown)
         console.error('[SegEditorSurfaceView] surface diagnostics failed', err);
+        return null;
       });
   }
 
@@ -737,8 +878,9 @@ export default class SegEditorSurfaceView extends Component {
         });
       }
     };
-    push(result.boundaryEdges || [], OPEN_EDGE_COLOR);
-    push(result.nonManifoldEdges || [], NON_MANIFOLD_EDGE_COLOR);
+    push(result.boundaryEdges || [], ISSUE_COLORS.boundary);
+    push(result.nonManifoldEdges || [], ISSUE_COLORS.nonManifold);
+    push(result.inconsistentEdges || [], ISSUE_COLORS.inconsistent);
     if (!segments.length) {
       return;
     }
@@ -1116,18 +1258,80 @@ export default class SegEditorSurfaceView extends Component {
    * `write`, and what the summary needs), null when there was nothing to do (it has told the
    * user), or false when it refused (likewise).
    */
+  /**
+   * One console record per operation exit or fit attempt (FR-11): the operation, its outcome
+   * and reason, timing and counters. Never called from a hot loop.
+   */
+  _debug(record) {
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug(DEBUG_PREFIX, record);
+    }
+  }
+
+  /**
+   * Refuse to start an edit (FR-9): every guard names the operation and the reason, whether or
+   * not the operation needs a selection, and leaves a console record.
+   */
+  _refuse(title, operation, reason, message = REFUSALS[reason]) {
+    const { notify, t } = this.props;
+    notify?.({ type: 'warning', title, message: t(message) });
+    this._debug({ operation, outcome: 'refused', reason });
+    return false;
+  }
+
+  /**
+   * Refuse a result that failed the data-integrity checks (surfaceValidity): nothing of it is
+   * shown or kept. Not a mesh-quality judgement: an open result passes these checks. Returns the
+   * rejection for _runSurfaceEdit's one console record of the exit.
+   */
+  _refuseInvalid(title, problem) {
+    const { notify, t } = this.props;
+    notify?.({
+      type: 'error',
+      title,
+      message: t('The result was not valid geometry: {{count}} {{what}} in the {{where}}. Nothing was changed.', {
+        count: problem.count,
+        what: t(INVALID_GEOMETRY_TEXT[problem.reason] || problem.reason),
+        where: t(INVALID_GEOMETRY_WHERE[problem.where] || problem.where),
+      }),
+    });
+    return { rejected: 'invalid', problem };
+  }
+
+  _editGuardReason(state, model, needsSelection) {
+    const { editSegmentationId } = this.props;
+    if (this._confirming) {
+      return 'confirming';
+    }
+    if (state.preview) {
+      return 'previewPending';
+    }
+    if (state.busy) {
+      return 'busy';
+    }
+    if (!state.target || state.target.disabledReason) {
+      return 'noTarget';
+    }
+    if (!model || !editSegmentationId || !this.api) {
+      return 'noCanvas';
+    }
+    if (needsSelection && (!this._selection.size || model.geometryId !== this._selectionGeometryId)) {
+      return 'noSelection';
+    }
+    return null;
+  }
+
   async _runSurfaceEdit({
-    title, cancelledMessage, step, needsSelection = true, confirmFirst = null, compute,
+    title, operation = title, cancelledMessage, step, needsSelection = true, confirmFirst = null, compute,
   }) {
-    const { editSegmentationId, notify, t } = this.props;
+    const { editSegmentationId } = this.props;
     const state = get3DToolState();
     const { target } = state;
     const model = target && this._targetModel(target.segmentIndex);
-    if (this._confirming || state.busy || !is3DTargetEditable(state) || !model || !editSegmentationId || !this.api) {
-      return false;
-    }
-    if (needsSelection && (!this._selection.size || model.geometryId !== this._selectionGeometryId)) {
-      return false;
+    const guard = this._editGuardReason(state, model, needsSelection);
+    if (guard) {
+      const message = guard === 'noTarget' && target?.disabledReason ? target.disabledReason : undefined;
+      return this._refuse(title, operation, guard, message);
     }
 
     if (confirmFirst) {
@@ -1139,6 +1343,7 @@ export default class SegEditorSurfaceView extends Component {
         this._confirming = false;
       }
       if (!confirmed || !this.api) {
+        this._debug({ operation, outcome: 'cancelled', reason: 'confirmation' });
         return false;
       }
     }
@@ -1149,13 +1354,8 @@ export default class SegEditorSurfaceView extends Component {
     if (!surface || this._sources.get(model.geometryId) !== surface.points || !labelmap) {
       if (needsSelection) {
         this.clearSelection();
-        notify?.({
-          type: 'warning',
-          title,
-          message: t('The segment changed while the faces were selected. Select them again.'),
-        });
       }
-      return false;
+      return this._refuse(title, operation, needsSelection ? 'stale' : 'staleSurface');
     }
 
     const selected = Array.from(this._selection);
@@ -1172,8 +1372,11 @@ export default class SegEditorSurfaceView extends Component {
     const stillValid = () => validity() && this._labelmapRevision === labelmapRevision;
 
     const job = begin3DToolJob();
+    const started = Date.now();
     this._toolBeforeEdit = state.activeTool;
     this.setState({ deleteStep: step });
+    let outcome = 'error';
+    let counters = null;
     try {
       const edit = await compute({
         model, surface, before, selected, segmentIndex, state, stillValid,
@@ -1183,9 +1386,21 @@ export default class SegEditorSurfaceView extends Component {
         throw new SurfaceEditCancelledError();
       }
       if (edit === null) {
+        outcome = 'nothing';
         return true;
       }
-      if (edit === false) {
+      if (edit === false || edit.rejected) {
+        // The computation refused the result itself (it has told the user)
+        outcome = edit?.rejected || 'rejected';
+        counters = edit?.problem || null;
+        return false;
+      }
+      // A result with a non-finite coordinate, a bad index or an unbounded box is refused here,
+      // before it can be shown, cached, recorded or written (FR-4): the edge diagnostics do not
+      // see such a fault, and a worker result is data until checked
+      const problem = validateEditGeometry(edit);
+      if (problem) {
+        ({ rejected: outcome, problem: counters } = this._refuseInvalid(title, problem));
         return false;
       }
       if (!edit.keepSelection) {
@@ -1193,22 +1408,49 @@ export default class SegEditorSurfaceView extends Component {
       }
       const full = {
         ...edit, geometryId: model.geometryId, segmentIndex, before, labelmapVolume: labelmap.volume, stillValid,
+        operation, options: edit.options || this._editOptions(before.points),
       };
+      counters = this._editCounters(full);
       if (edit.previewAlways || state.previewEnabled) {
+        outcome = 'preview';
         this._startPreview(model, full);
       } else {
+        outcome = 'applied';
         this._commitEdit(full);
       }
       return true;
     } catch (err) {
+      outcome = err instanceof SurfaceEditCancelledError ? 'cancelled' : 'error';
       this._reportEditFailure(err, generation, title, cancelledMessage);
       return false;
     } finally {
+      this._debug({ operation, outcome, ms: Date.now() - started, ...(counters || {}) });
       end3DToolJob(job);
       if (this._isMounted) {
         this.setState({ deleteStep: null });
       }
     }
+  }
+
+  // The counters of an edit for its console record: what the cut did and whether the result
+  // can be written
+  _editCounters(edit) {
+    const diagnostics = edit.cut?.diagnostics;
+    if (!diagnostics) {
+      return edit.kind === 'smooth' ? { moved: edit.moved } : null;
+    }
+    const fits = (diagnostics.fits || []).flat();
+    return {
+      removedTriangles: diagnostics.removedTriangles,
+      holes: edit.cut.holes,
+      methods: diagnostics.methods,
+      preexistingLoops: diagnostics.preexistingLoops?.count,
+      introduced: diagnostics.introduced,
+      acceptable: diagnostics.acceptable,
+      fits,
+      fitMs: fits.reduce((sum, attempt) => sum + (attempt.ms || 0), 0),
+      weld: diagnostics.conditioning,
+    };
   }
 
   _cutDeps(stillValid) {
@@ -1229,6 +1471,7 @@ export default class SegEditorSurfaceView extends Component {
     const title = t('Remove selected faces');
     return this._runSurfaceEdit({
       title,
+      operation: 'remove',
       cancelledMessage: t('The segment changed while the faces were being removed, so nothing was removed.'),
       step: DELETE_STEPS.cut,
       // With the preview on, the edit itself is the confirmation (Apply / Cancel)
@@ -1241,14 +1484,18 @@ export default class SegEditorSurfaceView extends Component {
         confirmText: t('Remove'),
         cancelText: t('Cancel'),
       }) : true),
-      compute: async ({ before, selected, state, stillValid, onStep }) => {
+      compute: async ({ model, before, selected, state, stillValid, onStep }) => {
+        const options = this._editOptions(before.points);
         const cut = await cutAndPatch({
           surface: before,
           selectedTriangles: selected,
-          options: get3DEditOptions(),
+          options,
           deps: this._cutDeps(stillValid),
           onStep,
         });
+        if (cut.invalid) {
+          return this._refuseInvalid(title, cut.invalid);
+        }
         if (!cut.changed) {
           this.clearSelection();
           notify?.({
@@ -1259,13 +1506,26 @@ export default class SegEditorSurfaceView extends Component {
           return null;
         }
         const depth = state.removalDepth;
+        // The result is written to the labelmap only when it has no open, non-manifold or
+        // inverted edge, retained or new (FR-4: a detected defect needs the user's explicit
+        // acknowledgement, which ohif-viewers#152's handoff will ask for), and when no earlier
+        // edit of this surface is still waiting to reach the 2D views. Otherwise it is applied to
+        // the surface alone and shown for Apply / Cancel whatever the preview setting.
+        const sound = cut.diagnostics?.acceptable !== false;
+        const synchronized = unsynchronizedEdits(model.geometryId) === 0;
+        const writable = sound && synchronized;
         return {
           selected,
           after: cut.edited || EMPTY_SURFACE,
           editBox: cut.editBox,
           selectedPoints: cut.selectedPoints,
           depth,
-          write: { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth },
+          write: writable ? { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth } : null,
+          surfaceOnly: !writable,
+          surfaceOnlyReason: !sound ? SURFACE_ONLY_REASONS.defects : !synchronized ? SURFACE_ONLY_REASONS.unsynchronized : null,
+          defects: cut.diagnostics?.output || null,
+          previewAlways: !writable,
+          options,
           cut,
           repair: false,
         };
@@ -1281,9 +1541,10 @@ export default class SegEditorSurfaceView extends Component {
     const title = t('Smooth selected faces');
     return this._runSurfaceEdit({
       title,
+      operation: 'smooth',
       cancelledMessage: t('The segment changed while the faces were being smoothed, so nothing was changed.'),
       step: DELETE_STEPS.smooth,
-      compute: async ({ before, selected }) => {
+      compute: async ({ model, before, selected }) => {
         const options = get3DSmoothOptions();
         const result = await smoothInWorker({ surface: before, selectedTriangles: selected, options });
         if (!result.changed) {
@@ -1302,12 +1563,22 @@ export default class SegEditorSurfaceView extends Component {
           });
           return false;
         }
+        // A smooth keeps its input's faces, so the defects of its result are the ones the surface
+        // had; they are counted on the result exactly as the delta write would voxelize it (the
+        // worker's `written`, from the same call: every face, duplicates included, coincident
+        // positions as one vertex, no cleanup and no tolerance), not on the conditioned copy the
+        // panel's health diagnoses, which drops a duplicate face and may weld a seam the written
+        // faces keep. A result with open, non-manifold or inverted edges is not written without
+        // the acknowledgement #152 provides (FR-4), nor is one that came without that diagnosis,
+        // nor one of a surface the 2D views have not caught up with (its delta would be computed
+        // against a labelmap that does not reflect the surface). The kernel's own flip and
+        // degenerate checks only see what the smoothing itself did.
         return {
           kind: 'smooth',
           selected,
           after: result.after,
           editBox: result.editBox,
-          write: { kind: WRITE_KINDS.smooth },
+          ...this._smoothWriteDecision(model.geometryId, result),
           keepSelection: true,
           previewAlways: true,
           moved: result.moved,
@@ -1323,18 +1594,35 @@ export default class SegEditorSurfaceView extends Component {
     const title = t('Repair surface');
     return this._runSurfaceEdit({
       title,
+      operation: 'repair',
       cancelledMessage: t('The surface could not be repaired. It is unchanged.'),
       step: DELETE_STEPS.patch,
       needsSelection: false,
       compute: async ({ before, stillValid, onStep }) => {
+        const options = this._editOptions(before.points);
         const cut = await repairSurface({
           surface: before,
-          options: get3DEditOptions(),
+          options,
           deps: this._cutDeps(stillValid),
           onStep,
         });
+        if (cut.invalid) {
+          return this._refuseInvalid(title, cut.invalid);
+        }
         if (!cut.changed) {
-          notify?.({ type: 'info', title, message: t('The surface has no open rims to close.') });
+          // No rim to close. Non-manifold or inverted edges are defects a patch cannot fix yet
+          // (ohif-viewers#150): say so rather than calling the surface sound.
+          const input = cut.diagnostics?.input || {};
+          const unclosable = (input.nonManifoldEdgeCount || 0) + (input.inconsistentEdgeCount || 0);
+          notify?.({
+            type: 'info',
+            title,
+            message: unclosable
+              ? t('Repair cannot close {{nonManifold}} non-manifold and {{inconsistent}} inverted edge(s) yet; there is no open rim to patch.', {
+                nonManifold: input.nonManifoldEdgeCount || 0, inconsistent: input.inconsistentEdgeCount || 0,
+              })
+              : t('The surface has no open rims to close.'),
+          });
           return null;
         }
         return {
@@ -1342,7 +1630,10 @@ export default class SegEditorSurfaceView extends Component {
           editBox: cut.editBox,
           selectedPoints: cut.selectedPoints,
           depth: 0,
-          write: { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth: 0 },
+          write: null,
+          surfaceOnly: true,
+          surfaceOnlyReason: SURFACE_ONLY_REASONS.repair,
+          options,
           cut,
           repair: true,
         };
@@ -1401,6 +1692,14 @@ export default class SegEditorSurfaceView extends Component {
         });
         return;
       }
+      // A recompute is a worker result like the first: checked before it replaces the one shown,
+      // which stays when it fails (FR-4)
+      const problem = validateEditGeometry({ after: result.after, editBox: result.editBox });
+      if (problem) {
+        this._refuseInvalid(t('Smooth selected faces'), problem);
+        this._debug({ operation: 'smooth', outcome: 'invalid', recompute: true, ...problem });
+        return;
+      }
       if (!this._previewIsCurrent(edit)) {
         this._dropStalePreview();
         return;
@@ -1408,6 +1707,8 @@ export default class SegEditorSurfaceView extends Component {
       edit.after = result.after;
       edit.editBox = result.editBox;
       edit.moved = result.moved;
+      // A recompute is a new result: whether it is written is decided from its own diagnosis
+      Object.assign(edit, this._smoothWriteDecision(edit.geometryId, result));
       // The recompute updates the preview mesh and its overlay only; the cache is written on Apply
       this._updatePreviewMesh(edit.after);
       this._updateChangeOverlay(edit);
@@ -1449,19 +1750,32 @@ export default class SegEditorSurfaceView extends Component {
   // -----------------------------------------------------------------------------------------
   // Edits: preview, apply, cancel, repair
 
-  _editSummary(edit) {
+  _editSummary(edit, write = edit.surfaceOnly || edit.repair ? 'surfaceOnly' : 'queued') {
     if (edit.kind === 'smooth') {
-      return { kind: 'smooth', points: edit.moved };
+      return { kind: 'smooth', points: edit.moved, write };
     }
     const { diagnostics = {}, holes = 0 } = edit.cut;
     return {
       points: edit.selectedPoints ? edit.selectedPoints.length / 3 : 0,
+      faces: diagnostics.removedTriangles || 0,
       holes,
       methods: diagnostics.methods || {},
       closed: diagnostics.output?.closed,
       openEdges: diagnostics.openEdges || 0,
+      preexistingLoops: diagnostics.preexistingLoops?.count || 0,
+      introduced: diagnostics.introduced || null,
+      before: diagnostics.input || null,
+      after: diagnostics.output || null,
+      conditioning: diagnostics.conditioning || null,
       repair: !!edit.repair,
+      // What the 2D views got: queued, written (with counts), surfaceOnly, refused or failed
+      write,
     };
+  }
+
+  /** The last edit as a developer export bundle (FR-12), or null. */
+  getLastEditCase() {
+    return this._lastEditCase;
   }
 
   _startPreview(model, edit) {
@@ -1677,6 +1991,16 @@ export default class SegEditorSurfaceView extends Component {
       this._dropStalePreview();
       return false;
     }
+    // Only validated geometry is committed, whatever path produced the pending edit
+    const problem = validateEditGeometry(edit);
+    if (problem) {
+      const { t } = this.props;
+      this._endPreview();
+      this._refuseInvalid(edit.kind === 'smooth' ? t('Smooth selected faces')
+        : edit.repair ? t('Repair surface') : t('Remove selected faces'), problem);
+      this._debug({ operation: edit.operation || edit.kind || 'remove', outcome: 'invalid', apply: true, ...problem });
+      return false;
+    }
     this._endPreview();
     this._commitEdit(edit);
     return true;
@@ -1703,6 +2027,15 @@ export default class SegEditorSurfaceView extends Component {
     // labelmap written (FR-23/FR-24): a removal clears the voxels the surface no longer contains,
     // a smooth moves the segment with the surface. A repair changes the surface only.
     const { notify, t } = this.props;
+    // Prepared with a write while an earlier edit's write was still pending: if that write has
+    // since failed or was refused, this one stays on the surface too (the writer would refuse it
+    // at execution as well; deciding here keeps the record and the notice right)
+    if (edit.write && !edit.surfaceOnly && !edit.repair && unsynchronizedEdits(edit.geometryId) > 0) {
+      edit.write = null;
+      edit.surfaceOnly = true;
+      edit.surfaceOnlyReason = SURFACE_ONLY_REASONS.unsynchronized;
+    }
+    const surfaceOnly = !!(edit.repair || edit.surfaceOnly || !edit.write);
     const memo = createSurfaceEditMemo({
       geometryId: edit.geometryId,
       segmentIndex: edit.segmentIndex,
@@ -1714,26 +2047,86 @@ export default class SegEditorSurfaceView extends Component {
       labelmapVolume: edit.labelmapVolume,
       deps: {
         setSurface: (id, next, options) => setCachedSurface(this.props.segmentationId, id, next, options),
-        queueWrite: pending => this._queueWrite(pending),
+        queueWrite: pending => this._queueWrite(pending, edit),
         withOwnEdit: this.props.withOwnLabelmapEdit,
       },
     });
-    if (edit.repair) {
+    if (surfaceOnly) {
       memo.surfaceOnly = true;
     }
+    trackSurfaceEditMemo(memo);
+    this._lastEditId += 1;
+    edit.id = this._lastEditId;
+    edit.memo = memo;
+    if (this._developerTools()) {
+      this._lastEditCase = buildEditCase({ edit, memo });
+    }
     recordSurfaceEdit(memo);
-    set3DLastEdit(this._editSummary(edit));
+    set3DLastEdit({ id: edit.id, ...this._editSummary(edit, surfaceOnly ? 'surfaceOnly' : 'queued') });
     this._restoreTool();
 
     const { cut } = edit;
+    const title = edit.kind === 'smooth' ? t('Smooth selected faces')
+      : edit.repair ? t('Repair surface') : t('Remove selected faces');
     if (cut?.cappedHoles) {
       notify?.({
         type: 'warning',
-        title: edit.repair ? t('Repair surface') : t('Remove selected faces'),
+        title,
         message: t('{{holes}} hole(s) could not be closed smoothly and were closed flat.', {
           holes: cut.cappedHoles,
         }),
       });
+    }
+    // An edit that stays on the surface alone says so, and what brings the 2D views back: Undo.
+    // Repair is surface-only as well, so it is not offered as the way to update them.
+    const reason = edit.surfaceOnlyReason || (surfaceOnly && !edit.repair ? SURFACE_ONLY_REASONS.unsynchronized : null);
+    if (reason === SURFACE_ONLY_REASONS.defects) {
+      const output = edit.defects || cut?.diagnostics?.output || {};
+      notify?.({
+        type: 'warning',
+        title,
+        message: t('Surface changed; the 2D views were not updated. The result has {{open}} open, {{nonManifold}} non-manifold and {{inconsistent}} inverted edge(s), {{introduced}} of them new. They stay as they are until the surface is synchronized; Undo restores the previous surface.', {
+          open: output.boundaryEdgeCount || 0,
+          nonManifold: output.nonManifoldEdgeCount || 0,
+          inconsistent: output.inconsistentEdgeCount || 0,
+          introduced: cut?.diagnostics?.introduced?.total || 0,
+        }),
+      });
+    } else if (reason === SURFACE_ONLY_REASONS.unsynchronized) {
+      notify?.({
+        type: 'warning',
+        title,
+        message: t('Surface changed; the 2D views were not updated: an earlier edit of this surface has not reached them yet. Undo restores the previous surface.'),
+      });
+    } else if (reason === SURFACE_ONLY_REASONS.unchecked) {
+      notify?.({
+        type: 'warning',
+        title,
+        message: t('Surface changed; the 2D views were not updated: the surface\'s check did not complete, so it is not known to be sound. Undo restores the previous surface.'),
+      });
+    }
+  }
+
+  // The Last-edit line follows the write of the edit it describes
+  _updateLastEditWrite(edit, memo) {
+    const current = get3DToolState().lastEdit;
+    if (!this._isMounted || !current || current.id !== edit.id) {
+      return;
+    }
+    const report = memo.writeReport || {};
+    const status = report.status === 'written' ? 'written'
+      : report.status === 'refused' ? 'refused'
+        : report.status === 'failed' ? 'failed'
+          : memo.surfaceOnly ? 'surfaceOnly' : current.write;
+    set3DLastEdit({
+      ...current,
+      write: status,
+      removedVoxels: report.removed || 0,
+      addedVoxels: report.added || 0,
+      farField: report.farField || 0,
+    });
+    if (this._lastEditCase && this._lastEditCase.editId === edit.id) {
+      this._lastEditCase = buildEditCase({ edit, memo });
     }
   }
 
@@ -1773,23 +2166,40 @@ export default class SegEditorSurfaceView extends Component {
     }
   }
 
-  _queueWrite(memo) {
+  _queueWrite(memo, edit = null) {
     // The labelmap write that follows a surface edit (and a redo's). The callbacks are the
     // layout's, so they outlive this canvas.
     const { editSegmentationId, notify, onEditError, withOwnLabelmapEdit, t } = this.props;
     const smooth = memo.write?.kind === WRITE_KINDS.smooth;
-    return queueSurfaceEditWrite(memo, {
+    const title = smooth ? t('Smooth selected faces') : t('Remove selected faces');
+    const write = queueSurfaceEditWrite(memo, {
       editSegmentationId,
       withOwnEdit: withOwnLabelmapEdit,
-      onRefused: () => notify?.({
+      keepIndices: this._developerTools(),
+      onRefused: (refused = memo) => notify?.({
         type: 'warning',
-        title: smooth ? t('Smooth selected faces') : t('Remove selected faces'),
-        message: smooth
-          ? t('The segment changed before the 2D views could be updated. Undo the smoothing to restore the surface.')
-          : t('The segment changed before the 2D views could be updated. Undo the removal to restore the surface.'),
+        title,
+        message: refused?.writeReport?.reason === 'domain'
+          ? t('The 2D views were not updated: the proposed change reached {{count}} voxel(s) outside the edit region, so it was refused. Undo the edit to restore the surface.', {
+            count: refused.writeReport.farField,
+          })
+          : refused?.writeReport?.reason === 'predecessor'
+            ? t('The 2D views were not updated: an earlier edit of this surface did not reach them, so this one was not written either. Undo the edits to restore the surface.')
+            : smooth
+            ? t('The segment changed before the 2D views could be updated. Undo the smoothing to restore the surface.')
+            : t('The segment changed before the 2D views could be updated. Undo the removal to restore the surface.'),
       }),
       onError: error => onEditError?.(error),
     });
+    // A refused or failed write leaves the surface ahead of the 2D views (the memo is marked
+    // surface-only by the queue): the synchronization state follows
+    Promise.resolve(write).then(() => {
+      if (edit) {
+        this._updateLastEditWrite(edit, memo);
+      }
+      publishSyncLedger();
+    }).catch(() => {});
+    return write;
   }
 
   _createInteractions(api) {
@@ -1850,6 +2260,7 @@ export default class SegEditorSurfaceView extends Component {
       handle3DToolRequest('applyPreview', () => this.applyPreview()),
       handle3DToolRequest('cancelPreview', () => this.cancelPreview()),
       handle3DToolRequest('repairSurface', () => this.repairSurface()),
+      handle3DToolRequest('editCase', () => this.getLastEditCase()),
       handle3DToolRequest(SURFACE_CHANGED_REQUEST, options => this._onSurfaceChanged(options)),
     );
     this._loadInitialModels();

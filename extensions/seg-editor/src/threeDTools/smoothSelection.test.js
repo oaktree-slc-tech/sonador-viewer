@@ -2,8 +2,8 @@
 
 import { uvSphere, verticesWhere } from './testing/meshes';
 import { findBoundaryLoops } from './meshCut';
-import { selectionTopology, triangleTopology } from './meshRepair';
-import { smoothRegion, smoothSurface } from './smoothSelection';
+import { conditionSurface, selectionTopology, surfaceDiagnostics, triangleTopology } from './meshRepair';
+import { smoothAndDiagnose, smoothRegion, smoothSurface } from './smoothSelection';
 
 
 // A sphere with a bump: the vertices of a cap pushed outwards by a noisy amount
@@ -181,5 +181,50 @@ describe('smoothSurface', () => {
 
     expect(result.changed).toBe(true);
     expect(result.maxDisplacement).toBeLessThan(1e-5);
+  });
+});
+
+describe('smoothAndDiagnose', () => {
+  // What the carve worker's `smooth` returns: the kernel's result and the diagnosis of that
+  // result as the delta write would voxelize it. The review's reproductions (ohif-viewers!104,
+  // round 3): a smooth keeps its input's faces, so a defect the conditioned health hides, which
+  // the kernel's flip and degenerate checks cannot see either, is still in the written geometry.
+  const probe = { strength: 0.1, passes: 1, feather: false };
+  const healthOf = (surface, weldTolerance = 0) => surfaceDiagnostics(conditionSurface(surface, { weldTolerance }).triangles);
+
+  it('reports the duplicate face a smooth keeps, which the conditioned health drops', () => {
+    const surface = {
+      points: Float32Array.from([0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10]),
+      polys: Int32Array.from([3, 0, 2, 1, 3, 0, 1, 3, 3, 0, 3, 2, 3, 1, 2, 3, 3, 0, 2, 1]),
+    };
+    expect(healthOf(surface).closed).toBe(true);
+
+    const result = smoothAndDiagnose({ surface, selectedTriangles: [0, 1, 2, 3, 4], options: probe });
+
+    expect(result).toMatchObject({ changed: true, flipped: 0, degenerate: 0 });
+    expect(result.after.polys).toBe(surface.polys);
+    expect(result.written).toMatchObject({ closed: false, nonManifoldEdgeCount: 3, boundaryEdgeCount: 0 });
+  });
+
+  it('reports the seam a smooth keeps, which a developer weld would close in the health', () => {
+    const surface = {
+      points: Float32Array.from([0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10, 0.001, 0, 0]),
+      polys: Int32Array.from([3, 4, 2, 1, 3, 0, 1, 3, 3, 0, 3, 2, 3, 1, 2, 3]),
+    };
+    expect(healthOf(surface, 0.009999).closed).toBe(true);
+
+    const result = smoothAndDiagnose({ surface, selectedTriangles: [0, 1, 2, 3], options: probe });
+
+    expect(result).toMatchObject({ changed: true, flipped: 0, degenerate: 0 });
+    expect(result.written).toMatchObject({ closed: false, boundaryEdgeCount: 4, nonManifoldEdgeCount: 0 });
+  });
+
+  it('finds a closed result closed, and adds nothing when there was nothing to smooth', () => {
+    const surface = bumpySphere();
+    const result = smoothAndDiagnose({ surface, selected: cap(surface, 6), options: { strength: 0.5, passes: 1, feather: false } });
+    expect(result.changed).toBe(true);
+    expect(result.written).toMatchObject({ closed: true, degenerate: 0 });
+    expect(smoothAndDiagnose({ surface, selected: [], options: probe })).toMatchObject({ changed: false });
+    expect(smoothAndDiagnose({ surface, selected: [], options: probe }).written).toBeUndefined();
   });
 });

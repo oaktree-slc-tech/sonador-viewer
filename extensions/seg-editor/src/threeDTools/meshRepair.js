@@ -2,7 +2,14 @@
 // what makes a cut-and-patch more likely to give back a closed, manifold surface.
 //
 // - conditionSurface: weld vertices within a tolerance, drop degenerate and duplicate triangles.
-// - surfaceDiagnostics: open (boundary) and non-manifold edges of a triangle set.
+//   A positive tolerance is kept only when it preserves the surface (ohif-viewers#149, FR-2);
+//   otherwise the exact weld is used and the fallback reported.
+// - surfaceDiagnostics: open (boundary), non-manifold and inconsistently wound edges of a
+//   triangle set (ohif-viewers#149, FR-3).
+// - writtenSurfaceDiagnostics: the same for a surface exactly as the voxelizer receives it (every
+//   face, duplicates included, coincident positions as one vertex, no tolerance), which decides
+//   whether an edit that keeps its input's faces may be written (FR-4).
+// - edgeStatistics: the length percentiles the weld cap and relative settings are derived from.
 // - cleanRim: remove ear triangles and small islands after a cut, so the rim has no pinches.
 // - growSelection / shrinkSelection / largestConnectedSelection: shape a vertex selection.
 // - triangleTopology, growTriangles / shrinkTriangles / largestConnectedTriangles: the same for the
@@ -103,20 +110,8 @@ export function weldVerticesWithin(points, tolerance = 0) {
   return canonical;
 }
 
-/**
- * Weld a surface's vertices and drop the triangles that are degenerate or duplicates after the
- * weld.
- *
- * @param {{ points: ArrayLike<number>, polys: ArrayLike<number> }} surface
- * @param {Object} [options]
- * @param {number} [options.weldTolerance] - world units (0: exact positions)
- * @returns {{ canonical: Int32Array, triangles: Int32Array, source: Int32Array, degenerate: number,
- *   duplicate: number }} triangles in canonical vertex indices, and for each the index of the
- *   surface's triangle it came from
- */
-export function conditionSurface({ points, polys }, { weldTolerance = 0 } = {}) {
+function _condition(points, raw, weldTolerance) {
   const canonical = weldVerticesWithin(points, weldTolerance);
-  const raw = polysToTriangles(polys);
   const kept = [];
   const source = [];
   const seen = new Set();
@@ -142,6 +137,256 @@ export function conditionSurface({ points, polys }, { weldTolerance = 0 } = {}) 
   return { canonical, triangles: Int32Array.from(kept), source: Int32Array.from(source), degenerate, duplicate };
 }
 
+/** The number of vertex-connected components of a triangle set. */
+export function triangleComponentCount(triangles) {
+  const parent = new Map();
+  const find = v => {
+    let root = v;
+    while (parent.get(root) !== root) {
+      root = parent.get(root);
+    }
+    while (parent.get(v) !== root) {
+      const next = parent.get(v);
+      parent.set(v, root);
+      v = next;
+    }
+    return root;
+  };
+  const union = (a, b) => {
+    if (!parent.has(a)) {
+      parent.set(a, a);
+    }
+    if (!parent.has(b)) {
+      parent.set(b, b);
+    }
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) {
+      parent.set(ra, rb);
+    }
+  };
+  for (let t = 0; t < triangles.length; t += 3) {
+    union(triangles[t], triangles[t + 1]);
+    union(triangles[t + 1], triangles[t + 2]);
+  }
+  let count = 0;
+  parent.forEach((_, v) => {
+    if (find(v) === v) {
+      count++;
+    }
+  });
+  return count;
+}
+
+function _normalOf(points, a, b, c, out) {
+  const ax = points[3 * a];
+  const ay = points[3 * a + 1];
+  const az = points[3 * a + 2];
+  const ux = points[3 * b] - ax;
+  const uy = points[3 * b + 1] - ay;
+  const uz = points[3 * b + 2] - az;
+  const vx = points[3 * c] - ax;
+  const vy = points[3 * c + 1] - ay;
+  const vz = points[3 * c + 2] - az;
+  out[0] = uy * vz - uz * vy;
+  out[1] = uz * vx - ux * vz;
+  out[2] = ux * vy - uy * vx;
+  return out;
+}
+
+// A kept triangle whose normal shrinks to this fraction of its source's has lost its area: three
+// distinct canonical vertices that became collinear. Relative to the triangle's own area, so the
+// test holds at any scale; a source triangle with no area is not sound and is not counted.
+const COLLAPSE_RATIO = 1e-9;
+
+/**
+ * Whether a toleranced weld preserved the surface's sound geometry (ohif-viewers#149, FR-2): no
+ * triangle beyond the exact weld's degenerates and duplicates was dropped, no kept triangle lost
+ * its area (three distinct vertices welded onto a line are not an index degeneracy, so the kept
+ * count alone misses them) or had its normal turned over against its source cell, and no
+ * component was merged into another. A percentile-based cap alone cannot promise this: a tiny
+ * valid component below the tolerance collapses while the edge counts still look healthy.
+ */
+export function checkConditioningPreserved(points, raw, exact, toleranced) {
+  const before = [0, 0, 0];
+  const after = [0, 0, 0];
+  let flipped = 0;
+  let collapsed = 0;
+  const { triangles, source } = toleranced;
+  for (let t = 0; t < triangles.length; t += 3) {
+    const cell = 3 * source[t / 3];
+    _normalOf(points, raw[cell], raw[cell + 1], raw[cell + 2], before);
+    _normalOf(points, triangles[t], triangles[t + 1], triangles[t + 2], after);
+    const areaBefore = Math.hypot(before[0], before[1], before[2]);
+    const areaAfter = Math.hypot(after[0], after[1], after[2]);
+    if (areaBefore > 0 && areaAfter <= COLLAPSE_RATIO * areaBefore) {
+      collapsed++;
+    } else if (before[0] * after[0] + before[1] * after[1] + before[2] * after[2] < 0) {
+      flipped++;
+    }
+  }
+  const componentsBefore = triangleComponentCount(exact.triangles);
+  const componentsAfter = triangleComponentCount(triangles);
+  const report = {
+    extraDegenerate: toleranced.degenerate - exact.degenerate,
+    extraDuplicate: toleranced.duplicate - exact.duplicate,
+    collapsed,
+    flipped,
+    componentsBefore,
+    componentsAfter,
+  };
+  const preserved = report.extraDegenerate === 0 && report.extraDuplicate === 0 && collapsed === 0
+    && flipped === 0 && componentsAfter === componentsBefore;
+  return { preserved, report };
+}
+
+/**
+ * Weld a surface's vertices and drop the triangles that are degenerate or duplicates after the
+ * weld. A positive tolerance is applied only when it preserves the surface
+ * (checkConditioningPreserved); otherwise the exact weld's result is returned with `fellBack`
+ * set, so a tolerance can never silently decimate the surface. The exact weld's degenerate and
+ * duplicate counts are the pre-existing ones, reported apart from anything an action removes.
+ *
+ * @param {{ points: ArrayLike<number>, polys: ArrayLike<number> }} surface
+ * @param {Object} [options]
+ * @param {number} [options.weldTolerance] - world units (0: exact positions)
+ * @returns {{ canonical: Int32Array, triangles: Int32Array, source: Int32Array, degenerate: number,
+ *   duplicate: number, effectiveWeldTolerance: number, requestedWeldTolerance: number,
+ *   preserved: boolean, fellBack: boolean, preservation: Object|null }} triangles in canonical
+ *   vertex indices, and for each the index of the surface's triangle it came from
+ */
+export function conditionSurface({ points, polys }, { weldTolerance = 0 } = {}) {
+  const raw = polysToTriangles(polys);
+  const requested = Number.isFinite(weldTolerance) && weldTolerance > 0 ? weldTolerance : 0;
+  const exact = _condition(points, raw, 0);
+  if (!requested) {
+    return {
+      ...exact, effectiveWeldTolerance: 0, requestedWeldTolerance: 0, preserved: true, fellBack: false, preservation: null,
+    };
+  }
+  const toleranced = _condition(points, raw, requested);
+  const { preserved, report } = checkConditioningPreserved(points, raw, exact, toleranced);
+  if (!preserved) {
+    return {
+      ...exact, effectiveWeldTolerance: 0, requestedWeldTolerance: requested, preserved: false, fellBack: true, preservation: report,
+    };
+  }
+  return {
+    ...toleranced, effectiveWeldTolerance: requested, requestedWeldTolerance: requested, preserved: true, fellBack: false, preservation: report,
+  };
+}
+
+const _positionKey = (points, v) => `${points[3 * v]},${points[3 * v + 1]},${points[3 * v + 2]}`;
+
+function _edgePositionKeys(points, edges) {
+  const keys = new Set();
+  for (let e = 0; e < edges.length; e += 2) {
+    const a = _positionKey(points, edges[e]);
+    const b = _positionKey(points, edges[e + 1]);
+    keys.add(a < b ? `${a}|${b}` : `${b}|${a}`);
+  }
+  return keys;
+}
+
+/**
+ * The defects of a result that its input did not have (ohif-viewers#149, FR-4/FR-5): the output's
+ * boundary, non-manifold and inconsistent edges whose two endpoint positions were not such an
+ * edge of the input. Edges are compared by position because the result is renumbered; kept
+ * vertices and loop vertices keep their positions exactly. Pre-existing openings an edit left
+ * alone are therefore retained, not introduced.
+ *
+ * @param {{ points: ArrayLike<number>, diagnostics: Object }} input - surfaceDiagnostics of the
+ *   input, with the points its edge indices refer to
+ * @param {{ points: ArrayLike<number>, diagnostics: Object }} output - likewise for the result
+ * @returns {{ boundaryEdgeCount: number, nonManifoldEdgeCount: number, inconsistentEdgeCount: number,
+ *   total: number, retained: { boundaryEdgeCount, nonManifoldEdgeCount, inconsistentEdgeCount } }}
+ */
+export function compareDefects(input, output) {
+  const kinds = [
+    ['boundaryEdgeCount', 'boundaryEdges'],
+    ['nonManifoldEdgeCount', 'nonManifoldEdges'],
+    ['inconsistentEdgeCount', 'inconsistentEdges'],
+  ];
+  const introduced = { total: 0, retained: {} };
+  kinds.forEach(([countKey, edgesKey]) => {
+    const before = _edgePositionKeys(input.points, input.diagnostics?.[edgesKey] || []);
+    const after = _edgePositionKeys(output.points, output.diagnostics?.[edgesKey] || []);
+    let count = 0;
+    after.forEach(key => {
+      if (!before.has(key)) {
+        count++;
+      }
+    });
+    introduced[countKey] = count;
+    introduced.retained[countKey] = after.size - count;
+    introduced.total += count;
+  });
+  return introduced;
+}
+
+// Above this many unique edges the length percentiles are taken from an evenly strided sample
+export const EDGE_STATISTICS_SAMPLE_LIMIT = 200000;
+
+/**
+ * Length statistics of a triangle set's unique edges (ohif-viewers#149 FR-1, #151 FR-3/FR-4):
+ * the first percentile the weld cap is a fraction of, the median, and the mean. Computed once per
+ * surface version with the health diagnostics; sampled above EDGE_STATISTICS_SAMPLE_LIMIT edges,
+ * which the result says.
+ *
+ * @param {ArrayLike<number>} points - flat xyz
+ * @param {ArrayLike<number>} triangles - flat vertex triples (canonical or raw indices)
+ * @param {Object} [options]
+ * @param {number} [options.sampleLimit]
+ * @returns {{ edgeCount: number, sampleSize: number, sampled: boolean, p1: number|null,
+ *   p50: number|null, mean: number|null }} null statistics when there is no edge
+ */
+export function edgeStatistics(points, triangles, { sampleLimit = EDGE_STATISTICS_SAMPLE_LIMIT } = {}) {
+  const seen = new Set();
+  const lengths = [];
+  for (let t = 0; t < triangles.length; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = triangles[t + e];
+      const b = triangles[t + ((e + 1) % 3)];
+      if (a === b) {
+        continue;
+      }
+      const key = _key(a, b);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      lengths.push(Math.hypot(
+        points[3 * a] - points[3 * b], points[3 * a + 1] - points[3 * b + 1], points[3 * a + 2] - points[3 * b + 2]));
+    }
+  }
+  const edgeCount = lengths.length;
+  if (!edgeCount) {
+    return { edgeCount: 0, sampleSize: 0, sampled: false, p1: null, p50: null, mean: null };
+  }
+  let sample = lengths;
+  if (edgeCount > sampleLimit) {
+    const stride = edgeCount / sampleLimit;
+    sample = [];
+    for (let i = 0; i < sampleLimit; i++) {
+      sample.push(lengths[Math.floor(i * stride)]);
+    }
+  }
+  const sorted = Float64Array.from(sample).sort();
+  const rank = percentile => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((percentile / 100) * sorted.length) - 1))];
+  let total = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    total += sorted[i];
+  }
+  return {
+    edgeCount,
+    sampleSize: sorted.length,
+    sampled: sorted.length < edgeCount,
+    p1: rank(1),
+    p50: rank(50),
+    mean: total / sorted.length,
+  };
+}
+
 /**
  * Edge use counts of a triangle set: an edge of a closed manifold is used by exactly two
  * triangles.
@@ -161,30 +406,85 @@ export function edgeUseCounts(triangles) {
 }
 
 /**
- * The open and non-manifold edges of a triangle set.
+ * The open, non-manifold and inconsistently wound edges of a triangle set (ohif-viewers#149,
+ * FR-3). The half-edges are counted by direction in the same pass as the edge uses: an edge used
+ * by exactly two triangles is inconsistent when both traverse it the same way (one of the two
+ * faces is wound the wrong way round). `closed` requires all three counts to be zero. That is
+ * necessary for a valid solid, not sufficient: vertex fans, self-intersection and component
+ * orientation are not examined here.
  *
  * @param {ArrayLike<number>} triangles
- * @returns {{ boundaryEdges: Int32Array, nonManifoldEdges: Int32Array, boundaryEdgeCount: number,
- *   nonManifoldEdgeCount: number, closed: boolean }} the edge arrays are flat vertex pairs
+ * @returns {{ boundaryEdges: Int32Array, nonManifoldEdges: Int32Array, inconsistentEdges: Int32Array,
+ *   boundaryEdgeCount: number, nonManifoldEdgeCount: number, inconsistentEdgeCount: number,
+ *   closed: boolean }} the edge arrays are flat vertex pairs
  */
 export function surfaceDiagnostics(triangles) {
-  const counts = edgeUseCounts(triangles);
+  const counts = new Map();
+  const directed = new Set();
+  for (let t = 0; t < triangles.length; t += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = triangles[t + e];
+      const b = triangles[t + ((e + 1) % 3)];
+      const key = _key(a, b);
+      counts.set(key, (counts.get(key) || 0) + 1);
+      directed.add(`${a}>${b}`);
+    }
+  }
   const boundary = [];
   const nonManifold = [];
+  const inconsistent = [];
   counts.forEach((count, key) => {
-    if (count === 2) {
-      return;
-    }
     const [a, b] = key.split('_').map(Number);
-    (count === 1 ? boundary : nonManifold).push(a, b);
+    if (count === 1) {
+      boundary.push(a, b);
+    } else if (count > 2) {
+      nonManifold.push(a, b);
+    } else if (!directed.has(`${a}>${b}`) || !directed.has(`${b}>${a}`)) {
+      inconsistent.push(a, b);
+    }
   });
   return {
     boundaryEdges: Int32Array.from(boundary),
     nonManifoldEdges: Int32Array.from(nonManifold),
+    inconsistentEdges: Int32Array.from(inconsistent),
     boundaryEdgeCount: boundary.length / 2,
     nonManifoldEdgeCount: nonManifold.length / 2,
-    closed: !boundary.length && !nonManifold.length,
+    inconsistentEdgeCount: inconsistent.length / 2,
+    closed: !boundary.length && !nonManifold.length && !inconsistent.length,
   };
+}
+
+/**
+ * The diagnosis of a surface as the voxelizer receives it (ohif-viewers#149, FR-4): the edge
+ * counts of the faces a labelmap write would be computed from, not of a conditioned copy. Vertices
+ * at exactly the same position are one vertex (the ray test sees positions, not indices), every
+ * face is counted, duplicates included (a ray crosses a duplicated face twice, so the parity, and
+ * the voxels, behind it are wrong), and only the faces with two coincident corners are left out,
+ * counted as `degenerate` (they have no area in any projection, so no ray crosses them). Nothing
+ * is welded within a tolerance and no duplicate is dropped, so a defect that `conditionSurface`
+ * followed by `surfaceDiagnostics` hides (a duplicate face, a seam a developer weld closes) is
+ * counted here. An edit that writes its input's faces unchanged (a smooth) is gated on this.
+ *
+ * @param {{ points: ArrayLike<number>, polys: ArrayLike<number> }} surface
+ * @returns {Object} surfaceDiagnostics of the written faces (edges in canonical vertex indices),
+ *   plus `degenerate` and the `triangles` counted
+ */
+export function writtenSurfaceDiagnostics({ points, polys }) {
+  const raw = polysToTriangles(polys);
+  const canonical = weldVerticesWithin(points, 0);
+  const kept = [];
+  let degenerate = 0;
+  for (let t = 0; t < raw.length; t += 3) {
+    const a = canonical[raw[t]];
+    const b = canonical[raw[t + 1]];
+    const c = canonical[raw[t + 2]];
+    if (a === b || b === c || a === c) {
+      degenerate++;
+      continue;
+    }
+    kept.push(a, b, c);
+  }
+  return { ...surfaceDiagnostics(kept), degenerate, triangles: kept.length / 3 };
 }
 
 /**

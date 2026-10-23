@@ -35,6 +35,7 @@ const { applyLabelmapEdit, carveInWorker, deltaInWorker, getLabelmapForEdit } = 
 const { createSurfaceEditMemo } = require('./surfaceEditMemo');
 const {
   cancelSurfaceEditWrites,
+  countOutsideIndexBox,
   pendingSurfaceEditWrites,
   queueSurfaceEditWrite,
   recordSurfaceEdit,
@@ -140,8 +141,8 @@ describe('runSurfaceEditWrite', () => {
 
     const args = carveInWorker.mock.calls[0][0];
     expect(args).toMatchObject({ segmentIndex: 1, original: memo.before, edited: memo.after, dimensions: [8, 8, 8] });
-    expect(args.indexBox).toEqual({ min: [0, 0, 0], max: [7, 7, 7] }); // the box padded by 3 voxels, clamped
-    expect(args.boxData).toHaveLength(512);
+    expect(args.indexBox).toEqual({ min: [0, 0, 0], max: [6, 6, 6] }); // the box padded by two cells
+    expect(args.boxData).toHaveLength(343);
     expect(withOwnEdit).toHaveBeenCalledTimes(1);
     const edit = applyLabelmapEdit.mock.calls[0][0];
     expect(edit).toMatchObject({ segmentationId: EDIT_SEG, volume });
@@ -234,6 +235,55 @@ describe('runSurfaceEditWrite', () => {
     setCachedSurface(VOL3D, 'g2', { points: Float32Array.from([1, 1, 1]), polys: new Int32Array(0) }, { keepSelection: true });
 
     expect(handler).toHaveBeenCalledWith({ geometryId: 'g2', keepSelection: true });
+  });
+
+  it('refuses, rather than clips, a delta that reaches outside the edit\'s index domain', async () => {
+    // The domain of a box at 2..4 is 0..6; index 511 (7, 7, 7) lies outside it
+    const memo = memoFor();
+    memo.job = { cancelled: false };
+    const onRefused = jest.fn();
+    carveInWorker.mockResolvedValue(Int32Array.from([3, 511]));
+
+    await expect(runSurfaceEditWrite(memo, { editSegmentationId: EDIT_SEG })).rejects.toBeInstanceOf(WriteRefusedError);
+
+    expect(applyLabelmapEdit).not.toHaveBeenCalled();
+    expect(memo.writeReport).toMatchObject({ status: 'refused', reason: 'domain', farField: 1, proposedRemove: 2 });
+
+    // Through the queue, the refusal is reported like a lost target and the surface edit stands
+    const queued = memoFor();
+    expect(await queueSurfaceEditWrite(queued, { editSegmentationId: EDIT_SEG, onRefused })).toBe(false);
+    expect(onRefused).toHaveBeenCalledWith(queued);
+    expect(queued.surfaceOnly).toBe(true);
+    expect(queued.writeReport.status).toBe('refused');
+  });
+
+  it('counts indices outside a box, and out-of-range ones', () => {
+    const box = { min: [1, 1, 1], max: [2, 2, 2] };
+    const inside = 1 + 8 * (2 + 8 * 1);
+    expect(countOutsideIndexBox(Int32Array.from([inside]), box, [8, 8, 8])).toBe(0);
+    expect(countOutsideIndexBox(Int32Array.from([inside, 0, 511, -1, 512]), box, [8, 8, 8])).toBe(4);
+  });
+
+  it('reports what it wrote, with the indices when asked', async () => {
+    const memo = memoFor();
+    memo.job = { cancelled: false };
+    const labelmap = labelmapForEdit();
+    labelmap.scalarData[4] = 2; // changed hands meanwhile: dropped
+    getLabelmapForEdit.mockReturnValue(labelmap);
+
+    expect(await runSurfaceEditWrite(memo, { editSegmentationId: EDIT_SEG, keepIndices: true })).toBe(true);
+
+    expect(memo.writeReport).toMatchObject({
+      status: 'written', kind: 'delete', domain: { min: [0, 0, 0], max: [6, 6, 6] }, domainVoxels: 343,
+      proposedRemove: 2, proposedAdd: 0, removed: 1, added: 0, dropped: 1, farField: 0,
+      proposed: { remove: [3, 4], add: [] }, applied: { remove: [3], add: [] },
+    });
+
+    const plain = memoFor();
+    plain.job = { cancelled: false };
+    await runSurfaceEditWrite(plain, { editSegmentationId: EDIT_SEG });
+    expect(plain.writeReport.proposed).toBeUndefined();
+    expect(plain.writeReport.status).toBe('written');
   });
 
   it('voxelizes an emptied surface as having no inside', async () => {
@@ -427,5 +477,87 @@ describe('queueSurfaceEditWrite', () => {
     await flush();
 
     expect(run).toHaveBeenCalledWith(memo, expect.any(Object));
+  });
+});
+
+describe('predecessors of a queued write', () => {
+  const { configureSyncLedger, resetSyncLedger, trackSurfaceEditMemo } = require('./syncLedger');
+  const { set3DToolTarget } = require('./threeDToolState');
+
+  afterEach(() => {
+    resetSyncLedger();
+    configureSyncLedger();
+  });
+
+  it('refuses the write of an edit whose predecessor on the surface did not reach the labelmap', async () => {
+    // A's write fails after B was prepared with a write of its own: B's surfaces describe a state
+    // the labelmap never had, so B is refused at execution, before anything is touched
+    const labelmap = labelmapForEdit();
+    getLabelmapForEdit.mockReturnValue(labelmap);
+    const deps = { editSegmentationId: EDIT_SEG };
+    const points = n => Float32Array.from([1, 1, 1, n, 1, 1, 1, n, 1]);
+    const polys = Int32Array.from([3, 0, 1, 2]);
+    const s0 = { points: points(5), polys };
+    const s1 = { points: points(4), polys };
+    const s2 = { points: points(3), polys };
+    let current = s0.points;
+    configureSyncLedger({ getPoints: () => current });
+    set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
+    const memoDeps = {
+      setSurface: (geometryId, next) => { current = next.points; },
+      queueWrite: memo => queueSurfaceEditWrite(memo, deps),
+    };
+    const make = (before, after) => trackSurfaceEditMemo(createSurfaceEditMemo({
+      geometryId: 'g1', segmentIndex: 1, before, after, editBox: { min: [2, 2, 2], max: [4, 4, 4] },
+      write: { kind: 'delete', selectedPoints: [5, 1, 1], depth: 0 }, labelmapVolume: volume, deps: memoDeps,
+    }));
+    const a = make(s0, s1);
+    const b = make(s1, s2);
+    carveInWorker.mockReset();
+    carveInWorker.mockRejectedValueOnce(new Error('worker lost')).mockResolvedValue(Int32Array.from([3, 4]));
+    applyLabelmapEdit.mockImplementation(({ edit }) => {
+      let n = 0;
+      edit((index, value) => { labelmap.scalarData[index] = value; n++; });
+      return { changed: n > 0, memo: { restoreMemo: jest.fn() } };
+    });
+
+    a.restoreMemo(false);
+    b.restoreMemo(false);
+    for (let i = 0; i < 6; i++) {
+      await flush();
+    }
+
+    expect(a.writeReport.status).toBe('failed');
+    expect(a.surfaceOnly).toBe(true);
+    expect(b.writeReport).toMatchObject({ status: 'refused', reason: 'predecessor', predecessors: 1 });
+    expect(b.surfaceOnly).toBe(true);
+    expect(carveInWorker).toHaveBeenCalledTimes(1); // B never reached the worker
+    expect(applyLabelmapEdit).not.toHaveBeenCalled();
+    expect(Array.from(labelmap.scalarData).every(v => v === 1)).toBe(true);
+    // The ledger sees both (the canvas publishes the count once a write settles)
+    const { unsynchronizedEdits, unsynchronizedPredecessors } = require('./syncLedger');
+    expect(unsynchronizedEdits('g1')).toBe(2);
+    expect(unsynchronizedPredecessors(b)).toEqual([a]);
+
+    // Undone in order, the ledger follows the surface back
+    b.restoreMemo(true);
+    expect(unsynchronizedEdits('g1')).toBe(1);
+    a.restoreMemo(true);
+    expect(unsynchronizedEdits('g1')).toBe(0);
+  });
+
+  it('checks the predecessors again right before the labelmap is touched', async () => {
+    const labelmap = labelmapForEdit();
+    getLabelmapForEdit.mockReturnValue(labelmap);
+    const memo = memoFor();
+    memo.job = { memo, cancelled: false };
+    const blockers = [[], [{ surfaceOnly: true }]];
+    const blockingPredecessors = jest.fn(() => blockers.shift());
+
+    await expect(runSurfaceEditWrite(memo, { editSegmentationId: EDIT_SEG, blockingPredecessors })).rejects.toBeInstanceOf(WriteRefusedError);
+
+    expect(blockingPredecessors).toHaveBeenCalledTimes(2);
+    expect(memo.writeReport).toMatchObject({ status: 'refused', reason: 'predecessor', proposedRemove: 2 });
+    expect(applyLabelmapEdit).not.toHaveBeenCalled();
   });
 });

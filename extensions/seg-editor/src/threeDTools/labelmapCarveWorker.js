@@ -7,8 +7,8 @@ import { expose } from 'comlink';
 
 import { assembleCut, prepareCut, prepareRepair } from './deleteSelection.js';
 import { carveLabelmap, deltaLabelmap } from './labelmapCarve.js';
-import { conditionSurface, surfaceDiagnostics, triangleTopology } from './meshRepair.js';
-import { smoothSurface } from './smoothSelection.js';
+import { conditionSurface, edgeStatistics, surfaceDiagnostics, triangleTopology } from './meshRepair.js';
+import { smoothAndDiagnose } from './smoothSelection.js';
 
 
 const carve = {
@@ -29,10 +29,13 @@ const carve = {
   },
 
   /**
+   * The smooth and the diagnosis of its result as the delta write would voxelize it
+   * (`written`), in one call: the geometry does not travel twice.
+   *
    * @param {Object} args - see smoothSurface
    */
   async smooth(args) {
-    return smoothSurface(args);
+    return smoothAndDiagnose(args);
   },
 
   /** The whole-mesh stages of a cut, before and after the patches (deleteSelection). */
@@ -54,13 +57,29 @@ const carve = {
   },
 
   /**
-   * Open and non-manifold edges of a surface (edges in raw vertex indices of the surface).
+   * The health of a surface, once per surface version (ohif-viewers#149 FR-1, FR-3): its open,
+   * non-manifold and inconsistently wound edges (in raw vertex indices of the surface), the
+   * pre-existing degenerate and duplicate triangles, what the conditioning did with a requested
+   * weld, and the edge-length statistics the weld cap and relative settings derive from.
    *
    * @param {{ points, polys, weldTolerance? }} args
    */
   async diagnose({ points, polys, weldTolerance = 0 }) {
-    const { triangles, degenerate, duplicate } = conditionSurface({ points, polys }, { weldTolerance });
-    return { ...surfaceDiagnostics(triangles), degenerate, duplicate };
+    const conditioned = conditionSurface({ points, polys }, { weldTolerance });
+    const { triangles, degenerate, duplicate } = conditioned;
+    return {
+      ...surfaceDiagnostics(triangles),
+      degenerate,
+      duplicate,
+      triangles: triangles.length / 3,
+      conditioning: {
+        requestedWeldTolerance: conditioned.requestedWeldTolerance,
+        effectiveWeldTolerance: conditioned.effectiveWeldTolerance,
+        fellBack: conditioned.fellBack,
+        preservation: conditioned.preservation,
+      },
+      edges: edgeStatistics(points, triangles),
+    };
   },
 };
 

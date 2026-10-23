@@ -87,7 +87,9 @@ export function triangleTopologyInWorker({ points, polys }) {
 }
 
 /**
- * Smooth the selected region of a surface in the carve worker (smoothSelection's smoothSurface).
+ * Smooth the selected region of a surface in the carve worker (smoothSelection's
+ * smoothAndDiagnose): the result comes with `written`, its diagnosis as the delta write would
+ * voxelize it, which decides whether it is written.
  *
  * @param {{ surface, selected, options }} args
  */

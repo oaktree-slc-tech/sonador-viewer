@@ -6,6 +6,7 @@ import { useSystem } from '@ohif/core';
 import { Button, Icons, Label, Switch } from '@ohif/ui-next';
 
 import { editSummary } from '../threeDTools/editSummary';
+import { repairAvailability } from '../threeDTools/repairAvailability';
 import {
   EDIT_SETTINGS,
   get3DToolState,
@@ -21,9 +22,11 @@ import {
   SMOOTH_STRENGTH,
   subscribe3DToolState,
   THREE_D_TOOLS,
+  WELD_FRACTION,
 } from '../threeDTools/threeDToolState';
 import { SEG_EDITOR_COMMAND_CONTEXT } from '../toolbox/constants';
 import { setPreviewColor, usePreviewColor } from '../utils/previewColor';
+import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
 import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/segEditorUnits';
 
 import { AdvancedField, Card, ColorSwatch, SegmentedRow, SliderRow, Tip, ToggleRow } from './panelControls';
@@ -90,18 +93,24 @@ const ACTIONS = [
   },
 ];
 
-// Advanced removal settings; `length` ones are in the surface's units, the others are counts
+// Advanced removal settings, as counts. The weld is a developer setting (ohif-viewers#149 FR-1,
+// #151 FR-4): a fraction of the surface's first-percentile edge length, shown with the developer
+// tools only, exact otherwise.
 const ADVANCED = [
-  { key: 'maxConstraints', label: 'Patch constraints', unit: 'pts', unitHint: 'Boundary points', step: 1 },
-  { key: 'weldTolerance', label: 'Weld tolerance', length: true, step: 0.001 },
+  { key: 'maxConstraints', label: 'Patch constraints', unit: 'pts', unitHint: 'Boundary points; at most 8, two fits per hole', step: 1 },
   { key: 'islandMaxTriangles', label: 'Drop islands under', unit: 'tris', unitHint: 'Triangles', step: 1 },
 ];
+const WELD_FIELD = {
+  key: 'weldFraction', label: 'Weld', unit: '× p1', step: WELD_FRACTION.step,
+  unitHint: 'A fraction of the surface\'s first-percentile edge length, at most 0.1; 0 welds exact duplicates only. A weld that would drop or turn over sound triangles is not applied.',
+};
 
 export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const { t } = useTranslation('SegmentationEditor');
   const { commandsManager } = useSystem();
   const [state, setState] = useState(get3DToolState);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const developer = isDeveloperToolsEnabled();
 
   useEffect(() => subscribe3DToolState(setState), []);
 
@@ -126,7 +135,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
 
   const {
     target, selectionCount, selectionPoints, selectionRegions, preview, surfaceHealth, lastEdit,
-    pendingWrites, busy,
+    pendingWrites, unsynchronizedEdits = 0, busy,
   } = state;
   const hasSelection = selectionCount > 0;
   const editable = is3DTargetEditable(state);
@@ -171,6 +180,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const healthCounts = health ? [
     ['Open edges', health.boundaryEdgeCount],
     ['Non-manifold edges', health.nonManifoldEdgeCount],
+    ['Inverted edges', health.inconsistentEdgeCount],
     ['Degenerate triangles', health.degenerate],
     ['Duplicate triangles', health.duplicate],
   ].filter(([, count]) => count > 0) : [];
@@ -179,6 +189,18 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
     : healthTone === 'muted' ? t('Checking the surface...')
       : healthTone === 'ok' ? t('Surface is closed') : t('Surface has issues');
   const healthDot = healthTone === 'ok' ? 'bg-customgreen-100' : healthTone === 'warning' ? 'bg-[#e8b04c]' : 'bg-muted-foreground/50';
+  // Repair is offered for any diagnosed edge issue; the reason it is not is shown on hover
+  const repair = repairAvailability(state);
+  const repairTip = t(repair.message, repair.values);
+  const weldFellBack = !!health?.conditioning?.fellBack;
+  const advancedFields = developer ? [ADVANCED[0], WELD_FIELD, ADVANCED[1]] : ADVANCED;
+  const advancedSummary = developer
+    ? t('Advanced: {{constraints}} patch constraints, weld {{weld}} × p1, islands under {{island}} tris', {
+      constraints: state.maxConstraints, weld: state.weldFraction, island: state.islandMaxTriangles,
+    })
+    : t('Advanced: {{constraints}} patch constraints, islands under {{island}} tris', {
+      constraints: state.maxConstraints, island: state.islandMaxTriangles,
+    });
 
   return (
     <div className="text-foreground flex flex-col gap-2.5 px-1 py-1 text-[13px]" data-cy="seg-editor-selection-panel">
@@ -281,13 +303,16 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
               <div className="flex flex-col gap-1">
                 <span>{t(hint)}</span>
                 {id === 'repair' && (
-                  <span className="flex items-center gap-1.5" data-cy="seg-editor-repair-hover-status">
-                    <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
-                    <span>
-                      {healthText}
-                      {health?.triangles > 0 && `, ${t('{{count}} triangles', { count: number(health.triangles) })}`}
+                  <>
+                    <span className="flex items-center gap-1.5" data-cy="seg-editor-repair-hover-status">
+                      <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
+                      <span>
+                        {healthText}
+                        {health?.triangles > 0 && `, ${t('{{count}} triangles', { count: number(health.triangles) })}`}
+                      </span>
                     </span>
-                  </span>
+                    <span data-cy="seg-editor-repair-hover-reason">{repairTip}</span>
+                  </>
                 )}
               </div>
             )}
@@ -350,20 +375,18 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
           >
             <span className={`inline-block transition-transform ${advancedOpen ? 'rotate-90' : ''}`} aria-hidden="true">▸</span>
             <span className="truncate">
-              {advancedOpen ? t('Advanced') : t('Advanced: {{constraints}} patch constraints, weld {{weld}} {{unit}}, islands under {{island}} tris', {
-                constraints: state.maxConstraints, weld: state.weldTolerance, unit: lengthUnit, island: state.islandMaxTriangles,
-              })}
+              {advancedOpen ? t('Advanced') : advancedSummary}
             </span>
           </button>
           {advancedOpen && (
             <div className="border-input/60 flex flex-col gap-2 border-l-2 pl-3">
-              {ADVANCED.map(({ key, label, unit, unitHint, length, step }) => (
+              {advancedFields.map(({ key, label, unit, unitHint, step }) => (
                 <AdvancedField
                   key={key}
                   id={`seg-editor-advanced-${key}`}
                   label={t(label)}
-                  unit={length ? lengthUnit : t(unit)}
-                  unitHint={length ? lengthHint : t(unitHint)}
+                  unit={t(unit)}
+                  unitHint={t(unitHint)}
                   step={step}
                   value={state[key]}
                   range={EDIT_SETTINGS[key]}
@@ -371,6 +394,15 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
                   onChange={value => set(key, value)}
                 />
               ))}
+              {developer && health?.edges?.p1 > 0 && (
+                <p className="text-muted-foreground text-xs" data-cy="seg-editor-edge-statistics">
+                  {t('Edge lengths: p1 {{p1}}, median {{p50}} {{unit}}{{sampled}}', {
+                    p1: health.edges.p1.toPrecision(3), p50: health.edges.p50.toPrecision(3), unit: lengthUnit,
+                    sampled: health.edges.sampled ? ` (${t('sample of {{count}}', { count: number(health.edges.sampleSize) })})` : '',
+                  })}
+                  {state.weldFraction > 0 && ` · ${t('weld {{tolerance}} {{unit}}', { tolerance: (health.weldTolerance || 0).toPrecision(3), unit: lengthUnit })}`}
+                </p>
+              )}
             </div>
           )}
           {previewingRemoval
@@ -474,10 +506,12 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
           </div>
         )}
       >
-        <div className="flex items-center gap-2" data-cy="seg-editor-surface-status">
-          <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
-          <span className={`min-w-0 ${healthTone === 'muted' ? 'text-muted-foreground' : ''}`}>{healthText}</span>
-        </div>
+        <Tip text={t('Open, non-manifold and inverted edge counts of the 3D surface. Zero counts mean the edges are sound; they do not prove a valid solid.')}>
+          <div className="flex items-center gap-2" data-cy="seg-editor-surface-status">
+            <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
+            <span className={`min-w-0 ${healthTone === 'muted' ? 'text-muted-foreground' : ''}`}>{healthText}</span>
+          </div>
+        </Tip>
         {healthCounts.length > 0 && (
           <dl className="text-muted-foreground grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
             {healthCounts.map(([label, count]) => (
@@ -491,30 +525,47 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
         {health?.triangles > 0 && (
           <p className="text-muted-foreground text-xs">{t('{{count}} triangles', { count: number(health.triangles) })}</p>
         )}
+        {state.showIssues && (
+          <p className="text-muted-foreground text-xs" data-cy="seg-editor-issues-legend">
+            {t('On the model: open edges red, non-manifold edges amber, inverted edges purple.')}
+          </p>
+        )}
+        {weldFellBack && (
+          <p className="text-xs text-[#e8b04c]" role="status" data-cy="seg-editor-weld-fallback">
+            {t('The requested weld would drop or turn over sound triangles, so the exact weld was used.')}
+          </p>
+        )}
         {previewingRepair
           ? previewRow(t('Preview: the patches closing the rims are highlighted. Enter applies, Esc cancels.'), t('Apply repair'),
             'seg-editor-cancel-repair', 'seg-editor-apply-repair')
           : (
-            <Tip text={t('Closes every open edge with the Closure and Advanced settings. Changes the 3D surface only.')}>
-              <Button
-                variant="secondary"
-                className="h-8 self-start"
-                disabled={!editable || !health || health.closed || busy}
-                onClick={() => request('repairSurface')}
-                data-cy="seg-editor-repair-surface"
-              >
-                {t('Repair surface')}
-              </Button>
+            <Tip text={repairTip}>
+              <span className="self-start" data-cy="seg-editor-repair-surface-tip" data-repair-reason={repair.reason}>
+                <Button
+                  variant="secondary"
+                  className="h-8"
+                  disabled={!repair.enabled}
+                  onClick={() => request('repairSurface')}
+                  data-cy="seg-editor-repair-surface"
+                >
+                  {t('Repair surface')}
+                </Button>
+              </span>
             </Tip>
           )}
       </Card>
       )}
 
-      {(pendingWrites > 0 || (lastEdit && !preview)) && (
+      {(pendingWrites > 0 || unsynchronizedEdits > 0 || (lastEdit && !preview)) && (
         <footer className="flex flex-col gap-1" data-cy="seg-editor-footer">
           {pendingWrites > 0 && (
             <p className="text-muted-foreground px-1 text-xs" role="status" data-cy="seg-editor-pending-writes">
               {t('Updating the 2D views ({{count}} pending)...', { count: pendingWrites })}
+            </p>
+          )}
+          {unsynchronizedEdits > 0 && (
+            <p className="px-1 text-xs text-[#e8b04c]" role="status" data-cy="seg-editor-unsynchronized">
+              {t('3D surface ahead of the 2D views: {{count}} edit(s) not written. Further edits stay on the surface; Undo brings the views back together.', { count: unsynchronizedEdits })}
             </p>
           )}
           {lastEdit && !preview && (

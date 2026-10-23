@@ -26,8 +26,12 @@ export const CLOSURES = {
 // staircase-shaped rim of a hole in a marching-cubes surface, 16 to 32 constraints produced
 // patches bulging 5 to 20 mm away from a rim less than 1 mm deep, while 6 to 12 gave flat,
 // faithful patches in about 0.1 s. The boundary vertices in between are stitched to the patch
-// (stitchPatch).
-export const CONSTRAINT_COUNTS = [12, 8, 6];
+// (stitchPatch). At most two fits are attempted per hole and the ladder stops at the first fit
+// that strays beyond the bounds, since each failed fit of a long rim cost seconds for nothing
+// (ohif-viewers#149, FR-7).
+export const CONSTRAINT_COUNTS = [8, 6];
+export const MAX_CONSTRAINTS = 8;
+export const MAX_FIT_ATTEMPTS = 2;
 
 // Holes with at most this many boundary vertices are closed flat by the automatic closure: a
 // fitted patch cannot improve on a flat one at that size
@@ -60,14 +64,18 @@ export function patchWithinBounds(loopPoints, patchPoints) {
   return true;
 }
 
-/** Constraint counts no larger than `maxConstraints`, with that count first when it is new. */
+/**
+ * Constraint counts no larger than `maxConstraints` (itself capped at MAX_CONSTRAINTS), with that
+ * count first when it is new, and no more than MAX_FIT_ATTEMPTS of them.
+ */
 export function constraintCountsUpTo(maxConstraints, counts = CONSTRAINT_COUNTS) {
-  if (!(maxConstraints > 0)) {
-    return counts;
-  }
-  const within = counts.filter(count => count <= maxConstraints);
-  return within.includes(maxConstraints) ? within : [maxConstraints, ...within];
+  const cap = maxConstraints > 0 ? Math.min(MAX_CONSTRAINTS, Math.floor(maxConstraints)) : MAX_CONSTRAINTS;
+  const within = counts.filter(count => count <= cap);
+  const ladder = within.includes(cap) ? within : [cap, ...within];
+  return ladder.slice(0, MAX_FIT_ATTEMPTS);
 }
+
+const _now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
 function _flat(loopPoints) {
   const count = loopPoints.length / 3;
@@ -99,9 +107,10 @@ function _withCentroid(loopPoints, count) {
  *   smooth (fitted, flat when the fit fails) or flat
  * @param {number[]} [options.constraintCounts] - constraint vertex counts to try, in order
  * @param {number} [options.maxConstraints] - cap on the constraint counts
- * @returns {{ patch: { points: Float64Array, triangles: Int32Array }, method: string, error?: string }}
- *   the patch in loop-local indices (nodes 0..n-1 are the boundary vertices), wound with the
- *   surface around the hole
+ * @returns {{ patch: { points: Float64Array, triangles: Int32Array }, method: string, error?: string,
+ *   attempts: Array<{ constraints: number, ms: number, outcome: string }> }} the patch in
+ *   loop-local indices (nodes 0..n-1 are the boundary vertices), wound with the surface around
+ *   the hole; `attempts` records each fit tried (outcome: fitted, outOfBounds, unstitched, error)
  */
 export function patchHole(oc, loopPoints, {
   closure = CLOSURES.auto, constraintCounts = CONSTRAINT_COUNTS, maxConstraints,
@@ -109,12 +118,13 @@ export function patchHole(oc, loopPoints, {
   const count = loopPoints.length / 3;
   if (count === 3) {
     const { triangles } = orientPatchToRim([0, 1, 2], 3);
-    return { patch: { points: Float64Array.from(loopPoints), triangles }, method: PATCH_METHODS.flat };
+    return { patch: { points: Float64Array.from(loopPoints), triangles }, method: PATCH_METHODS.flat, attempts: [] };
   }
   if (closure === CLOSURES.flat || (closure === CLOSURES.auto && count <= AUTO_FLAT_MAX_VERTICES)) {
-    return _flat(loopPoints);
+    return { ..._flat(loopPoints), attempts: [] };
   }
 
+  const attempts = [];
   let error = 'OpenCascade is not available';
   if (oc) {
     const tried = new Set();
@@ -124,6 +134,8 @@ export function patchHole(oc, loopPoints, {
         continue;
       }
       tried.add(constraintIndices.length);
+      const started = _now();
+      const record = outcome => attempts.push({ constraints: constraintIndices.length, ms: _now() - started, outcome });
 
       try {
         const constraintPoints = new Float64Array(constraintIndices.length * 3);
@@ -132,8 +144,10 @@ export function patchHole(oc, loopPoints, {
 
         const fitted = fillBoundary(oc, constraintPoints);
         if (!patchWithinBounds(loopPoints, fitted.points)) {
+          // A fit that strays once strays with fewer constraints too: the ladder stops here
           error = 'The fitted patch strays from the hole boundary';
-          continue;
+          record('outOfBounds');
+          break;
         }
         const patch = stitchPatch({
           loopPoints,
@@ -143,14 +157,17 @@ export function patchHole(oc, loopPoints, {
         });
         if (patch) {
           const { triangles } = orientPatchToRim(patch.triangles, count);
-          return { patch: { points: patch.points, triangles }, method: PATCH_METHODS.fitted };
+          record('fitted');
+          return { patch: { points: patch.points, triangles }, method: PATCH_METHODS.fitted, attempts };
         }
         error = 'The fitted patch does not match the hole boundary';
+        record('unstitched');
       } catch (err) {
         error = String(err?.message || err);
+        record('error');
       }
     }
   }
 
-  return { ..._flat(loopPoints), error };
+  return { ..._flat(loopPoints), error, attempts };
 }
