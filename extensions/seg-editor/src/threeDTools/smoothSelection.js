@@ -7,7 +7,7 @@
 // them) move together, so no triangle tears open. Plain data in and out, so it runs in the carve
 // worker.
 
-import { selectionTopology, trianglesAt, triangleTopology } from './meshRepair.js';
+import { selectionTopology, trianglesAt, triangleTopology, writtenSurfaceDiagnostics } from './meshRepair.js';
 
 
 export const SMOOTH_OPTION_DEFAULTS = Object.freeze({
@@ -215,8 +215,14 @@ export function smoothSurface({ surface, selected = [], selectedTriangles, optio
     }
   }
 
+  // The edit box covers the moved vertices before and after, and their unmoved neighbours: the
+  // faces that change reach those, and the labelmap write is confined to this box plus a fixed
+  // index padding (ohif-viewers#149, FR-6)
   const editBox = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+  const neighbours = new Set();
+  moving.forEach(c => adjacency.get(c)?.forEach(n => neighbours.add(n)));
   _bounds(points, movedRaw, editBox);
+  _bounds(points, neighbours, editBox);
   _bounds(after, movedRaw, editBox);
 
   return {
@@ -228,6 +234,25 @@ export function smoothSurface({ surface, selected = [], selectedTriangles, optio
     flipped,
     degenerate,
   };
+}
+
+/**
+ * smoothSurface, plus the diagnosis of its result exactly as a labelmap write would voxelize it
+ * (`written`: meshRepair.writtenSurfaceDiagnostics). A smooth keeps its input's faces, duplicates
+ * and unwelded seams included, so the kernel's own flip and degenerate checks, which run on the
+ * conditioned vertex set, cannot see such a retained defect; the write is gated on `written`
+ * (ohif-viewers#149, FR-4), not on the surface's conditioned health. This is what the carve
+ * worker's `smooth` returns, for the first result and for every live recompute.
+ *
+ * @param {Object} params - smoothSurface's
+ * @returns {Object} smoothSurface's result, with `written` when it changed anything
+ */
+export function smoothAndDiagnose(params) {
+  const result = smoothSurface(params);
+  if (!result.changed) {
+    return result;
+  }
+  return { ...result, written: writtenSurfaceDiagnostics(result.after) };
 }
 
 export default smoothSurface;

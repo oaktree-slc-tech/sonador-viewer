@@ -55,15 +55,32 @@ describe('patchHole', () => {
     expect(Array.from(result.patch.points.slice(0, 120))).toEqual(Array.from(ring(40)));
   });
 
-  it('retries with fewer constraints when a fitted patch strays from the boundary', () => {
+  it('stops the ladder at the first fit that strays from the boundary, and closes flat', () => {
+    // A fit that strays once strays with fewer constraints too, and each failed fit of a long
+    // rim cost seconds: no second attempt is made (ohif-viewers#149, FR-7)
     fillBoundary
       .mockImplementationOnce((_oc, points) => disc(points, 30))
       .mockImplementation((_oc, points) => disc(points));
 
     const result = patchHole(OC, ring(40));
 
+    expect(result.method).toBe(PATCH_METHODS.flat);
+    expect(result.error).toMatch(/strays/);
+    expect(fillBoundary).toHaveBeenCalledTimes(1);
+    expect(result.attempts).toEqual([{ constraints: 8, ms: expect.any(Number), outcome: 'outOfBounds' }]);
+  });
+
+  it('retries once with fewer constraints when a fit cannot be stitched', () => {
+    // A patch whose boundary does not match the loop (no nodes at the constraint vertices)
+    fillBoundary
+      .mockImplementationOnce((_oc, points) => disc(Float64Array.from(points, v => v * 0.5)))
+      .mockImplementation((_oc, points) => disc(points));
+
+    const result = patchHole(OC, ring(40));
+
     expect(result.method).toBe(PATCH_METHODS.fitted);
-    expect(fillBoundary.mock.calls.map(([, points]) => points.length / 3)).toEqual([12, 8]);
+    expect(fillBoundary.mock.calls.map(([, points]) => points.length / 3)).toEqual([8, 6]);
+    expect(result.attempts.map(attempt => attempt.outcome)).toEqual(['unstitched', 'fitted']);
   });
 
   it('closes the hole flat when no fit succeeds, and says why', () => {
@@ -75,6 +92,9 @@ describe('patchHole', () => {
 
     expect(result.method).toBe(PATCH_METHODS.flat);
     expect(result.error).toBe('No surface could be fitted to the boundary');
+    // At most two fits are attempted
+    expect(fillBoundary).toHaveBeenCalledTimes(2);
+    expect(result.attempts.map(attempt => attempt.outcome)).toEqual(['error', 'error']);
     // An ear-clipped ring: n - 2 triangles over the ring's own vertices
     expect(result.patch.triangles).toHaveLength(38 * 3);
     expect(result.patch.points).toHaveLength(40 * 3);
@@ -121,10 +141,16 @@ describe('patchHole', () => {
     expect(fillBoundary.mock.calls.map(([, points]) => points.length / 3)).toEqual([5]);
   });
 
-  it('caps the constraint counts at the maximum asked for', () => {
+  it('caps the constraint counts at the maximum asked for, never above eight or two attempts', () => {
     expect(constraintCountsUpTo(8)).toEqual([8, 6]);
-    expect(constraintCountsUpTo(10)).toEqual([10, 8, 6]);
+    expect(constraintCountsUpTo(7)).toEqual([7, 6]);
+    expect(constraintCountsUpTo(6)).toEqual([6]);
+    expect(constraintCountsUpTo(4)).toEqual([4]);
+    // A stored cap above the limit (an earlier session's 32) obeys it
+    expect(constraintCountsUpTo(32)).toEqual([8, 6]);
+    expect(constraintCountsUpTo(10)).toEqual([8, 6]);
     expect(constraintCountsUpTo(undefined)).toEqual(CONSTRAINT_COUNTS);
+    expect(CONSTRAINT_COUNTS).toEqual([8, 6]);
   });
 
   it('winds every patch against the rim, so the closed surface is consistent', () => {

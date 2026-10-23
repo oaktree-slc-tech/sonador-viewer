@@ -1,31 +1,25 @@
-import _ from 'lodash';
-
 import {
   getEnabledElementByViewportId,
   utilities as c3dUtilities,
   VolumeViewport,
 } from '@cornerstonejs/core';
+import { cache as c3dCache } from '@cornerstonejs/core';
 import {
   Enums as c3dToolsEnums,
   segmentation as c3dSegmentations,
   utilities as c3dToolsUtilities,
 } from '@cornerstonejs/tools';
+import _ from 'lodash';
 
-import { cache as c3dCache } from '@cornerstonejs/core';
 import OHIF from '@ohif/core';
-import i18n from '@ohif/i18n';
 import { cornerstone3dUtils, createViewportToggleFeatureCommand } from '@ohif/extension-vtk';
-
+import i18n from '@ohif/i18n';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
 import { callConfirmDialog } from './components/confirmDialog';
-
-import { Enums as SegEditEnums } from './enums';
+import createImportCommands from './importers/importCommands.js';
 import { getSegEditorLayout } from './layouts/segEditorLayouts';
-import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
-import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
-import { redoSegEditorEdit, segEditorHistoryDroppedEdits, undoSegEditorEdit } from './toolbox/segEditorHistory';
-import { LABELMAP_TOOL_NAMES, releaseIdlePreview } from './toolbox/segEditorTools';
+import { downloadEditCase } from './threeDTools/editCase';
 import {
   get3DToolState,
   request3DToolAction,
@@ -33,9 +27,13 @@ import {
   setActive3DTool,
   setRemovalDepth,
 } from './threeDTools/threeDToolState';
-
-import createImportCommands from './importers/importCommands.js';
+import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
+import { redoSegEditorEdit, segEditorHistoryDroppedEdits, undoSegEditorEdit } from './toolbox/segEditorHistory';
+import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
+import { LABELMAP_TOOL_NAMES, releaseIdlePreview } from './toolbox/segEditorTools';
+import { isDeveloperToolsEnabled } from './utils/segEditorDeveloper';
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
+import { Enums as SegEditEnums } from './enums';
 
 
 const { DisplaySetApi } = OHIF.display;
@@ -301,6 +299,31 @@ const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
     requestSegEditor3DAction({ request }) {
       // Palette buttons acting on the 3D editing canvas (delete / clear the selection)
       return request3DToolAction(request);
+    },
+
+    exportSegEditor3DEditCase() {
+      // Developer tools only (ohif-viewers#149, FR-12): the last 3D edit as a JSON bundle of
+      // geometry and numbers, replayable against the plain-array modules. Not offered without
+      // the flag, and never described as anonymous: anatomy can identify a patient.
+      const notify = options => servicesManager?.services?.UINotificationService?.show(options);
+      const t = key => i18n.t(key, { ns: 'SegmentationEditor' });
+      if (!isDeveloperToolsEnabled()) {
+        notify({ type: 'warning', title: t('Export edit case'), message: t('The edit-case export needs the developer tools flag.') });
+        return false;
+      }
+      const bundle = request3DToolAction('editCase');
+      if (!bundle) {
+        notify({ type: 'info', title: t('Export edit case'), message: t('No 3D edit has been applied in this session.') });
+        return false;
+      }
+      try {
+        const name = downloadEditCase(bundle);
+        notify({ type: 'success', title: t('Export edit case'), message: name });
+        return true;
+      } catch (error) {
+        notify({ type: 'error', title: t('Export edit case'), message: String(error?.message || error) });
+        return false;
+      }
     },
 
     setThresholdRange({ value, toolNames = [] }) {

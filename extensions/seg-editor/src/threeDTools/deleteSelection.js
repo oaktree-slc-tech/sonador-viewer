@@ -28,7 +28,8 @@ import {
   findBoundaryLoopsDetailed,
   loopPositions,
 } from './meshCut.js';
-import { cleanRim, conditionSurface, surfaceDiagnostics } from './meshRepair.js';
+import { cleanRim, compareDefects, conditionSurface, surfaceDiagnostics } from './meshRepair.js';
+import { validateBox, validatePatch, validateSurface } from './surfaceValidity.js';
 
 
 /** Thrown when an edit is abandoned (its session or target became invalid) before writing. */
@@ -49,8 +50,11 @@ export const DELETE_STEPS = {
   write: 'write',
 };
 
-// Labelmap voxels around the edit box examined for the carve, beyond the removal depth
-const EDIT_BOX_PADDING_VOXELS = 3;
+// Index cells added on each side of the edit's index domain (ohif-viewers#149, FR-6): the world
+// box of the removed triangles, their patches and the removal depth is mapped to index space and
+// grown by exactly this many cells per axis, whatever the spacing. The carve's shell passes reach
+// at most this far from a removed voxel.
+export const EDIT_BOX_PADDING_CELLS = 2;
 
 export const RIM_CLEANUPS = {
   off: 'off',
@@ -61,13 +65,17 @@ export const RIM_CLEANUPS = {
 // Ear-removal passes per rim cleanup level; islands are removed at every level but off
 const RIM_CLEANUP_PASSES = { [RIM_CLEANUPS.off]: 0, [RIM_CLEANUPS.light]: 1, [RIM_CLEANUPS.full]: 3 };
 
-/** Defaults of the cut-and-patch options (the 3D tool state holds the user's values). */
+/**
+ * Defaults of the cut-and-patch options (the 3D tool state holds the user's values). The weld is
+ * exact by default and the fit ladder is capped at eight constraints (ohif-viewers#149, FR-1 and
+ * FR-7).
+ */
 export const EDIT_OPTION_DEFAULTS = Object.freeze({
   closure: 'auto',
   rimCleanup: RIM_CLEANUPS.full,
-  weldTolerance: 0.001,
+  weldTolerance: 0,
   islandMaxTriangles: 50,
-  maxConstraints: 12,
+  maxConstraints: 8,
 });
 
 export const EMPTY_SURFACE = Object.freeze({ points: new Float32Array(0), polys: new Int32Array(0) });
@@ -89,34 +97,86 @@ function _pad(box, amount) {
 const _summary = diagnostics => ({
   boundaryEdgeCount: diagnostics.boundaryEdgeCount,
   nonManifoldEdgeCount: diagnostics.nonManifoldEdgeCount,
+  inconsistentEdgeCount: diagnostics.inconsistentEdgeCount,
   closed: diagnostics.closed,
+});
+
+// The defect edges of the input, kept for the comparison with the result (compareDefects)
+const _defectEdges = diagnostics => ({
+  boundaryEdges: diagnostics.boundaryEdges,
+  nonManifoldEdges: diagnostics.nonManifoldEdges,
+  inconsistentEdges: diagnostics.inconsistentEdges,
+});
+
+// What the conditioning did, for the report: the pre-existing degenerates and duplicates apart
+// from anything the action removes, and whether a requested weld was kept
+const _conditioning = conditioned => ({
+  degenerate: conditioned.degenerate,
+  duplicate: conditioned.duplicate,
+  requestedWeldTolerance: conditioned.requestedWeldTolerance,
+  effectiveWeldTolerance: conditioned.effectiveWeldTolerance,
+  fellBack: conditioned.fellBack,
+  preservation: conditioned.preservation,
+});
+
+// An input, patch or result that fails the data-integrity checks: nothing is assembled, and the
+// caller refuses the edit before anything is shown (ohif-viewers#149 FR-4)
+const _invalid = (invalid, diagnostics, extra = {}) => ({
+  changed: false, invalid, edited: null, editBox: null, selectedPoints: new Float64Array(0),
+  holes: 0, cappedHoles: 0, patchErrors: [], diagnostics: { ...diagnostics, invalid }, ...extra,
 });
 
 /**
  * Assemble the edited surface from the kept triangles and the patches, and report on it. Plain
- * data in and out, so it runs in the carve worker (segmentEdits.assembleCutInWorker).
+ * data in and out, so it runs in the carve worker (segmentEdits.assembleCutInWorker). The
+ * result's defects are compared with the input's, so the report can tell the ones the cut
+ * introduced from the openings it left alone (ohif-viewers#149 FR-5); the result is `acceptable`
+ * for a labelmap write only when it has no open, non-manifold or inconsistent edge at all, of
+ * either origin. A detected defect, retained or new, needs the user's explicit acknowledgement
+ * before voxelization (FR-4, ohif-viewers#152 §3), which this stage cannot give. The patches and
+ * the result are checked for finite coordinates and valid indices first: an invalid result is
+ * returned as `invalid`, unassembled (FR-4's data-integrity refusal).
  *
  * @param {Object} params
  * @param {ArrayLike<number>} params.surfacePoints - the surface's flat xyz
  * @param {ArrayLike<number>} params.kept - the kept triangles (canonical vertex triples)
- * @param {Int32Array[]} params.loops - the holes' boundary loops (vertex indices)
+ * @param {Int32Array[]} params.loops - the holes' boundary loops to close (vertex indices)
  * @param {Array} params.results - the patches, one per loop (patchHoles)
  * @param {{ min, max }} params.editBox - the world box the edit can affect so far (grown here)
  * @param {Float64Array} params.selectedPoints
- * @param {Object} params.diagnostics
+ * @param {Object} params.diagnostics - prepareCut's, with `inputEdges` for the comparison
  * @param {Object} params.options - EDIT_OPTION_DEFAULTS
  */
 export function assembleCut({ surfacePoints, kept, loops, results, editBox, selectedPoints, diagnostics, options }) {
   const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const { inputEdges } = diagnostics;
+  const rest = { ...diagnostics };
+  delete rest.inputEdges;
+  const patchErrors = results.map(result => result.error).filter(Boolean);
+
+  for (let i = 0; i < results.length; i++) {
+    const problem = validatePatch(results[i].patch);
+    if (problem) {
+      return _invalid({ ...problem, where: 'patch', loop: i }, rest, { patchErrors, holes: loops.length, selectedPoints });
+    }
+  }
   const loopPoints = loops.map(loop => loopPositions(surfacePoints, loop));
   const patches = loops.map((loop, i) => ({ loop, patch: results[i].patch }));
   const edited = kept.length
     ? assembleSurface({ points: surfacePoints, triangles: kept, patches })
     : null;
+  const editedProblem = edited && validateSurface(edited);
+  if (editedProblem) {
+    return _invalid({ ...editedProblem, where: 'after' }, rest, { patchErrors, holes: loops.length, selectedPoints });
+  }
 
   const box = { min: [...editBox.min], max: [...editBox.max] };
   loopPoints.forEach(points => _bounds(points, box));
   results.forEach(({ patch }) => _bounds(patch.points, box));
+  const boxProblem = edited && validateBox(box);
+  if (boxProblem) {
+    return _invalid({ ...boxProblem, where: 'editBox' }, rest, { patchErrors, holes: loops.length, selectedPoints });
+  }
 
   const methods = { fitted: 0, flat: 0, cap: 0 };
   let fallbacks = 0;
@@ -127,16 +187,37 @@ export function assembleCut({ surfacePoints, kept, loops, results, editBox, sele
       fallbacks++;
     }
   });
-  const output = edited ? _summary(surfaceDiagnostics(conditionSurface(edited).triangles)) : null;
+  let output = null;
+  let introduced = null;
+  if (edited) {
+    const outputDiagnostics = surfaceDiagnostics(conditionSurface(edited).triangles);
+    output = _summary(outputDiagnostics);
+    introduced = compareDefects(
+      { points: surfacePoints, diagnostics: inputEdges },
+      { points: edited.points, diagnostics: outputDiagnostics });
+  }
   return {
     changed: true,
+    invalid: null,
     edited,
     editBox: box,
     selectedPoints,
     holes: loops.length,
     cappedHoles: fallbacks,
-    patchErrors: results.map(result => result.error).filter(Boolean),
-    diagnostics: { ...diagnostics, methods, fallbacks, output },
+    patchErrors,
+    diagnostics: {
+      ...rest,
+      methods,
+      fallbacks,
+      fits: results.map(result => result.attempts || []),
+      output,
+      introduced,
+      // No open, non-manifold or inverted edge is left, of either origin: the result can be
+      // written without an acknowledgement. An emptied surface (the whole segment removed) is a
+      // valid deletion with nothing to diagnose.
+      acceptable: !output || output.closed,
+      emptied: !edited,
+    },
   };
 }
 
@@ -144,6 +225,27 @@ const _unchanged = diagnostics => ({
   changed: false, edited: null, editBox: null, selectedPoints: new Float64Array(0),
   holes: 0, cappedHoles: 0, patchErrors: [], diagnostics,
 });
+
+/**
+ * Split the boundary loops of the cut surface into the ones the cut opened (sharing a vertex with
+ * a removed triangle or the rim cleanup) and the pre-existing ones it did not touch, which are
+ * reported and left as they are (ohif-viewers#149, FR-5).
+ */
+export function splitTouchingLoops(loops, touching) {
+  const touchingLoops = [];
+  const preexisting = [];
+  loops.forEach(loop => {
+    if (loop.some(v => touching.has(v))) {
+      touchingLoops.push(loop);
+    } else {
+      preexisting.push(loop);
+    }
+  });
+  return {
+    loops: touchingLoops,
+    preexistingLoops: { count: preexisting.length, vertexCounts: preexisting.map(loop => loop.length) },
+  };
+}
 
 function _points(surfacePoints, vertices) {
   const points = new Float64Array(vertices.length * 3);
@@ -165,10 +267,15 @@ function _points(surfacePoints, vertices) {
  */
 export function prepareCut({ surface, selected = [], selectedTriangles = [], options = {} }) {
   const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const sourceProblem = validateSurface(surface);
+  if (sourceProblem) {
+    return _invalid({ ...sourceProblem, where: 'before' }, { removedTriangles: 0 });
+  }
   const selectedVertices = new Set(selected);
   const selectedCells = new Set(selectedTriangles);
   const conditioned = conditionSurface(surface, { weldTolerance: opts.weldTolerance });
-  const input = _summary(surfaceDiagnostics(conditioned.triangles));
+  const inputDiagnostics = surfaceDiagnostics(conditioned.triangles);
+  const input = _summary(inputDiagnostics);
   const selectedCanonical = new Set(Array.from(selectedVertices, v => conditioned.canonical[v]));
   const keptRaw = [];
   const rim = new Set();
@@ -193,7 +300,7 @@ export function prepareCut({ surface, selected = [], selectedTriangles = [], opt
     }
   }
   if (!removedCount) {
-    return _unchanged({ input });
+    return _unchanged({ input, removedTriangles: 0, conditioning: _conditioning(conditioned) });
   }
 
   const cleanup = cleanRim(keptRaw, {
@@ -201,10 +308,16 @@ export function prepareCut({ surface, selected = [], selectedTriangles = [], opt
     islandMaxTriangles: opts.rimCleanup === RIM_CLEANUPS.off ? 0 : opts.islandMaxTriangles,
     touching: rim,
   });
-  // Whatever the cleanup removed is part of the edit too
-  cleanup.removed.forEach(v => selectedVertices.add(v));
+  // Whatever the cleanup removed is part of the edit too, and its vertices join the rim the
+  // affected loops are found from
+  const touching = new Set(rim);
+  cleanup.removed.forEach(v => {
+    selectedVertices.add(v);
+    touching.add(v);
+  });
   const kept = cleanup.triangles;
-  const { loops, openEdges } = findBoundaryLoopsDetailed(kept);
+  const found = findBoundaryLoopsDetailed(kept);
+  const { loops, preexistingLoops } = splitTouchingLoops(found.loops, touching);
   const selectedPoints = _points(surface.points, Array.from(selectedVertices));
   return {
     changed: true,
@@ -215,30 +328,53 @@ export function prepareCut({ surface, selected = [], selectedTriangles = [], opt
     editBox: _bounds(selectedPoints),
     diagnostics: {
       input,
+      inputEdges: _defectEdges(inputDiagnostics),
+      conditioning: _conditioning(conditioned),
       degenerate: conditioned.degenerate,
       duplicate: conditioned.duplicate,
+      removedTriangles: removedCount,
       earsRemoved: cleanup.earsRemoved,
       islandsRemoved: cleanup.islandsRemoved,
-      openEdges,
+      removedByCleanup: cleanup.removed.length / 3,
+      openEdges: found.openEdges,
+      preexistingLoops,
     },
   };
 }
 
 /**
  * A repair before the patches: condition the surface and find every boundary loop. Runs in the
- * carve worker like prepareCut.
+ * carve worker like prepareCut. Every loop is closed; the rim half-edges no loop could use are
+ * reported as `openEdges`, with the input's non-manifold and inconsistent counts, so the caller
+ * can say what a repair cannot close yet (ohif-viewers#149, FR-8/FR-10).
  */
 export function prepareRepair({ surface, options = {} }) {
   const opts = { ...EDIT_OPTION_DEFAULTS, ...options };
+  const sourceProblem = validateSurface(surface);
+  if (sourceProblem) {
+    return _invalid({ ...sourceProblem, where: 'before' }, { removedTriangles: 0 });
+  }
   const conditioned = conditionSurface(surface, { weldTolerance: opts.weldTolerance });
-  const input = _summary(surfaceDiagnostics(conditioned.triangles));
+  const inputDiagnostics = surfaceDiagnostics(conditioned.triangles);
+  const input = _summary(inputDiagnostics);
   const { loops, openEdges } = findBoundaryLoopsDetailed(conditioned.triangles);
   const diagnostics = {
-    input, degenerate: conditioned.degenerate, duplicate: conditioned.duplicate,
-    earsRemoved: 0, islandsRemoved: 0, openEdges,
+    input,
+    inputEdges: _defectEdges(inputDiagnostics),
+    conditioning: _conditioning(conditioned),
+    degenerate: conditioned.degenerate,
+    duplicate: conditioned.duplicate,
+    removedTriangles: 0,
+    earsRemoved: 0,
+    islandsRemoved: 0,
+    removedByCleanup: 0,
+    openEdges,
+    preexistingLoops: { count: 0, vertexCounts: [] },
   };
   if (!loops.length) {
-    return _unchanged(diagnostics);
+    const rest = { ...diagnostics };
+    delete rest.inputEdges;
+    return _unchanged(rest);
   }
   return {
     changed: true,
@@ -349,20 +485,22 @@ export async function repairSurface({ surface, options = {}, deps, onStep = () =
 }
 
 /**
- * The labelmap index box an edit can affect: its world box padded by a few voxels and the removal
- * depth.
+ * The labelmap index domain an edit may write (ohif-viewers#149, FR-6): its world box (the removed
+ * triangles, their patches and whatever else the edit moved) grown by the removal depth in world
+ * coordinates, mapped to index space through the volume's own axes, and grown by exactly
+ * EDIT_BOX_PADDING_CELLS cells per axis. No voxel outside it may change; the writer checks.
  *
  * @param {Object} params
  * @param {{ min, max }} params.editBox
- * @param {number} [params.depth]
+ * @param {number} [params.depth] - world units
  * @param {{ dimensions: number[], indexToWorld: Function }} params.labelmap
- * @returns {{ axes: Object, indexBox: { min, max }|null }}
+ * @returns {{ axes: Object, indexBox: { min, max }|null }} inclusive index bounds, clamped to the
+ *   volume; null when the edit misses it
  */
 export function editIndexBox({ editBox, depth = 0, labelmap }) {
   const axes = volumeAxes(labelmap.indexToWorld);
-  const voxelSize = Math.max(...[axes.di, axes.dj, axes.dk].map(v => Math.hypot(...v)));
   const indexBox = worldBoxToIndexBox(
-    _pad(editBox, EDIT_BOX_PADDING_VOXELS * voxelSize + Math.max(depth, 0)), axes, labelmap.dimensions);
+    _pad(editBox, Math.max(depth, 0)), axes, labelmap.dimensions, EDIT_BOX_PADDING_CELLS);
   return { axes, indexBox };
 }
 

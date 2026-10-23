@@ -1,5 +1,6 @@
 // Cutting surfaces, finding their holes and stitching patches into them (3D Selection tool delete)
 
+import { edgeUse, isClosedManifold, uvSphere, verticesWhere } from './testing/meshes';
 import {
   assembleSurface,
   cutSurface,
@@ -12,7 +13,6 @@ import {
   stitchPatch,
   weldVertices,
 } from './meshCut';
-import { edgeUse, isClosedManifold, uvSphere, verticesWhere } from './testing/meshes';
 
 
 describe('polysToTriangles / weldVertices', () => {
@@ -231,6 +231,15 @@ describe('findBoundaryLoopsDetailed', () => {
     const { loops, openEdges } = findBoundaryLoopsDetailed(triangles);
     expect(loops.length + openEdges).toBeGreaterThan(0);
     expect(openEdges).toBeGreaterThan(0);
+  });
+
+  it('does not take the edges of a face wound the wrong way for a rim', () => {
+    // A tetrahedron with one face turned over: every edge is still used by two triangles, so
+    // there is no hole to close, only inconsistent edges for the diagnostics
+    const consistent = Int32Array.from([0, 2, 1, 0, 1, 3, 1, 2, 3, 0, 3, 2]);
+    const turned = Int32Array.from([0, 1, 2, 0, 1, 3, 1, 2, 3, 0, 3, 2]);
+    expect(findBoundaryLoopsDetailed(consistent)).toEqual({ loops: [], openEdges: 0 });
+    expect(findBoundaryLoopsDetailed(turned)).toEqual({ loops: [], openEdges: 0 });
   });
 });
 

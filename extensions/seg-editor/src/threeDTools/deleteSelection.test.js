@@ -13,6 +13,7 @@ import {
 } from './deleteSelection';
 import { carveLabelmap } from './labelmapCarve';
 import { fanCap } from './meshCut';
+import { orientPatchToRim } from './meshRepair';
 
 
 // 1 mm labelmap, 32^3, centred on the world origin
@@ -33,7 +34,14 @@ function labelmapWith(fill) {
   return { scalarData, dimensions: [N, N, N], indexToWorld };
 }
 
-const patchHoles = async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'fitted' }));
+// A fan cap wound against the rim, as the hole-filling worker's patches are
+const cap = loop => {
+  const patch = fanCap(loop);
+  return { points: patch.points, triangles: orientPatchToRim(patch.triangles, loop.length / 3).triangles };
+};
+const patchHoles = async loops => loops.map(loop => ({ patch: cap(loop), method: 'fitted' }));
+// No patch at all: the hole stays open
+const leaveOpen = async loops => loops.map(() => ({ patch: { points: new Float64Array(0), triangles: new Int32Array(0) }, method: 'flat' }));
 
 function run({ surface, selected, labelmap, segmentIndex = 1, depth = 0 }) {
   const removed = [];
@@ -67,8 +75,18 @@ describe('cutAndPatch', () => {
     expect(isClosedManifold(result.edited.polys)).toBe(true);
     expect(result.edited.points.length).toBeLessThan(surface.points.length);
     expect(result.diagnostics).toMatchObject({
-      input: { closed: true }, output: { closed: true }, openEdges: 0, methods: { fitted: 1 },
+      input: { closed: true, inconsistentEdgeCount: 0 },
+      output: { closed: true, inconsistentEdgeCount: 0 },
+      openEdges: 0,
+      methods: { fitted: 1 },
+      introduced: { total: 0 },
+      acceptable: true,
+      emptied: false,
+      preexistingLoops: { count: 0 },
+      conditioning: { effectiveWeldTolerance: 0, fellBack: false },
+      fits: [[]],
     });
+    expect(result.diagnostics.removedTriangles).toBeGreaterThan(0);
     expect(result.edited.patchPolysOffset).toBeLessThan(result.edited.polys.length);
     // The edit box covers the removed points and the hole's rim (the ring at z = 5.33)
     expect(result.editBox.max[2]).toBeGreaterThanOrEqual(9.6);
@@ -160,7 +178,111 @@ describe('cutAndPatch', () => {
       surface, selected: verticesWhere(surface.points, () => true), deps: { patchHoles },
     });
 
+    // A valid deletion of everything, not a failed closure: nothing is left to diagnose
     expect(result).toMatchObject({ changed: true, holes: 0, edited: null });
+    expect(result.diagnostics).toMatchObject({ output: null, introduced: null, acceptable: true, emptied: true });
+  });
+
+  it('closes only the loops the cut opened, and reports the openings it did not touch', async () => {
+    // A surface with its top cap already missing; a second cut on its side opens one more loop
+    const open = await cutAndPatch({
+      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6), deps: { patchHoles: leaveOpen },
+    });
+    const topRim = open.diagnostics.output.boundaryEdgeCount;
+    expect(topRim).toBe(16);
+    const side = verticesWhere(open.edited.points, ([x, y, z]) => x > 8 && Math.abs(y) < 3 && Math.abs(z) < 3);
+    const patch = jest.fn(patchHoles);
+
+    const result = await cutAndPatch({ surface: open.edited, selected: side, deps: { patchHoles: patch } });
+
+    expect(result.holes).toBe(1);
+    expect(patch.mock.calls[0][0]).toHaveLength(1);
+    expect(result.diagnostics.preexistingLoops).toEqual({ count: 1, vertexCounts: [16] });
+    // The top opening is retained as it was: nothing new is open, which the report tells apart
+    // from an opening the cut made. The result still has open edges, so it is not acceptable for
+    // a labelmap write without the user's acknowledgement (FR-4).
+    expect(result.diagnostics.output).toMatchObject({ closed: false, boundaryEdgeCount: topRim });
+    expect(result.diagnostics.introduced).toMatchObject({ total: 0, boundaryEdgeCount: 0, retained: { boundaryEdgeCount: topRim } });
+    expect(result.diagnostics.acceptable).toBe(false);
+    // The edit box does not grow towards the untouched opening
+    expect(result.editBox.max[2]).toBeLessThan(5);
+  });
+
+  it('refuses a patch or result with non-finite coordinates, unassembled', async () => {
+    // A fitted cap with one NaN coordinate: its connectivity still closes the hole, so the edge
+    // diagnostics would call the result closed; the integrity check refuses it first
+    const selected = verticesWhere(surface.points, ([, , z]) => z > 6);
+    const poisoned = async loops => loops.map(loop => {
+      const patch = cap(loop);
+      patch.points[0] = NaN;
+      return { patch, method: 'fitted' };
+    });
+
+    const result = await cutAndPatch({ surface, selected, deps: { patchHoles: poisoned } });
+
+    expect(result).toMatchObject({
+      changed: false, edited: null, editBox: null, holes: 1,
+      invalid: { reason: 'nonFinitePoints', count: 1, where: 'patch', loop: 0 },
+    });
+    expect(result.diagnostics.output).toBeUndefined();
+    expect(result.diagnostics.acceptable).toBeUndefined();
+
+    // A patch indexing past its own points is refused the same way
+    const dangling = async loops => loops.map(loop => {
+      const patch = cap(loop);
+      patch.triangles[0] = patch.points.length;
+      return { patch, method: 'fitted' };
+    });
+    const bad = await cutAndPatch({ surface, selected, deps: { patchHoles: dangling } });
+    expect(bad.invalid).toMatchObject({ reason: 'invalidIndices', where: 'patch' });
+  });
+
+  it('refuses a source surface with a non-finite coordinate before cutting it', async () => {
+    const points = Float32Array.from(surface.points);
+    points[7] = Infinity;
+    const patch = jest.fn(patchHoles);
+
+    const result = await cutAndPatch({
+      surface: { points, polys: surface.polys }, selected: verticesWhere(surface.points, ([, , z]) => z > 6), deps: { patchHoles: patch },
+    });
+
+    expect(result).toMatchObject({ changed: false, invalid: { reason: 'nonFinitePoints', count: 1, where: 'before' } });
+    expect(patch).not.toHaveBeenCalled();
+    const repaired = await repairSurface({ surface: { points, polys: surface.polys }, deps: { patchHoles: patch } });
+    expect(repaired.invalid).toMatchObject({ where: 'before' });
+  });
+
+  it('counts the defects an edit introduces, apart from the ones it retained', async () => {
+    const selected = verticesWhere(surface.points, ([, , z]) => z > 6);
+    const result = await cutAndPatch({ surface, selected, deps: { patchHoles: leaveOpen } });
+
+    expect(result.diagnostics.output.closed).toBe(false);
+    expect(result.diagnostics.introduced).toMatchObject({ boundaryEdgeCount: 16, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, total: 16 });
+    expect(result.diagnostics.acceptable).toBe(false);
+
+    // A patch wound the wrong way introduces inconsistent edges, not open ones
+    const inverted = async loops => loops.map(loop => ({ patch: fanCap(loop), method: 'fitted' }));
+    const turned = await cutAndPatch({ surface, selected, deps: { patchHoles: inverted } });
+    expect(turned.diagnostics.output).toMatchObject({ boundaryEdgeCount: 0, closed: false });
+    expect(turned.diagnostics.introduced.inconsistentEdgeCount).toBe(16);
+    expect(turned.diagnostics.acceptable).toBe(false);
+  });
+
+  it('reports a weld it could not keep, and still cuts with the exact one', async () => {
+    // A tiny tetrahedron beside the sphere: a tolerance wider than its edges would erase it
+    const tetra = { points: [100, 0, 0, 100.05, 0, 0, 100, 0.05, 0, 100, 0, 0.05], polys: [3, 0, 2, 1, 3, 0, 1, 3, 3, 1, 2, 3, 3, 0, 3, 2] };
+    const offset = surface.points.length / 3;
+    const two = {
+      points: Float32Array.from([...surface.points, ...tetra.points]),
+      polys: Int32Array.from([...surface.polys, ...tetra.polys.map((v, i) => (i % 4 === 0 ? v : v + offset))]),
+    };
+
+    const result = await cutAndPatch({ surface: two, selectedTriangles: [0], options: { weldTolerance: 0.1 }, deps: { patchHoles } });
+
+    expect(result.diagnostics.conditioning).toMatchObject({ requestedWeldTolerance: 0.1, effectiveWeldTolerance: 0, fellBack: true });
+    expect(result.diagnostics.conditioning.preservation.extraDegenerate).toBe(4);
+    // The tetrahedron survives in the result
+    expect(result.edited.points.length / 3).toBeGreaterThanOrEqual(offset - 3 + 4);
   });
 
   it('stops after the patch once cancelled', async () => {
@@ -190,14 +312,28 @@ describe('cutAndPatch', () => {
 });
 
 describe('editIndexBox', () => {
-  it('pads the edit box by three voxels and the removal depth', () => {
+  it('pads the edit box by the removal depth in world units and two index cells', () => {
     const editBox = { min: [0, 0, 0], max: [2, 2, 2] };
     const map = labelmap();
 
     expect(editIndexBox({ editBox, labelmap: map }).indexBox)
-      .toEqual({ min: [16 - 4, 16 - 4, 16 - 4], max: [16 + 2 + 4, 16 + 2 + 4, 16 + 2 + 4] });
+      .toEqual({ min: [16 - 2, 16 - 2, 16 - 2], max: [16 + 2 + 2, 16 + 2 + 2, 16 + 2 + 2] });
     expect(editIndexBox({ editBox, depth: 2, labelmap: map }).indexBox)
-      .toEqual({ min: [16 - 6, 16 - 6, 16 - 6], max: [16 + 2 + 6, 16 + 2 + 6, 16 + 2 + 6] });
+      .toEqual({ min: [16 - 4, 16 - 4, 16 - 4], max: [16 + 2 + 4, 16 + 2 + 4, 16 + 2 + 4] });
+  });
+
+  it('adds index cells, not a world distance, on an anisotropic rotated grid', () => {
+    // 0.5 x 0.5 x 3 mm voxels, the slice axis along world x: two cells are 6 mm along x and
+    // 1 mm along y and z
+    const anisotropic = {
+      dimensions: [20, 60, 60],
+      indexToWorld: ([i, j, k]) => [3 * i, 0.5 * j, 0.5 * k],
+    };
+    const editBox = { min: [30, 15, 15], max: [33, 16, 16] };
+
+    const { indexBox } = editIndexBox({ editBox, labelmap: anisotropic });
+
+    expect(indexBox).toEqual({ min: [10 - 2, 30 - 2, 30 - 2], max: [11 + 2, 32 + 2, 32 + 2] });
   });
 
   it('is empty for an edit outside the labelmap', () => {
@@ -338,15 +474,16 @@ describe('cutAndPatch options', () => {
 describe('repairSurface', () => {
   it('closes the open rims of a cut surface without a selection', async () => {
     const open = await cutAndPatch({
-      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6),
-      deps: { patchHoles: async loops => loops.map(() => ({ patch: { points: new Float64Array(0), triangles: new Int32Array(0) }, method: 'flat' })) },
+      surface, selected: verticesWhere(surface.points, ([, , z]) => z > 6), deps: { patchHoles: leaveOpen },
     });
     expect(open.diagnostics.output.closed).toBe(false);
 
     const repaired = await repairSurface({ surface: open.edited, deps: { patchHoles } });
     expect(repaired.changed).toBe(true);
     expect(repaired.holes).toBe(1);
+    expect(repaired.diagnostics.input).toMatchObject({ closed: false, boundaryEdgeCount: 16 });
     expect(repaired.diagnostics.output.closed).toBe(true);
+    expect(repaired.diagnostics).toMatchObject({ introduced: { total: 0 }, acceptable: true });
     expect(isClosedManifold(repaired.edited.polys)).toBe(true);
   });
 
@@ -354,5 +491,14 @@ describe('repairSurface', () => {
     const result = await repairSurface({ surface, deps: { patchHoles } });
     expect(result.changed).toBe(false);
     expect(result.diagnostics.input.closed).toBe(true);
+  });
+
+  it('reports what it cannot close: non-manifold and inconsistent edges leave no loop to patch', async () => {
+    // One face of the sphere turned over: every edge is still used twice, so there is no rim
+    const polys = surface.polys.slice();
+    [polys[2], polys[3]] = [polys[3], polys[2]];
+    const result = await repairSurface({ surface: { points: surface.points, polys }, deps: { patchHoles } });
+    expect(result.changed).toBe(false);
+    expect(result.diagnostics.input).toMatchObject({ closed: false, boundaryEdgeCount: 0, inconsistentEdgeCount: 3 });
   });
 });
