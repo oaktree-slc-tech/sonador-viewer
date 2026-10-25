@@ -1,4 +1,16 @@
+/**
+ * @jest-environment jsdom
+ */
 import referenceIdentifiers from './referenceIdentifiers';
+import utils from './index';
+
+// The utils index pulls the Cornerstone3D loaders in, which this package's jest cannot resolve
+// (their `exports` maps); none of them is exercised here
+jest.mock('@cornerstonejs/dicom-image-loader', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/core', () => ({ utilities: {}, cache: {}, metaData: {}, Enums: {} }), { virtual: true });
+jest.mock('@cornerstonejs/tools', () => ({ utilities: {}, Enums: {}, segmentation: {} }), { virtual: true });
+jest.mock('@cornerstonejs/core/utilities/textureSupport', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({}), { virtual: true });
 
 const storeWith = ({ instances = {}, series = {} }) => ({
   getInstance: (study, seriesUid, sop) => instances[sop],
@@ -27,5 +39,13 @@ describe('referenceIdentifiers', () => {
     expect(referenceIdentifiers(storeWith({}), { SeriesInstanceUID: 's1' })).toBeNull();
     expect(referenceIdentifiers(storeWith({}), {})).toBeNull();
     expect(referenceIdentifiers(null, { SeriesInstanceUID: 's1' })).toBeNull();
+  });
+});
+
+describe('utils.referenceIdentifiers', () => {
+  it('is reachable through the utils object the viewer and the extensions read (OHIF.utils)', () => {
+    // The measurement table and the Series Tag tooltip call it through `OHIF.utils` /
+    // `import { utils }`, which is this object, not the module's named exports
+    expect(utils.referenceIdentifiers).toBe(referenceIdentifiers);
   });
 });
