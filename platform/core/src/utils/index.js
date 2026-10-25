@@ -137,6 +137,7 @@ const utils = {
   cornerstone3dUtils,
   cornerstoneUtils,
   buildButtonCommands,
+  referenceIdentifiers,
 };
 
 
