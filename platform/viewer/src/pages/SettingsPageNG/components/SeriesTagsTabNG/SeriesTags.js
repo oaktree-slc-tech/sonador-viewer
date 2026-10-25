@@ -375,7 +375,7 @@ export default function SeriesTagsTabNG() {
             />
           ))}
           {(tags?.length == 0) && (
-            <tr><td colSpan={headers.length + 1 + (aclTagModify ? 1 : 0)}>
+            <tr><td className={settingsPanelTableStyles.emptyState} colSpan={headers.length + 1 + (aclTagModify ? 1 : 0)}>
               <p className={globalTableStyles.noMatchingResults}>
                 {t('No series tags defined for ')+selectedGroup.name+'.'}
               </p>

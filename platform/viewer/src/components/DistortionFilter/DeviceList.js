@@ -386,7 +386,7 @@ export default function DeviceList() {
                 />
               ))}
               {(devicesList?.length == 0) && (
-                <tr><td colSpan={columnCount}>
+                <tr><td className={settingsPanelTableStyles.emptyState} colSpan={columnCount}>
                   <p className={globalTableStyles.noMatchingResults}>
                     {t('No devices defined for distortion filter.')}
                   </p>

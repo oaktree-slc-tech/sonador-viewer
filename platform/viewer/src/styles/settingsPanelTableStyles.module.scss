@@ -54,6 +54,13 @@ table {
       max-width: 196px;
     }
 
+    // Empty-state row: a single cell spanning every column. Lift the per-column width cap above
+    // so the message centres across the table rather than wrapping inside the first data column.
+    &.emptyState p {
+      min-width: 0;
+      max-width: none;
+    }
+
     .listItemNumber {
       width: 25px;
       font-weight: 500;
