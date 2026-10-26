@@ -196,7 +196,7 @@ export default function DisplayAttributesTab({ server }) {
               ))}
               {!attributes.length && (
                 <tr>
-                  <td colSpan={canModify ? 6 : 5}>
+                  <td className={settingsPanelTableStyles.emptyState} colSpan={canModify ? 6 : 5}>
                     <p className={globalTableStyles.noMatchingResults}>
                       {isLoading ? 'Loading…' : error ? 'The collection could not be loaded.' : `No display attributes defined for ${group.name}.`}
                     </p>
