@@ -33,21 +33,39 @@ export const LOCKED_MODELS_WARNING_PREFERENCE_KEY = 'warnLockedModelsOnOpenAsSeg
 export const SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY = 'segEditorPreviewColor';
 export const SEG_EDITOR_PREVIEW_COLOR_DEFAULT = '#ff8500';
 
+// The colour the Segmentation Editor draws the mesh (edges and vertices) of the segment being
+// edited in 3D: 'auto' (the default) follows the segment's own colour, moved well lighter or
+// darker; a hex colour is the user's own pick.
+export const SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY = 'segEditorMeshColor';
+export const SEG_EDITOR_MESH_COLOR_AUTO = 'auto';
+export const SEG_EDITOR_MESH_COLOR_DEFAULT = SEG_EDITOR_MESH_COLOR_AUTO;
+
+// Whether the Segmentation Editor's views follow the selected segment: when a segment is
+// selected, the 2D views scroll to its centre and the 3D view frames its surface. Off by default;
+// set from the segmentation header's menu or the Settings page.
+export const SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY = 'segEditorFollowSelection';
+export const SEG_EDITOR_FOLLOW_SELECTION_DEFAULT = false;
+
 // The keys held here and their defaults, which also fix each key's type: a stored value of another
 // type (a document edited by hand, or written by another release) is read as the default.
 const GENERAL_DEFAULTS = Object.freeze({
   [LOCKED_MODELS_WARNING_PREFERENCE_KEY]: true,
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
+  [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: SEG_EDITOR_MESH_COLOR_DEFAULT,
+  [SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
 });
 
 // Values a key accepts beyond its default's type
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const VALIDATORS = Object.freeze({
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: value => HEX_COLOR.test(value),
+  [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: value => value === SEG_EDITOR_MESH_COLOR_AUTO || HEX_COLOR.test(value),
 });
 
 // Keys the server does not accept yet (see above): kept in this browser, not in the section POST
-const LOCAL_ONLY_KEYS = new Set([SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]);
+const LOCAL_ONLY_KEYS = new Set([
+  SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY, SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
+]);
 
 // Where a local-only value is kept in the browser's storage
 const LOCAL_STORAGE_PREFIX = 'sonador.preferences.general.';

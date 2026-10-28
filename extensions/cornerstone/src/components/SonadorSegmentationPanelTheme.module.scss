@@ -53,6 +53,8 @@
   :global(.seg-action) {
     --spacing: 0.35rem;
     height: auto; padding: 0 !important;
+    // One colour for every header action, the segmentation table's and the tool palettes'
+    color: var(--text-secondary-color);
 
     button { height: auto; padding: 0 !important; }
   }

@@ -19,6 +19,11 @@
   "SegEditor": "Seg Editor",
   "SegEditorPreviewColorHelp": "The colour a 3D edit awaiting Apply is drawn in: the faces a Remove, Smooth or Repair will change, with their edges and vertices. Blender's orange by default. Kept in this browser for now.",
   "SegEditorPreviewColorLabel": "Preview colour",
+  "SegEditorMeshColorAutoLabel": "Mesh follows the segment colour",
+  "SegEditorMeshColorLabel": "Mesh colour",
+  "SegEditorMeshColorHelp": "The colour the Segmentation Editor draws the mesh (edges and vertices) of the segment being edited in 3D. By default a much lighter or darker shade of the segment's own colour; untick to pick one colour for every segment. Also set from the 3D palette's Model Actions menu.",
+  "SegEditorFollowSelectionLabel": "Follow the selected segment",
+  "SegEditorFollowSelectionHelp": "When a segment is selected, the 2D views scroll to its centre and the 3D view frames its surface. Off, selecting a segment moves nothing. Also set from the segmentation table's configuration in the editor. Kept in this browser for now.",
   "Segmentation": "Segmentation",
   "User Preferences": "User Preferences"
 }

@@ -9,6 +9,11 @@
 // Writes run one after another, in edit order, so each sees the voxels the ones before it wrote.
 // The queue outlives the canvas (a layout change remounts it) and is cancelled when the editor
 // closes.
+//
+// A synchronization (ohif-viewers#152 §4; surfaceEditMemo.createSurfaceSyncMemo) is a write of
+// the same kind as a smooth's, between the checkpoint surface and the current one: it is proposed
+// first (proposeSurfaceSync: the bounded delta against the labelmap as it is, for the user to see
+// before acknowledging a best-effort conversion), then run through the queue like any write.
 
 import { cache as c3dCache, utilities as c3dUtilities } from '@cornerstonejs/core';
 import {
@@ -147,12 +152,110 @@ export function countOutsideIndexBox(indices, indexBox, dimensions) {
   return outside;
 }
 
+// The index domain of a write: the edit's world box (padded by a delete's removal depth) in
+// index space, plus the fixed padding
+function _writeDomain(memo, labelmap) {
+  const write = memo.write || { kind: WRITE_KINDS.delete };
+  const depth = write.kind === WRITE_KINDS.delete ? write.depth || 0 : 0;
+  return editIndexBox({ editBox: memo.editBox, depth, labelmap });
+}
+
+// The voxels a write proposes, classified in the worker: a delete carves, a smooth and a
+// synchronization take the delta of their two surfaces
+async function _classifyWrite(memo, labelmap, { axes, indexBox }, { carve, delta }) {
+  if (!indexBox) {
+    return { remove: new Int32Array(0), add: new Int32Array(0) };
+  }
+  const write = memo.write || { kind: WRITE_KINDS.delete };
+  const args = {
+    original: memo.before,
+    edited: memo.after.points?.length ? memo.after : null,
+    boxData: extractIndexBox(labelmap.scalarData, labelmap.dimensions, indexBox),
+    dimensions: labelmap.dimensions,
+    segmentIndex: memo.segmentIndex,
+    axes,
+    indexBox,
+  };
+  if (write.kind === WRITE_KINDS.delete) {
+    const depth = write.depth || 0;
+    return { remove: await carve({ ...args, selectedPoints: write.selectedPoints, depth }), add: new Int32Array(0) };
+  }
+  return delta(args);
+}
+
+function _farField(classified, indexBox, dimensions) {
+  return indexBox
+    ? countOutsideIndexBox(classified.remove, indexBox, dimensions)
+      + countOutsideIndexBox(classified.add, indexBox, dimensions)
+    : classified.remove.length + classified.add.length;
+}
+
+/**
+ * The bounded voxel delta a synchronization proposes (ohif-viewers#152 §4, handoff): the delta
+ * from the checkpoint surface to the current one over the accumulated affected region,
+ * classified in the worker and validated against the labelmap as it is now, without writing
+ * anything. What the handoff shows before the user acknowledges a best-effort conversion: the
+ * affected region, the voxels it would remove and add, and the ones it would leave alone because
+ * they changed hands. The write itself (runSurfaceEditWrite, kind sync) classifies again, so the
+ * voxels written are always those of the labelmap at that moment.
+ *
+ * @param {Object} sync - { before, after, editBox, segmentIndex, labelmapVolume }, as the memo
+ *   will carry them
+ * @param {Object} deps - editSegmentationId, and runSurfaceEditWrite's optional getLabelmap /
+ *   delta / isSegmentLocked / segmentExists
+ * @returns {Promise<{ domain: { min, max }|null, domainVoxels: number, proposedRemove: number,
+ *   proposedAdd: number, remove: number, add: number, dropped: number, farField: number }>}
+ *   `remove` and `add` are the voxels still the segment's / still background
+ * @throws {WriteRefusedError} when the target is invalid or the delta reaches outside the region
+ */
+export async function proposeSurfaceSync(sync, deps) {
+  const {
+    editSegmentationId,
+    getLabelmap = getLabelmapForEdit,
+    delta = deltaInWorker,
+    isSegmentLocked = (id, index) => c3dSegmentations.segmentLocking.isSegmentIndexLocked(id, index),
+    segmentExists = (id, index) => !!c3dSegmentations.state.getSegmentation(id)?.segments?.[index],
+  } = deps;
+  const memo = { ...sync, write: { kind: WRITE_KINDS.sync } };
+  const targetValid = labelmap => !!labelmap && labelmap.volume === memo.labelmapVolume
+    && segmentExists(editSegmentationId, memo.segmentIndex)
+    && !isSegmentLocked(editSegmentationId, memo.segmentIndex);
+  const labelmap = getLabelmap(editSegmentationId);
+  if (!targetValid(labelmap)) {
+    throw new WriteRefusedError();
+  }
+  const { axes, indexBox } = _writeDomain(memo, labelmap);
+  const classified = await _classifyWrite(memo, labelmap, { axes, indexBox }, { delta });
+  const farField = _farField(classified, indexBox, labelmap.dimensions);
+  if (farField > 0) {
+    throw new WriteRefusedError(`${farField} proposed voxel(s) lie outside the affected region`);
+  }
+  const current = getLabelmap(editSegmentationId);
+  if (!targetValid(current)) {
+    throw new WriteRefusedError();
+  }
+  const owned = ownedDelta(classified, current.scalarData, memo.segmentIndex);
+  return {
+    domain: indexBox,
+    domainVoxels: indexBox ? indexBoxSize(indexBox).reduce((a, b) => a * b, 1) : 0,
+    proposedRemove: classified.remove.length,
+    proposedAdd: classified.add.length,
+    remove: owned.remove.length,
+    add: owned.add.length,
+    dropped: owned.dropped,
+    farField,
+  };
+}
+
 /**
  * The labelmap write of a surface edit: the edit's index box is examined in the worker and the
  * voxels are written through a labelmap memo, which the surface edit's record keeps for undo. A
  * delete (`write.kind` delete) carves: it only clears the segment's voxels. A smooth (`write.kind`
  * smooth) takes the delta of the two surfaces: it clears the segment's voxels the surface moved
- * out of and sets the background voxels it moved over; other segments are never written.
+ * out of and sets the background voxels it moved over; other segments are never written. A
+ * synchronization (`write.kind` sync) is the same delta between the checkpoint surface and the
+ * current one, over the region the covered edits affected together; its predecessors are the
+ * memos it covers, so they do not block it (syncLedger).
  *
  * The target is checked before the worker runs and again, against the labelmap as it is then,
  * before anything is written: the segment must exist and be unlocked, the working labelmap must
@@ -224,9 +327,7 @@ export async function runSurfaceEditWrite(memo, deps) {
   }
 
   const write = memo.write || { kind: WRITE_KINDS.delete };
-  const isDelete = write.kind !== WRITE_KINDS.smooth;
-  const depth = isDelete ? write.depth || 0 : 0;
-  const { axes, indexBox } = editIndexBox({ editBox: memo.editBox, depth, labelmap });
+  const { axes, indexBox } = _writeDomain(memo, labelmap);
   const report = {
     status: 'pending',
     kind: write.kind,
@@ -240,23 +341,7 @@ export async function runSurfaceEditWrite(memo, deps) {
     farField: 0,
   };
   memo.writeReport = report;
-  let classified = { remove: new Int32Array(0), add: new Int32Array(0) };
-  if (indexBox) {
-    const args = {
-      original: memo.before,
-      edited: memo.after.points?.length ? memo.after : null,
-      boxData: extractIndexBox(labelmap.scalarData, labelmap.dimensions, indexBox),
-      dimensions: labelmap.dimensions,
-      segmentIndex: memo.segmentIndex,
-      axes,
-      indexBox,
-    };
-    if (isDelete) {
-      classified = { remove: await carve({ ...args, selectedPoints: write.selectedPoints, depth }), add: new Int32Array(0) };
-    } else {
-      classified = await delta(args);
-    }
-  }
+  const classified = await _classifyWrite(memo, labelmap, { axes, indexBox }, { carve, delta });
   if (job.cancelled) {
     report.status = 'cancelled';
     return false;
@@ -271,10 +356,7 @@ export async function runSurfaceEditWrite(memo, deps) {
 
   // No voxel outside the edit's index domain may change: a delta reaching outside it is a faulty
   // write and is refused whole, not clipped
-  const farField = indexBox
-    ? countOutsideIndexBox(classified.remove, indexBox, labelmap.dimensions)
-      + countOutsideIndexBox(classified.add, indexBox, labelmap.dimensions)
-    : classified.remove.length + classified.add.length;
+  const farField = _farField(classified, indexBox, labelmap.dimensions);
   report.farField = farField;
   if (farField > 0) {
     report.status = 'refused';
@@ -388,7 +470,16 @@ export function cancelSurfaceEditWrites() {
   chain = Promise.resolve();
 }
 
-/** Writes queued or running (tests). */
+/** Writes queued or running. */
 export function pendingSurfaceEditWrites() {
   return pending.size;
+}
+
+/**
+ * Resolves once every write queued so far has settled (made, refused, failed or cancelled). A
+ * write queued meanwhile is not waited for: callers that need an empty queue check
+ * pendingSurfaceEditWrites again.
+ */
+export function whenSurfaceEditWritesSettled() {
+  return chain.then(() => undefined, () => undefined);
 }

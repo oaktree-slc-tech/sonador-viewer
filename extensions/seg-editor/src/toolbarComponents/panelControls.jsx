@@ -1,18 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
-import {
-  Input,
-  Label,
-  Slider,
-  Switch,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@ohif/ui-next';
+import { Icons, Input, Label, Slider, Switch, Tabs, TabsList, TabsTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@ohif/ui-next';
 
 
 // The Segmentation Editor palettes' panel controls (ohif-viewers#142, §12), shared by the 3D tools'
@@ -54,19 +43,44 @@ export function useWheelStep(ref, { value, step, onChange, disabled }) {
   }, [ref]);
 }
 
-export function Tip({ text, content, children }) {
+/**
+ * A hover tip in the kit's own idiom (ui-next ToolButton): the kit's TooltipContent, wrapping to
+ * its width, with the text in the kit's size and an optional muted detail line beneath. A
+ * disabled control takes no pointer events, so wrap it in a span to keep its tip.
+ */
+export function Tip({ text, detail, content, children }) {
   if (!text && !content) {
     return children;
   }
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[240px] text-xs">{content || text}</TooltipContent>
+      <TooltipContent side="top" className="text-wrap w-auto max-w-sm whitespace-normal break-words">
+        {content || (
+          <div className="space-y-1">
+            <div className="text-sm">{text}</div>
+            {detail && <div className="text-muted-foreground text-xs">{detail}</div>}
+          </div>
+        )}
+      </TooltipContent>
     </Tooltip>
   );
 }
 
-Tip.propTypes = { text: PropTypes.string, content: PropTypes.node, children: PropTypes.node };
+Tip.propTypes = { text: PropTypes.string, detail: PropTypes.string, content: PropTypes.node, children: PropTypes.node };
+
+/** The kit's status icon for a surface state: closed (ok), has issues (warning), or being checked. */
+export function StatusIcon({ tone, className = 'h-4 w-4 flex-none' }) {
+  if (tone === 'ok') {
+    return <Icons.StatusSuccess className={`${className} text-customgreen-100`} aria-hidden="true" />;
+  }
+  if (tone === 'warning') {
+    return <Icons.StatusWarning className={className} aria-hidden="true" />;
+  }
+  return <Icons.LoadingSpinner className={className} aria-hidden="true" />;
+}
+
+StatusIcon.propTypes = { tone: PropTypes.oneOf(['ok', 'warning', 'muted']).isRequired, className: PropTypes.string };
 
 /** A unit after a value: muted, in a fixed column so the values above and below it line up. */
 export function Unit({ unit, hint }) {
@@ -242,16 +256,20 @@ Card.propTypes = {
   children: PropTypes.node,
 };
 
-/** Label leading, switch trailing, with an optional one-line description under the label. */
-export function ToggleRow({ id, label, description, hint, checked, disabled, onChange }) {
+/**
+ * Label leading, switch trailing, with an optional one-line description under the label and an
+ * optional control (a colour swatch) between the label and the switch.
+ */
+export function ToggleRow({ id, label, description, hint, checked, disabled, onChange, control }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-3 py-0.5">
       <Tip text={hint}>
-        <Label htmlFor={id} className="min-w-0 cursor-pointer text-[13px] font-normal leading-snug">
+        <Label htmlFor={id} className="min-w-0 flex-1 cursor-pointer text-[13px] font-normal leading-snug">
           {label}
           {description && <span className="text-muted-foreground mt-1.5 block text-xs leading-snug">{description}</span>}
         </Label>
       </Tip>
+      {control}
       <Switch id={id} checked={!!checked} disabled={disabled} onCheckedChange={onChange} data-cy={id} />
     </div>
   );
@@ -265,6 +283,7 @@ ToggleRow.propTypes = {
   checked: PropTypes.bool,
   disabled: PropTypes.bool,
   onChange: PropTypes.func.isRequired,
+  control: PropTypes.node,
 };
 
 /**

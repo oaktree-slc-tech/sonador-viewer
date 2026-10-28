@@ -20,6 +20,7 @@ import { callConfirmDialog } from './components/confirmDialog';
 import createImportCommands from './importers/importCommands.js';
 import { getSegEditorLayout } from './layouts/segEditorLayouts';
 import { downloadEditCase } from './threeDTools/editCase';
+import { replayNeeds3DContext } from './threeDTools/surfaceEditMemo';
 import {
   get3DToolState,
   request3DToolAction,
@@ -28,10 +29,11 @@ import {
   setRemovalDepth,
 } from './threeDTools/threeDToolState';
 import { IMAGING_TOOLS, STACK_SCROLL_TOOL } from './toolbox/constants';
-import { redoSegEditorEdit, segEditorHistoryDroppedEdits, undoSegEditorEdit } from './toolbox/segEditorHistory';
+import { peekSegEditorRedo, redoSegEditorEdit, segEditorHistoryDroppedEdits, undoSegEditorEdit } from './toolbox/segEditorHistory';
 import { getSegEditorToolContext } from './toolbox/segEditorToolContext';
 import { LABELMAP_TOOL_NAMES, releaseIdlePreview } from './toolbox/segEditorTools';
 import { isDeveloperToolsEnabled } from './utils/segEditorDeveloper';
+import { frameSelectedSegment } from './utils/followSelection';
 import setSegmentationEditorLayout from './utils/setSegmentationEditorLayout.js';
 import { Enums as SegEditEnums } from './enums';
 
@@ -260,8 +262,13 @@ const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
       _scrollActiveViewport(-1);
     },
 
-    // Undo / redo the editor's labelmap and 3D edits (one shared history)
+    // Undo / redo the editor's labelmap and 3D edits (one shared history). Neither runs while a
+    // handoff is being resolved (ohif-viewers#152): its dialog and its awaited write are one
+    // transaction over the history, which an undo meanwhile would pull apart.
     undoSegEditor() {
+      if (get3DToolState().handoff) {
+        return false;
+      }
       // An edit the active tool is still recording is committed first, as the tools' own undo does
       const toolGroup = _toolGroup();
       const activeTool = toolGroup?.getToolInstance?.(toolGroup.getActivePrimaryMouseButtonTool());
@@ -270,7 +277,31 @@ const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
     },
 
     redoSegEditor() {
-      redoSegEditorEdit();
+      if (get3DToolState().handoff) {
+        return false;
+      }
+      // A 3D edit discarded by a handoff stays on the Redo stack. Replaying it restores a surface
+      // the labelmap does not have (its voxels were never written), which only the 3D tools on
+      // that segment account for: elsewhere (the Labelmap palette, another segment) the replay
+      // is refused and the way back is named (ohif-viewers#152 §7, no hidden draft).
+      const next = peekSegEditorRedo();
+      if (replayNeeds3DContext(next)) {
+        const items = Array.isArray(next) ? next : [next];
+        const memo = items.find(replayNeeds3DContext);
+        const allowed = request3DToolAction('surfaceRedoAllowed', { memo });
+        if (allowed !== true) {
+          const t = (key, options) => i18n.t(key, { ns: 'SegmentationEditor', ...options });
+          const segment = c3dSegmentations.state.getSegmentation(getSegEditorToolContext()?.segmentationId)
+            ?.segments?.[memo.segmentIndex]?.label || t('Segment {{index}}', { index: memo.segmentIndex });
+          servicesManager?.services?.UINotificationService?.show({
+            type: 'warning',
+            title: t('Redo'),
+            message: t('This Redo would restore a 3D edit of "{{segment}}" that the 2D slices do not have. Open the 3D tools on that segment to redo it.', { segment }),
+          });
+          return false;
+        }
+      }
+      return redoSegEditorEdit();
     },
 
     toggleSegEditor3DTool({ toolName }) {
@@ -283,6 +314,23 @@ const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
     deactivate3DTools() {
       setActive3DTool(null);
       _refreshToolbar();
+    },
+
+    frameSegEditorSegment({ animate = true } = {}) {
+      // Frame Selected Segment (the segmentation header's menu): the 2D views scroll and pan to
+      // the selected segment's centre and the 3D view frames its surface, once, whatever the
+      // Follow Selected Segment preference says. False when nothing moved (no editor, or a
+      // segment with no voxels).
+      return frameSelectedSegment({ animate });
+    },
+
+    async resolveSegEditor3DHandoff({ reason, segmentIndex } = {}) {
+      // Before something else takes over from 3D editing (the Labelmap palette, another target,
+      // an import, the editor's exit; ohif-viewers#152): a 3D surface the 2D views have not
+      // caught up with is resolved through the canvas's handoff dialog. Resolves to whether the
+      // destination may proceed; without a canvas there is nothing to resolve.
+      const resolved = await request3DToolAction('resolveHandoff', { reason, segmentIndex });
+      return resolved === undefined ? true : resolved !== false;
     },
 
     setSegEditor3DRemovalDepth({ value }) {
@@ -373,6 +421,13 @@ const commandsModule =({ servicesManager, commandsManager, appConfig }) => {
       const _ds = displaySetInstanceUID
         && DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUID);
       const workingSegmentationId = _ds?.segmentationId;
+
+      // A 3D surface the 2D views have not caught up with is resolved first (ohif-viewers#152):
+      // Stay in 3D Tools keeps the editor open
+      if (!(await toolActions.resolveSegEditor3DHandoff({ reason: 'exit' }))) {
+        useLayoutButton.getState().setIsDisplayedLayoutButton(false);
+        return false;
+      }
 
       const t = key => i18n.t(key, { ns: 'SegmentationEditor' });
       let prompt = null;

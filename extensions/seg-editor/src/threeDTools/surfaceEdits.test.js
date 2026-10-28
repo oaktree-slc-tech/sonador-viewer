@@ -561,3 +561,130 @@ describe('predecessors of a queued write', () => {
     expect(applyLabelmapEdit).not.toHaveBeenCalled();
   });
 });
+
+describe('synchronization writes (ohif-viewers#152)', () => {
+  const { createSurfaceSyncMemo } = require('./surfaceEditMemo');
+  const { configureSyncLedger, resetSyncLedger, trackSurfaceEditMemo, unsynchronizedEdits } = require('./syncLedger');
+  const { proposeSurfaceSync, whenSurfaceEditWritesSettled } = require('./surfaceEdits');
+  const { set3DToolTarget } = require('./threeDToolState');
+  const points = n => Float32Array.from([1, 1, 1, n, 1, 1, 1, n, 1]);
+  const polys = Int32Array.from([3, 0, 1, 2]);
+  const box = { min: [2, 2, 2], max: [4, 4, 4] };
+
+  afterEach(() => {
+    resetSyncLedger();
+    configureSyncLedger();
+    mockLocked.clear();
+  });
+
+  function ledgerWith() {
+    const s0 = { points: points(5), polys };
+    const s1 = { points: points(4), polys };
+    const s2 = { points: points(3), polys };
+    let current = s0.points;
+    configureSyncLedger({ getPoints: () => current });
+    set3DToolTarget({ segmentIndex: 1, label: 'Liver' });
+    const memoDeps = { setSurface: (geometryId, next) => { current = next.points; }, queueWrite: jest.fn() };
+    const make = (before, after) => {
+      const m = trackSurfaceEditMemo(createSurfaceEditMemo({
+        geometryId: 'g1', segmentIndex: 1, before, after, editBox: box,
+        write: { kind: 'delete', selectedPoints: [5, 1, 1], depth: 0 }, labelmapVolume: volume, deps: memoDeps,
+      }));
+      m.surfaceOnly = true;
+      return m;
+    };
+    const a = make(s0, s1);
+    const b = make(s1, s2);
+    a.restoreMemo(false);
+    b.restoreMemo(false);
+    expect(unsynchronizedEdits('g1')).toBe(2);
+    const sync = covers => trackSurfaceEditMemo(createSurfaceSyncMemo({
+      geometryId: 'g1', segmentIndex: 1, before: s0, after: s2, editBox: box, covers, acknowledged: null,
+      labelmapVolume: volume, deps: { queueWrite: jest.fn() },
+    }));
+    return { s0, s2, a, b, sync };
+  }
+
+  it('writes a synchronization as the delta from the checkpoint, unblocked by the edits it covers', async () => {
+    const labelmap = labelmapForEdit();
+    getLabelmapForEdit.mockReturnValue(labelmap);
+    const { s0, s2, a, b, sync } = ledgerWith();
+    const memo = sync([a, b]);
+    memo.job = { memo, cancelled: false };
+    deltaInWorker.mockResolvedValue({ remove: Int32Array.from([146]), add: Int32Array.from([0]) });
+    labelmap.scalarData[0] = 0;
+    applyLabelmapEdit.mockImplementation(({ edit }) => {
+      let n = 0;
+      edit((index, value) => { labelmap.scalarData[index] = value; n++; });
+      return { changed: n > 0, memo: { restoreMemo: jest.fn() } };
+    });
+
+    expect(await runSurfaceEditWrite(memo, { editSegmentationId: EDIT_SEG })).toBe(true);
+
+    expect(deltaInWorker).toHaveBeenCalledWith(expect.objectContaining({ original: s0, edited: s2, segmentIndex: 1 }));
+    expect(carveInWorker).not.toHaveBeenCalled();
+    expect(memo.writeReport).toMatchObject({ status: 'written', kind: 'sync', removed: 1, added: 1, farField: 0 });
+    expect(labelmap.scalarData[146]).toBe(0);
+    expect(labelmap.scalarData[0]).toBe(1);
+  });
+
+  it('refuses a synchronization when an edit it does not cover failed to reach the labelmap', async () => {
+    const labelmap = labelmapForEdit();
+    getLabelmapForEdit.mockReturnValue(labelmap);
+    const { a, b, sync } = ledgerWith();
+    a.writeReport = { status: 'failed', message: 'worker lost' };
+    const memo = sync([b]);
+    memo.job = { memo, cancelled: false };
+
+    await expect(runSurfaceEditWrite(memo, { editSegmentationId: EDIT_SEG })).rejects.toBeInstanceOf(WriteRefusedError);
+    expect(memo.writeReport).toMatchObject({ status: 'refused', reason: 'predecessor', predecessors: 1 });
+    expect(deltaInWorker).not.toHaveBeenCalled();
+  });
+
+  it('proposes the bounded delta against the labelmap as it is, without writing', async () => {
+    const labelmap = labelmapForEdit();
+    // One voxel of the removal now another segment's, one addition no longer background
+    labelmap.scalarData[146] = 2;
+    labelmap.scalarData[0] = 0;
+    labelmap.scalarData[1] = 3;
+    getLabelmapForEdit.mockReturnValue(labelmap);
+    deltaInWorker.mockResolvedValue({ remove: Int32Array.from([145, 146]), add: Int32Array.from([0, 1]) });
+    const sync = {
+      before: { points: points(5), polys }, after: { points: points(3), polys }, editBox: box, segmentIndex: 1, labelmapVolume: volume,
+    };
+
+    const proposal = await proposeSurfaceSync(sync, { editSegmentationId: EDIT_SEG });
+
+    expect(proposal).toMatchObject({
+      proposedRemove: 2, proposedAdd: 2, remove: 1, add: 1, dropped: 2, farField: 0,
+      domain: { min: [0, 0, 0], max: [6, 6, 6] }, domainVoxels: 343,
+    });
+    expect(deltaInWorker).toHaveBeenCalledWith(expect.objectContaining({ original: sync.before, edited: sync.after }));
+    expect(applyLabelmapEdit).not.toHaveBeenCalled();
+    expect(labelmap.scalarData[145]).toBe(1);
+
+    // A locked target, or a delta outside the region, is refused like a write
+    mockLocked.add(1);
+    await expect(proposeSurfaceSync(sync, { editSegmentationId: EDIT_SEG })).rejects.toBeInstanceOf(WriteRefusedError);
+    mockLocked.clear();
+    deltaInWorker.mockResolvedValue({ remove: Int32Array.from([511]), add: new Int32Array(0) });
+    await expect(proposeSurfaceSync(sync, { editSegmentationId: EDIT_SEG })).rejects.toThrow(/outside the affected region/);
+  });
+
+  it('resolves once the writes queued so far have settled', async () => {
+    getLabelmapForEdit.mockReturnValue(labelmapForEdit());
+    const order = [];
+    const run = jest.fn(async memo => { await flush(); order.push(memo.id); return false; });
+    const a = memoFor();
+    const b = memoFor();
+    queueSurfaceEditWrite(a, { editSegmentationId: EDIT_SEG, run });
+    queueSurfaceEditWrite(b, { editSegmentationId: EDIT_SEG, run });
+    expect(pendingSurfaceEditWrites()).toBe(2);
+
+    await whenSurfaceEditWritesSettled();
+    await flush();
+
+    expect(order).toEqual([a.id, b.id]);
+    expect(pendingSurfaceEditWrites()).toBe(0);
+  });
+});

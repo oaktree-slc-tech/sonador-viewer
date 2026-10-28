@@ -96,10 +96,9 @@
 //    header's surface and vertical padding, 16px light type.
 .palette :global(.seg-editor-toolbox-title) {
   margin: 0 0 0.35rem;
-  padding: 0.5rem 0 0.5rem 14px;
+  // The 2px mirrors the segmentation header's scroll-area inset (pl-0.5); the label's type is
+  // the header's .seg-label (the panel theme), the action slots its .seg-action
+  padding: 0.5rem 0 0.5rem 2px;
   line-height: 24px;
-  font-size: 16px;
-  font-weight: 300;
-  color: var(--text-primary-color);
   background-color: var(--ui-gray-dark);
 }

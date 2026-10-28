@@ -37,6 +37,38 @@ export function redoSegEditorEdit(history = _history()) {
   return false;
 }
 
+/**
+ * The newest entries of the history that Undo would reach, newest first, without undoing them
+ * (HistoryMemo keeps a ring indexed by `position`; a grouped entry is returned as its array). The
+ * 3D tools' Discard (ohif-viewers#152) checks that the entries it is about to undo are exactly
+ * the surface's unsynchronized edits before it touches the history.
+ *
+ * @param {number} count
+ * @returns {Array} at most `count` entries, fewer when less can be undone
+ */
+export function peekSegEditorHistory(count, history = _history()) {
+  const items = [];
+  const available = Math.min(count, history?.undoAvailable || 0);
+  const ring = history?.ring || [];
+  const size = history?.size || ring.length || 1;
+  for (let i = 0; i < available; i++) {
+    items.push(ring[(history.position - i + size * (i + 1)) % size]);
+  }
+  return items;
+}
+
+/**
+ * The entry Redo would replay next, without replaying it (null when there is none, or when the
+ * history does not expose its ring). A grouped entry is returned as its array.
+ */
+export function peekSegEditorRedo(history = _history()) {
+  if (!history || !(history.redoAvailable > 0) || !history.ring) {
+    return null;
+  }
+  const size = history.size || history.ring.length || 1;
+  return history.ring[(history.position + 1) % size] ?? null;
+}
+
 /** Drop every recorded edit (HistoryMemo has no clear(); resizing resets its ring). */
 export function clearSegEditorHistory(history = _history()) {
   const { size } = history;

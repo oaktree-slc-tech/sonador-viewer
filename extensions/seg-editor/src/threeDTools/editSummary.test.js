@@ -45,3 +45,19 @@ describe('editSummary', () => {
     expect(writeStatusText(t, {})).toBe('');
   });
 });
+
+describe('editSummary: synchronizations (ohif-viewers#152)', () => {
+  const { acknowledgedText } = require('./editSummary');
+
+  it('describes a synchronization by the edits it covered, and an acknowledged conversion by its defects', () => {
+    expect(editSummary(t, { kind: 'sync', covered: 3, acknowledged: null, write: 'queued' }))
+      .toBe('3 edit(s) synchronized from the last checkpoint; 2D views updating...');
+    expect(editSummary(t, {
+      kind: 'sync', covered: 2, write: 'written', removedVoxels: 40, addedVoxels: 2, farField: 0,
+      acknowledged: { defects: { boundaryEdgeCount: 4, nonManifoldEdgeCount: 1, inconsistentEdgeCount: 0, closed: false } },
+    })).toBe('best-effort conversion acknowledged with 4 open, 1 non-manifold and 0 inverted edge(s); '
+      + '2D views updated: 40 voxel(s) removed, 2 added, 0 outside the edit region');
+    expect(acknowledgedText(t, { defects: null })).toBe('surface synchronized');
+    expect(acknowledgedText(t, null)).toBe('');
+  });
+});

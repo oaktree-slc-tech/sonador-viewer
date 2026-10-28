@@ -9,12 +9,12 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { useActiveToolOptions, useSystem, useToolbar } from '@ohif/core';
-import { Icons } from '@ohif/ui-next';
+import { Button, Icons } from '@ohif/ui-next';
 
 import ToolOptionCards from '../../toolbarComponents/ToolOptionCards';
 
 
-export default function SegEditorToolbox({ buttonSectionId, title }) {
+export default function SegEditorToolbox({ buttonSectionId, title, titleAction = null, status = null }) {
   const { servicesManager } = useSystem();
   const { t } = useTranslation();
 
@@ -46,16 +46,25 @@ export default function SegEditorToolbox({ buttonSectionId, title }) {
 
   return (
     <div className="seg-editor-toolbox" data-cy={`seg-editor-toolbox-${buttonSectionId}`}>
-      <div className="seg-editor-toolbox-title flex w-full items-center justify-between">
-        <span>{t(title)}</span>
-        {CustomConfigComponent && (
-          <div className="ml-auto mr-2">
-            <Icons.Settings
-              className="text-primary h-4 w-4"
-              onClick={() => setShowConfig(!showConfig)}
-            />
-          </div>
-        )}
+      {/* The segmentation header's row (SonadorSegmentationHeader): a leading action slot, the
+          label, a trailing action slot, each slot present whether or not it holds a control, so
+          the label sits where the header's does (owner's review of 2026-10-27: be consistent) */}
+      <div className="seg-editor-toolbox-title text-foreground flex w-full items-center justify-between">
+        <div className="flex items-center">
+          {titleAction ?? <span className="seg-action ml-1 inline-block w-6" aria-hidden="true" />}
+        </div>
+        <div className="flex min-w-0 items-center">
+          <span className="seg-label ml-2 truncate pl-1.5 pr-1.5">{t(title)}</span>
+        </div>
+        <div className="ml-1 mr-1 flex items-center">
+          {CustomConfigComponent ? (
+            <Button variant="ghost" size="icon" className="seg-action" aria-label={t('Settings', { ns: 'SegmentationEditor' })} onClick={() => setShowConfig(!showConfig)}>
+              <Icons.Settings className="h-4 w-4" />
+            </Button>
+          ) : (
+            <span className="seg-action inline-block w-6" aria-hidden="true" />
+          )}
+        </div>
       </div>
 
       <div className="bg-muted flex-shrink-0 border-none">
@@ -87,6 +96,7 @@ export default function SegEditorToolbox({ buttonSectionId, title }) {
             </div>
           );
         })}
+        {status && <div className="bg-muted px-2">{status}</div>}
         {activeToolOptions && (
           <div className="bg-muted mt-1 h-auto px-2">
             <ToolOptionCards title={activeToolLabel} options={activeToolOptions} />
@@ -100,4 +110,8 @@ export default function SegEditorToolbox({ buttonSectionId, title }) {
 SegEditorToolbox.propTypes = {
   buttonSectionId: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
+  /** A menu before the title, as the kit's segmentation header leads with its menu (the 3D palette's Model Actions) */
+  titleAction: PropTypes.node,
+  /** A block under the tool row, shown with every tool (the 3D palette's surface status) */
+  status: PropTypes.node,
 };

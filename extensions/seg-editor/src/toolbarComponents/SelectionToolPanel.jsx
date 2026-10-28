@@ -2,11 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
-import { useSystem } from '@ohif/core';
-import { Button, Icons, Label, Switch } from '@ohif/ui-next';
+import { Button, Icons } from '@ohif/ui-next';
 
-import { editSummary } from '../threeDTools/editSummary';
-import { repairAvailability } from '../threeDTools/repairAvailability';
 import {
   EDIT_SETTINGS,
   get3DToolState,
@@ -24,7 +21,8 @@ import {
   THREE_D_TOOLS,
   WELD_FRACTION,
 } from '../threeDTools/threeDToolState';
-import { SEG_EDITOR_COMMAND_CONTEXT } from '../toolbox/constants';
+import { meshColorFor } from '../threeDTools/editModeOverlay';
+import { setMeshColor, useMeshColor } from '../utils/meshColor';
 import { setPreviewColor, usePreviewColor } from '../utils/previewColor';
 import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
 import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/segEditorUnits';
@@ -32,12 +30,14 @@ import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/seg
 import { AdvancedField, Card, ColorSwatch, SegmentedRow, SliderRow, Tip, ToggleRow } from './panelControls';
 
 
-// The 3D Selection tool's panel (ohif-viewers#142, §12), as three grouped cards: what is selected,
-// how the selected points are removed, and the health of the segment's surface. Every card shares
-// one left edge and one row grammar (label leading, control trailing); an operation's parameters
-// sit in its card and are shown only while it applies; the card's own action row is its primary,
-// and while an edit is shown for Apply / Cancel that row is the only primary offered. Settings
-// live in the 3D tool state; actions reach the canvas through its request channel.
+// The 3D Selection tool's panel (ohif-viewers#142, §12), as grouped cards: what is selected, then
+// the action on the selection (Remove or Smooth) with its parameters. Every card shares one left
+// edge and one row grammar (label leading, control trailing); an operation's parameters sit in
+// its card and are shown only while it applies; the card's own action row is its primary, and
+// while an edit is shown for Apply / Cancel that row is the only primary offered. What acts on
+// the whole surface (Repair, Synchronize, the surface health) lives apart, in the palette's
+// status block and "⋯" menu (WholeSurface.jsx; owner's review of 2026-10-26). Settings live in
+// the 3D tool state; actions reach the canvas through its request channel.
 
 const number = value => Number(value || 0).toLocaleString();
 
@@ -62,15 +62,6 @@ function SmoothIcon(props) {
   );
 }
 
-/** A wrench: Repair. */
-function RepairIcon(props) {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M14.5 5.5a4 4 0 0 0 5 5L10 20a2.1 2.1 0 0 1-3-3l9.5-9.5zM14.5 5.5l4-1 1 4" />
-    </svg>
-  );
-}
-
 // The action cards, one shown at a time: the row's button, its icon, and the help shown on hover
 const ACTIONS = [
   {
@@ -84,12 +75,6 @@ const ACTIONS = [
     label: 'Smooth',
     Icon: SmoothIcon,
     hint: 'Evens out the selected faces. Their edge stays in place, or eases with Soft edge.',
-  },
-  {
-    id: 'repair',
-    label: 'Repair',
-    Icon: RepairIcon,
-    hint: 'Closes the open edges of the whole surface. Changes the 3D surface only.',
   },
 ];
 
@@ -107,7 +92,6 @@ const WELD_FIELD = {
 
 export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const { t } = useTranslation('SegmentationEditor');
-  const { commandsManager } = useSystem();
   const [state, setState] = useState(get3DToolState);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const developer = isDeveloperToolsEnabled();
@@ -123,6 +107,11 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   // The colour a pending edit's changed faces are drawn in (a user preference, also on the
   // Settings page's Seg Editor section)
   const previewColor = usePreviewColor();
+  // The mesh colour: following the segment (the default) or the user's pick; the swatch shows the
+  // colour in effect for the target and a pick sets it (the Model Actions menu offers the
+  // segment's own shades and a way back to following the segment)
+  const meshColor = useMeshColor();
+  const effectiveMeshColor = `#${meshColorFor(state.target?.color, meshColor).getHexString()}`;
   const previewSwatch = id => (
     <ColorSwatch
       id={id}
@@ -133,29 +122,23 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
     />
   );
 
-  const {
-    target, selectionCount, selectionPoints, selectionRegions, preview, surfaceHealth, lastEdit,
-    pendingWrites, unsynchronizedEdits = 0, busy,
-  } = state;
+  const { target, selectionCount, selectionPoints, selectionRegions, preview, surfaceHealth, busy } = state;
   const hasSelection = selectionCount > 0;
   const editable = is3DTargetEditable(state);
-  const hasTarget = !!target && !target.disabledReason;
   const previewingSmooth = preview?.kind === 'smooth';
   const previewingRemoval = !!preview && !preview.repair && !previewingSmooth;
-  const previewingRepair = !!preview && !!preview.repair;
   const painting = tool === THREE_D_TOOLS.Paint;
   const { action } = state;
   const request = name => request3DToolAction(name);
   const set = (key, value) => set3DToolOption(key, value);
 
-  // An edit shown for Apply / Cancel brings its own action card up, wherever it was started
+  // An edit of the selection shown for Apply / Cancel brings its own action card up, wherever it
+  // was started (a repair's Apply / Cancel live in the Repair surface dialog)
   useEffect(() => {
-    if (preview) {
-      set3DToolOption('action', preview.kind === 'smooth' ? SELECTION_ACTIONS.smooth
-        : preview.repair ? SELECTION_ACTIONS.repair : SELECTION_ACTIONS.remove);
+    if (preview && !preview.repair) {
+      set3DToolOption('action', preview.kind === 'smooth' ? SELECTION_ACTIONS.smooth : SELECTION_ACTIONS.remove);
     }
   }, [preview]);
-  const undo = () => commandsManager?.runCommand('undoSegEditor', {}, SEG_EDITOR_COMMAND_CONTEXT);
 
   // The action row of a card while its edit is shown for Apply / Cancel
   const previewRow = (note, applyLabel, cancelCy, applyCy) => (
@@ -176,23 +159,6 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   );
 
   const health = surfaceHealth;
-  const healthTone = !health ? 'muted' : health.closed ? 'ok' : 'warning';
-  const healthCounts = health ? [
-    ['Open edges', health.boundaryEdgeCount],
-    ['Non-manifold edges', health.nonManifoldEdgeCount],
-    ['Inverted edges', health.inconsistentEdgeCount],
-    ['Degenerate triangles', health.degenerate],
-    ['Duplicate triangles', health.duplicate],
-  ].filter(([, count]) => count > 0) : [];
-  const healthText = !hasTarget && !health
-    ? t('Select a segment to check its surface')
-    : healthTone === 'muted' ? t('Checking the surface...')
-      : healthTone === 'ok' ? t('Surface is closed') : t('Surface has issues');
-  const healthDot = healthTone === 'ok' ? 'bg-customgreen-100' : healthTone === 'warning' ? 'bg-[#e8b04c]' : 'bg-muted-foreground/50';
-  // Repair is offered for any diagnosed edge issue; the reason it is not is shown on hover
-  const repair = repairAvailability(state);
-  const repairTip = t(repair.message, repair.values);
-  const weldFellBack = !!health?.conditioning?.fellBack;
   const advancedFields = developer ? [ADVANCED[0], WELD_FIELD, ADVANCED[1]] : ADVANCED;
   const advancedSummary = developer
     ? t('Advanced: {{constraints}} patch constraints, weld {{weld}} × p1, islands under {{island}} tris', {
@@ -293,29 +259,29 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
             />
           </>
         ))}
+        <ToggleRow
+          id="seg-editor-show-mesh"
+          label={t('Show mesh')}
+          description={t('Draw every edge and vertex of the selected segment, as Blender\'s edit mode does')}
+          checked={state.showMesh}
+          onChange={value => set('showMesh', value)}
+          control={(
+            <ColorSwatch
+              id="seg-editor-mesh-color"
+              label={t('Mesh colour')}
+              hint={t('The colour the mesh of the selected segment is drawn in. Also in Settings > General > Seg Editor.')}
+              value={effectiveMeshColor}
+              onChange={setMeshColor}
+            />
+          )}
+        />
       </Card>
 
       <div className="flex gap-1 px-0.5" role="tablist" aria-label={t('Action')} data-cy="seg-editor-action-row">
         {ACTIONS.map(({ id, label, Icon: ActionIcon, hint }) => (
           <Tip
             key={id}
-            content={(
-              <div className="flex flex-col gap-1">
-                <span>{t(hint)}</span>
-                {id === 'repair' && (
-                  <>
-                    <span className="flex items-center gap-1.5" data-cy="seg-editor-repair-hover-status">
-                      <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
-                      <span>
-                        {healthText}
-                        {health?.triangles > 0 && `, ${t('{{count}} triangles', { count: number(health.triangles) })}`}
-                      </span>
-                    </span>
-                    <span data-cy="seg-editor-repair-hover-reason">{repairTip}</span>
-                  </>
-                )}
-              </div>
-            )}
+            text={t(hint)}
           >
             <Button
               role="tab"
@@ -492,94 +458,6 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
         </Card>
       )}
 
-      {action === SELECTION_ACTIONS.repair && (
-      <Card
-        title={t('Repair')}
-        warning={healthTone === 'warning'}
-        dataCy="seg-editor-surface-card"
-        action={(
-          <div className="flex items-center gap-2">
-            <Tip text={t('Draw the open and non-manifold edges on the model')}>
-              <Label htmlFor="seg-editor-show-issues" className="text-muted-foreground cursor-pointer text-xs font-normal">{t('Show issues')}</Label>
-            </Tip>
-            <Switch id="seg-editor-show-issues" checked={!!state.showIssues} onCheckedChange={value => set('showIssues', value)} data-cy="seg-editor-show-issues" />
-          </div>
-        )}
-      >
-        <Tip text={t('Open, non-manifold and inverted edge counts of the 3D surface. Zero counts mean the edges are sound; they do not prove a valid solid.')}>
-          <div className="flex items-center gap-2" data-cy="seg-editor-surface-status">
-            <span aria-hidden="true" className={`h-2 w-2 flex-none rounded-full ${healthDot}`} />
-            <span className={`min-w-0 ${healthTone === 'muted' ? 'text-muted-foreground' : ''}`}>{healthText}</span>
-          </div>
-        </Tip>
-        {healthCounts.length > 0 && (
-          <dl className="text-muted-foreground grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
-            {healthCounts.map(([label, count]) => (
-              <React.Fragment key={label}>
-                <dt>{t(label)}</dt>
-                <dd className="text-foreground tabular-nums">{number(count)}</dd>
-              </React.Fragment>
-            ))}
-          </dl>
-        )}
-        {health?.triangles > 0 && (
-          <p className="text-muted-foreground text-xs">{t('{{count}} triangles', { count: number(health.triangles) })}</p>
-        )}
-        {state.showIssues && (
-          <p className="text-muted-foreground text-xs" data-cy="seg-editor-issues-legend">
-            {t('On the model: open edges red, non-manifold edges amber, inverted edges purple.')}
-          </p>
-        )}
-        {weldFellBack && (
-          <p className="text-xs text-[#e8b04c]" role="status" data-cy="seg-editor-weld-fallback">
-            {t('The requested weld would drop or turn over sound triangles, so the exact weld was used.')}
-          </p>
-        )}
-        {previewingRepair
-          ? previewRow(t('Preview: the patches closing the rims are highlighted. Enter applies, Esc cancels.'), t('Apply repair'),
-            'seg-editor-cancel-repair', 'seg-editor-apply-repair')
-          : (
-            <Tip text={repairTip}>
-              <span className="self-start" data-cy="seg-editor-repair-surface-tip" data-repair-reason={repair.reason}>
-                <Button
-                  variant="secondary"
-                  className="h-8"
-                  disabled={!repair.enabled}
-                  onClick={() => request('repairSurface')}
-                  data-cy="seg-editor-repair-surface"
-                >
-                  {t('Repair surface')}
-                </Button>
-              </span>
-            </Tip>
-          )}
-      </Card>
-      )}
-
-      {(pendingWrites > 0 || unsynchronizedEdits > 0 || (lastEdit && !preview)) && (
-        <footer className="flex flex-col gap-1" data-cy="seg-editor-footer">
-          {pendingWrites > 0 && (
-            <p className="text-muted-foreground px-1 text-xs" role="status" data-cy="seg-editor-pending-writes">
-              {t('Updating the 2D views ({{count}} pending)...', { count: pendingWrites })}
-            </p>
-          )}
-          {unsynchronizedEdits > 0 && (
-            <p className="px-1 text-xs text-[#e8b04c]" role="status" data-cy="seg-editor-unsynchronized">
-              {t('3D surface ahead of the 2D views: {{count}} edit(s) not written. Further edits stay on the surface; Undo brings the views back together.', { count: unsynchronizedEdits })}
-            </p>
-          )}
-          {lastEdit && !preview && (
-            <div className="text-muted-foreground flex items-center justify-between gap-2 px-1 text-xs" data-cy="seg-editor-last-edit">
-              <span className="min-w-0 flex-1 leading-snug">{t('Last edit: {{summary}}', { summary: editSummary(t, lastEdit) })}</span>
-              <Tip text={t('Undo the last edit (Ctrl+Z)')}>
-                <Button variant="ghost" size="icon" className="flex-none" aria-label={t('Undo')} onClick={undo} data-cy="seg-editor-undo-last-edit">
-                  <Icons.Undo className="h-4 w-4" />
-                </Button>
-              </Tip>
-            </div>
-          )}
-        </footer>
-      )}
     </div>
   );
 }

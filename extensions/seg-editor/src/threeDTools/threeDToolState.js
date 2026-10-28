@@ -40,11 +40,11 @@ export const PAINT_MODES = {
   erase: 'erase',
 };
 
-// The action card shown under the tool: one at a time
+// The action card shown under the selection tool: one at a time. Repair acts on the whole
+// surface and lives in the palette's "⋯" menu and Repair surface dialog, not here.
 export const SELECTION_ACTIONS = {
   remove: 'remove',
   smooth: 'smooth',
-  repair: 'repair',
 };
 
 // The developer-only weld, as a fraction of the target surface's first-percentile edge length
@@ -82,6 +82,9 @@ export const EDIT_SETTINGS = {
   previewEnabled: { default: true, boolean: true },
   // Open and non-manifold edges drawn on the canvas
   showIssues: { default: false, boolean: true },
+  // The target segment's surface drawn with every edge and vertex in black, as Blender's edit
+  // mode draws the active object (the other segments keep their presentation look)
+  showMesh: { default: true, boolean: true },
   // Vertices closer than this fraction of the surface's p1 edge length are one vertex
   // (developer tools only; the world value is derived per surface version)
   weldFraction: { default: WELD_FRACTION.default, min: WELD_FRACTION.min, max: WELD_FRACTION.max },
@@ -136,10 +139,19 @@ const INITIAL_STATE = {
   // Summary of the last edit applied in this session, or null
   lastEdit: null,
   // Applied edits of the target's surface the 2D views have not received (surface-only results
-  // and refused or failed writes still in force): the 3D surface is ahead of the labelmap while
-  // this is above zero, and further edits stay surface-only (ohif-viewers#152's synchronization
-  // choices follow)
+  // and refused or failed writes still in force, not covered by a synchronization): the 3D
+  // surface is ahead of the labelmap while this is above zero, and further edits stay
+  // surface-only until it is synchronized (ohif-viewers#152: Synchronize, or the handoff)
   unsynchronizedEdits: 0,
+  // How many of those are writes that were refused or failed (as opposed to never asked for)
+  failedWrites: 0,
+  // A handoff is being resolved (ohif-viewers#152): the dialog is open or its write is awaited,
+  // and no edit, undo or redo may run meanwhile
+  handoff: false,
+  // The Repair surface card is open in the palette (opened from the Model Actions menu, the
+  // surface status line, or a repair preview starting; closed by its own control, a target
+  // change, or leaving the 3D palette)
+  repairPanel: false,
   // Selection tool settings (EDIT_SETTINGS; kept across editor sessions, like the brush radius)
   ...Object.fromEntries(Object.entries(EDIT_SETTINGS).map(([key, setting]) => [key, setting.default])),
 };
@@ -312,18 +324,36 @@ export function set3DLastEdit(lastEdit) {
   _set({ lastEdit: lastEdit || null });
 }
 
-/** How many applied edits of the target's surface the 2D views have not received. */
-export function set3DUnsynchronizedEdits(count) {
-  const next = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
-  if (next !== _state.unsynchronizedEdits) {
-    _set({ unsynchronizedEdits: next });
+/** A handoff started (true) or ended (false). */
+export function set3DHandoff(active) {
+  _set({ handoff: !!active });
+}
+
+/** Open or close the Repair surface card in the palette. */
+export function set3DRepairPanel(open) {
+  _set({ repairPanel: !!open });
+}
+
+/**
+ * How many applied edits of the target's surface the 2D views have not received, and how many of
+ * them are refused or failed writes.
+ */
+export function set3DUnsynchronizedEdits(count, failed = 0) {
+  const whole = value => (Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
+  const next = whole(count);
+  const nextFailed = Math.min(next, whole(failed));
+  if (next !== _state.unsynchronizedEdits || nextFailed !== _state.failedWrites) {
+    _set({ unsynchronizedEdits: next, failedWrites: nextFailed });
   }
 }
 
 /**
  * The canvas registers a handler for a request; returns an unregister function.
  * Requests: 'deleteSelection', 'smoothSelection', 'clearSelection', 'growSelection',
- * 'shrinkSelection', 'applyPreview', 'cancelPreview', 'repairSurface'.
+ * 'shrinkSelection', 'applyPreview', 'cancelPreview', 'repairSurface', 'synchronizeSurface',
+ * 'resolveHandoff' (ohif-viewers#152: resolves to whether the destination may take over),
+ * 'surfaceRedoAllowed' (whether a replay that restores a surface without its voxels is coherent
+ * on the canvas now).
  */
 export function handle3DToolRequest(request, handler) {
   _requestHandlers.set(request, handler);

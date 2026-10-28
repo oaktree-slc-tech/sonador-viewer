@@ -22,6 +22,25 @@ const _edgeCounts = (t, counts) => t('{{open}} open, {{nonManifold}} non-manifol
   inconsistent: counts.inconsistentEdgeCount || 0,
 });
 
+/**
+ * What a synchronization acknowledged (ohif-viewers#152 §3, §5): the defects of the surface
+ * written as found, never described as repaired or watertight.
+ */
+export function acknowledgedText(t, acknowledged) {
+  if (!acknowledged) {
+    return '';
+  }
+  const { defects } = acknowledged;
+  if (!defects) {
+    return t('surface synchronized');
+  }
+  return t('best-effort conversion acknowledged with {{open}} open, {{nonManifold}} non-manifold and {{inconsistent}} inverted edge(s)', {
+    open: defects.boundaryEdgeCount || 0,
+    nonManifold: defects.nonManifoldEdgeCount || 0,
+    inconsistent: defects.inconsistentEdgeCount || 0,
+  });
+}
+
 /** What the 2D views got from the edit, from the summary's `write` status. */
 export function writeStatusText(t, edit) {
   const { write, removedVoxels = 0, addedVoxels = 0, farField = 0 } = edit;
@@ -54,7 +73,10 @@ export function editSummary(t, edit) {
     preexistingLoops = 0, introduced, before, after, conditioning,
   } = edit;
   const parts = [];
-  if (kind === 'smooth') {
+  if (kind === 'sync') {
+    parts.push(edit.acknowledged?.defects ? acknowledgedText(t, edit.acknowledged)
+      : t('{{count}} edit(s) synchronized from the last checkpoint', { count: edit.covered || 0 }));
+  } else if (kind === 'smooth') {
     parts.push(t('{{count}} point(s) smoothed', { count: points }));
   } else {
     const how = _methods(t, methods);

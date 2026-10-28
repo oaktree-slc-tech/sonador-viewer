@@ -258,3 +258,16 @@ describe('synchronization state', () => {
     unsubscribe();
   });
 });
+
+describe('synchronization state: failed writes', () => {
+  beforeEach(() => reset3DToolState());
+
+  it('publishes how many of the unsynchronized edits are refused or failed writes, never more than all', () => {
+    set3DUnsynchronizedEdits(3, 1);
+    expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 3, failedWrites: 1 });
+    set3DUnsynchronizedEdits(2, 5);
+    expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 2, failedWrites: 2 });
+    set3DUnsynchronizedEdits(0, 2);
+    expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 0, failedWrites: 0 });
+  });
+});

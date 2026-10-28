@@ -20,6 +20,7 @@ import i18n from '@ohif/i18n';
 import { callConfirmDialog } from '../components/confirmDialog';
 import { volumeAxes } from '../threeDTools/labelmapCarve.js';
 import { getLabelmapForEdit } from '../threeDTools/segmentEdits.js';
+import { request3DToolAction } from '../threeDTools/threeDToolState';
 import { getSegEditorToolContext } from '../toolbox/segEditorToolContext';
 import { getSegEditorUnits, LENGTH_UNITS } from '../utils/segEditorUnits';
 
@@ -131,6 +132,12 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
     askRescale = options => callConfirmDialog({
       uiDialogService: servicesManager?.services?.UIDialogService, ...options,
     }),
+    // Resolves a 3D surface the 2D views have not caught up with before the import replaces the
+    // labelmap (ohif-viewers#152 handoff): false when the user chose to keep editing in 3D
+    resolveHandoff = async () => {
+      const resolved = await request3DToolAction('resolveHandoff', { reason: 'import' });
+      return resolved === undefined ? true : resolved !== false;
+    },
   } = deps;
 
   const notify = options => servicesManager?.services?.UINotificationService?.show(options);
@@ -199,6 +206,11 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
     const segmentationId = workingSegmentationId();
     if (!segmentationId) {
       notify({ type: 'warning', title, message: t('Open a segmentation in the Segmentation Editor first.') });
+      return undefined;
+    }
+    // The import replaces voxels the 3D surface may be ahead of: that is resolved first
+    if (!(await resolveHandoff())) {
+      notify({ type: 'info', title, message: t('The import was not started: the 3D surface is still being edited.') });
       return undefined;
     }
     // Status is published only while this command runs: nothing that finishes late (a reader, a

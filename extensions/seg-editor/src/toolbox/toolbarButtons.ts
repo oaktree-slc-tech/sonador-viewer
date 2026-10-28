@@ -35,6 +35,9 @@ import {
 // rather than a `Buttons:` key prefix: i18next 23 treats a prefixed key containing spaces, such as
 // 'Buttons:Radius (mm)', as natural-language text and returns it untranslated, prefix included.
 const tb = (key: string) => i18n.t(key, { ns: 'Buttons' });
+// Hover text of the 3D tools (the second, muted line of the kit's ToolButton tooltip), from the
+// editor's own namespace
+const ts = (key: string) => i18n.t(key, { ns: 'SegmentationEditor' });
 
 const command = (commandName: string, commandOptions = {}) => ({
   commandName,
@@ -273,6 +276,7 @@ export function getToolbarButtons() {
       props: {
         icon: 'tool-pointer',
         label: tb('Pointer'),
+        tooltip: ts('Drag to orbit, pan and zoom the model. Selects nothing.'),
         evaluate: EVALUATORS.pointer3D,
         commands: command('deactivate3DTools'),
       },
@@ -287,6 +291,7 @@ export function getToolbarButtons() {
       props: {
         icon: 'icon-tool-freehand-roi',
         label: tb('Lasso'),
+        tooltip: ts('Drag an outline or box over faces to select them. Shift adds, Ctrl removes.'),
         evaluate: { name: EVALUATORS.threeDTool, toolName: THREE_D_TOOLS.Lasso },
         commands: command('toggleSegEditor3DTool', { toolName: THREE_D_TOOLS.Lasso }),
         options: [
@@ -304,6 +309,7 @@ export function getToolbarButtons() {
       props: {
         icon: 'icon-tool-brush',
         label: tb('Paint'),
+        tooltip: ts('Drag the brush over faces to add them to the selection. Ctrl erases.'),
         evaluate: { name: EVALUATORS.threeDTool, toolName: THREE_D_TOOLS.Paint },
         commands: command('toggleSegEditor3DTool', { toolName: THREE_D_TOOLS.Paint }),
         options: [

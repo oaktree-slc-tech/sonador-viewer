@@ -9,6 +9,11 @@ import {
   RETRY_ATTEMPTS_DEFAULT,
   RETRY_ATTEMPTS_MAX,
   RETRY_ATTEMPTS_MIN,
+  SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
+  SEG_EDITOR_MESH_COLOR_AUTO,
+  SEG_EDITOR_MESH_COLOR_DEFAULT,
+  SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY,
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
   UserPreferencesService,
@@ -41,11 +46,17 @@ const ARCHIVE_FIELD = 'archiveTransfer';
 const RETRY_FIELD = 'retryAttempts';
 const LOCKED_MODELS_FIELD = 'lockedModelsWarning';
 const PREVIEW_COLOR_FIELD = 'segEditorPreviewColor';
+const MESH_COLOR_FIELD = 'segEditorMeshColor';
+const FOLLOW_SELECTION_FIELD = 'segEditorFollowSelection';
 
 const lockedModelsWarningDefault = () =>
   UserPreferencesService?.GENERAL_DEFAULTS?.[LOCKED_MODELS_WARNING_PREFERENCE_KEY] ?? true;
 const previewColorDefault = () =>
   UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY] ?? SEG_EDITOR_PREVIEW_COLOR_DEFAULT;
+const meshColorDefault = () =>
+  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY] ?? SEG_EDITOR_MESH_COLOR_DEFAULT;
+const followSelectionDefault = () =>
+  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY] ?? SEG_EDITOR_FOLLOW_SELECTION_DEFAULT;
 
 export default function GeneralTabNG() {
   // The preferences namespace, which is where every string on this surface is registered. Without
@@ -190,6 +201,12 @@ export default function GeneralTabNG() {
         if (key === SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY) {
           setPreviewColor(current => latch.accept(PREVIEW_COLOR_FIELD, value, current));
         }
+        if (key === SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY) {
+          setMeshColor(current => latch.accept(MESH_COLOR_FIELD, value, current));
+        }
+        if (key === SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY) {
+          setFollowSelectionState(current => latch.accept(FOLLOW_SELECTION_FIELD, value, current));
+        }
       }
     );
     return unsubscribe;
@@ -213,6 +230,38 @@ export default function GeneralTabNG() {
     setPreviewColor(event.target.value);
   };
 
+  // The colour the editor draws the mesh (edges and vertices) of the segment being edited in 3D:
+  // 'auto' (the default) follows the segment's own colour, a hex colour is the user's pick; set
+  // from the 3D panel's Model Actions menu too. Local-only, like the preview colour.
+  const [meshColor, setMeshColor] = useState(
+    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY) ?? meshColorDefault()
+  );
+  const meshColorAuto = meshColor === SEG_EDITOR_MESH_COLOR_AUTO;
+  // The swatch while the mesh follows the segment: the grey the editor falls back to
+  const MESH_SWATCH_FALLBACK = '#8f8f8f';
+
+  const handleMeshColorChange = (event) => {
+    latch.markEdited(MESH_COLOR_FIELD);
+    setMeshColor(event.target.value);
+  };
+
+  const handleMeshColorAutoChange = (event) => {
+    latch.markEdited(MESH_COLOR_FIELD);
+    setMeshColor(event.target.checked ? SEG_EDITOR_MESH_COLOR_AUTO : MESH_SWATCH_FALLBACK);
+  };
+
+  // Whether the editor's views follow the selected segment (the 2D views scroll to its centre,
+  // the 3D view frames its surface); off by default, also set from the editor's segmentation
+  // table configuration. Local-only, like the colours above.
+  const [followSelection, setFollowSelectionState] = useState(
+    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY) ?? followSelectionDefault()
+  );
+
+  const handleFollowSelectionChange = (event) => {
+    latch.markEdited(FOLLOW_SELECTION_FIELD);
+    setFollowSelectionState(event.target.checked);
+  };
+
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
   const onSave = () => {
@@ -226,6 +275,8 @@ export default function GeneralTabNG() {
     UserPreferencesService?.setGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY, lockedModelsWarning, { persist: false });
     // Local-only for now: the service keeps it in this browser (see above)
     UserPreferencesService?.setGeneral?.(SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, previewColor.toLowerCase(), { persist: false });
+    UserPreferencesService?.setGeneral?.(SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY, meshColor.toLowerCase(), { persist: false });
+    UserPreferencesService?.setGeneral?.(SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY, !!followSelection, { persist: false });
 
     // `language` rides along because a section POST replaces the section's values wholesale --
     // sending the toggle alone would erase a stored language preference.
@@ -254,10 +305,14 @@ export default function GeneralTabNG() {
     latch.markEdited(RETRY_FIELD);
     latch.markEdited(LOCKED_MODELS_FIELD);
     latch.markEdited(PREVIEW_COLOR_FIELD);
+    latch.markEdited(MESH_COLOR_FIELD);
+    latch.markEdited(FOLLOW_SELECTION_FIELD);
     setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
     setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
     setLockedModelsWarning(lockedModelsWarningDefault());
     setPreviewColor(previewColorDefault());
+    setMeshColor(meshColorDefault());
+    setFollowSelectionState(followSelectionDefault());
   };
 
   return (
@@ -359,7 +414,7 @@ export default function GeneralTabNG() {
           </div>
         </div>
 
-        {/* The Segmentation Editor's own settings: the colour a pending 3D edit is drawn in. */}
+        {/* The Segmentation Editor's own settings: the colours a pending 3D edit and the edited segment's mesh are drawn in, and whether the views follow the selected segment. */}
         <div className={classNames(styles.wrapper, styles.wrapperTop)}>
           <p className={styles.label}>{t('SegEditor')}</p>
           <div className={styles.optionContainer}>
@@ -374,6 +429,41 @@ export default function GeneralTabNG() {
               <span>{t('SegEditorPreviewColorLabel')}</span>
             </label>
             <p className={styles.optionHelp}>{t('SegEditorPreviewColorHelp')}</p>
+          </div>
+          <div className={styles.optionContainer}>
+            <label className={styles.option} htmlFor="seg-editor-mesh-color-auto">
+              <input
+                id="seg-editor-mesh-color-auto"
+                type="checkbox"
+                checked={meshColorAuto}
+                onChange={handleMeshColorAutoChange}
+              />
+              <span>{t('SegEditorMeshColorAutoLabel')}</span>
+            </label>
+            <label className={classNames(styles.option, previewColorStyles.option)} htmlFor="seg-editor-mesh-color">
+              <input
+                id="seg-editor-mesh-color"
+                className={previewColorStyles.swatch}
+                type="color"
+                value={meshColorAuto ? MESH_SWATCH_FALLBACK : meshColor}
+                disabled={meshColorAuto}
+                onChange={handleMeshColorChange}
+              />
+              <span>{t('SegEditorMeshColorLabel')}</span>
+            </label>
+            <p className={styles.optionHelp}>{t('SegEditorMeshColorHelp')}</p>
+          </div>
+          <div className={styles.optionContainer}>
+            <label className={styles.option} htmlFor="seg-editor-follow-selection">
+              <input
+                id="seg-editor-follow-selection"
+                type="checkbox"
+                checked={followSelection}
+                onChange={handleFollowSelectionChange}
+              />
+              <span>{t('SegEditorFollowSelectionLabel')}</span>
+            </label>
+            <p className={styles.optionHelp}>{t('SegEditorFollowSelectionHelp')}</p>
           </div>
         </div>
       </div>
