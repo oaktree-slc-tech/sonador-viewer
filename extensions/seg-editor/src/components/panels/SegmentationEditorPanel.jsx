@@ -17,6 +17,7 @@ import { Icon } from '@ohif/ui';
 import {
   Button,
   Icons,
+  Label, Switch,
   TooltipProvider,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   Tooltip, TooltipTrigger, TooltipContent,
@@ -31,6 +32,7 @@ import {
 
 import { Enums as SegEditorEnums } from '../../enums';
 import { SEG_EDITOR_COMMAND_CONTEXT } from '../../toolbox/constants';
+import { setFollowSelection, useFollowSelection } from '../../utils/followSelection';
 import SegEditorToolPalette from './SegEditorToolPalette';
 import { Enums as vtkEnums } from '@ohif/extension-vtk';
 
@@ -45,9 +47,13 @@ export default function SonadorSegmentationEditorPanel({
     displaySetInstanceUID, commandsManager, servicesManager, eventTimeout = 50, showAddSegment = true }) {
   // React component providing controls for interfacing with the Sonador Segmentation Editor Panel.
 
-  const { t } = useTranslation('SonadorSegmentationEditorPanel');
+  // The editor's own namespace (en-US SegmentationEditor.json), so the panel's strings are translatable
+  const { t } = useTranslation('SegmentationEditor');
 
   const { segmentationService } = servicesManager.services;
+
+  // Whether the views follow the selected segment (a user preference; the configuration drawer below sets it)
+  const followSelection = useFollowSelection();
 
   // Component Containers: grounds styling for the editor
   const [portalContainer, setPortalContainer] = useState(null);
@@ -228,13 +234,24 @@ export default function SonadorSegmentationEditorPanel({
   }
 
 
-  function editorOnSegmentClick(segmentationId, segIdx) {
+  async function editorOnSegmentClick(segmentationId, segIdx) {
     // Toggle the active state of the selected segment
 
     // Set active property of segmentation
     if (_checkActiveSeg(editorSegmentationsRef.current?.length ? editorSegmentationsRef.current[0] : undefined)) {
+      // Another target: a 3D surface of the current one that the 2D views have not caught up
+      // with is resolved first (ohif-viewers#152 handoff); Stay in 3D Tools keeps the target
+      if (!(await _resolve3DHandoff('target', segIdx))) {
+        return;
+      }
       segmentationService.setActiveSegment(segmentationId, segIdx);
     }
+  }
+
+  async function _resolve3DHandoff(reason, segmentIndex) {
+    // Whether the 3D tools let the change go ahead (nothing to resolve counts as yes)
+    const resolved = await commandsManager.runCommand('resolveSegEditor3DHandoff', { reason, segmentIndex }, SEG_EDITOR_COMMAND_CONTEXT);
+    return resolved !== false;
   }
 
 
@@ -250,6 +267,22 @@ export default function SonadorSegmentationEditorPanel({
     // Panel menu imports (importers/importCommands): the command opens the file window and adds
     // the file's segments to the working segmentation
     commandsManager.runCommand(commandName, {}, SEG_EDITOR_COMMAND_CONTEXT);
+  }
+
+
+  function editorOnFollowSelection(value) {
+    // Configuration drawer: Follow selected segment. Turning it on frames the current segment at
+    // once, as Blender's Lock to Object does; off, selecting a segment moves nothing
+    setFollowSelection(value);
+    if (value) {
+      commandsManager.runCommand('frameSegEditorSegment', {}, SEG_EDITOR_COMMAND_CONTEXT);
+    }
+  }
+
+
+  function editorOnFrameSegment() {
+    // Panel menu: Frame Selected Segment, once, whatever the preference says
+    commandsManager.runCommand('frameSegEditorSegment', {}, SEG_EDITOR_COMMAND_CONTEXT);
   }
 
 
@@ -300,9 +333,12 @@ export default function SonadorSegmentationEditorPanel({
   }
 
 
-  function editorOnSegmentAdd(segmentationId) {
-    // Segmentation editor callback for adding new segments
+  async function editorOnSegmentAdd(segmentationId) {
+    // Segmentation editor callback for adding new segments (the new segment becomes the target)
 
+    if (!(await _resolve3DHandoff('target'))) {
+      return;
+    }
     commandsManager.runCommand('addSegment', { segmentationId }, vtkEnums.VIEWPORT);
   }
 
@@ -425,7 +461,7 @@ export default function SonadorSegmentationEditorPanel({
   }, [activeSegmentationId, editorSegmentations]);
 
 
-  return (<section className={styles.theme} ref={setPortalContainer}>
+  return (<section className={styles.theme} ref={setPortalContainer} data-seg-editor-theme="true">
     <div className={styles.panelWrapper}>
 
       <TooltipProvider>
@@ -443,7 +479,24 @@ export default function SonadorSegmentationEditorPanel({
               outlineWidth={outlineWidth} setOutlineWidth={editorSetOutlineWidth} >
 
           {activeSegmentationId && (
-            <SegmentationTable.Config />
+            <SegmentationTable.Config>
+              {/* Follow selected segment: a display preference, so it sits with the display settings
+                  (owner's call, 2026-10-27), in the drawer's own switch row idiom */}
+              <div className="border-input w-full border"></div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="my-2 flex items-center pl-1" data-cy="seg-editor-follow-selection">
+                    <Switch id="seg-editor-follow-selection-switch" checked={followSelection} onCheckedChange={editorOnFollowSelection} />
+                    <Label htmlFor="seg-editor-follow-selection-switch" className="text-muted-foreground mx-2 text-xs">
+                      {t('Follow selected segment')}
+                    </Label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent container={portalContainer} side="bottom" align="start" className="text-wrap w-auto max-w-sm whitespace-normal break-words">
+                  {t('Moves the 2D views to the selected segment and frames it in 3D.')}
+                </TooltipContent>
+              </Tooltip>
+            </SegmentationTable.Config>
           )}
 
 
@@ -471,6 +524,13 @@ export default function SonadorSegmentationEditorPanel({
               <DropdownMenuItem onClick={() => editorOnImport('importNrrdNifti')} >
                 <Icons.Database className="text-customgreen-100 h-4 w-4" />
                 <span className="pl-2" data-cy="ImportNrrdNifti">{t('Import NRRD / NIfTI')}</span>
+              </DropdownMenuItem>
+              {/* The views, apart from the imports: frame the selected segment once (the drawer's
+                  Follow selected segment does it on every selection) */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={editorOnFrameSegment} >
+                <Icons.ToolCrosshair className="text-foreground h-4 w-4" />
+                <span className="pl-2" data-cy="FrameSelectedSegment">{t('Frame Selected Segment')}</span>
               </DropdownMenuItem>
               </DropdownMenuContent>
             </>)} />

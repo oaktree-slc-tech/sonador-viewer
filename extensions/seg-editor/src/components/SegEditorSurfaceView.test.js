@@ -9,16 +9,20 @@ import { withOwnSurfaceWrite } from '../threeDTools/ownWrites';
 import { collectTrianglesInSphere, raycastSurfaces } from '../threeDTools/paintSelection';
 import { diagnoseSurfaceInWorker, getLabelmapForEdit, smoothInWorker } from '../threeDTools/segmentEdits';
 import {
+  pendingSurfaceEditWrites,
+  proposeSurfaceSync,
   queueSurfaceEditWrite,
   recordSurfaceEdit,
   setCachedSurface,
   SURFACE_CHANGED_REQUEST,
+  whenSurfaceEditWritesSettled,
 } from '../threeDTools/surfaceEdits';
-import { resetSyncLedger } from '../threeDTools/syncLedger';
+import { resetSyncLedger, surfaceCheckpoint, unsynchronizedEdits } from '../threeDTools/syncLedger';
 import {
   get3DToolState,
   request3DToolAction,
   reset3DToolState,
+  set3DPreview,
   set3DToolBusy,
   set3DToolOption,
   setActive3DTool,
@@ -126,6 +130,7 @@ jest.mock('../threeDTools/segmentEdits', () => ({
   getLabelmapForEdit: jest.fn(),
   patchHolesInWorker: jest.fn(),
   smoothInWorker: jest.fn(),
+  diagnoseWrittenSurfaceInWorker: jest.fn(),
   diagnoseSurfaceInWorker: jest.fn(() => Promise.resolve({
     boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, closed: true, boundaryEdges: [], nonManifoldEdges: [],
   })),
@@ -144,12 +149,26 @@ jest.mock('../utils/previewColor', () => ({
     return () => mockPreviewColor.listeners.delete(listener);
   },
 }));
+// The mesh colour (the overlay's), as the preview colour: a preference in @ohif/core, which this
+// node-environment suite does not load
+const mockMeshColor = { value: '#8f8f8f', listeners: new Set() };
+jest.mock('../utils/meshColor', () => ({
+  getMeshColor: () => mockMeshColor.value,
+  subscribeMeshColor: listener => {
+    mockMeshColor.listeners.add(listener);
+    return () => mockMeshColor.listeners.delete(listener);
+  },
+}));
 jest.mock('../threeDTools/surfaceEdits', () => ({
   SURFACE_CHANGED_REQUEST: 'surfaceChanged',
   setCachedSurface: jest.fn(),
   queueSurfaceEditWrite: jest.fn(),
   // Applies the edit as the real one does, without the history
   recordSurfaceEdit: jest.fn(memo => memo.restoreMemo(false)),
+  // The queue is idle unless a test says otherwise
+  pendingSurfaceEditWrites: jest.fn(() => 0),
+  whenSurfaceEditWritesSettled: jest.fn(() => Promise.resolve()),
+  proposeSurfaceSync: jest.fn(),
 }));
 // The developer tools flag (window.config.segEditor.developerTools), off unless a test turns it on
 const mockDeveloper = { enabled: false };
@@ -449,6 +468,40 @@ describe('SegEditorSurfaceView', () => {
     expect(api.setCameraLookAt).toHaveBeenCalledTimes(1);
   });
 
+  it('frames an extent with its direction kept and its zoom fitted, then hands the camera to the VTK view', () => {
+    setSurfaces([surface(1)]);
+    const reference = {
+      position: [0, -500, 0], focalPoint: [0, 0, 0], viewUp: [0, 0, 1],
+      parallelProjection: true, parallelScale: 150,
+    };
+    const setReferenceCamera = jest.fn();
+    const view = createView({ active: true, getReferenceCamera: () => reference, setReferenceCamera });
+    view._loadInitialModels();
+    const api = fakeApi(view.state.initialModels);
+    view._onCreated(api);
+    api.setCameraLookAt.mockClear();
+    setReferenceCamera.mockClear();
+
+    expect(view.frameExtent(null)).toBe(false);
+    expect(view.frameExtent({ center: [10, 20, 30], radius: 50 }, { animate: false })).toBe(true);
+    // The fake camera looks at the origin from [0, -400, 0]: that direction and distance are kept
+    expect(api.setCameraLookAt).toHaveBeenCalledTimes(1);
+    const [framed] = api.setCameraLookAt.mock.calls[0];
+    expect(framed.position).toEqual([10, -380, 30]);
+    expect(framed.target).toEqual([10, 20, 30]);
+    expect(framed.up).toEqual([0, 0, 1]);
+    expect(framed.parallelScale).toBeCloseTo(55);
+    expect(setReferenceCamera).toHaveBeenCalledTimes(1);
+
+    // Animated: the first step lands on a later frame, and a new framing cancels the one before
+    expect(view.frameExtent({ center: [0, 0, 0], radius: 1 })).toBe(true);
+    expect(api.setCameraLookAt).toHaveBeenCalledTimes(1);
+    view._cancelFraming();
+    expect(view.frameExtent({ center: [0, 0, 0], radius: 2 }, { animate: false })).toBe(true);
+    expect(api.setCameraLookAt).toHaveBeenCalledTimes(2);
+    expect(view._cancelFraming).toBeNull();
+  });
+
   it('hands its camera to the VTK view when unmounted while shown, and not while hidden', () => {
     setSurfaces([surface(1)]);
     const reference = {
@@ -567,7 +620,8 @@ describe('SegEditorSurfaceView 3D tools', () => {
       mesh: target.instance, occluders: [target.instance],
     }));
     expect(get3DToolState().selectionCount).toBe(3);
-    expect(api.scene.add).toHaveBeenCalledTimes(1);
+    expect(api.scene.add).toHaveBeenCalledWith(view._highlight);
+    expect(api.scene.add.mock.calls.filter(([object]) => object !== view._editMode?.group)).toHaveLength(1);
 
     selectTrianglesInLasso.mockReturnValueOnce([2, 5]);
     view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.add);
@@ -649,17 +703,52 @@ describe('SegEditorSurfaceView 3D tools', () => {
     setActive3DTool(THREE_D_TOOLS.Lasso);
     selectTrianglesInLasso.mockReturnValueOnce([0, 2]);
     view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
-    expect(view._highlight.children).toHaveLength(3); // faces, edges, points
-    const [, lassoEdges, lassoPoints] = view._highlight.children;
+    expect(view._highlight.children).toHaveLength(4); // faces, outline, interior edges, vertices
+    const [, lassoOutline, lassoEdges, lassoPoints] = view._highlight.children;
 
     setActive3DTool(THREE_D_TOOLS.Paint);
-    expect(view._highlight.children).toHaveLength(3);
-    const [, paintEdges, paintPoints] = view._highlight.children;
-    // The brush's points and edges are subdued, the lasso's are nearer white
-    expect(paintPoints.material.size).toBeLessThan(lassoPoints.material.size);
-    expect(paintEdges.material.opacity).toBeLessThan(lassoEdges.material.opacity);
-    expect(paintPoints.material.color.r + paintPoints.material.color.g + paintPoints.material.color.b)
-      .toBeLessThan(lassoPoints.material.color.r + lassoPoints.material.color.g + lassoPoints.material.color.b);
+    expect(view._highlight.children).toHaveLength(4);
+    const [, , , paintPoints] = view._highlight.children;
+    // Lit up in the segment's own hue (threeDTools/selectionStyle): a pale saturated fill at
+    // 0.8 (0.9 while painting); the wire in the hue at a lightness solved for contrast against
+    // the fill and the mesh: a 3px outline round the patch, 2px edges inside it, 6px points; the
+    // same colours for both tools; nothing of the preview colour
+    const [paintFaces] = view._highlight.children;
+    expect(paintFaces.material.opacity).toBe(0.9); // the Paint tool is active now; the lasso's own fill was 0.8
+    expect(lassoPoints.material.size).toBe(6);
+    expect(paintPoints.material.size).toBe(6);
+    expect(paintPoints.name).toBe('vertices');
+    // The wire is drawn after the fill, in the transparent pass, so the fill cannot paint over it
+    const parts = view._highlight.children;
+    expect(parts.map(part => part.name)).toEqual(['faces', 'outline', 'edges', 'vertices']);
+    expect(parts.every(part => part.material.transparent === true && part.material.depthWrite === false)).toBe(true);
+    expect(parts.map(part => part.renderOrder)).toEqual([1, 1.01, 1.02, 1.03]);
+    expect(lassoOutline.type).toBe('LineSegments2');
+    expect(lassoOutline.material.linewidth).toBe(3);
+    expect(lassoEdges.type).toBe('LineSegments2');
+    expect(lassoEdges.material.linewidth).toBe(2);
+    expect(lassoEdges.material.opacity).toBe(1);
+    expect(lassoEdges.material.depthTest).toBe(false);
+    expect(typeof lassoEdges.onBeforeRender).toBe('function');
+    // Two selected triangles have six edge uses: a boundary edge is used once, an interior
+    // edge (shared by both) twice; the current parts hold the geometry (the lasso's were disposed)
+    const [, paintOutline, paintEdges] = view._highlight.children;
+    const outlineCount = paintOutline.geometry.attributes.instanceStart.count;
+    const interiorCount = paintEdges.geometry.attributes.instanceStart.count;
+    expect(outlineCount + 2 * interiorCount).toBe(6);
+    expect(paintOutline.material.linewidth).toBe(3);
+    expect(paintEdges.material.linewidth).toBe(2);
+    expect(paintOutline.material.color.getHex()).toBe(paintEdges.material.color.getHex());
+    expect(paintPoints.material.color.getHex()).toBe(lassoPoints.material.color.getHex());
+    expect(lassoEdges.material.color.getHex()).toBe(lassoPoints.material.color.getHex());
+    // The fill, wire and rim come from the segment's colour, not the preview colour
+    const { contrastRatio, selectionColors } = require('../threeDTools/selectionStyle');
+    // Solved against the mesh colour in effect (the mocked preference is a picked grey)
+    const expected = selectionColors(view._segmentColor(1), { meshColor: mockMeshColor.value });
+    expect(`#${paintFaces.material.color.getHexString()}`).toBe(expected.fill);
+    expect(`#${paintPoints.material.color.getHexString()}`).toBe(expected.wire);
+    expect(contrastRatio(expected.wire, expected.fill)).toBeGreaterThanOrEqual(2.1);
+    expect(`#${paintFaces.material.color.getHexString()}`).not.toBe(mockPreviewColor.value.toLowerCase());
 
     // The lasso follows its shape setting
     set3DToolOption('lassoShape', 'box');
@@ -1987,7 +2076,7 @@ describe('SegEditorSurfaceView 3D tools', () => {
       // Every face the smooth moves is drawn in the preview colour, in place of the selection
       // highlight: the moved point 0 is in all 6 faces, though only 2 are selected
       const overlay = view._changeOverlay;
-      expect(overlay.children.map(part => part.name)).toEqual(['faces', 'edges', 'vertices']);
+      expect(overlay.children.map(part => part.name)).toEqual(['faces', 'edges', 'vertexRims', 'vertices']);
       expect(overlay.getObjectByName('faces').geometry.index.count).toBe(6 * 3);
       expect(view._highlight).toBeNull();
       expect(get3DToolState().busy).toBe(false);
@@ -2401,6 +2490,793 @@ describe('SegEditorSurfaceView 3D tools', () => {
           boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, closed: true, boundaryEdges: [], nonManifoldEdges: [],
         });
       }
+    });
+  });
+
+  describe('edit-mode display of the target surface', () => {
+    const overlayOf = view => view._editMode?.group || null;
+
+    it('draws the target surface\'s edges and vertices in the mesh colour, pushing its mesh back, and only the target\'s', () => {
+      const { view, api } = createEditingView();
+      const [liver, spleen] = view.state.initialModels;
+      // The mesh gets a material after the first overlay was built: rebuilt with the toggle
+      liver.instance.material = { polygonOffset: false, polygonOffsetFactor: 0, polygonOffsetUnits: 0 };
+      set3DToolOption('showMesh', false);
+      set3DToolOption('showMesh', true);
+
+      const overlay = overlayOf(view);
+      expect(overlay).not.toBeNull();
+      expect(api.scene.add).toHaveBeenCalledWith(overlay);
+      expect(overlay.children.map(part => part.name)).toEqual(['edges', 'vertices']);
+      expect(overlay.getObjectByName('edges').material.color.getHex()).toBe(0x8f8f8f);
+      // The user's mesh colour, followed as it changes (the swatch beside Show mesh, the Settings
+      // page); the service holds the new value before it broadcasts the change
+      mockMeshColor.value = '#ff00ff';
+      mockMeshColor.listeners.forEach(listener => listener('#ff00ff'));
+      expect(overlay.getObjectByName('edges').material.color.getHex()).toBe(0xff00ff);
+      expect(overlay.getObjectByName('vertices').material.color.getHex()).toBe(0xff00ff);
+      mockMeshColor.value = '#8f8f8f';
+      expect(view._editMode.geometryId).toBe(liver.geometryId);
+      expect(liver.instance.material).toMatchObject({ polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      expect(spleen.instance.material).toBeUndefined();
+
+      // Another target: the overlay moves and the first mesh gets its material back
+      mockState.activeSegmentIndex[EDIT_SEG] = 2;
+      view.publishTarget();
+      expect(view._editMode.geometryId).toBe(spleen.geometryId);
+      expect(liver.instance.material).toMatchObject({ polygonOffset: false, polygonOffsetFactor: 0, polygonOffsetUnits: 0 });
+      expect(overlayOf(view)).not.toBe(overlay);
+      expect(api.scene.add).toHaveBeenCalledWith(overlayOf(view));
+    });
+
+    it('recolours the mesh and redraws the selection when the segment colour or the mesh preference changes', () => {
+      const { meshColorFor } = require('../threeDTools/editModeOverlay');
+      const { selectionColors } = require('../threeDTools/selectionStyle');
+      mockMeshColor.value = 'auto';
+      const { view } = createEditingView();
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0, 2]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      const overlay = overlayOf(view);
+      const meshHex = group => `#${group.getObjectByName('edges').material.color.getHexString()}`;
+      const wireHex = group => `#${group.getObjectByName('vertices').material.color.getHexString()}`;
+      const fillHex = group => `#${group.getObjectByName('faces').material.color.getHexString()}`;
+      const derived = segment => `#${meshColorFor(segment, 'auto').getHexString()}`;
+      expect(meshHex(overlay)).toBe(derived('rgb(255, 0, 0)'));
+      const drawn = view._highlight;
+      expect(fillHex(drawn)).toBe(selectionColors('rgb(255, 0, 0)', { meshColor: derived('rgb(255, 0, 0)') }).fill);
+
+      // The segment recoloured (the segmentation table): the same overlay takes the new shade in
+      // place, and the selection is drawn again from the new colour
+      mockState.colorLUTs[1][1] = [0, 128, 0, 255];
+      view.syncPresentation();
+      expect(overlayOf(view)).toBe(overlay);
+      expect(meshHex(overlay)).toBe(derived('rgb(0, 128, 0)'));
+      expect(view._highlight).not.toBe(drawn);
+      const green = selectionColors('rgb(0, 128, 0)', { meshColor: derived('rgb(0, 128, 0)') });
+      expect(fillHex(view._highlight)).toBe(green.fill);
+      expect(wireHex(view._highlight)).toBe(green.wire);
+
+      // Nothing changed: nothing is redrawn
+      const redrawn = view._highlight;
+      view.syncPresentation();
+      mockMeshColor.listeners.forEach(listener => listener('auto'));
+      expect(view._highlight).toBe(redrawn);
+
+      // The mesh preference changed: the mesh takes it, and the wire is solved against it again
+      mockMeshColor.value = '#ff00ff';
+      mockMeshColor.listeners.forEach(listener => listener('#ff00ff'));
+      expect(meshHex(overlay)).toBe('#ff00ff');
+      expect(view._highlight).not.toBe(redrawn);
+      expect(wireHex(view._highlight)).toBe(selectionColors('rgb(0, 128, 0)', { meshColor: '#ff00ff' }).wire);
+      mockMeshColor.value = '#8f8f8f';
+    });
+
+    it('is taken away while the setting is off, the canvas is hidden, or the target cannot be edited', () => {
+      const { view } = createEditingView();
+      expect(overlayOf(view)).not.toBeNull();
+
+      set3DToolOption('showMesh', false);
+      expect(overlayOf(view)).toBeNull();
+      set3DToolOption('showMesh', true);
+      expect(overlayOf(view)).not.toBeNull();
+
+      const shownProps = view.props;
+      view.props = { ...shownProps, active: false };
+      view.componentDidUpdate(shownProps);
+      expect(overlayOf(view)).toBeNull();
+      const hiddenProps = view.props;
+      view.props = { ...hiddenProps, active: true };
+      view.componentDidUpdate(hiddenProps);
+      expect(overlayOf(view)).not.toBeNull();
+
+      mockState.locked.add(1);
+      view._onSegmentationModified({ detail: { segmentationId: EDIT_SEG } });
+      expect(overlayOf(view)).toBeNull();
+      mockState.locked.delete(1);
+      view._onSegmentationModified({ detail: { segmentationId: EDIT_SEG } });
+      expect(overlayOf(view)).not.toBeNull();
+
+      view.componentWillUnmount();
+      expect(overlayOf(view)).toBeNull();
+    });
+
+    it('follows the surface through a rebuild and a preview, and is left alone when nothing changed', () => {
+      const { view, api } = createEditingView();
+      const geometryId = view.state.initialModels[0].geometryId;
+      const first = overlayOf(view);
+      view.publishTarget();
+      expect(overlayOf(view)).toBe(first);
+      expect(api.scene.add.mock.calls.filter(([object]) => object === first)).toHaveLength(1);
+
+      // A rebuilt surface: the same overlay, new geometry
+      const edited = surface(1, [0, 0, 0, 2, 0, 0, 0, 2, 0]);
+      setSurfaces([edited, surface(2)]);
+      view.reconcileGeometry();
+      expect(overlayOf(view)).toBe(first);
+      expect(view._editMode.points).toBe(edited.points);
+
+      // A preview: the overlay draws the previewed surface, then the cached one again
+      const previewed = { points: Float32Array.from([0, 0, 0, 5, 0, 0, 0, 5, 0]), polys: Int32Array.from([3, 0, 1, 2]) };
+      view._pendingEdit = { geometryId, segmentIndex: 1, after: previewed, before: { points: edited.points, polys: edited.polys }, selected: [] };
+      view._showPreviewMesh(view.state.initialModels[0], previewed);
+      expect(view._editMode.points).toBe(previewed.points);
+      expect(overlayOf(view).getObjectByName('edges').geometry.index.count).toBe(6);
+      view._endPreview();
+      expect(view._editMode.points).toBe(edited.points);
+    });
+  });
+
+  describe('synchronization and handoff (ohif-viewers#152)', () => {
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+    const settle = async (n = 6) => { for (let i = 0; i < n; i++) { await tick(); } };
+    const DEFECTS = { boundaryEdgeCount: 2, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, degenerate: 0, closed: false };
+    const PROPOSAL = {
+      domain: { min: [0, 0, 0], max: [2, 2, 0] }, domainVoxels: 9, proposedRemove: 3, proposedAdd: 1, remove: 3, add: 1, dropped: 0, farField: 0,
+    };
+    // The shared history, as far as these flows need it: recorded memos, undone newest first,
+    // and peeked without undoing
+    const history = [];
+    const undoEdit = jest.fn(() => {
+      const memo = history.pop();
+      if (!memo) {
+        return false;
+      }
+      memo.restoreMemo(true);
+      return true;
+    });
+    const peekHistory = jest.fn(count => history.slice(-count).reverse());
+    const labelmap = () => ({ volume: { id: 'labelmap' }, scalarData: Uint8Array.from([1, 1, 1, 1]), dimensions: [2, 2, 1] });
+
+    beforeEach(() => {
+      history.length = 0;
+      recordSurfaceEdit.mockImplementation(memo => { history.push(memo); memo.restoreMemo(false); });
+      setCachedSurface.mockImplementation((segmentationId, id, next, options) => {
+        Object.assign(mockState.geometries[id].data, { points: next.points, polys: next.polys });
+        request3DToolAction('surfaceChanged', { geometryId: id, keepSelection: !!options?.keepSelection });
+        return true;
+      });
+      pendingSurfaceEditWrites.mockReturnValue(0);
+      proposeSurfaceSync.mockResolvedValue({ ...PROPOSAL });
+      getLabelmapForEdit.mockReturnValue(labelmap());
+    });
+    afterEach(() => {
+      recordSurfaceEdit.mockImplementation(memo => memo.restoreMemo(false));
+      setCachedSurface.mockReset();
+      queueSurfaceEditWrite.mockReset();
+      proposeSurfaceSync.mockReset();
+      pendingSurfaceEditWrites.mockReset();
+      pendingSurfaceEditWrites.mockReturnValue(0);
+      whenSurfaceEditWritesSettled.mockReset();
+      whenSurfaceEditWritesSettled.mockImplementation(() => Promise.resolve());
+    });
+
+    // A written sync: the queue reports it made, with a labelmap memo for undo
+    const writes = (report = { status: 'written', removed: 3, added: 1, dropped: 0, farField: 0 }) => {
+      queueSurfaceEditWrite.mockImplementation(memo => {
+        memo.writeReport = { ...report };
+        memo.labelmapMemo = { restoreMemo: jest.fn() };
+        return Promise.resolve(true);
+      });
+    };
+    const fails = (message = 'worker lost') => {
+      queueSurfaceEditWrite.mockImplementation(memo => {
+        memo.surfaceOnly = true;
+        memo.writeReport = { status: 'failed', message };
+        return Promise.resolve(false);
+      });
+    };
+
+    // An editing view whose target surface carries one applied Remove with defects (surface-only)
+    async function unsynchronized(props = {}) {
+      set3DToolOption('previewEnabled', true);
+      const diagnoseWritten = jest.fn(async () => ({ ...DEFECTS }));
+      const context = createEditingView({ undoEdit, peekHistory, diagnoseWritten, ...props });
+      const { view } = context;
+      const geometryId = view.state.initialModels[0].geometryId;
+      const original = mockState.geometries[geometryId].data.points;
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0, 2]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      cutAndPatch.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 5, 0, 0, 0, 5, 0]), polys: Int32Array.from([3, 0, 1, 2]) },
+        editBox: { min: [0, 0, 0], max: [5, 5, 0] }, selectedPoints: Float64Array.from([0, 0, 0]), holes: 1, cappedHoles: 0, patchErrors: [],
+        diagnostics: { acceptable: false, output: { ...DEFECTS }, introduced: { total: 0 }, removedTriangles: 2, methods: {} },
+      });
+      expect(await view.deleteSelectedPoints()).toBe(true);
+      request3DToolAction('applyPreview');
+      expect(unsynchronizedEdits(geometryId)).toBe(1);
+      expect(get3DToolState().unsynchronizedEdits).toBe(1);
+      return { ...context, geometryId, original, diagnoseWritten, removeMemo: history[0] };
+    }
+
+    it('lets the destination proceed at once when the surface is synchronized, and says so for Synchronize', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn();
+      const { view } = createEditingView({ notify, handoff });
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(true);
+      expect(await request3DToolAction('resolveHandoff', { reason: 'target' })).toBe(true);
+      expect(handoff).not.toHaveBeenCalled();
+      expect(notify).not.toHaveBeenCalled();
+
+      expect(await request3DToolAction('synchronizeSurface')).toBe(true);
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: 'The 3D surface and the 2D views are synchronized.' }));
+    });
+
+    it('asks before leaving 3D with an unsynchronized surface, with the findings and the proposed change; Stay in 3D Tools refuses the switch', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'continue');
+      const { view, diagnoseWritten } = await unsynchronized({ notify, handoff });
+
+      // Selecting the segment that is already the target changes nothing and asks nothing
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 1 })).toBe(true);
+      expect(handoff).not.toHaveBeenCalled();
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+
+      expect(diagnoseWritten).toHaveBeenCalledTimes(1);
+      expect(proposeSurfaceSync).toHaveBeenCalledWith(expect.objectContaining({
+        editBox: { min: [0, 0, 0], max: [5, 5, 0] }, segmentIndex: 1, labelmapVolume: { id: 'labelmap' },
+      }), { editSegmentationId: EDIT_SEG });
+      expect(handoff).toHaveBeenCalledWith({
+        reason: 'labelmap',
+        destination: null,
+        findings: expect.objectContaining({ segment: 'Liver', unsynchronized: 1, failed: 0, checked: true, defects: DEFECTS }),
+        proposal: PROPOSAL,
+        failure: null,
+      });
+      // The pending edits are listed for the dialog: what each did, and why it is not written
+      expect(handoff.mock.calls[0][0].findings).toMatchObject({
+        edits: [{ kind: 'remove', faces: 2, holes: 1, status: 'surfaceOnly', reason: 'defects', depth: expect.any(Number) }],
+        lengthUnit: 'units',
+      });
+      expect(get3DToolState().busy).toBe(false);
+      expect(view._confirming).toBe(false);
+      expect(recordSurfaceEdit).toHaveBeenCalledTimes(1);
+      expect(get3DToolState().unsynchronizedEdits).toBe(1);
+
+      // A target change names the segment it goes to, so the dialog can say what the user did;
+      // Add segment (no index) and an unknown index name none
+      handoff.mockClear();
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ reason: 'target', destination: { segmentIndex: 2, label: 'Spleen' } }));
+      handoff.mockClear();
+      expect(await view.resolveHandoff({ reason: 'target' })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ reason: 'target', destination: null }));
+      handoff.mockClear();
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 9 })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ destination: null }));
+    });
+
+    it('Discard undoes the unsynchronized edits back to the checkpoint and lets the switch proceed', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'discard');
+      const { view, geometryId, original } = await unsynchronized({ notify, handoff });
+
+      expect(await view.resolveHandoff({ reason: 'exit' })).toBe(true);
+
+      expect(undoEdit).toHaveBeenCalledTimes(1);
+      expect(mockState.geometries[geometryId].data.points).toBe(original);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(get3DToolState().unsynchronizedEdits).toBe(0);
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'info', message: expect.stringMatching(/1 unsynchronized edit\(s\) discarded.*Redo restores/),
+      }));
+      expect(queueSurfaceEditWrite).not.toHaveBeenCalled();
+    });
+
+    it('Write edits to slices records an acknowledged synchronization, waits for its write, then unlocks; undo reverts the voxels only', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'proceed');
+      writes();
+      const { view, geometryId, removeMemo } = await unsynchronized({ notify, handoff });
+      const edited = mockState.geometries[geometryId].data.points;
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(true);
+
+      expect(recordSurfaceEdit).toHaveBeenCalledTimes(2);
+      const sync = recordSurfaceEdit.mock.calls[1][0];
+      expect(sync).toMatchObject({
+        sync: true, write: { kind: 'sync' }, covers: [removeMemo], segmentIndex: 1,
+        editBox: { min: [0, 0, 0], max: [5, 5, 0] },
+        acknowledged: expect.objectContaining({
+          reason: 'labelmap', defects: DEFECTS, unsynchronized: 1, proposal: expect.objectContaining({ remove: 3, add: 1 }),
+        }),
+      });
+      expect(sync.before).toEqual(removeMemo.before);
+      expect(sync.after.points).toBe(edited);
+      expect(queueSurfaceEditWrite).toHaveBeenCalledWith(sync, expect.objectContaining({ editSegmentationId: EDIT_SEG }));
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(surfaceCheckpoint(geometryId)).toBeNull();
+      expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 0, busy: false, lastEdit: { kind: 'sync', write: 'written', removedVoxels: 3, addedVoxels: 1 } });
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'info', message: '2D views updated from the 3D surface: 3 voxel(s) removed, 1 added, 0 left alone because they changed hands.',
+      }));
+
+      // Undo is one transaction: the voxels come back and the surface returns to the checkpoint,
+      // so nothing unsynchronized is left wherever Undo was pressed; the covered edit is absorbed
+      // (its own undo moves nothing); redo shows the synchronized surface and voxels again
+      expect(undoEdit()).toBe(true);
+      expect(sync.labelmapMemo.restoreMemo).toHaveBeenCalledWith(true);
+      expect(mockState.geometries[geometryId].data.points).toBe(removeMemo.before.points);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(removeMemo.absorbedBy).toBe(sync);
+      expect(undoEdit()).toBe(true);
+      expect(mockState.geometries[geometryId].data.points).toBe(removeMemo.before.points);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      removeMemo.restoreMemo(false);
+      expect(mockState.geometries[geometryId].data.points).toBe(removeMemo.before.points);
+      sync.restoreMemo(false);
+      expect(sync.labelmapMemo.restoreMemo).toHaveBeenLastCalledWith(false);
+      expect(mockState.geometries[geometryId].data.points).toBe(edited);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+    });
+
+    it('holds the editing guard through the awaited write and judges the session again before unlocking', async () => {
+      // The write is deferred: an edit attempted meanwhile is refused, and so is a second handoff
+      let finish;
+      queueSurfaceEditWrite.mockImplementation(memo => new Promise(resolve => {
+        finish = () => {
+          memo.writeReport = { status: 'written', removed: 3, added: 1, dropped: 0, farField: 0 };
+          memo.labelmapMemo = { restoreMemo: jest.fn() };
+          resolve(true);
+        };
+      }));
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'proceed');
+      const { view, geometryId } = await unsynchronized({ notify, handoff });
+
+      const resolving = view.resolveHandoff({ reason: 'labelmap' });
+      await settle();
+      expect(handoff).toHaveBeenCalledTimes(1);
+      expect(typeof finish).toBe('function');
+      expect(get3DToolState()).toMatchObject({ busy: true, handoff: true });
+      expect(view._editGuardReason(get3DToolState(), view.state.initialModels[0], false)).toBe('confirming');
+      expect(await view.deleteSelectedPoints()).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Answer the open confirmation first.' }));
+      expect(view.resolveHandoff({ reason: 'exit' })).toBe(resolving);
+
+      finish();
+      expect(await resolving).toBe(true);
+      expect(get3DToolState()).toMatchObject({ busy: false, handoff: false });
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(view._confirming).toBe(false);
+    });
+
+    it('resolves a surface removed whole, which has no mesh any more, from the ledger', async () => {
+      // A whole-surface Remove leaves empty arrays and no model; its unfinished write must still
+      // reach the handoff (pending and failed alike)
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'continue');
+      const { view, geometryId, removeMemo } = await unsynchronized({ notify, handoff });
+      // The next Remove takes the rest of the surface; it stays surface-only behind the first
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      cutAndPatch.mockResolvedValue({
+        changed: true, edited: { points: new Float32Array(0), polys: new Int32Array(0) },
+        editBox: { min: [0, 0, 0], max: [5, 5, 0] }, selectedPoints: Float64Array.from([0, 0, 0]), holes: 0, cappedHoles: 0, patchErrors: [],
+        diagnostics: { acceptable: true, output: { boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, closed: true }, introduced: { total: 0 }, removedTriangles: 1, methods: {} },
+      });
+      expect(await view.deleteSelectedPoints()).toBe(true);
+      request3DToolAction('applyPreview');
+      expect(view._targetModel(1)).toBeUndefined();
+      expect(unsynchronizedEdits(geometryId)).toBe(2);
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({
+        findings: expect.objectContaining({ segment: 'Liver', unsynchronized: 2, isTarget: false, defects: expect.objectContaining({ closed: true }) }),
+      }));
+      expect(proposeSurfaceSync).toHaveBeenCalledWith(expect.objectContaining({ before: removeMemo.before, after: expect.objectContaining({ points: expect.any(Float32Array) }) }), expect.anything());
+
+      // The same when the removal's own write failed rather than never ran
+      const removal = history[1];
+      removal.writeReport = { status: 'failed', message: 'worker lost' };
+      handoff.mockClear();
+      expect(await view.resolveHandoff({ reason: 'exit' })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ findings: expect.objectContaining({ unsynchronized: 2, failed: 1 }) }));
+    });
+
+    it('resolves a surface left behind by an earlier target change, wherever Undo put it', async () => {
+      // A synchronized on the way to B, then Undo from B: A's record is one transaction, so A is
+      // back at its checkpoint and nothing is hidden; and a surface of A left unsynchronized is
+      // found by the exit handoff while B is the target
+      writes();
+      const handoff = jest.fn(async () => 'proceed');
+      const { view, geometryId, removeMemo } = await unsynchronized({ handoff });
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(true);
+      mockState.activeSegmentIndex[EDIT_SEG] = 2;
+      view.publishTarget();
+      expect(get3DToolState().target.segmentIndex).toBe(2);
+
+      expect(undoEdit()).toBe(true);
+      expect(mockState.geometries[geometryId].data.points).toBe(removeMemo.before.points);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(await view.resolveHandoff({ reason: 'exit' })).toBe(true);
+
+      // A left unsynchronized (the record redone, then a new surface-only edit would do; here the
+      // ledger is put back directly) is still the session's: the exit handoff asks about it
+      history.pop().restoreMemo(false);
+      history.push(removeMemo);
+      removeMemo.absorbedBy = null;
+      removeMemo.restoreMemo(false);
+      expect(unsynchronizedEdits(geometryId)).toBe(1);
+      handoff.mockClear().mockResolvedValue('continue');
+      expect(await view.resolveHandoff({ reason: 'exit' })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({
+        findings: expect.objectContaining({ segment: 'Liver', segmentIndex: 1, isTarget: false, unsynchronized: 1 }),
+      }));
+      expect(handoff.mock.calls[0][0].findings.isTarget).toBe(false);
+    });
+
+    it('refuses Discard without undoing anything when the history does not end with the surface\'s edits', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'discard');
+      const { view, geometryId } = await unsynchronized({ notify, handoff });
+      // Another segment's successful edit on top of the history
+      const spleen = view.state.initialModels[1];
+      const other = { restoreMemo: jest.fn(), geometryId: spleen.geometryId, segmentIndex: 2 };
+      history.push(other);
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+
+      expect(peekHistory).toHaveBeenCalledWith(1);
+      expect(undoEdit).not.toHaveBeenCalled();
+      expect(other.restoreMemo).not.toHaveBeenCalled();
+      expect(history).toHaveLength(2);
+      expect(unsynchronizedEdits(geometryId)).toBe(1);
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', message: expect.stringMatching(/could not be discarded/) }));
+    });
+
+    it('keeps the destination locked after a failed conversion and offers the remaining choices again', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn().mockResolvedValueOnce('proceed').mockResolvedValueOnce('continue');
+      fails('worker lost');
+      const { view, geometryId } = await unsynchronized({ notify, handoff });
+
+      expect(await view.resolveHandoff({ reason: 'target' })).toBe(false);
+
+      expect(handoff).toHaveBeenCalledTimes(2);
+      expect(handoff.mock.calls[1][0]).toMatchObject({
+        reason: 'target',
+        findings: expect.objectContaining({ unsynchronized: 2, failed: 1 }),
+        proposal: null,
+        failure: { message: 'worker lost', stage: 'write' },
+      });
+      // The failed record stands, unsynchronized and undoable, and nothing claims the views are updated
+      expect(unsynchronizedEdits(geometryId)).toBe(2);
+      expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 2, failedWrites: 1, lastEdit: { kind: 'sync', write: 'failed' } });
+      expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/2D views updated/) }));
+      expect(proposeSurfaceSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a proposal that could not be computed and withholds Write edits to slices', async () => {
+      const handoff = jest.fn(async () => 'continue');
+      proposeSurfaceSync.mockRejectedValue(new Error('3 proposed voxel(s) lie outside the affected region'));
+      const { view } = await unsynchronized({ handoff });
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({
+        proposal: null, failure: { message: '3 proposed voxel(s) lie outside the affected region', stage: 'proposal' },
+      }));
+    });
+
+    it('the handoff\'s Repair shows the whole-surface Repair for Apply / Cancel, whatever the preview setting, and refuses the switch', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'repair');
+      const { view } = await unsynchronized({ notify, handoff });
+      set3DToolOption('previewEnabled', false);
+      repairSurface.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 6, 0, 0, 0, 6, 0]), polys: Int32Array.from([3, 0, 1, 2]), patchPolysOffset: 0 },
+        editBox: { min: [0, 0, 0], max: [6, 6, 0] }, selectedPoints: new Float64Array(0),
+        holes: 1, cappedHoles: 0, patchErrors: [], diagnostics: { methods: { flat: 1 }, output: { closed: true }, acceptable: true, openEdges: 0 },
+      });
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      await settle();
+
+      expect(repairSurface).toHaveBeenCalledTimes(1);
+      expect(get3DToolState().preview).toMatchObject({ repair: true, holes: 1 });
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringMatching(/shown for Apply \/ Cancel/) }));
+      expect(recordSurfaceEdit).toHaveBeenCalledTimes(1);
+    });
+
+    it('synchronizes an applied Repair that left no defect from the checkpoint, without asking', async () => {
+      const notify = jest.fn();
+      const handoff = jest.fn();
+      writes({ status: 'written', removed: 2, added: 4, dropped: 0, farField: 0 });
+      const { geometryId, removeMemo } = await unsynchronized({ notify, handoff });
+      set3DToolOption('previewEnabled', false);
+      repairSurface.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 6, 0, 0, 0, 6, 0]), polys: Int32Array.from([3, 0, 1, 2]), patchPolysOffset: 0 },
+        editBox: { min: [1, 1, 0], max: [6, 6, 0] }, selectedPoints: new Float64Array(0),
+        holes: 1, cappedHoles: 0, patchErrors: [], diagnostics: { methods: { flat: 1 }, output: { closed: true }, acceptable: true, openEdges: 0 },
+      });
+
+      expect(await request3DToolAction('repairSurface')).toBe(true);
+      await settle();
+
+      expect(handoff).not.toHaveBeenCalled();
+      expect(recordSurfaceEdit).toHaveBeenCalledTimes(3);
+      const [, repairMemo, sync] = recordSurfaceEdit.mock.calls.map(([memo]) => memo);
+      expect(repairMemo.surfaceOnly).toBe(true);
+      expect(sync).toMatchObject({
+        sync: true, covers: [removeMemo, repairMemo], acknowledged: null, editBox: { min: [0, 0, 0], max: [6, 6, 0] },
+      });
+      expect(sync.before).toEqual(removeMemo.before);
+      expect(sync.after.points).toBe(mockState.geometries[geometryId].data.points);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(get3DToolState()).toMatchObject({ unsynchronizedEdits: 0, lastEdit: { kind: 'sync', write: 'written', removedVoxels: 2, addedVoxels: 4 } });
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'info', message: expect.stringMatching(/repaired surface has no open, non-manifold or inverted edge.*\(2 edit\(s\)\)/),
+      }));
+    });
+
+    it('does not synchronize a Repair that left defects, and the next handoff covers both edits', async () => {
+      const handoff = jest.fn(async () => 'continue');
+      const { view, geometryId } = await unsynchronized({ handoff });
+      set3DToolOption('previewEnabled', false);
+      repairSurface.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 6, 0, 0, 0, 6, 0]), polys: Int32Array.from([3, 0, 1, 2]), patchPolysOffset: 0 },
+        editBox: { min: [1, 1, 0], max: [6, 6, 0] }, selectedPoints: new Float64Array(0),
+        holes: 1, cappedHoles: 0, patchErrors: [], diagnostics: { methods: { flat: 1 }, output: { ...DEFECTS, boundaryEdgeCount: 1 }, acceptable: false, openEdges: 1 },
+      });
+
+      expect(await request3DToolAction('repairSurface')).toBe(true);
+      await settle();
+      expect(recordSurfaceEdit).toHaveBeenCalledTimes(2);
+      expect(queueSurfaceEditWrite).not.toHaveBeenCalled();
+      expect(unsynchronizedEdits(geometryId)).toBe(2);
+
+      expect(await view.resolveHandoff({ reason: 'import' })).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ findings: expect.objectContaining({ unsynchronized: 2 }) }));
+      expect(proposeSurfaceSync).toHaveBeenCalledWith(expect.objectContaining({ editBox: { min: [0, 0, 0], max: [6, 6, 0] } }), expect.anything());
+    });
+
+    it('waits for queued writes to settle before judging the surface', async () => {
+      const handoff = jest.fn(async () => 'continue');
+      const { view } = await unsynchronized({ handoff });
+      // The fast path reads the count once; the guarded run then settles until it is zero
+      pendingSurfaceEditWrites.mockReturnValueOnce(2).mockReturnValueOnce(2).mockReturnValueOnce(1).mockReturnValue(0);
+
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(whenSurfaceEditWritesSettled).toHaveBeenCalledTimes(2);
+      expect(handoff).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for a pending write of an ordinary edit, with no earlier unsynchronized edit, and asks once it failed', async () => {
+      // An ordinary writable Remove, its worker held: the destination is not let through while
+      // the write is pending, and the dialog comes up when the write then fails
+      set3DToolOption('previewEnabled', false);
+      let settleWrite;
+      let pendingMemo = null;
+      queueSurfaceEditWrite.mockImplementation(memo => new Promise(resolve => {
+        pendingMemo = memo;
+        settleWrite = () => {
+          memo.surfaceOnly = true;
+          memo.writeReport = { status: 'failed', message: 'worker lost' };
+          resolve(false);
+        };
+      }));
+      pendingSurfaceEditWrites.mockImplementation(() => (pendingMemo && !pendingMemo.writeReport ? 1 : 0));
+      let settled;
+      whenSurfaceEditWritesSettled.mockImplementation(() => new Promise(resolve => { settled = resolve; }));
+      const notify = jest.fn();
+      const handoff = jest.fn(async () => 'continue');
+      const diagnoseWritten = jest.fn(async () => ({ boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, closed: true }));
+      const { view, geometryId } = createEditingView({ notify, handoff, undoEdit, peekHistory, diagnoseWritten });
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0, 2]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      cutAndPatch.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 5, 0, 0, 0, 5, 0]), polys: Int32Array.from([3, 0, 1, 2]) },
+        editBox: { min: [0, 0, 0], max: [5, 5, 0] }, selectedPoints: Float64Array.from([0, 0, 0]), holes: 1, cappedHoles: 0, patchErrors: [],
+        diagnostics: { acceptable: true, output: { boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, closed: true }, introduced: { total: 0 }, removedTriangles: 2, methods: {} },
+      });
+      expect(await view.deleteSelectedPoints()).toBe(true);
+      expect(queueSurfaceEditWrite).toHaveBeenCalledTimes(1);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+
+      let answer = 'unsettled';
+      const resolving = view.resolveHandoff({ reason: 'labelmap' }).then(result => { answer = result; });
+      await settle();
+      expect(answer).toBe('unsettled');
+      expect(handoff).not.toHaveBeenCalled();
+      expect(get3DToolState().handoff).toBe(true);
+
+      settleWrite();
+      settled();
+      await resolving;
+      expect(answer).toBe(false);
+      expect(handoff).toHaveBeenCalledWith(expect.objectContaining({ findings: expect.objectContaining({ unsynchronized: 1, failed: 1 }) }));
+      expect(get3DToolState().handoff).toBe(false);
+    });
+
+    it('waits for the pending write of a whole-surface removal too, and lets the switch through once it was made', async () => {
+      set3DToolOption('previewEnabled', false);
+      let settleWrite;
+      let pendingMemo = null;
+      queueSurfaceEditWrite.mockImplementation(memo => new Promise(resolve => {
+        pendingMemo = memo;
+        settleWrite = () => {
+          memo.writeReport = { status: 'written', removed: 4, added: 0, dropped: 0, farField: 0 };
+          memo.labelmapMemo = { restoreMemo: jest.fn() };
+          resolve(true);
+        };
+      }));
+      pendingSurfaceEditWrites.mockImplementation(() => (pendingMemo && !pendingMemo.writeReport ? 1 : 0));
+      let settled;
+      whenSurfaceEditWritesSettled.mockImplementation(() => new Promise(resolve => { settled = resolve; }));
+      const handoff = jest.fn(async () => 'continue');
+      const { view } = createEditingView({ handoff, undoEdit, peekHistory });
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0, 1, 2, 3, 4, 5]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      cutAndPatch.mockResolvedValue({
+        changed: true, edited: { points: new Float32Array(0), polys: new Int32Array(0) },
+        editBox: { min: [0, 0, 0], max: [1, 1, 0] }, selectedPoints: Float64Array.from([0, 0, 0]), holes: 0, cappedHoles: 0, patchErrors: [],
+        diagnostics: { acceptable: true, output: { boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, closed: true }, introduced: { total: 0 }, removedTriangles: 6, methods: {} },
+      });
+      expect(await view.deleteSelectedPoints()).toBe(true);
+      expect(view._targetModel(1)).toBeUndefined();
+
+      let answer = 'unsettled';
+      const resolving = view.resolveHandoff({ reason: 'exit' }).then(result => { answer = result; });
+      await settle();
+      expect(answer).toBe('unsettled');
+      settleWrite();
+      settled();
+      await resolving;
+      expect(answer).toBe(true);
+      expect(handoff).not.toHaveBeenCalled();
+    });
+
+    it('refuses a preview or a running edit on a synchronized surface before the fast path', async () => {
+      const notify = jest.fn();
+      const { view } = createEditingView({ notify, handoff: jest.fn() });
+      set3DPreview({ kind: 'smooth' });
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringMatching(/Finish or cancel the edit shown first/) }));
+      set3DPreview(null);
+      set3DToolBusy(true);
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(false);
+      set3DToolBusy(false);
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(true);
+    });
+
+    it('keeps a failed synchronization absorbed by its retry from reviving the surface on redo', async () => {
+      // E1 surface-only; S1 fails (Continue); E2 surface-only; S2 succeeds on the way to B. Undo
+      // S2, E2 and S1, then redo S1: the surface stays at the checkpoint with nothing hidden
+      const handoff = jest.fn()
+        .mockResolvedValueOnce('proceed').mockResolvedValueOnce('continue')
+        .mockResolvedValueOnce('proceed');
+      fails('worker lost');
+      const { view, geometryId, removeMemo } = await unsynchronized({ handoff });
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      const s1 = history[1];
+      expect(s1).toMatchObject({ sync: true, surfaceOnly: true });
+
+      // E2 on the edited surface
+      setActive3DTool(THREE_D_TOOLS.Lasso);
+      selectTrianglesInLasso.mockReturnValueOnce([0]);
+      view.selectWithLasso([0, 0, 1, 0, 1, 1], SELECTION_MODES.replace);
+      cutAndPatch.mockResolvedValue({
+        changed: true,
+        edited: { points: Float32Array.from([0, 0, 0, 7, 0, 0, 0, 7, 0]), polys: Int32Array.from([3, 0, 1, 2]) },
+        editBox: { min: [0, 0, 0], max: [7, 7, 0] }, selectedPoints: Float64Array.from([0, 0, 0]), holes: 1, cappedHoles: 0, patchErrors: [],
+        diagnostics: { acceptable: false, output: { ...DEFECTS }, introduced: { total: 0 }, removedTriangles: 1, methods: {} },
+      });
+      expect(await view.deleteSelectedPoints()).toBe(true);
+      request3DToolAction('applyPreview');
+      const e2 = history[2];
+      expect(unsynchronizedEdits(geometryId)).toBe(3);
+
+      writes();
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(true);
+      const s2 = history[3];
+      expect(s2.covers).toEqual([removeMemo, s1, e2]);
+      expect(s1.absorbedBy).toBe(s2);
+      mockState.activeSegmentIndex[EDIT_SEG] = 2;
+      view.publishTarget();
+
+      expect(undoEdit()).toBe(true); // S2
+      expect(undoEdit()).toBe(true); // E2 (absorbed)
+      expect(undoEdit()).toBe(true); // S1 (absorbed, failed)
+      s1.restoreMemo(false);
+      expect(mockState.geometries[geometryId].data.points).toBe(removeMemo.before.points);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      expect(get3DToolState().unsynchronizedEdits).toBe(0);
+      handoff.mockClear();
+      expect(await view.resolveHandoff({ reason: 'exit' })).toBe(true);
+      expect(handoff).not.toHaveBeenCalled();
+    });
+
+    it('allows the replay of discarded 3D work only on its segment, in 3D, with nothing else going on', async () => {
+      // Discard on the way to B leaves the edit on the Redo stack: the Redo command asks the
+      // canvas before replaying it (commandsModule), and the answer is no until the user is back
+      // on A in the 3D tools
+      const handoff = jest.fn(async () => 'discard');
+      const { view, geometryId, removeMemo } = await unsynchronized({ handoff });
+      expect(await view.resolveHandoff({ reason: 'target', segmentIndex: 2 })).toBe(true);
+      expect(unsynchronizedEdits(geometryId)).toBe(0);
+      mockState.activeSegmentIndex[EDIT_SEG] = 2;
+      view.publishTarget();
+      expect(request3DToolAction('surfaceRedoAllowed', { memo: removeMemo })).toBe(false);
+
+      // Back on A, shown: allowed; hidden, previewing or mid-handoff: not
+      mockState.activeSegmentIndex[EDIT_SEG] = 1;
+      view.publishTarget();
+      expect(request3DToolAction('surfaceRedoAllowed', { memo: removeMemo })).toBe(true);
+      set3DPreview({ kind: 'smooth' });
+      view._pendingEdit = {};
+      expect(request3DToolAction('surfaceRedoAllowed', { memo: removeMemo })).toBe(false);
+      view._pendingEdit = null;
+      set3DPreview(null);
+      const shownProps = view.props;
+      view.props = { ...shownProps, active: false };
+      view.componentDidUpdate(shownProps);
+      expect(request3DToolAction('surfaceRedoAllowed', { memo: removeMemo })).toBe(false);
+      expect(request3DToolAction('surfaceRedoAllowed', {})).toBe(false);
+    });
+
+    it('refuses the handoff while an edit is shown for Apply / Cancel, is running, or cannot be asked', async () => {
+      const notify = jest.fn();
+      const { view } = await unsynchronized({ notify, handoff: undefined });
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'warning', message: expect.stringMatching(/cannot be asked here/) }));
+
+      set3DPreview({ kind: 'smooth' });
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringMatching(/Finish or cancel the edit shown first/) }));
+      set3DPreview(null);
+      set3DToolBusy(true);
+      expect(await view.resolveHandoff({ reason: 'labelmap' })).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringMatching(/Another edit is still running/) }));
+      set3DToolBusy(false);
+    });
+
+    it('refuses edits while the handoff dialog is open, and answers one handoff at a time', async () => {
+      let choose;
+      const handoff = jest.fn(() => new Promise(resolve => { choose = resolve; }));
+      const notify = jest.fn();
+      const { view } = await unsynchronized({ notify, handoff });
+
+      const first = view.resolveHandoff({ reason: 'labelmap' });
+      const second = view.resolveHandoff({ reason: 'exit' });
+      await settle();
+      expect(handoff).toHaveBeenCalledTimes(1);
+      expect(await view.deleteSelectedPoints()).toBe(false);
+      expect(notify).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'Answer the open confirmation first.' }));
+
+      choose('continue');
+      expect(await first).toBe(false);
+      expect(await second).toBe(false);
     });
   });
 

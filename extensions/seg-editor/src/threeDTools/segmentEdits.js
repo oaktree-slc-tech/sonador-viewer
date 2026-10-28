@@ -42,6 +42,18 @@ export function diagnoseSurfaceInWorker({ points, polys }, { weldTolerance = 0 }
 }
 
 /**
+ * The diagnosis of a surface as a delta write would voxelize it, from the carve worker
+ * (meshRepair's writtenSurfaceDiagnostics): what the handoff discloses before a best-effort
+ * conversion is acknowledged.
+ *
+ * @param {{ points, polys }} surface
+ */
+export function diagnoseWrittenSurfaceInWorker({ points, polys }) {
+  registerLabelmapCarveWorker();
+  return getWebWorkerManager().executeTask(LABELMAP_CARVE_WORKER, 'diagnoseWritten', { points, polys });
+}
+
+/**
  * Carve the labelmap for a surface edit in the carve worker (labelmapCarve's carveLabelmap).
  *
  * @param {Object} args - see carveLabelmap

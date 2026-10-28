@@ -62,6 +62,9 @@ import {
 } from '@ohif/extension-vtk';
 
 import { Enums as SonadorSegEnums } from '../enums';
+import { getFollowSelection, registerSegmentFramer } from '../utils/followSelection';
+import { animateCamera, FRAME_DURATION_MS, framedCamera, pannedCamera } from '../utils/frameSegment';
+import { lookupSegmentExtent } from '../utils/segmentExtent';
 import { Cornerstone3DSegmentationViewerBaseViewport } from '../components/Cornerstone3DSegmentationViewerLayout';
 
 const { ViewportType, Events: c3dEvents } = C3dEnums;
@@ -236,6 +239,12 @@ class SegmentationEditorBaseViewport extends Cornerstone3DSegmentationViewerBase
           segmentationService.setActiveSegment(labelmapInstance3dUID, segmentIndex);
         }
 
+        // Follow Selected Segment: the views move onto the segment selected in the working copy
+        // (a segment click after its handoff, Add segment, a programmatic change alike)
+        if (segmentationId == labelmapInstanceUID && getFollowSelection()) {
+          component.frameSegment(segmentIndex);
+        }
+
         if (segVol3d && segmentationId == labelmapInstance3dUID) {
 
           // Check component "rendering" state and update if currently indicated as "rendering".
@@ -289,6 +298,10 @@ class SegmentationEditorBaseViewport extends Cornerstone3DSegmentationViewerBase
         }
       });
 
+    // Frame Selected Segment (the header menu, the command) reaches the viewports through here
+    component._unregisterSegmentFramer?.();
+    component._unregisterSegmentFramer = registerSegmentFramer(options => component.frameSegment(undefined, options));
+
     super.subscribeEventListeners();
   }
 
@@ -331,9 +344,75 @@ class SegmentationEditorBaseViewport extends Cornerstone3DSegmentationViewerBase
     await super._activateSurfaceRepresentation();
   }
 
+  frameSegment(segmentIndex, { animate = true } = {}) {
+    // Move the views onto a segment (Follow Selected Segment, Frame Selected Segment): every 2D
+    // view scrolls and pans to the segment's centre, keeping its zoom; the 3D view keeps its
+    // direction and zooms to the segment's surface (the editing canvas while it is shown, else
+    // the VTK view). The active segment when none is given. False when nothing moved: the
+    // viewports are not up yet, or the segment has neither a surface nor voxels (one just added).
+    const component = this;
+    const { views2d, views3d } = component.props;
+    const { volumeId: labelmapSegmentationId } = component._segVol();
+    const { volumeId: surfaceSegmentationId, segVol: segVol3d } = component._segVol3d();
+    const index = segmentIndex ?? c3dSegmentations.segmentIndex.getActiveSegmentIndex(labelmapSegmentationId);
+    if (!labelmapSegmentationId || !index) {
+      return false;
+    }
+    const extent = lookupSegmentExtent({
+      labelmapSegmentationId, surfaceSegmentationId: segVol3d ? surfaceSegmentationId : undefined, segmentIndex: index,
+    });
+    if (!extent) {
+      return false;
+    }
+
+    const duration = animate ? FRAME_DURATION_MS : 0;
+    component._cancelFraming?.forEach(cancel => cancel());
+    component._cancelFraming = [];
+    let moved = false;
+    const move = (viewport, to) => {
+      if (!to) {
+        return;
+      }
+      moved = true;
+      component._cancelFraming.push(animateCamera({
+        from: viewport.getCamera(), to, duration,
+        apply: (camera) => {
+          viewport.setCamera(camera);
+          viewport.render();
+        },
+      }));
+    };
+
+    _.each(views2d, (tab) => {
+      const { viewport } = component._checkViewportActive({ tab });
+      if (viewport) {
+        move(viewport, pannedCamera(viewport.getCamera(), extent.center));
+      }
+    });
+    _.each(views3d, (tab) => {
+      if (component.props.segEditor3dEditingEnabled && component._surfaceViewRef.current) {
+        moved = component._surfaceViewRef.current.frameExtent(extent, { animate }) || moved;
+        return;
+      }
+      const { viewport } = component._checkViewportActive({ tab });
+      if (!viewport) {
+        return;
+      }
+      const canvas = viewport.canvas;
+      const aspect = canvas?.clientWidth && canvas?.clientHeight ? canvas.clientWidth / canvas.clientHeight : 1;
+      move(viewport, framedCamera(viewport.getCamera(), extent, { aspect }));
+    });
+    return moved;
+  }
+
   unsubscribeEvents() {
     // Unsubscribe event handlers
     const component = this;
+
+    component._unregisterSegmentFramer?.();
+    component._unregisterSegmentFramer = null;
+    component._cancelFraming?.forEach(cancel => cancel());
+    component._cancelFraming = [];
 
     // displaySetApi service events
     component.displaysets_apisync?.unsubscribe();

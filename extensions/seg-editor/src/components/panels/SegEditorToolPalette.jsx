@@ -6,7 +6,9 @@ import OHIF from '@ohif/core';
 import { Icon } from '@ohif/ui';
 import { Icons, Tabs, TabsContent, TabsList, TabsTrigger } from '@ohif/ui-next';
 
+import { WholeSurfaceMenu, WholeSurfaceStatus } from '../../toolbarComponents/WholeSurface';
 import { SECTIONS, SEG_EDITOR_COMMAND_CONTEXT } from '../../toolbox/constants';
+import { closeRepairSurface } from '../../toolbarComponents/RepairSurfaceCard';
 
 import SegEditorToolbox from './SegEditorToolbox';
 
@@ -50,17 +52,28 @@ export default function SegEditorToolPalette({
   // Segmentation Editor tool palettes (ohif-viewers#142), shown under the segment list: the
   // Labelmap (slice) tools, ported from the OHIF v3 segmentation toolbox, and the 3D tools, which
   // act on the 3D tab's editing canvas. Leaving a palette releases its tools: a labelmap tool
-  // holding the primary mouse binding, or the active 3D tool.
+  // holding the primary mouse binding, or the active 3D tool. Leaving the 3D palette first
+  // resolves a 3D surface the 2D views have not caught up with (ohif-viewers#152 handoff): the
+  // Labelmap tools are not enabled until the user discarded or synchronized those edits.
 
   const { t } = useTranslation('SegmentationEditor');
   const [palette, setPalette] = useState(() => _initialPalette(displaySetInstanceUID, defaultPalette));
 
-  const onPaletteChange = (value) => {
+  const onPaletteChange = async (value) => {
+    if (palette === PALETTES.threeD && value !== PALETTES.threeD) {
+      const resolved = await commandsManager.runCommand('resolveSegEditor3DHandoff', {
+        reason: 'labelmap',
+      }, SEG_EDITOR_COMMAND_CONTEXT);
+      if (resolved === false) {
+        return;
+      }
+    }
     if (value !== PALETTES.labelmap) {
       commandsManager.runCommand('deactivateLabelmapTools', {}, SEG_EDITOR_COMMAND_CONTEXT);
     }
     if (value !== PALETTES.threeD) {
       commandsManager.runCommand('deactivate3DTools', {}, SEG_EDITOR_COMMAND_CONTEXT);
+      closeRepairSurface();
     }
 
     // The 3D palette switches the 3D tab to the Three.js editing canvas
@@ -102,7 +115,12 @@ export default function SegEditorToolPalette({
         </TabsContent>
 
         <TabsContent value={PALETTES.threeD} className="mt-0">
-          <SegEditorToolbox buttonSectionId={SECTIONS.threeDToolbox} title={t('3D Tools')} />
+          <SegEditorToolbox
+            buttonSectionId={SECTIONS.threeDToolbox}
+            title={t('3D Tools')}
+            titleAction={<WholeSurfaceMenu />}
+            status={<WholeSurfaceStatus />}
+          />
         </TabsContent>
       </Tabs>
     </div>

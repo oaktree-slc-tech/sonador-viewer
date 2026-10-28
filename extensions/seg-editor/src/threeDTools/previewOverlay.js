@@ -1,9 +1,11 @@
 // The overlay a 3D edit is previewed with (ohif-viewers#142 §12, #148 FR-2): the faces the edit
 // changes, drawn the way Blender's edit mode draws a selection, so a pending change and its shape
-// stand out from any segment colour. Faces are a strong fill in the preview colour (Blender orange
-// by default, a user preference), edges thick lines in a lighter variant, and vertices large pale
-// dots: while a preview is up it is the most prominent thing on the canvas, and the original faces
-// (SegEditorSurfaceView's ghost) recede behind it.
+// stand out from any segment colour. Faces are a translucent tint of the preview colour (Blender
+// orange by default, a user preference), edges thick opaque lines in a lighter variant, and
+// vertices large pale dots on a dark rim: the edges and vertices are what the eye is meant to
+// follow, the fill only marks the region (user feedback, 2026-10-24: a strong fill drowned the
+// nodes). While a preview is up the overlay is the most prominent thing on the canvas, and the
+// original faces (SegEditorSurfaceView's ghost) recede behind it.
 //
 // Only what Apply would change is drawn: the new patch faces of a Remove or Repair, and every face
 // a Smooth moves. The rest of the previewed surface keeps the segment's colour.
@@ -28,12 +30,17 @@ export const PREVIEW_COLOR_FALLBACK = '#ff8500';
 
 // The variants of the preview colour: edges lifted in lightness, vertices most of the way to white
 const EDGE_LIGHTNESS_LIFT = 0.15;
-const VERTEX_TOWARD_WHITE = 0.6;
-const FACE_OPACITY = 0.7;
+const VERTEX_TOWARD_WHITE = 0.75;
+// The fill is a tint, so the edges and vertices on it keep their contrast
+const FACE_OPACITY = 0.35;
 // In CSS pixels. WebGL draws plain lines one pixel wide, so the edges are screen-space quads
 // (three's LineSegments2), which is what lets them be thicker than the segment's own wireframe.
-const EDGE_WIDTH = 2.5;
+const EDGE_WIDTH = 3;
 const VERTEX_SIZE = 8;
+// Each vertex sits on a dark rim a little larger than itself, so a pale dot reads on a pale
+// surface and over the fill alike
+const VERTEX_RIM_SIZE = VERTEX_SIZE + 4;
+const VERTEX_RIM_COLOR = new Color(0.08, 0.08, 0.08);
 // Drawn over the preview mesh and the ghost
 const OVERLAY_RENDER_ORDER = 2;
 
@@ -195,7 +202,7 @@ function _geometries(points, triangles) {
   });
   const lines = new LineSegmentsGeometry();
   lines.setPositions(segments);
-  return { faces: make(faces), edges: lines, vertices: make(null) };
+  return { faces: make(faces), edges: lines, vertexRims: make(null), vertices: make(null) };
 }
 
 function _syncLineResolution(renderer) {
@@ -205,7 +212,7 @@ function _syncLineResolution(renderer) {
 
 /**
  * The overlay for a previewed edit, or null when it changes no faces. Its parts are named
- * 'faces', 'edges' and 'vertices'.
+ * 'faces', 'edges', 'vertexRims' and 'vertices'.
  *
  * The edges and vertices are depth-tested against the preview mesh, which is pushed back with a
  * polygon offset (see SegEditorSurfaceView), so the ones on the near side show and those behind
@@ -231,15 +238,21 @@ export function createChangeOverlay({ points, triangles, color }) {
     color: shades.edge, linewidth: EDGE_WIDTH, worldUnits: false,
   }));
   edges.onBeforeRender = _syncLineResolution;
+  const vertexRims = new Points(geometries.vertexRims, new PointsMaterial({
+    color: VERTEX_RIM_COLOR, size: VERTEX_RIM_SIZE, sizeAttenuation: false,
+  }));
   const vertices = new Points(geometries.vertices, new PointsMaterial({
-    color: shades.vertex, size: VERTEX_SIZE, sizeAttenuation: false,
+    color: shades.vertex, size: VERTEX_SIZE, sizeAttenuation: false, depthTest: false,
   }));
   faces.name = 'faces';
   edges.name = 'edges';
+  vertexRims.name = 'vertexRims';
   vertices.name = 'vertices';
   const group = new Group();
-  [faces, edges, vertices].forEach(part => {
-    part.renderOrder = OVERLAY_RENDER_ORDER;
+  // In draw order: the rims under the dots, both depth-tested through the rim (the dot itself
+  // skips the test so it is never cut in half by the surface it sits on)
+  [faces, edges, vertexRims, vertices].forEach((part, i) => {
+    part.renderOrder = OVERLAY_RENDER_ORDER + i * 0.01;
     group.add(part);
   });
   return group;
@@ -259,7 +272,9 @@ export function setChangeOverlayColor(group, color) {
   const shades = previewShades(color);
   group.children.forEach(part => {
     const shade = { faces: shades.face, edges: shades.edge, vertices: shades.vertex }[part.name];
-    part.material.color.copy(shade);
+    if (shade) {
+      part.material.color.copy(shade);
+    }
   });
 }
 

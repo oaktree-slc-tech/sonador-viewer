@@ -412,3 +412,26 @@ describe('definitions', () => {
     ]);
   });
 });
+
+describe('imports and the 3D handoff (ohif-viewers#152)', () => {
+  it('does not start while the user keeps editing a 3D surface the 2D views have not received', async () => {
+    const resolveHandoff = jest.fn(async () => false);
+    const { actions, services, deps } = setup({ deps: { resolveHandoff } });
+
+    expect(await actions.importStlModels()).toBeUndefined();
+
+    expect(resolveHandoff).toHaveBeenCalledTimes(1);
+    expect(deps.pickFiles).not.toHaveBeenCalled();
+    expect(deps.importInto).not.toHaveBeenCalled();
+    expect(notifications(services)).toEqual([['info', 'The import was not started: the 3D surface is still being edited.']]);
+  });
+
+  it('goes ahead once the handoff is resolved', async () => {
+    const resolveHandoff = jest.fn(async () => true);
+    const { actions, deps, result } = setup({ deps: { resolveHandoff } });
+    deps.pickFiles.mockResolvedValue([file('femur.stl')]);
+
+    expect(await actions.importStlModels()).toBe(result);
+    expect(resolveHandoff).toHaveBeenCalledTimes(1);
+  });
+});

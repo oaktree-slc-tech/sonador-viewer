@@ -111,14 +111,20 @@ describe('createChangeOverlay', () => {
     const triangles = changedTriangles(CUT);
     const overlay = createChangeOverlay({ points: CUT.after.points, triangles, color: '#ff8500' });
     expect(overlay.children.map(part => [part.name, part.type])).toEqual([
-      ['faces', 'Mesh'], ['edges', 'LineSegments2'], ['vertices', 'Points'],
+      ['faces', 'Mesh'], ['edges', 'LineSegments2'], ['vertexRims', 'Points'], ['vertices', 'Points'],
     ]);
     const faces = overlay.getObjectByName('faces');
     expect(faces.material).toMatchObject({ transparent: true, depthWrite: false, polygonOffset: true });
-    // Prominent: a strong fill, edges thicker than a one-pixel line, large vertices
-    expect(faces.material.opacity).toBeGreaterThanOrEqual(0.6);
+    // The fill is a tint, so the edges and vertices keep their contrast on it; the edges are
+    // thicker than a one-pixel line and opaque, the vertices large on a dark rim
+    expect(faces.material.opacity).toBeLessThanOrEqual(0.4);
     const edges = overlay.getObjectByName('edges');
     expect(edges.material.linewidth).toBeGreaterThan(1);
+    expect(edges.material.transparent).toBe(false);
+    const rims = overlay.getObjectByName('vertexRims');
+    expect(rims.material.size).toBeGreaterThan(overlay.getObjectByName('vertices').material.size);
+    expect(rims.material.color.getHSL({}).l).toBeLessThan(0.2);
+    expect(rims.renderOrder).toBeLessThan(overlay.getObjectByName('vertices').renderOrder);
     expect(edges.material.worldUnits).toBe(false);
     // The thick lines' segments: the patch triangle's three edges, end to end
     expect(edges.geometry.getAttribute('instanceStart').count).toBe(3);

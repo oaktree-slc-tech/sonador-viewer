@@ -77,6 +77,7 @@ import { attachBrushCursorClearing } from '../toolbox/brushCursor';
 import { attachSegEditorKeyBindings, trackActiveViewport } from '../toolbox/segEditorKeyboard';
 import { createSurfaceSync } from '../utils/surfaceSync';
 import SegEditorSurfaceView from './SegEditorSurfaceView';
+import { callHandoffDialog } from './handoffDialog';
 import { callConfirmDialog } from './confirmDialog';
 import { reset3DToolState } from '../threeDTools/threeDToolState';
 import { clearSegEditorHistory, trackSegEditorHistory } from '../toolbox/segEditorHistory';
@@ -825,6 +826,7 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
             noSurfaceMessage={surfaceRendering ? null : translateSegEditor('The 3D surface is not available yet.')}
             editSegmentationId={component._segVol().volumeId}
             confirm={component._confirm3DEdit}
+            handoff={component._handoff3D}
             notify={component._notify3DEdit}
             onEditError={component._on3DEditError}
             withOwnLabelmapEdit={component._withOwnLabelmapEdit}
@@ -858,6 +860,17 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
   _notify3DEdit = ({ type, title, message }) => {
     uiNotificationService.show({ type, title, message });
   };
+
+  // The handoff dialog of the 3D tools (ohif-viewers#152): the four choices over the findings
+  _handoff3D = ({ reason, destination, findings, proposal, failure }) => callHandoffDialog({
+    uiDialogService: this.props.servicesManager.services.UIDialogService,
+    t: translateSegEditor,
+    reason,
+    destination,
+    findings,
+    proposal,
+    failure,
+  });
 
   _withOwnLabelmapEdit = (fn) => {
     // A labelmap write made for the surface (surface edits and their undo): copied to the vol3d

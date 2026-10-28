@@ -688,3 +688,94 @@ describe('releaseIdlePreview', () => {
     expect(toolGroup.getActivePrimaryMouseButtonTool()).toBe('CircularEraser');
   });
 });
+
+
+describe('resolveSegEditor3DHandoff (ohif-viewers#152)', () => {
+  it('lets the destination proceed without a canvas, and follows the canvas with one', async () => {
+    const { run } = createCommands();
+    expect(await run('resolveSegEditor3DHandoff', { reason: 'labelmap' })).toBe(true);
+
+    const resolve = jest.fn(() => Promise.resolve(false));
+    const unregister = handle3DToolRequest('resolveHandoff', resolve);
+    expect(await run('resolveSegEditor3DHandoff', { reason: 'labelmap' })).toBe(false);
+    expect(resolve).toHaveBeenCalledWith({ reason: 'labelmap' });
+    resolve.mockResolvedValue(true);
+    expect(await run('resolveSegEditor3DHandoff', { reason: 'target' })).toBe(true);
+    unregister();
+  });
+});
+
+describe('undo and redo during a handoff (ohif-viewers#152)', () => {
+  const { set3DHandoff } = require('../threeDTools/threeDToolState');
+
+  it('do not run while a handoff is being resolved', () => {
+    createEditorToolGroup();
+    publishEditor();
+    const { run } = createCommands();
+    mockCore.history.canUndo = true;
+    mockCore.history.canRedo = true;
+    mockCore.history.undo.mockClear();
+    mockCore.history.redo.mockClear();
+    set3DHandoff(true);
+    expect(run('undoSegEditor')).toBe(false);
+    expect(run('redoSegEditor')).toBe(false);
+    expect(mockCore.history.undo).not.toHaveBeenCalled();
+    expect(mockCore.history.redo).not.toHaveBeenCalled();
+    set3DHandoff(false);
+    run('undoSegEditor');
+    expect(mockCore.history.undo).toHaveBeenCalledTimes(1);
+    mockCore.history.canUndo = false;
+    mockCore.history.canRedo = false;
+  });
+});
+
+describe('redo of discarded 3D work (ohif-viewers#152 §7)', () => {
+  const { handle3DToolRequest } = require('../threeDTools/threeDToolState');
+  // A history whose next Redo entry is `entry` (ring / position as the pinned HistoryMemo keeps them)
+  const withRedo = entry => Object.assign(mockCore.history, {
+    canUndo: false, canRedo: true, redoAvailable: 1, ring: [entry, undefined], position: -1, size: 2,
+  });
+  const surfaceOnly = { operationType: 'surface', segmentIndex: 1, surfaceOnly: true, labelmapMemo: null, absorbedBy: null };
+  const written = { operationType: 'surface', segmentIndex: 1, surfaceOnly: false, labelmapMemo: {}, absorbedBy: null };
+  afterEach(() => {
+    Object.assign(mockCore.history, { canUndo: false, canRedo: false, redoAvailable: 0, ring: undefined, position: -1 });
+    mockCore.history.redo.mockClear();
+  });
+
+  it('refuses to replay a surface the 2D slices do not have outside the 3D tools on its segment, and says where to go', () => {
+    createEditorToolGroup();
+    publishEditor({ segments: { 1: { label: 'Liver' } } });
+    const { run, servicesManager } = createCommands();
+    const show = jest.fn();
+    servicesManager.services.UINotificationService = { show };
+
+    // No canvas registered (the Labelmap palette, the canvas gone): refused
+    withRedo(surfaceOnly);
+    expect(run('redoSegEditor')).toBe(false);
+    expect(mockCore.history.redo).not.toHaveBeenCalled();
+    // (this file's i18n mock returns keys uninterpolated)
+    expect(show).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'warning', message: expect.stringMatching(/restore a 3D edit of .* that the 2D slices do not have\. Open the 3D tools on that segment/),
+    }));
+
+    // The canvas says no (another target, or hidden): refused
+    const allowed = jest.fn(() => false);
+    const unregister = handle3DToolRequest('surfaceRedoAllowed', allowed);
+    expect(run('redoSegEditor')).toBe(false);
+    expect(allowed).toHaveBeenCalledWith({ memo: surfaceOnly });
+    expect(mockCore.history.redo).not.toHaveBeenCalled();
+
+    // The canvas says yes: replayed
+    allowed.mockReturnValue(true);
+    expect(run('redoSegEditor')).toBe(true);
+    expect(mockCore.history.redo).toHaveBeenCalledTimes(1);
+    unregister();
+
+    // A replay that carries its voxels needs no context; a grouped entry is judged by its items
+    withRedo(written);
+    expect(run('redoSegEditor')).toBe(true);
+    withRedo([{ operationType: 'labelmap' }, surfaceOnly]);
+    expect(run('redoSegEditor')).toBe(false);
+    expect(mockCore.history.redo).toHaveBeenCalledTimes(2);
+  });
+});

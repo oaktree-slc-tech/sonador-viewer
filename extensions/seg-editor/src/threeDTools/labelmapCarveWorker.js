@@ -7,7 +7,9 @@ import { expose } from 'comlink';
 
 import { assembleCut, prepareCut, prepareRepair } from './deleteSelection.js';
 import { carveLabelmap, deltaLabelmap } from './labelmapCarve.js';
-import { conditionSurface, edgeStatistics, surfaceDiagnostics, triangleTopology } from './meshRepair.js';
+import {
+  conditionSurface, edgeStatistics, surfaceDiagnostics, triangleTopology, writtenSurfaceDiagnostics,
+} from './meshRepair.js';
 import { smoothAndDiagnose } from './smoothSelection.js';
 
 
@@ -80,6 +82,17 @@ const carve = {
       },
       edges: edgeStatistics(points, triangles),
     };
+  },
+
+  /**
+   * The diagnosis of a surface exactly as a delta write would voxelize it (ohif-viewers#152
+   * handoff findings): every face with its multiplicity, coincident positions as one vertex, no
+   * cleanup and no tolerance (meshRepair.writtenSurfaceDiagnostics).
+   *
+   * @param {{ points, polys }} args
+   */
+  async diagnoseWritten({ points, polys }) {
+    return writtenSurfaceDiagnostics({ points, polys });
   },
 };
 

@@ -234,3 +234,28 @@ describe('closeSegEditor', () => {
     expect(commandsManager.runCommand).toHaveBeenCalledWith('setCornerstoneLayout');
   });
 });
+
+describe('closeSegEditor: the 3D handoff (ohif-viewers#152)', () => {
+  const { handle3DToolRequest, reset3DToolState } = require('./threeDTools/threeDToolState');
+  afterEach(() => reset3DToolState());
+
+  it('resolves a 3D surface ahead of the 2D views first, and stays open while the user keeps editing', async () => {
+    const { commandsManager, close } = setup();
+    const resolve = jest.fn(() => Promise.resolve(false));
+    handle3DToolRequest('resolveHandoff', resolve);
+
+    expect(await close()).toBe(false);
+
+    expect(resolve).toHaveBeenCalledWith({ reason: 'exit' });
+    expect(callConfirmDialog).not.toHaveBeenCalled();
+    expect(commandsManager.runCommand).not.toHaveBeenCalled();
+    expect(mockLayoutButton.setIsDisplayedLayoutButton).toHaveBeenCalledWith(false);
+
+    // Resolved (discarded or synchronized): the usual question follows
+    resolve.mockResolvedValue(true);
+    callConfirmDialog.mockResolvedValue(true);
+    expect(await close()).toBe(true);
+    expect(callConfirmDialog).toHaveBeenCalledTimes(1);
+    expect(commandsManager.runCommand).toHaveBeenCalledWith('setCornerstoneLayout');
+  });
+});

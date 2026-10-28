@@ -122,3 +122,48 @@ describe('segEditorHistory', () => {
     });
   });
 });
+
+describe('peekSegEditorHistory', () => {
+  const { peekSegEditorHistory } = require('./segEditorHistory');
+  const item = id => ({ id, restoreMemo: jest.fn() });
+
+  it('returns the newest entries Undo would reach, newest first, without undoing them', () => {
+    const history = new HistoryMemo('test', 3);
+    const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(item);
+    history.push(a);
+    history.push(b);
+    history.push(c);
+    expect(peekSegEditorHistory(2, history)).toEqual([c, b]);
+    expect(peekSegEditorHistory(5, history)).toEqual([c, b, a]);
+    history.push(d); // a falls off the ring
+    expect(peekSegEditorHistory(5, history)).toEqual([d, c, b]);
+    history.undo();
+    expect(peekSegEditorHistory(5, history)).toEqual([c, b]);
+    expect(d.restoreMemo).toHaveBeenCalledWith(true);
+    expect(c.restoreMemo).not.toHaveBeenCalled();
+    expect(peekSegEditorHistory(2, { undoAvailable: 0 })).toEqual([]);
+  });
+});
+
+describe('peekSegEditorRedo', () => {
+  const { peekSegEditorRedo } = require('./segEditorHistory');
+  const item = id => ({ id, restoreMemo: jest.fn() });
+
+  it('returns the entry Redo would replay next, without replaying it', () => {
+    const history = new HistoryMemo('test', 3);
+    const [a, b, c] = ['a', 'b', 'c'].map(item);
+    history.push(a);
+    history.push(b);
+    history.push(c);
+    expect(peekSegEditorRedo(history)).toBeNull();
+    history.undo();
+    expect(peekSegEditorRedo(history)).toBe(c);
+    history.undo();
+    expect(peekSegEditorRedo(history)).toBe(b);
+    expect(c.restoreMemo).toHaveBeenCalledTimes(1);
+    history.redo();
+    expect(peekSegEditorRedo(history)).toBe(c);
+    expect(peekSegEditorRedo({ redoAvailable: 1 })).toBeNull();
+    expect(peekSegEditorRedo(null)).toBeNull();
+  });
+});

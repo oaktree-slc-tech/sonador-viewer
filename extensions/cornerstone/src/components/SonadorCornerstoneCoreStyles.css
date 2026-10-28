@@ -23,3 +23,24 @@
 .sonadorSimpleInputDialog .content .dialogOption input {
 	margin: 0;
 }
+
+/* The Segmentation Editor's 3D handoff dialog (seg-editor handoffDialog): a decision sheet with
+   a facts block, so its type runs 18 / 15 / 14 / 13 px, and a footer with the cancel on the
+   left and Repair plus a pull-down on the right (520px of content) */
+.sonadorSegEditorHandoff {
+	max-width: 568px;
+}
+
+.sonadorSegEditorHandoff .header .title {
+	font-size: 18px;
+	line-height: 24px;
+}
+
+.sonadorSegEditorHandoff .content {
+	padding: 20px 24px 4px;
+}
+
+.sonadorSegEditorHandoff .footer {
+	padding: 16px 24px 20px;
+	text-align: left;
+}

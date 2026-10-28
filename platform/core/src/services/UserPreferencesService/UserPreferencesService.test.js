@@ -3,6 +3,10 @@
 
 import {
   LOCKED_MODELS_WARNING_PREFERENCE_KEY as KEY,
+  SEG_EDITOR_FOLLOW_SELECTION_DEFAULT as FOLLOW_DEFAULT,
+  SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY as FOLLOW_KEY,
+  SEG_EDITOR_MESH_COLOR_DEFAULT as MESH_DEFAULT,
+  SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY as MESH_KEY,
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT as PREVIEW_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY as PREVIEW_KEY,
   UserPreferencesServiceClass,
@@ -130,6 +134,37 @@ describe('UserPreferencesService: local-only keys (the Seg Editor preview colour
 
     const next = new UserPreferencesServiceClass({ storage });
     expect(next.getGeneral(PREVIEW_KEY)).toBe('#00ff00');
+  });
+
+  it('keeps the Segmentation Editor mesh colour the same way: following the segment by default, local-only, a hex colour or auto', async () => {
+    const storage = memoryStorage();
+    const service = new UserPreferencesServiceClass({ storage });
+    expect(MESH_DEFAULT).toBe('auto');
+    expect(service.getGeneral(MESH_KEY)).toBe(MESH_DEFAULT);
+    expect(service.isLocalOnly(MESH_KEY)).toBe(true);
+    expect(service.getGeneralValues()).not.toHaveProperty(MESH_KEY);
+    await service.setGeneral(MESH_KEY, '#336699');
+    expect(storage.items[`sonador.preferences.general.${MESH_KEY}`]).toBe('"#336699"');
+    expect(new UserPreferencesServiceClass({ storage }).getGeneral(MESH_KEY)).toBe('#336699');
+    await service.setGeneral(MESH_KEY, 'auto');
+    expect(service.getGeneral(MESH_KEY)).toBe('auto');
+    const broken = new UserPreferencesServiceClass({ storage: memoryStorage({ [`sonador.preferences.general.${MESH_KEY}`]: '"grey"' }) });
+    expect(broken.getGeneral(MESH_KEY)).toBe(MESH_DEFAULT);
+  });
+
+  it('keeps Follow Selected Segment the same way: off by default, local-only, a boolean only', async () => {
+    const storage = memoryStorage();
+    const service = new UserPreferencesServiceClass({ storage });
+    expect(FOLLOW_DEFAULT).toBe(false);
+    expect(service.getGeneral(FOLLOW_KEY)).toBe(false);
+    expect(service.isLocalOnly(FOLLOW_KEY)).toBe(true);
+    expect(service.getGeneralValues()).not.toHaveProperty(FOLLOW_KEY);
+    await service.setGeneral(FOLLOW_KEY, true);
+    expect(storage.items[`sonador.preferences.general.${FOLLOW_KEY}`]).toBe('true');
+    expect(new UserPreferencesServiceClass({ storage }).getGeneral(FOLLOW_KEY)).toBe(true);
+    expect(() => service.setGeneral(FOLLOW_KEY, 'yes')).toThrow('Invalid value');
+    const broken = new UserPreferencesServiceClass({ storage: memoryStorage({ [`sonador.preferences.general.${FOLLOW_KEY}`]: '"on"' }) });
+    expect(broken.getGeneral(FOLLOW_KEY)).toBe(false);
   });
 
   it('is not overridden by hydration, and ignores a malformed stored value', () => {

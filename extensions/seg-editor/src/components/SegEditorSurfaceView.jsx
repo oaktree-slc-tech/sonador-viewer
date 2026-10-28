@@ -24,6 +24,15 @@
 //   it no longer contains are removed from the working labelmap in the background. Smooth evens
 //   the selected region out with its edge pinned, shown for Apply / Cancel, and the labelmap
 //   follows the moved surface the same way.
+// - Edit-mode display: the target segment's surface is drawn with every edge and vertex in black
+//   over its shading, as Blender's edit mode draws the active object (threeDTools/editModeOverlay),
+//   so the topology the tools act on can be seen; the other segments keep their presentation look.
+// - Synchronization and handoff (ohif-viewers#152): an edit whose result has defects, or of a
+//   surface the 2D views have not caught up with, stays on the surface; the ledger
+//   (threeDTools/syncLedger) keeps the checkpoint the labelmap reflects. Synchronize, or leaving
+//   3D editing (the Labelmap palette, another target, an import, the editor's exit), resolves the
+//   difference through one dialog: Stay in 3D Tools, Repair, Write edits to slices with the
+//   findings acknowledged, or Discard edits back to the checkpoint (resolveHandoff).
 //
 // The view stays mounted once created; while hidden its render loop is paused.
 
@@ -49,6 +58,9 @@ import {
   PointsMaterial,
   SphereGeometry,
 } from 'three';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 
 import {
   createSurfaceModel,
@@ -67,8 +79,17 @@ import {
   SurfaceEditCancelledError,
 } from '../threeDTools/deleteSelection';
 import { buildEditCase } from '../threeDTools/editCase';
+import {
+  createEditModeOverlay,
+  disposeEditModeOverlay,
+  setEditModeOverlayColor,
+  meshColorFor,
+  updateEditModeOverlay,
+} from '../threeDTools/editModeOverlay';
+import { HANDOFF_CHOICES, HANDOFF_REASONS } from '../threeDTools/handoff';
 import LassoInteraction from '../threeDTools/LassoInteraction';
 import { combineSelection, SELECTION_MODES, selectTrianglesInLasso } from '../threeDTools/lassoSelection';
+import { BRUSH_FOOTPRINT_OPACITY, selectionColors, selectionStyle } from '../threeDTools/selectionStyle';
 import {
   growTriangles,
   largestConnectedTriangles,
@@ -93,6 +114,7 @@ import {
 import {
   assembleCutInWorker,
   diagnoseSurfaceInWorker,
+  diagnoseWrittenSurfaceInWorker,
   getLabelmapForEdit,
   patchHolesInWorker,
   prepareCutInWorker,
@@ -100,15 +122,25 @@ import {
   smoothInWorker,
   triangleTopologyInWorker,
 } from '../threeDTools/segmentEdits';
-import { createSurfaceEditMemo, WRITE_KINDS } from '../threeDTools/surfaceEditMemo';
+import { createSurfaceEditMemo, createSurfaceSyncMemo, WRITE_KINDS } from '../threeDTools/surfaceEditMemo';
 import {
+  pendingSurfaceEditWrites,
+  proposeSurfaceSync,
   queueSurfaceEditWrite,
   recordSurfaceEdit,
   setCachedSurface,
   SURFACE_CHANGED_REQUEST,
+  whenSurfaceEditWritesSettled,
 } from '../threeDTools/surfaceEdits';
 import { validateEditGeometry } from '../threeDTools/surfaceValidity';
-import { publishSyncLedger, trackSurfaceEditMemo, unsynchronizedEdits } from '../threeDTools/syncLedger';
+import {
+  isUnsynchronizedMemo,
+  publishSyncLedger,
+  surfaceCheckpoint,
+  trackSurfaceEditMemo,
+  unsynchronizedEdits,
+  unsynchronizedSurfaces,
+} from '../threeDTools/syncLedger';
 import {
   begin3DToolJob,
   effectiveWeldTolerance,
@@ -120,6 +152,7 @@ import {
   is3DSelectionTool,
   is3DTargetEditable,
   PAINT_MODES,
+  set3DHandoff,
   set3DLastEdit,
   set3DPreview,
   set3DSelectionCount,
@@ -130,8 +163,12 @@ import {
   THREE_D_TOOLS,
 } from '../threeDTools/threeDToolState';
 import { ensureBoundsTree, releaseBoundsTree } from '../threejs/meshBvh';
+import { peekSegEditorHistory, undoSegEditorEdit } from '../toolbox/segEditorHistory';
+import { getMeshColor, subscribeMeshColor } from '../utils/meshColor';
+import { animateCamera, FRAME_DURATION_MS, framedCamera } from '../utils/frameSegment';
 import { getPreviewColor, subscribePreviewColor } from '../utils/previewColor';
 import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
+import { getSegEditorUnits } from '../utils/segEditorUnits';
 
 
 const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
@@ -142,10 +179,13 @@ const TOOL_MOUSE_ACTIONS = { left: 'none', right: 'rotate', middle: 'pan', wheel
 // Selection display, in tints of the segment's colour: faces a little over half way to white; the
 // brush's edges and points the same, subdued; the lasso's edges and points much nearer white, so
 // the two tools read differently at a glance
-const FACE_TINT_TOWARD_WHITE = 0.55;
-const PAINT_POINT_TINT_TOWARD_WHITE = 0.7;
-const LASSO_EDGE_TINT_TOWARD_WHITE = 0.8;
-const LASSO_POINT_TINT_TOWARD_WHITE = 0.95;
+// The selection is drawn in the segment's own hue, lit up (threeDTools/selectionStyle.js): a
+// flat, pale, saturated fill at high opacity; its edges and vertices (the wire) in the hue at
+// full saturation and a lightness solved for contrast against the fill and the edit-mode mesh,
+// a 3px outline round the patch and 2px edges inside it, 6px dots at its vertices, drawn after
+// the fill; so it outranks the mesh (a shade of the segment colour, 1px / 3px) and never looks
+// like a pending edit's preview (a translucent fill in the user's colour). The Paint brush
+// footprint is the fill colour at a lower opacity, a ghost of the selection it will become.
 const FALLBACK_SEGMENT_COLOR = '#ffd600';
 const WHITE = new Color(1, 1, 1);
 // The original surface of the edited region, ghosted behind a preview for comparison: faint
@@ -326,6 +366,15 @@ export default class SegEditorSurfaceView extends Component {
     editSegmentationId: PropTypes.string,
     // ({ title, message, confirmText, cancelText }) => Promise<boolean>
     confirm: PropTypes.func,
+    // ({ reason, findings, proposal, failure }) => Promise<HANDOFF_CHOICES id>: the handoff dialog
+    // (components/handoffDialog); without it a handoff cannot be resolved and the switch is refused
+    handoff: PropTypes.func,
+    // () => boolean: undo the last edit of the shared history (Discard back to the checkpoint)
+    undoEdit: PropTypes.func,
+    // (count) => entries: the newest entries of the shared history, newest first, not undone
+    peekHistory: PropTypes.func,
+    // ({ points, polys }) => Promise<diagnosis>: the surface as a write would voxelize it
+    diagnoseWritten: PropTypes.func,
     // ({ type, title, message }) => void
     notify: PropTypes.func,
     // (error) => void: a delete failed
@@ -344,6 +393,9 @@ export default class SegEditorSurfaceView extends Component {
     withOwnLabelmapEdit: fn => fn(),
     // The triangle topology of a surface, built off the main thread (tests inject a local one)
     computeTopology: surface => triangleTopologyInWorker(surface),
+    undoEdit: () => undoSegEditorEdit(),
+    peekHistory: count => peekSegEditorHistory(count),
+    diagnoseWritten: surface => diagnoseWrittenSurfaceInWorker(surface),
     t: (key, options) => (options ? key.replace(/{{(\w+)}}/g, (_m, name) => options[name]) : key),
   };
 
@@ -392,6 +444,8 @@ export default class SegEditorSurfaceView extends Component {
     this._lastEditId = 0;            // identifies the edit the Last-edit line describes
     this._smoothRerun = null;        // timer: recompute the smooth shown for Apply / Cancel
     this._smoothRun = 0;             // invalidates a smooth recompute that was overtaken
+    this._handoff = null;            // the handoff being resolved (resolveHandoff), one at a time
+    this._editMode = null;           // { geometryId, points, group, material } of the target's edit-mode overlay
     this._unsubscribers = [];
     this._generation = 0;             // bumped on unmount: invalidates pending deletes
   }
@@ -478,6 +532,7 @@ export default class SegEditorSurfaceView extends Component {
     if (previewStale) {
       this._dropStalePreview();
     }
+    this._refreshEditMode();
   }
 
   _onSurfaceChanged(options) {
@@ -550,6 +605,95 @@ export default class SegEditorSurfaceView extends Component {
         this.api.setModelColor(geometryId, color);
       }
     });
+    // The overlays derive their colours from the segment's: a recoloured segment recolours them
+    this._refreshEditMode();
+    this._refreshHighlightColors();
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Edit-mode display of the target's surface
+
+  /**
+   * Show the target segment's surface the way Blender's edit mode shows the active object (every
+   * edge and vertex in a shade of the segment's colour, or the user's pick), or take that display
+   * away: drawn while the canvas is shown, the setting is on, and the target can be edited. The mesh itself is pushed back with a polygon
+   * offset meanwhile so the lines and dots on its near side pass the depth test; the far side
+   * stays hidden. While an edit is previewed, the overlay follows the previewed surface (the
+   * preview mesh already carries the offset).
+   */
+  /** The edit-mode mesh colour in effect for a model: the user's pick, or the segment's own shade. */
+  _meshColorInEffect(model) {
+    return `#${meshColorFor(this._segmentColor(model.segmentIndex), getMeshColor()).getHexString()}`;
+  }
+
+  _refreshEditMode() {
+    const state = get3DToolState();
+    const { target } = state;
+    const model = target && !target.disabledReason && this._targetModel(target.segmentIndex);
+    const wanted = !!this.api?.scene && !!this.props.active && !!state.showMesh && !!model?.instance
+      && this._segmentVisible(model.segmentIndex);
+    if (!wanted) {
+      this._removeEditMode();
+      return;
+    }
+    const previewing = this._previewMesh?.geometryId === model.geometryId && this._pendingEdit;
+    const surface = previewing ? this._pendingEdit.after : c3dCache.getGeometry(model.geometryId)?.data;
+    if (!surface?.points?.length) {
+      this._removeEditMode();
+      return;
+    }
+    const color = this._meshColorInEffect(model);
+    const current = this._editMode;
+    if (current && current.geometryId !== model.geometryId) {
+      this._removeEditMode();
+    }
+    if (this._editMode) {
+      // The same surface: its geometry when that changed, its colour when the segment's colour
+      // or the mesh preference did (review of !109: a recoloured segment kept its old shade)
+      if (this._editMode.points !== surface.points) {
+        updateEditModeOverlay(this._editMode.group, surface);
+        this._editMode.points = surface.points;
+      }
+      if (this._editMode.color !== color) {
+        setEditModeOverlayColor(this._editMode.group, color);
+        this._editMode.color = color;
+      }
+      return;
+    }
+    const group = createEditModeOverlay(surface, { color });
+    if (!group) {
+      return;
+    }
+    group.matrixAutoUpdate = false;
+    if (model.instance.matrixWorld) {
+      group.matrix.copy(model.instance.matrixWorld);
+    }
+    const material = model.instance.material;
+    const offset = material && !Array.isArray(material)
+      ? { polygonOffset: material.polygonOffset, polygonOffsetFactor: material.polygonOffsetFactor, polygonOffsetUnits: material.polygonOffsetUnits }
+      : null;
+    if (offset) {
+      material.polygonOffset = true;
+      material.polygonOffsetFactor = 1;
+      material.polygonOffsetUnits = 1;
+      material.needsUpdate = true;
+    }
+    this._editMode = { geometryId: model.geometryId, points: surface.points, color, group, material, offset };
+    this.api.scene.add(group);
+  }
+
+  _removeEditMode() {
+    const current = this._editMode;
+    if (!current) {
+      return;
+    }
+    this._editMode = null;
+    disposeEditModeOverlay(current.group);
+    // The mesh takes its material back as it was, if it still has it
+    if (current.offset && current.material) {
+      Object.assign(current.material, current.offset);
+      current.material.needsUpdate = true;
+    }
   }
 
   // -----------------------------------------------------------------------------------------
@@ -577,6 +721,41 @@ export default class SegEditorSurfaceView extends Component {
     if (camera) {
       this.props.setReferenceCamera(camera);
     }
+  }
+
+  frameExtent(extent, { animate = true } = {}) {
+    // Move onto a segment's extent (Follow Selected Segment): the direction is kept, the target
+    // goes to the segment's bounding sphere and the zoom fits it, over a short animation; the VTK
+    // view takes the camera at the end so the two agree when the canvas is hidden. False when
+    // there is no view or nothing to frame.
+    const look = this.api?.getCameraLookAt?.();
+    if (!look || !extent?.center) {
+      return false;
+    }
+    const camera = this.api.getCamera?.();
+    const aspect = camera?.isOrthographicCamera
+      ? (camera.right - camera.left) / (camera.top - camera.bottom)
+      : camera?.aspect;
+    const from = { position: look.position, focalPoint: look.target, parallelScale: look.parallelScale, parallelProjection: true };
+    const to = framedCamera(from, extent, { aspect: aspect > 0 ? aspect : 1 });
+    if (!to) {
+      return false;
+    }
+    this._cancelFraming?.();
+    let done = false;
+    const cancel = animateCamera({
+      from, to,
+      duration: animate ? FRAME_DURATION_MS : 0,
+      apply: step => this.api?.setCameraLookAt({ position: step.position, target: step.focalPoint, up: look.up, parallelScale: step.parallelScale }),
+      onDone: () => {
+        // Synchronous when not animated, so the cancel is kept only while a movement is in flight
+        done = true;
+        this._cancelFraming = null;
+        this.pushCameraToReference();
+      },
+    });
+    this._cancelFraming = done ? null : cancel;
+    return true;
   }
 
   // -----------------------------------------------------------------------------------------
@@ -659,6 +838,7 @@ export default class SegEditorSurfaceView extends Component {
       set3DToolTarget({ segmentIndex, label, color, disabledReason });
     }
     this._refreshSurfaceHealth();
+    this._refreshEditMode();
     // The synchronization ledger (threeDTools/syncLedger) lives with the session, not with this
     // canvas: a remounted canvas starts from it
     publishSyncLedger();
@@ -718,6 +898,9 @@ export default class SegEditorSurfaceView extends Component {
     if (!!state.showIssues !== this._issuesShown) {
       this._issuesShown = !!state.showIssues;
       this._refreshSurfaceHealth({ force: true });
+    }
+    if (!!state.showMesh !== !!this._editMode) {
+      this._refreshEditMode();
     }
     // The health follows the effective conditioning too, not only the surface version
     if (this._health && this._health.weldFraction !== this._weldFraction()) {
@@ -1011,10 +1194,10 @@ export default class SegEditorSurfaceView extends Component {
     if (!this.api?.scene) {
       return;
     }
-    const tint = selectionTint(this._segmentColor(model.segmentIndex), FACE_TINT_TOWARD_WHITE);
+    const tint = new Color(selectionColors(this._segmentColor(model.segmentIndex), { meshColor: this._meshColorInEffect(model) }).fill);
     if (!this._brush) {
       const material = new MeshBasicMaterial({
-        color: tint, transparent: true, opacity: 0.35, depthTest: false,
+        color: tint, transparent: true, opacity: BRUSH_FOOTPRINT_OPACITY, depthTest: false,
       });
       this._brush = new Mesh(new SphereGeometry(1, 24, 16), material);
       this._brush.renderOrder = 3;
@@ -1191,10 +1374,8 @@ export default class SegEditorSurfaceView extends Component {
       return;
     }
     const painting = get3DToolState().activeTool === THREE_D_TOOLS.Paint;
-    const color = this._segmentColor(model.segmentIndex);
-    const faceTint = selectionTint(color, FACE_TINT_TOWARD_WHITE);
-    const edgeTint = painting ? faceTint : selectionTint(color, LASSO_EDGE_TINT_TOWARD_WHITE);
-    const pointTint = selectionTint(color, painting ? PAINT_POINT_TINT_TOWARD_WHITE : LASSO_POINT_TINT_TOWARD_WHITE);
+    const style = selectionStyle(this._segmentColor(model.segmentIndex), { painting, meshColor: this._meshColorInEffect(model) });
+    this._highlightColorKey = this._highlightColorKeyFor(model);
 
     // A smooth's selection is drawn on the previewed positions while its preview is shown
     const shown = this._previewMesh?.geometryId === model.geometryId ? this._previewMesh.mesh : model.instance;
@@ -1202,7 +1383,7 @@ export default class SegEditorSurfaceView extends Component {
     const local = new Map();
     const positions = [];
     const faceIndex = [];
-    const edgeIndex = [];
+    const edgeUse = new Map();
     const at = v => {
       let index = local.get(v);
       if (index === undefined) {
@@ -1217,7 +1398,16 @@ export default class SegEditorSurfaceView extends Component {
       const b = at(polys[4 * t + 2]);
       const c = at(polys[4 * t + 3]);
       faceIndex.push(a, b, c);
-      edgeIndex.push(a, b, b, c, c, a);
+      // Each edge once, counting the selected triangles on it: one means the patch's boundary
+      [[a, b], [b, c], [c, a]].forEach(([p, q]) => {
+        const key = p < q ? `${p}:${q}` : `${q}:${p}`;
+        const seen = edgeUse.get(key);
+        if (seen) {
+          seen.count += 1;
+        } else {
+          edgeUse.set(key, { p, q, count: 1 });
+        }
+      });
     });
     const position = new BufferAttribute(Float32Array.from(positions), 3);
 
@@ -1229,26 +1419,73 @@ export default class SegEditorSurfaceView extends Component {
     const faces = new BufferGeometry();
     faces.setAttribute('position', position);
     faces.setIndex(new BufferAttribute(Uint32Array.from(faceIndex), 1));
-    group.add(new Mesh(faces, new MeshBasicMaterial({
-      color: faceTint, transparent: true, opacity: painting ? 0.6 : 0.2, side: DoubleSide,
+    // Every part is drawn in the transparent pass, in this order, after the segment's own mesh:
+    // the fill first, then the wire over it. An opaque wire would be drawn in the opaque pass,
+    // before the fill, and the fill would paint over it (the owner's "obscured connections").
+    const fill = new Mesh(faces, new MeshBasicMaterial({
+      color: style.fill, transparent: true, opacity: style.fillOpacity, side: DoubleSide, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
-    })));
+    }));
+    fill.name = 'faces';
+    fill.renderOrder = 1;
+    group.add(fill);
 
-    const edges = new BufferGeometry();
-    edges.setAttribute('position', position);
-    edges.setIndex(new BufferAttribute(Uint32Array.from(edgeIndex), 1));
-    group.add(new LineSegments(edges, new LineBasicMaterial({
-      color: edgeTint, transparent: true, opacity: painting ? 0.5 : 0.7, depthTest: false,
-    })));
+    // Thick lines (three's LineSegments2) take each edge's two end points, unindexed; their
+    // width is in pixels of the canvas, synced before each render as the preview overlay does.
+    // The patch's boundary edges are heavier than its interior ones, in the same colour.
+    const edgeLines = (edges, name, linewidth, renderOrder) => {
+      const segments = new Float32Array(6 * edges.length);
+      edges.forEach(({ p, q }, i) => {
+        segments.set(positions.slice(3 * p, 3 * p + 3), 6 * i);
+        segments.set(positions.slice(3 * q, 3 * q + 3), 6 * i + 3);
+      });
+      const geometry = new LineSegmentsGeometry();
+      geometry.setPositions(segments);
+      const lines = new LineSegments2(geometry, new LineMaterial({
+        color: style.wire, linewidth, worldUnits: false, depthTest: false, depthWrite: false, transparent: true, opacity: 1,
+      }));
+      lines.name = name;
+      lines.renderOrder = renderOrder;
+      lines.onBeforeRender = function syncResolution(renderer) {
+        renderer.getSize(this.material.resolution);
+      };
+      return lines;
+    };
+    const uses = Array.from(edgeUse.values());
+    group.add(edgeLines(uses.filter(edge => edge.count === 1), 'outline', style.boundaryWidth, 1.01));
+    group.add(edgeLines(uses.filter(edge => edge.count > 1), 'edges', style.interiorWidth, 1.02));
 
     const points = new BufferGeometry();
     points.setAttribute('position', position);
-    group.add(new Points(points, new PointsMaterial({
-      color: pointTint, size: painting ? 2 : 4, sizeAttenuation: false, depthTest: false,
-    })));
+    const dots = new Points(points, new PointsMaterial({
+      color: style.wire, size: style.pointSize, sizeAttenuation: false, depthTest: false, depthWrite: false, transparent: true, opacity: 1,
+    }));
+    dots.name = 'vertices';
+    dots.renderOrder = 1.03;
+    group.add(dots);
 
     this._highlight = group;
     this.api.scene.add(group);
+  }
+
+  // The colours a drawn selection was solved from: the segment's, and the mesh colour in effect
+  _highlightColorKeyFor(model) {
+    return `${this._segmentColor(model.segmentIndex) || ''}|${this._meshColorInEffect(model)}`;
+  }
+
+  /**
+   * Redraw the selection when the colours it was solved from changed under it (the segment was
+   * recoloured, or the mesh preference changed; review of !109): its wire's contrast holds
+   * against the mesh colour in effect only while that is the one it was solved against.
+   */
+  _refreshHighlightColors() {
+    if (!this._highlight || !this._selection.size || !this.api) {
+      return;
+    }
+    const model = this.api.getModels().find(entry => entry.geometryId === this._selectionGeometryId);
+    if (model && this._highlightColorKey !== this._highlightColorKeyFor(model)) {
+      this._updateHighlight(model);
+    }
   }
 
   /**
@@ -1300,7 +1537,9 @@ export default class SegEditorSurfaceView extends Component {
 
   _editGuardReason(state, model, needsSelection) {
     const { editSegmentationId } = this.props;
-    if (this._confirming) {
+    // A handoff being resolved holds this guard from its first check to its last, through the
+    // dialog and the awaited write (ohif-viewers#152)
+    if (this._confirming || this._handoff) {
       return 'confirming';
     }
     if (state.preview) {
@@ -1588,8 +1827,11 @@ export default class SegEditorSurfaceView extends Component {
     });
   }
 
-  repairSurface() {
-    // Close the open rims of the target's surface (nothing is written to the labelmap)
+  repairSurface({ previewAlways = false } = {}) {
+    // Close the open rims of the target's surface. The repair itself changes the surface only;
+    // a result with no open, non-manifold or inverted edge left is then synchronized from the
+    // checkpoint (ohif-viewers#152), like an ordinary valid edit. The handoff's Repair shows it
+    // for Apply / Cancel whatever the preview setting.
     const { notify, t } = this.props;
     const title = t('Repair surface');
     return this._runSurfaceEdit({
@@ -1633,6 +1875,7 @@ export default class SegEditorSurfaceView extends Component {
           write: null,
           surfaceOnly: true,
           surfaceOnlyReason: SURFACE_ONLY_REASONS.repair,
+          previewAlways,
           options,
           cut,
           repair: true,
@@ -1751,6 +1994,9 @@ export default class SegEditorSurfaceView extends Component {
   // Edits: preview, apply, cancel, repair
 
   _editSummary(edit, write = edit.surfaceOnly || edit.repair ? 'surfaceOnly' : 'queued') {
+    if (edit.kind === 'sync') {
+      return { kind: 'sync', covered: edit.covered, acknowledged: edit.acknowledged, write };
+    }
     if (edit.kind === 'smooth') {
       return { kind: 'smooth', points: edit.moved, write };
     }
@@ -1848,6 +2094,7 @@ export default class SegEditorSurfaceView extends Component {
     const previous = preview.mesh.geometry;
     preview.mesh.geometry = surfaceToBufferGeometry(surface);
     previous?.dispose?.();
+    this._refreshEditMode();
   }
 
   _removePreviewMesh() {
@@ -2054,6 +2301,13 @@ export default class SegEditorSurfaceView extends Component {
     if (surfaceOnly) {
       memo.surfaceOnly = true;
     }
+    // What the edit did, for the handoff's list of pending edits (ohif-viewers#152)
+    memo.summary = {
+      ...this._editSummary(edit, surfaceOnly ? 'surfaceOnly' : 'queued'),
+      kind: edit.kind === 'smooth' ? 'smooth' : edit.repair ? 'repair' : 'remove',
+      depth: edit.repair ? 0 : edit.depth || 0,
+      reason: edit.surfaceOnlyReason || null,
+    };
     trackSurfaceEditMemo(memo);
     this._lastEditId += 1;
     edit.id = this._lastEditId;
@@ -2105,6 +2359,422 @@ export default class SegEditorSurfaceView extends Component {
         message: t('Surface changed; the 2D views were not updated: the surface\'s check did not complete, so it is not known to be sound. Undo restores the previous surface.'),
       });
     }
+
+    // A repair that left no open, non-manifold or inverted edge is synchronized from the
+    // checkpoint (ohif-viewers#152): the delta from the last surface the labelmap reflects to
+    // the repaired one, bounded to the region the edits since affected. Not a damaged result, so
+    // no acknowledgement is asked for; the write reports like any other.
+    if (edit.repair && cut?.diagnostics?.acceptable === true) {
+      const checkpoint = surfaceCheckpoint(edit.geometryId);
+      if (checkpoint) {
+        notify?.({
+          type: 'info',
+          title,
+          message: t('The repaired surface has no open, non-manifold or inverted edge. The 2D views are being updated from the last synchronized surface ({{count}} edit(s)).', {
+            count: checkpoint.memos.filter(isUnsynchronizedMemo).length,
+          }),
+        });
+        this._synchronizeCheckpoint({ geometryId: edit.geometryId, segmentIndex: edit.segmentIndex }, checkpoint, { acknowledged: null })
+          .catch(() => {});
+      }
+    }
+  }
+
+  // -----------------------------------------------------------------------------------------
+  // Synchronization and handoff (ohif-viewers#152)
+
+  /**
+   * What the handoff discloses about a surface whose 2D views are behind: how many applied edits
+   * they have not received (and how many of those are refused or failed writes), and the defects
+   * of the surface exactly as a conversion would voxelize it (the worker's written diagnosis, not
+   * the panel's conditioned health). `checked` is false when that diagnosis did not complete.
+   * `isTarget` says whether the surface is the one the 3D tools act on now (a repair can only be
+   * attempted on that one).
+   */
+  async _handoffFindings({ geometryId, segmentIndex, checkpoint }) {
+    const { diagnoseWritten, editSegmentationId, t } = this.props;
+    const { target } = get3DToolState();
+    const surface = c3dCache.getGeometry(geometryId)?.data;
+    let defects = null;
+    let checked = false;
+    if (surface?.points?.length) {
+      try {
+        const result = await diagnoseWritten({ points: surface.points, polys: surface.polys });
+        defects = {
+          boundaryEdgeCount: result.boundaryEdgeCount || 0,
+          nonManifoldEdgeCount: result.nonManifoldEdgeCount || 0,
+          inconsistentEdgeCount: result.inconsistentEdgeCount || 0,
+          degenerate: result.degenerate || 0,
+          closed: result.closed === true,
+        };
+        checked = true;
+      } catch (err) {
+        console.error('[SegEditorSurfaceView] the written-surface diagnosis failed', err);
+      }
+    } else {
+      // An emptied surface has nothing to diagnose: the conversion clears what the checkpoint held
+      defects = { boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, inconsistentEdgeCount: 0, degenerate: 0, closed: true };
+      checked = true;
+    }
+    const segment = c3dSegmentations.state.getSegmentation(editSegmentationId)?.segments?.[segmentIndex];
+    // The pending edits, oldest first: what each did (memo.summary) and why the slices do not
+    // have it (its write refused or failed, or the surface kept it: defects, an earlier edit,
+    // an unfinished check, a repair)
+    const edits = checkpoint.memos.filter(isUnsynchronizedMemo).map(memo => {
+      const status = memo.writeReport?.status;
+      return {
+        ...(memo.summary || {}),
+        kind: memo.summary?.kind || (memo.sync ? 'sync' : memo.write?.kind === WRITE_KINDS.smooth ? 'smooth' : 'remove'),
+        depth: memo.summary?.depth ?? memo.write?.depth ?? 0,
+        status: status === 'failed' || status === 'refused' ? status : 'surfaceOnly',
+      };
+    });
+    return {
+      segment: segment?.label || target?.label || t('Segment {{index}}', { index: segmentIndex }),
+      segmentIndex,
+      isTarget: target?.segmentIndex === segmentIndex && !!this._targetModel(segmentIndex),
+      unsynchronized: edits.length,
+      failed: checkpoint.failed,
+      defects,
+      checked,
+      editBox: checkpoint.editBox,
+      edits,
+      lengthUnit: getSegEditorUnits().length,
+    };
+  }
+
+  /**
+   * Resolve every 3D surface of the session whose 2D views are behind before something else
+   * takes over (ohif-viewers#152 handoff): the Labelmap palette, another target, an import, the
+   * editor's exit, or the user's own Synchronize. The surfaces are read from the ledger, not from
+   * the meshes on the canvas: a surface removed whole has no mesh and still has unfinished
+   * writes, and a surface left behind by an earlier target change is still the session's.
+   * Resolves to whether the destination may proceed: at once when nothing is queued and every
+   * surface is synchronized; after the queue settled when writes were still pending (a write
+   * that fails then brings the dialog up); otherwise after the user chose, for each surface, to
+   * discard its unsynchronized edits or to proceed with a conversion that completed, and a final
+   * check found the queue settled and nothing unsynchronized left. Stay in 3D Tools and Repair
+   * keep the 3D surface and refuse the switch; a conversion that failed refuses it too and
+   * offers the remaining choices again.
+   *
+   * The whole run is one transaction: edits are refused and undo / redo do not run from its
+   * first check to its last (the busy latch, `_confirming` and the tool state's `handoff`).
+   *
+   * @param {{ reason?: string, segmentIndex?: number }} [options] - HANDOFF_REASONS, and for a
+   *   target change the segment selected (the same segment is no change)
+   * @returns {Promise<boolean>}
+   */
+  resolveHandoff({ reason = HANDOFF_REASONS.sync, segmentIndex } = {}) {
+    const state = get3DToolState();
+    const { target } = state;
+    if (!this.api || !this.props.editSegmentationId) {
+      return Promise.resolve(true);
+    }
+    if (reason === HANDOFF_REASONS.target && segmentIndex !== undefined && Number(segmentIndex) === target?.segmentIndex) {
+      return Promise.resolve(true);
+    }
+    if (this._handoff) {
+      return this._handoff;
+    }
+    const { notify, t } = this.props;
+    const title = reason === HANDOFF_REASONS.sync ? t('Synchronize the 3D surface') : t('3D surface not synchronized');
+    // An edit shown for Apply / Cancel or still computing is unfinished work too: it is refused
+    // before anything else, synchronized surface or not
+    const guard = this._confirming ? 'confirming' : state.preview ? 'previewPending' : state.busy ? 'busy' : null;
+    if (guard) {
+      return Promise.resolve(this._refuse(title, 'handoff', guard));
+    }
+    // Nothing pending and nothing unsynchronized: the destination may proceed at once. A write
+    // still queued is neither synchronized nor failed, so it goes through the guarded run, which
+    // lets the queue settle and judges the session after
+    if (!pendingSurfaceEditWrites() && !unsynchronizedSurfaces().length) {
+      if (reason === HANDOFF_REASONS.sync) {
+        notify?.({ type: 'info', title, message: t('The 3D surface and the 2D views are synchronized.') });
+      }
+      return Promise.resolve(true);
+    }
+    this._handoff = this._runHandoff(reason, title, { segmentIndex }).finally(() => {
+      this._handoff = null;
+    });
+    return this._handoff;
+  }
+
+  /**
+   * The segment a target change goes to, for the dialog to name what the user did; null when
+   * the reason is not a target change or the segment is not known (Add segment).
+   */
+  _handoffDestination(reason, segmentIndex) {
+    if (reason !== HANDOFF_REASONS.target || segmentIndex === undefined || segmentIndex === null) {
+      return null;
+    }
+    const index = Number(segmentIndex);
+    const segment = c3dSegmentations.state.getSegmentation(this.props.editSegmentationId)?.segments?.[index];
+    return segment ? { segmentIndex: index, label: segment.label || this.props.t('Segment {{index}}', { index }) } : null;
+  }
+
+  async _runHandoff(reason, title, { segmentIndex: destinationIndex } = {}) {
+    const { editSegmentationId, handoff, notify, t } = this.props;
+    const destination = this._handoffDestination(reason, destinationIndex);
+    const generation = this._generation;
+    const live = () => this._isMounted && this._generation === generation;
+    // Held for the whole run: no edit starts, no undo or redo runs, until the answer is final
+    const job = begin3DToolJob();
+    this._confirming = true;
+    set3DHandoff(true);
+    const release = () => {
+      this._confirming = false;
+      set3DHandoff(false);
+      end3DToolJob(job);
+    };
+    let failure = null;
+    try {
+      for (;;) {
+        // A write still queued is neither synchronized nor failed: let the queue settle first
+        while (pendingSurfaceEditWrites() > 0) {
+          await whenSurfaceEditWritesSettled();
+        }
+        if (!live()) {
+          return false;
+        }
+        publishSyncLedger();
+        const surfaces = unsynchronizedSurfaces();
+        if (!surfaces.length) {
+          if (reason === HANDOFF_REASONS.sync) {
+            notify?.({ type: 'info', title, message: t('The 3D surface and the 2D views are synchronized.') });
+          }
+          return true;
+        }
+        if (!handoff) {
+          notify?.({ type: 'warning', title, message: t('The 3D surface is ahead of the 2D views and the choice cannot be asked here. Undo the edits or synchronize from the 3D palette.') });
+          return false;
+        }
+        // The target's surface first, then any other the session still holds
+        const targetIndex = get3DToolState().target?.segmentIndex;
+        const entry = surfaces.find(candidate => candidate.segmentIndex === targetIndex) || surfaces[0];
+        if (failure && failure.geometryId !== entry.geometryId) {
+          failure = null;
+        }
+        const { geometryId, segmentIndex, checkpoint } = entry;
+
+        const labelmapRevision = this._labelmapRevision;
+        const started = Date.now();
+        const findings = await this._handoffFindings(entry);
+        let proposal = null;
+        if (!failure) {
+          try {
+            proposal = await proposeSurfaceSync({
+              before: checkpoint.surface,
+              after: checkpoint.memos[checkpoint.memos.length - 1].after,
+              editBox: checkpoint.editBox,
+              segmentIndex,
+              labelmapVolume: getLabelmapForEdit(editSegmentationId)?.volume,
+            }, { editSegmentationId });
+          } catch (err) {
+            failure = { message: String(err?.message || err), stage: 'proposal', geometryId };
+          }
+        }
+        this._debug({
+          operation: 'handoff', stage: 'findings', reason, segmentIndex, ms: Date.now() - started,
+          unsynchronized: findings.unsynchronized, failed: findings.failed, checked: findings.checked,
+          defects: findings.defects, proposal, failure,
+        });
+        if (!live() || this._labelmapRevision !== labelmapRevision) {
+          return false;
+        }
+
+        const choice = await handoff({
+          reason, destination, findings, proposal, failure: failure && { message: failure.message, stage: failure.stage },
+        });
+        this._debug({ operation: 'handoff', stage: 'choice', reason, segmentIndex, choice });
+        if (!live()) {
+          return false;
+        }
+        switch (choice) {
+          case HANDOFF_CHOICES.discard: {
+            const discarded = findings.unsynchronized;
+            if (!this._discardToCheckpoint(geometryId)) {
+              notify?.({ type: 'error', title, message: t('The surface changes could not be discarded: the history does not end with them. Undo them by hand.') });
+              return false;
+            }
+            notify?.({ type: 'info', title, message: t('{{count}} unsynchronized edit(s) discarded; the 3D surface is back at the last synchronized state. Redo restores them.', { count: discarded }) });
+            // The next surface, if any, and the final check
+            continue;
+          }
+          case HANDOFF_CHOICES.repair:
+            notify?.({ type: 'info', title, message: t('The repair is shown for Apply / Cancel. A repaired surface with no defect left is synchronized when applied; then switch again.') });
+            // The repair is an edit of its own: the transaction ends before it starts
+            this._handoff = null;
+            release();
+            this.repairSurface({ previewAlways: true });
+            return false;
+          case HANDOFF_CHOICES.proceed: {
+            const acknowledged = {
+              reason,
+              defects: findings.checked && findings.defects && !findings.defects.closed ? findings.defects : null,
+              checked: findings.checked,
+              unsynchronized: findings.unsynchronized,
+              failed: findings.failed,
+              proposal: proposal && {
+                domain: proposal.domain, domainVoxels: proposal.domainVoxels,
+                remove: proposal.remove, add: proposal.add, dropped: proposal.dropped,
+              },
+              at: new Date().toISOString(),
+            };
+            const synchronized = await this._synchronizeCheckpoint({ geometryId, segmentIndex }, checkpoint, { acknowledged });
+            if (synchronized === null) {
+              // The surface or the target changed under the dialog: nothing was recorded
+              return false;
+            }
+            if (synchronized !== true) {
+              failure = { message: this._lastSyncMemo?.writeReport?.message || t('the write did not complete'), stage: 'write', geometryId };
+            }
+            // Written or not, the loop judges the session again: the queue must be settled and
+            // nothing unsynchronized left before the destination is let through
+            continue;
+          }
+          default:
+            return false;
+        }
+      }
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Whether a history entry whose replay restores a surface without its voxels (a 3D edit a
+   * handoff discarded, a failed record) may be redone now: only while this canvas is shown and
+   * that surface's segment is the editable target, where the replay re-enters the ledger, the
+   * footer counts it and the next handoff resolves it. The Redo command asks before replaying.
+   */
+  surfaceRedoAllowed({ memo } = {}) {
+    const { target } = get3DToolState();
+    return !!memo && !!this.props.active && !!this.api && !!target && !target.disabledReason
+      && target.segmentIndex === memo.segmentIndex && !!this._targetModel(memo.segmentIndex)
+      && !this._handoff && !this._pendingEdit;
+  }
+
+  /**
+   * Record and run the write that brings the labelmap from the checkpoint to the current surface
+   * (createSurfaceSyncMemo), covering the unsynchronized edits in between, and wait for it.
+   * Resolves true when the labelmap now reflects the surface (something written, or nothing to
+   * write), false when the write was refused or failed (the record stands as unsynchronized, for
+   * undo), and null when nothing was recorded because the surface or target changed meanwhile.
+   *
+   * @param {{ geometryId: string, segmentIndex: number }} surfaceRef - the surface, which need
+   *   not have a mesh on the canvas any more (a whole-surface removal)
+   * @param {Object} checkpoint - syncLedger.surfaceCheckpoint
+   * @param {{ acknowledged: Object|null }} options - the findings the user acknowledged, or null
+   *   for the write that follows a closed repair
+   */
+  async _synchronizeCheckpoint({ geometryId, segmentIndex }, checkpoint, { acknowledged }) {
+    const { editSegmentationId, notify, withOwnLabelmapEdit, t } = this.props;
+    const title = t('Synchronize the 3D surface');
+    const surface = c3dCache.getGeometry(geometryId)?.data;
+    const labelmap = getLabelmapForEdit(editSegmentationId);
+    const last = checkpoint.memos[checkpoint.memos.length - 1];
+    if (!surface || surface.points !== last.after.points || !labelmap || !checkpoint.editBox) {
+      this._refuse(title, 'sync', 'staleSurface');
+      return null;
+    }
+    if (!this._validityCheck(editSegmentationId, segmentIndex, labelmap.volume)()) {
+      this._refuse(title, 'sync', 'noTarget', get3DToolState().target?.disabledReason);
+      return null;
+    }
+    this._lastEditId += 1;
+    const edit = {
+      id: this._lastEditId,
+      kind: 'sync',
+      operation: 'sync',
+      geometryId,
+      segmentIndex,
+      before: checkpoint.surface,
+      after: { points: surface.points, polys: surface.polys },
+      editBox: checkpoint.editBox,
+      covered: checkpoint.memos.filter(isUnsynchronizedMemo).length,
+      acknowledged,
+      pending: null,
+    };
+    const memo = createSurfaceSyncMemo({
+      geometryId,
+      segmentIndex,
+      before: edit.before,
+      after: edit.after,
+      editBox: edit.editBox,
+      covers: checkpoint.memos,
+      acknowledged,
+      labelmapVolume: labelmap.volume,
+      deps: {
+        setSurface: (id, next, options) => setCachedSurface(this.props.segmentationId, id, next, options),
+        queueWrite: pending => {
+          edit.pending = this._queueWrite(pending, edit);
+          return edit.pending;
+        },
+        withOwnEdit: withOwnLabelmapEdit,
+      },
+    });
+    edit.memo = memo;
+    memo.summary = { kind: 'sync', covered: checkpoint.memos.length, depth: 0, reason: null };
+    this._lastSyncMemo = memo;
+    trackSurfaceEditMemo(memo);
+    if (this._developerTools()) {
+      this._lastEditCase = buildEditCase({ edit, memo });
+    }
+    recordSurfaceEdit(memo);
+    set3DLastEdit({ id: edit.id, ...this._editSummary(edit, 'queued') });
+    const started = Date.now();
+    await Promise.resolve(edit.pending).catch(() => false);
+    publishSyncLedger();
+    const report = memo.writeReport || {};
+    const synchronized = report.status === 'written' || report.status === 'nothing';
+    this._debug({
+      operation: 'sync', outcome: report.status || 'unknown', acknowledged: !!acknowledged?.defects,
+      ms: Date.now() - started, covered: edit.covered, removed: report.removed, added: report.added,
+      dropped: report.dropped, farField: report.farField, domainVoxels: report.domainVoxels,
+    });
+    if (synchronized && this._isMounted) {
+      notify?.({
+        type: 'info',
+        title,
+        message: report.status === 'nothing'
+          ? t('The 2D views already matched the 3D surface: nothing was written.')
+          : t('2D views updated from the 3D surface: {{removed}} voxel(s) removed, {{added}} added, {{dropped}} left alone because they changed hands.', {
+            removed: report.removed || 0, added: report.added || 0, dropped: report.dropped || 0,
+          }),
+      });
+    }
+    return synchronized;
+  }
+
+  /**
+   * Discard the unsynchronized edits of a surface by undoing them, newest first, until the
+   * ledger holds none (the surface is back at the checkpoint; Redo restores the edits). The
+   * history is inspected first: its newest entries must be exactly those edits, else nothing is
+   * undone and false is returned, so another segment's or another tool's work is never reverted
+   * on the way.
+   */
+  _discardToCheckpoint(geometryId) {
+    const { undoEdit, peekHistory } = this.props;
+    const checkpoint = surfaceCheckpoint(geometryId);
+    if (!checkpoint) {
+      return true;
+    }
+    const expected = checkpoint.memos.slice().reverse();
+    const top = peekHistory?.(expected.length) || [];
+    const owned = top.length === expected.length && expected.every((memo, i) => top[i] === memo);
+    if (!owned) {
+      this._debug({ operation: 'discard', outcome: 'refused', reason: 'history', expected: expected.length, found: top.length });
+      return false;
+    }
+    let undone = 0;
+    while (unsynchronizedEdits(geometryId) > 0 && undone < expected.length) {
+      if (!undoEdit?.()) {
+        break;
+      }
+      undone += 1;
+    }
+    publishSyncLedger();
+    return unsynchronizedEdits(geometryId) === 0;
   }
 
   // The Last-edit line follows the write of the edit it describes
@@ -2159,6 +2829,13 @@ export default class SegEditorSurfaceView extends Component {
     }
   };
 
+  _onMeshColor = () => {
+    // The preference is set before the service broadcasts it: the mesh takes the colour now in
+    // effect, and the selection's wire is solved again against it
+    this._refreshEditMode();
+    this._refreshHighlightColors();
+  };
+
   _removeChangeOverlay() {
     if (this._changeOverlay) {
       disposeChangeOverlay(this._changeOverlay);
@@ -2171,7 +2848,8 @@ export default class SegEditorSurfaceView extends Component {
     // layout's, so they outlive this canvas.
     const { editSegmentationId, notify, onEditError, withOwnLabelmapEdit, t } = this.props;
     const smooth = memo.write?.kind === WRITE_KINDS.smooth;
-    const title = smooth ? t('Smooth selected faces') : t('Remove selected faces');
+    const sync = memo.write?.kind === WRITE_KINDS.sync;
+    const title = sync ? t('Synchronize the 3D surface') : smooth ? t('Smooth selected faces') : t('Remove selected faces');
     const write = queueSurfaceEditWrite(memo, {
       editSegmentationId,
       withOwnEdit: withOwnLabelmapEdit,
@@ -2185,6 +2863,8 @@ export default class SegEditorSurfaceView extends Component {
           })
           : refused?.writeReport?.reason === 'predecessor'
             ? t('The 2D views were not updated: an earlier edit of this surface did not reach them, so this one was not written either. Undo the edits to restore the surface.')
+            : sync
+            ? t('The segment changed before the 2D views could be synchronized. The 3D surface stays ahead of them.')
             : smooth
             ? t('The segment changed before the 2D views could be updated. Undo the smoothing to restore the surface.')
             : t('The segment changed before the 2D views could be updated. Undo the removal to restore the surface.'),
@@ -2252,6 +2932,7 @@ export default class SegEditorSurfaceView extends Component {
     this._unsubscribers.push(
       subscribe3DToolState(this._apply3DToolState),
       subscribePreviewColor(this._onPreviewColor),
+      subscribeMeshColor(this._onMeshColor),
       handle3DToolRequest('deleteSelection', () => this.deleteSelectedPoints()),
       handle3DToolRequest('smoothSelection', () => this.smoothSelection()),
       handle3DToolRequest('clearSelection', () => this.clearSelection()),
@@ -2260,6 +2941,9 @@ export default class SegEditorSurfaceView extends Component {
       handle3DToolRequest('applyPreview', () => this.applyPreview()),
       handle3DToolRequest('cancelPreview', () => this.cancelPreview()),
       handle3DToolRequest('repairSurface', () => this.repairSurface()),
+      handle3DToolRequest('synchronizeSurface', () => this.resolveHandoff({ reason: HANDOFF_REASONS.sync })),
+      handle3DToolRequest('resolveHandoff', options => this.resolveHandoff(options)),
+      handle3DToolRequest('surfaceRedoAllowed', options => this.surfaceRedoAllowed(options)),
       handle3DToolRequest('editCase', () => this.getLastEditCase()),
       handle3DToolRequest(SURFACE_CHANGED_REQUEST, options => this._onSurfaceChanged(options)),
     );
@@ -2284,6 +2968,7 @@ export default class SegEditorSurfaceView extends Component {
         this.publishTarget();
       } else {
         this.pushCameraToReference();
+        this._refreshEditMode();
       }
       this.api.setRenderingPaused(!active);
       this._apply3DToolState();
@@ -2307,6 +2992,8 @@ export default class SegEditorSurfaceView extends Component {
     c3dEventTarget.removeEventListener(
       Events.SEGMENTATION_REPRESENTATION_MODIFIED, this._onRepresentationModified);
     c3dEventTarget.removeEventListener(Events.SEGMENTATION_DATA_MODIFIED, this._onLabelmapModified);
+    this._cancelFraming?.();
+    this._cancelFraming = null;
     this._isMounted = false;
     this._unsubscribers.forEach(unsubscribe => unsubscribe());
     this._unsubscribers = [];
@@ -2322,6 +3009,7 @@ export default class SegEditorSurfaceView extends Component {
     // canvas starts clean; the user can make the edit again.)
     this._abandonPreview();
     this._removeIssuesOverlay();
+    this._removeEditMode();
     this._health = null;
     set3DPreview(null);
     set3DSurfaceHealth(null);
