@@ -123,7 +123,7 @@ export function RepairSurfaceCard({
             <ColorSwatch
               id="seg-editor-apply-repair-color"
               label={t('Preview colour')}
-              hint={t('The colour an edit awaiting Apply is drawn in. Also in Settings > General > Seg Editor.')}
+              hint={t('The colour an edit awaiting Apply is drawn in. Also in Settings > General > Segmentation Editor.')}
               value={previewColor}
               onChange={setPreviewColor}
             />

@@ -105,7 +105,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
   const segments = key => SEGMENTS[key].map(value => ({ value, label: t(SEGMENT_LABELS[value]) }));
 
   // The colour a pending edit's changed faces are drawn in (a user preference, also on the
-  // Settings page's Seg Editor section)
+  // Settings page, General > Segmentation Editor)
   const previewColor = usePreviewColor();
   // The mesh colour: following the segment (the default) or the user's pick; the swatch shows the
   // colour in effect for the target and a pick sets it (the Model Actions menu offers the
@@ -116,7 +116,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
     <ColorSwatch
       id={id}
       label={t('Preview colour')}
-      hint={t('The colour an edit awaiting Apply is drawn in. Also in Settings > General > Seg Editor.')}
+      hint={t('The colour an edit awaiting Apply is drawn in. Also in Settings > General > Segmentation Editor.')}
       value={previewColor}
       onChange={setPreviewColor}
     />
@@ -269,7 +269,7 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
             <ColorSwatch
               id="seg-editor-mesh-color"
               label={t('Mesh colour')}
-              hint={t('The colour the mesh of the selected segment is drawn in. Also in Settings > General > Seg Editor.')}
+              hint={t('The colour the mesh of the selected segment is drawn in. Also in Settings > General > Segmentation Editor.')}
               value={effectiveMeshColor}
               onChange={setMeshColor}
             />

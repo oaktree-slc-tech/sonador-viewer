@@ -1,0 +1,169 @@
+@import '@ohif/sonador-viewer/src/styles/breakpoints';
+
+// The settings row: a label column and the controls beside it (SettingRowNG). The pages put 30px
+// between rows, matching the gap the header divider leaves above the first one.
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+
+  @include xs {
+    flex-wrap: wrap;
+  }
+
+  // For a control taller than one line, align the label to the control's first line.
+  &.rowTop {
+    align-items: flex-start;
+  }
+}
+
+.rowLabel {
+  font-size: 16px;
+  line-height: 18.75px;
+  color: #d3d3d3;
+  margin: 0;
+  // Shared label column: without it each control is offset by the width of its own label.
+  flex: none;
+  min-width: 150px;
+
+  @include xs {
+    min-width: 0;
+  }
+}
+
+.rowControls {
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px;
+  min-width: 0;
+}
+
+// One control: its line (the control and its label) and the help text beneath.
+.control {
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px;
+  min-width: 0;
+}
+
+.controlLine {
+  display: flex;
+  align-items: center;
+  // Must equal .rowLabel's, so flex-start alignment puts the control on the label's line.
+  line-height: 18.75px;
+
+  // The kit's Label ships in the viewer palette (text-foreground, leading-none); here it takes
+  // the page's label grey and line height. Two classes, so the rule wins over the utilities.
+  .controlLabel {
+    font-size: 16px;
+    line-height: 18.75px;
+    color: #d3d3d3;
+    cursor: pointer;
+  }
+
+  // The kit switch is 28px wide and the colour well 22px; the gaps make up the difference, so the
+  // labels of the two controls start at the same x (40px in).
+  column-gap: 12px;
+
+  &.controlLineColor {
+    column-gap: 18px;
+  }
+}
+
+// The tooltip's anchor around a control: the control's own box, nothing more
+.hintAnchor {
+  display: inline-flex;
+}
+
+.help {
+  margin: 0;
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #60646d;
+}
+
+.tooltip {
+  max-width: 24rem;
+  white-space: normal;
+}
+
+// The on / off control is the kit's Switch in the kit's own colours, as the viewer draws it; the
+// 16px switch sits on the label's line like the colour well does.
+
+// A row whose control is the kit's Numeric stepper (Settings > General, the attempt budget). The
+// stepper is both taller and wider than a checkbox, so the 8px gap that suits a checkbox leaves its
+// label crowded against the field. Set the gap and the surrounding rhythm from the control's own
+// size instead of inheriting the checkbox's.
+.numeric {
+  column-gap: 16px;
+  // Adds to the container's 8px row-gap, so this row is separated from the block above it by
+  // more than its own help text is separated from it -- which is what groups the two.
+  margin-top: 10px;
+
+  // The ui-next stepper ships in the viewer palette: `border-input` and `--ring` are the aqua
+  // hsl(197 50% 50%), `bg-background` is black, and the chevrons are `--primary` blue. Settings
+  // uses the study-list palette -- a transparent field inside a #60646d outline that goes white
+  // on hover and focus (HotkeyFieldNG, the Window Level presets). Only the colours change here;
+  // the component's structure, sizing and behaviour are its own.
+  //
+  // Repainted locally rather than by changing --input/--border, which also colour form controls
+  // across every extension -- the same reasoning that put --overlay-line beside them in
+  // tailwind-integration.css instead of editing them. This module is the shared partial that
+  // note in the General tab once asked for: every kit control Settings repaints is repainted here.
+  //
+  // Element selectors, scoped to this hashed class, so nothing reaches another input. The two
+  // nested divs are Numeric.Container and the stepper's own bordered box.
+  > div > div {
+    background: none;
+    border-color: #60646d;
+    border-radius: 5px;
+  }
+
+  &:hover > div > div,
+  > div > div:focus-within {
+    border-color: #ffffff;
+  }
+
+  input {
+    background: none;
+    color: #ffffff;
+    box-shadow: none;
+
+    // The base Input tints on hover and carries an aqua focus ring; here the outline around the
+    // whole control is what answers both.
+    &:hover {
+      background: none;
+    }
+
+    &:focus,
+    &:focus-visible {
+      outline: none;
+      box-shadow: none;
+    }
+  }
+
+  // Increment / decrement chevrons. #b0b3ba, not the #60646d used for the outline: these are
+  // 12px glyphs, and at that size the outline grey has too little contrast against the panel to
+  // read as arrows at all. Same grey the Download Manager uses for its row controls.
+  button {
+    color: #b0b3ba;
+    // Wider hit target. Height is left alone deliberately -- the two buttons stack to exactly
+    // the input's height, and growing them would grow the whole control.
+    width: 22px;
+
+    &:hover:not(:disabled) {
+      background: none;
+      color: #ffffff;
+    }
+
+    // Disabled state is left to the Button's own opacity: dimming the colour as well would
+    // reproduce the illegibility this rule exists to fix.
+
+    svg {
+      // Lucide draws at stroke-width 2 for a 24px box; a little more holds up at 12px.
+      stroke-width: 2.25;
+    }
+  }
+}

@@ -1,6 +1,19 @@
+// Settings > General: two tabs under one header and one footer.
+// APPLICATION holds what belongs to the application as a whole: the language and the
+// offline-storage transfer settings. SEGMENTATION EDITOR holds the editor's own preferences: how it
+// opens, follows a selection, and what its 3D tools draw. The tabs are the dialog tabs the Viewer
+// Metadata page uses (components/TabsNG); the tab bodies are presentational
+// (ApplicationSettingsTab, SegEditorSettingsTab) and every field's state, hydration and save live
+// here, so one Save posts the general section once for both tabs.
+//
+// Persistence is unchanged: the language, the offline-transfer settings and the locked-models
+// warning are the server-side `general` section; the three segEditor* keys are
+// UserPreferencesService's local-only keys (kept in this browser, never posted). A section POST
+// replaces the section wholesale, so Save composes it from every runtime holder
+// (lib/generalPreferences) with this page's own fields laid over it.
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import classNames from 'classnames';
 
 import {
   DownloadManagerService,
@@ -20,10 +33,8 @@ import {
   UserPreferencesServiceEvents,
 } from '@ohif/core';
 import i18n from '@ohif/i18n';
-import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
-import { ReactComponent as CaretDownIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
-import { Numeric } from '@ohif/ui-next';
 
+import TabsNG from '../../../../components/TabsNG/TabsNG';
 import { showSaveOutcome } from '../../../../components/UserPreferences/saveOutcomeNotification';
 import {
   ARCHIVE_TRANSFER_DEFAULT,
@@ -32,443 +43,332 @@ import {
   PREFERENCES_VERSION,
   RETRY_ATTEMPTS_PREFERENCE_KEY,
 } from '../../../../constants/preferences';
+import { composeGeneralPreferenceValues } from '../../../../lib/generalPreferences';
 import { createHydrationLatch } from '../../../../lib/preferenceHydration';
 import { useUpdateUserPreferenceSection } from '../../../../queries/preferences';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
 import TabFooterNG from '../TabFooterNG/TabFooterNG';
 import TabHeaderNG from '../TabHeaderNG/TabHeaderNG';
 
-import styles from './GeneralTabNG.module.scss';
-import previewColorStyles from './PreviewColorOption.module.scss';
+import ApplicationSettingsTab from './ApplicationSettingsTab';
+import SegEditorSettingsTab, { MESH_SWATCH_FALLBACK } from './SegEditorSettingsTab';
 
-// Latch keys for the fields on this tab.
+import styles from './GeneralTabNG.module.scss';
+
+export const TAB_APPLICATION = 'application';
+export const TAB_SEG_EDITOR = 'seg-editor';
+
+// Latch keys for the fields on this page: the two offline-storage fields by name, the service's
+// keys by their preference key.
 const ARCHIVE_FIELD = 'archiveTransfer';
 const RETRY_FIELD = 'retryAttempts';
-const LOCKED_MODELS_FIELD = 'lockedModelsWarning';
-const PREVIEW_COLOR_FIELD = 'segEditorPreviewColor';
-const MESH_COLOR_FIELD = 'segEditorMeshColor';
-const FOLLOW_SELECTION_FIELD = 'segEditorFollowSelection';
+const LOCKED = LOCKED_MODELS_WARNING_PREFERENCE_KEY;
+const FOLLOW = SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY;
+const PREVIEW = SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY;
+const MESH = SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY;
+const SERVICE_FIELDS = [LOCKED, FOLLOW, PREVIEW, MESH];
+const ALL_FIELDS = [ARCHIVE_FIELD, RETRY_FIELD, ...SERVICE_FIELDS];
 
-const lockedModelsWarningDefault = () =>
-  UserPreferencesService?.GENERAL_DEFAULTS?.[LOCKED_MODELS_WARNING_PREFERENCE_KEY] ?? true;
-const previewColorDefault = () =>
-  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY] ?? SEG_EDITOR_PREVIEW_COLOR_DEFAULT;
-const meshColorDefault = () =>
-  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY] ?? SEG_EDITOR_MESH_COLOR_DEFAULT;
-const followSelectionDefault = () =>
-  UserPreferencesService?.GENERAL_DEFAULTS?.[SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY] ?? SEG_EDITOR_FOLLOW_SELECTION_DEFAULT;
+const FALLBACK_DEFAULTS = {
+  [LOCKED]: true,
+  [FOLLOW]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  [PREVIEW]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
+  [MESH]: SEG_EDITOR_MESH_COLOR_DEFAULT,
+};
+
+const defaultOf = key => UserPreferencesService?.GENERAL_DEFAULTS?.[key] ?? FALLBACK_DEFAULTS[key];
+const stored = key => UserPreferencesService?.getGeneral?.(key) ?? defaultOf(key);
 
 export default function GeneralTabNG() {
   // The preferences namespace, which is where every string on this surface is registered. Without
   // it i18next looks in the default namespace, finds nothing, and renders the key itself.
   const { t } = useTranslation('UserPreferencesModal');
-  const { availableLanguages, language: currentLanguage } = i18n;
-
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-
   const { isDesktop } = useDeviceStore();
 
-  const selectedLanguage = availableLanguages.find(({ value }) => value === currentLanguage);
+  const [tab, setTab] = useState(TAB_APPLICATION);
 
-  const ref = useRef(null);
-  const callback = useCallback(() => setIsDropdownOpen(false), [setIsDropdownOpen]);
+  // Which fields the user has changed. Per FIELD, not per form: the section is saved wholesale, so
+  // one shared flag would let an edit to one control block hydration of the others and then post
+  // their defaults over the values already stored. Never cleared by saving -- the startup GET
+  // that was already in flight can still land afterwards (lib/preferenceHydration).
+  const latch = useRef(createHydrationLatch()).current;
+  // The fields changed since the last Save, for the save message
+  const changed = useRef(new Set()).current;
 
-  useClickOutside(ref, callback);
+  // The latest authoritative value of each field: what the page opened with, what hydration
+  // delivered since (whether or not the field was being edited: the latch protects the draft, not
+  // this), or what was last saved. Cancel puts it back, and the fields are compared against it to
+  // know whether changes are pending (the settings console's pattern: Cancel appears with the
+  // first change).
+  const [baseline, setBaseline] = useState({});
+  const rebase = (field, value) => setBaseline(current => ({ ...current, [field]: value }));
 
-  const handleSelectLanguage = (language) => {
-    i18n.changeLanguage(language.value);
-
-    setIsDropdownOpen(false);
+  const edit = (field, apply) => value => {
+    latch.markEdited(field);
+    changed.add(field);
+    apply(value);
   };
 
-  // Offline-storage transfer strategy (ohif-viewers#129, FR-1).
-  //
-  // This tab is the General preferences surface the application actually renders: the account menu
-  // and the sidebar both route to /settings, and the legacy UserPreferences modal is not on that
-  // path. Hydrated state lives on DownloadManagerService, which is where a starting job reads it.
+  // Offline-storage transfer strategy (ohif-viewers#129, FR-1). This page is the General
+  // preferences surface the application actually renders: the account menu and the sidebar both
+  // route to /settings, and the legacy UserPreferences modal is not on that path. Hydrated state
+  // lives on DownloadManagerService, which is where a starting job reads it.
   const [archiveTransfer, setArchiveTransfer] = useState(
     () => DownloadManagerService?.isArchiveTransferEnabled?.() ?? ARCHIVE_TRANSFER_DEFAULT
   );
-  // Which fields the user has changed. Per FIELD, not per form: the section is saved wholesale, so
-  // one shared flag would let an edit to either control block hydration of the other and then post
-  // that other field's default over the value already stored. Never cleared by saving -- the
-  // startup GET that was already in flight can still land afterwards.
-  const latch = useRef(createHydrationLatch()).current;
-
-  // The initial read above can be too early. Preference hydration is an authenticated fetch kicked
-  // off from a sibling effect, so opening /settings directly can render this form BEFORE the
-  // stored value arrives: the checkbox would show the default, and saving would write that default
-  // over what the user had stored. Following the service's own event keeps the form honest.
-  useEffect(() => {
-    if (!DownloadManagerService?.subscribe) {
-      return undefined;
-    }
-    const { unsubscribe } = DownloadManagerService.subscribe(
-      DownloadManagerServiceEvents.TRANSFER_MODE_CHANGED,
-      ({ archiveTransferEnabled }) =>
-        setArchiveTransfer(current => latch.accept(ARCHIVE_FIELD, archiveTransferEnabled, current))
-    );
-    return unsubscribe;
-  }, []);
-
-  const handleArchiveTransferChange = (event) => {
-    latch.markEdited(ARCHIVE_FIELD);
-    setArchiveTransfer(event.target.checked);
-  };
-
-  // Per-instance attempt budget (ohif-viewers#131, FR-12). Same shape as the toggle above: read
-  // from the service, follow its hydration event until the user touches the control, and apply
-  // locally before syncing. Held as a number -- Numeric keeps it inside min/max and ignores a
-  // partially typed value, so the form never holds something unusable.
+  useEffect(() => { rebase(ARCHIVE_FIELD, archiveTransfer); }, []);
+  // Per-instance attempt budget (ohif-viewers#131, FR-12). Held as a number -- Numeric keeps it
+  // inside min/max and ignores a partially typed value, so the form never holds something unusable.
   const [retryAttempts, setRetryAttempts] = useState(
     () => DownloadManagerService?.getRetryAttempts?.() ?? RETRY_ATTEMPTS_DEFAULT
   );
+  useEffect(() => { rebase(RETRY_FIELD, retryAttempts); }, []);
 
+  // The initial reads above can be too early. Preference hydration is an authenticated fetch kicked
+  // off from a sibling effect, so opening /settings directly can render this form BEFORE the
+  // stored values arrive: a control would show its default, and saving would write that default
+  // over what the user had stored. Following the services' own events keeps the form honest.
   useEffect(() => {
     if (!DownloadManagerService?.subscribe) {
       return undefined;
     }
-    const { unsubscribe } = DownloadManagerService.subscribe(
-      DownloadManagerServiceEvents.RETRY_ATTEMPTS_CHANGED,
-      ({ retryAttempts: hydrated }) =>
-        setRetryAttempts(current => latch.accept(RETRY_FIELD, hydrated, current))
+    const transfer = DownloadManagerService.subscribe(
+      DownloadManagerServiceEvents.TRANSFER_MODE_CHANGED,
+      ({ archiveTransferEnabled }) => {
+        setArchiveTransfer(current => latch.accept(ARCHIVE_FIELD, archiveTransferEnabled, current));
+        rebase(ARCHIVE_FIELD, archiveTransferEnabled);
+      }
     );
-    return unsubscribe;
+    const retry = DownloadManagerService.subscribe(
+      DownloadManagerServiceEvents.RETRY_ATTEMPTS_CHANGED,
+      ({ retryAttempts: hydrated }) => {
+        setRetryAttempts(current => latch.accept(RETRY_FIELD, hydrated, current));
+        rebase(RETRY_FIELD, hydrated);
+      }
+    );
+    return () => {
+      transfer.unsubscribe();
+      retry.unsubscribe();
+    };
   }, []);
 
-  const handleRetryAttemptsChange = (value) => {
-    latch.markEdited(RETRY_FIELD);
-    setRetryAttempts(value);
-  };
-
+  const handleArchiveTransferChange = edit(ARCHIVE_FIELD, setArchiveTransfer);
+  const handleRetryAttemptsChange = edit(RETRY_FIELD, setRetryAttempts);
   const stepRetryAttempts = useCallback(
-    (delta) => {
+    delta => {
       latch.markEdited(RETRY_FIELD);
-      setRetryAttempts((current) =>
-        Math.min(RETRY_ATTEMPTS_MAX, Math.max(RETRY_ATTEMPTS_MIN, current + delta))
-      );
+      changed.add(RETRY_FIELD);
+      setRetryAttempts(current => Math.min(RETRY_ATTEMPTS_MAX, Math.max(RETRY_ATTEMPTS_MIN, current + delta)));
     },
-    [latch]
+    [latch, changed]
   );
 
-  // Numeric binds no keyboard events -- neither does the upstream component ours was ported from --
-  // so a control that looks like a spinner ignores Up and Down. Bound here, at the point of use,
-  // rather than by diverging our copy of a shared ui-next component from upstream.
-  //
-  // Attached to the rendered input rather than to the wrapping label: the label is not an
-  // interactive element, and delegating from it would also fire while a chevron button held focus.
-  // The functional state update is what keeps this listener correct without rebinding on
-  // every value change.
-  const retryFieldRef = useRef(null);
+  // The Segmentation Editor's preferences, read from UserPreferencesService (hydrated or already
+  // chosen this session): Open as Segmentation's warning about locked models (ohif-viewers!92;
+  // the dialog's "Don't ask again" clears it, here is where it is turned back on), whether the
+  // views follow the selected segment, the colour a pending 3D edit is drawn in, and the colour of
+  // the edited segment's mesh ('auto' follows the segment). Each is also set from inside the
+  // editor, and the subscription below keeps the field honest until the user touches it.
+  const [lockedModelsWarning, setLockedModelsWarning] = useState(() => stored(LOCKED));
+  const [followSelection, setFollowSelection] = useState(() => stored(FOLLOW));
+  const [previewColor, setPreviewColor] = useState(() => stored(PREVIEW));
+  const [meshColor, setMeshColor] = useState(() => stored(MESH));
+  useEffect(() => {
+    setBaseline(current => ({
+      ...current, [LOCKED]: lockedModelsWarning, [FOLLOW]: followSelection, [PREVIEW]: previewColor, [MESH]: meshColor,
+    }));
+  }, []);
+  const meshColorAuto = meshColor === SEG_EDITOR_MESH_COLOR_AUTO;
+  // The colour last picked or landed, so turning "follows the segment" off brings it back
+  const lastMeshPick = useRef(meshColorAuto ? MESH_SWATCH_FALLBACK : meshColor);
 
   useEffect(() => {
-    const input = retryFieldRef.current?.querySelector('input');
-    if (!input) {
-      return undefined;
+    if (!meshColorAuto) {
+      lastMeshPick.current = meshColor;
     }
-
-    const onKeyDown = (event) => {
-      const delta = { ArrowUp: 1, ArrowDown: -1 }[event.key];
-      if (!delta) {
-        return;
-      }
-      // Also stops the key from scrolling the settings panel.
-      event.preventDefault();
-      stepRetryAttempts(delta);
-    };
-
-    input.addEventListener('keydown', onKeyDown);
-    return () => input.removeEventListener('keydown', onKeyDown);
-  }, [stepRetryAttempts]);
-
-  // Open as Segmentation's warning about locked models (ohif-viewers!92). The dialog's "don't ask
-  // again" turns it off through the same service, so the checkbox here is where it is turned back
-  // on. Read, hydrated and latched like the two settings above.
-  const [lockedModelsWarning, setLockedModelsWarning] = useState(
-    () => UserPreferencesService?.getGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY) ?? lockedModelsWarningDefault()
-  );
+  }, [meshColor, meshColorAuto]);
 
   useEffect(() => {
     if (!UserPreferencesService?.subscribe) {
       return undefined;
     }
+    const setters = {
+      [LOCKED]: setLockedModelsWarning,
+      [FOLLOW]: setFollowSelection,
+      [PREVIEW]: setPreviewColor,
+      [MESH]: setMeshColor,
+    };
+    const land = (key, value) => {
+      setters[key](current => latch.accept(key, value, current));
+      rebase(key, value);
+    };
+    // A value that landed between the first read and this subscription
+    Object.keys(setters).forEach(key => land(key, stored(key)));
     const { unsubscribe } = UserPreferencesService.subscribe(
       UserPreferencesServiceEvents.GENERAL_CHANGED,
       ({ key, value }) => {
-        if (key === LOCKED_MODELS_WARNING_PREFERENCE_KEY) {
-          setLockedModelsWarning(current => latch.accept(LOCKED_MODELS_FIELD, value, current));
-        }
-        if (key === SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY) {
-          setPreviewColor(current => latch.accept(PREVIEW_COLOR_FIELD, value, current));
-        }
-        if (key === SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY) {
-          setMeshColor(current => latch.accept(MESH_COLOR_FIELD, value, current));
-        }
-        if (key === SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY) {
-          setFollowSelectionState(current => latch.accept(FOLLOW_SELECTION_FIELD, value, current));
+        if (setters[key]) {
+          land(key, value);
         }
       }
     );
     return unsubscribe;
   }, []);
 
-  const handleLockedModelsWarningChange = (event) => {
-    latch.markEdited(LOCKED_MODELS_FIELD);
-    setLockedModelsWarning(event.target.checked);
-  };
-
-  // The Segmentation Editor's preview colour: what a 3D edit awaiting Apply is drawn in (Blender
-  // orange by default). Also set from the editor's 3D panel, whose changes this form follows until
-  // the field is edited here. The server does not accept the key yet, so the service keeps it in
-  // this browser and it is not in the section POST below (UserPreferencesService local-only keys).
-  const [previewColor, setPreviewColor] = useState(
-    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY) ?? previewColorDefault()
-  );
-
-  const handlePreviewColorChange = (event) => {
-    latch.markEdited(PREVIEW_COLOR_FIELD);
-    setPreviewColor(event.target.value);
-  };
-
-  // The colour the editor draws the mesh (edges and vertices) of the segment being edited in 3D:
-  // 'auto' (the default) follows the segment's own colour, a hex colour is the user's pick; set
-  // from the 3D panel's Model Actions menu too. Local-only, like the preview colour.
-  const [meshColor, setMeshColor] = useState(
-    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY) ?? meshColorDefault()
-  );
-  const meshColorAuto = meshColor === SEG_EDITOR_MESH_COLOR_AUTO;
-  // The swatch while the mesh follows the segment: the grey the editor falls back to
-  const MESH_SWATCH_FALLBACK = '#8f8f8f';
-
-  const handleMeshColorChange = (event) => {
-    latch.markEdited(MESH_COLOR_FIELD);
-    setMeshColor(event.target.value);
-  };
-
-  const handleMeshColorAutoChange = (event) => {
-    latch.markEdited(MESH_COLOR_FIELD);
-    setMeshColor(event.target.checked ? SEG_EDITOR_MESH_COLOR_AUTO : MESH_SWATCH_FALLBACK);
-  };
-
-  // Whether the editor's views follow the selected segment (the 2D views scroll to its centre,
-  // the 3D view frames its surface); off by default, also set from the editor's segmentation
-  // table configuration. Local-only, like the colours above.
-  const [followSelection, setFollowSelectionState] = useState(
-    () => UserPreferencesService?.getGeneral?.(SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY) ?? followSelectionDefault()
-  );
-
-  const handleFollowSelectionChange = (event) => {
-    latch.markEdited(FOLLOW_SELECTION_FIELD);
-    setFollowSelectionState(event.target.checked);
-  };
+  const handleLockedModelsWarningChange = edit(LOCKED, setLockedModelsWarning);
+  const handleFollowSelectionChange = edit(FOLLOW, setFollowSelection);
+  const handlePreviewColorChange = edit(PREVIEW, setPreviewColor);
+  const handleMeshColorPick = edit(MESH, setMeshColor);
+  const handleMeshColorAutoChange = edit(MESH, auto => setMeshColor(auto ? SEG_EDITOR_MESH_COLOR_AUTO : lastMeshPick.current));
 
   const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
+  const values = {
+    [ARCHIVE_FIELD]: archiveTransfer,
+    [RETRY_FIELD]: retryAttempts,
+    [LOCKED]: lockedModelsWarning,
+    [FOLLOW]: followSelection,
+    [PREVIEW]: previewColor.toLowerCase(),
+    [MESH]: meshColor.toLowerCase(),
+  };
+  const changesPending = ALL_FIELDS.some(field => field in baseline && values[field] !== baseline[field]);
+
+  // Back to the latest authoritative values, on both tabs (a value hydration delivered while a
+  // field was being edited included); the fields are open to hydration again
+  const onCancel = () => {
+    setArchiveTransfer(baseline[ARCHIVE_FIELD]);
+    setRetryAttempts(baseline[RETRY_FIELD]);
+    setLockedModelsWarning(baseline[LOCKED]);
+    setFollowSelection(baseline[FOLLOW]);
+    setPreviewColor(baseline[PREVIEW]);
+    setMeshColor(baseline[MESH]);
+    latch.reset();
+    changed.clear();
+  };
+
   const onSave = () => {
-    // Apply locally first, then sync through the write queue. `setArchiveTransferEnabled` records
-    // this as an explicit choice, so hydration in flight can no longer override it in the service
-    // either.
+    const preview = previewColor.toLowerCase();
+    const mesh = meshColor.toLowerCase();
+
+    // Apply locally first, then sync through the write queue. The services record these as
+    // explicit choices, so hydration in flight can no longer override them; an open editor follows
+    // UserPreferencesService's event at once. The section POST below carries the locked-models
+    // value, so the service must not post it a second time (persist: false); the three segEditor*
+    // keys are local-only and the service keeps them in this browser.
     DownloadManagerService?.setArchiveTransferEnabled?.(archiveTransfer);
     DownloadManagerService?.setRetryAttempts?.(retryAttempts);
-    // Recorded only: the wholesale save below carries the value, so the service's own write is
-    // not wanted here.
-    UserPreferencesService?.setGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY, lockedModelsWarning, { persist: false });
-    // Local-only for now: the service keeps it in this browser (see above)
-    UserPreferencesService?.setGeneral?.(SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, previewColor.toLowerCase(), { persist: false });
-    UserPreferencesService?.setGeneral?.(SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY, meshColor.toLowerCase(), { persist: false });
-    UserPreferencesService?.setGeneral?.(SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY, !!followSelection, { persist: false });
+    UserPreferencesService?.setGeneral?.(LOCKED, lockedModelsWarning, { persist: false });
+    UserPreferencesService?.setGeneral?.(FOLLOW, !!followSelection, { persist: false });
+    UserPreferencesService?.setGeneral?.(PREVIEW, preview, { persist: false });
+    UserPreferencesService?.setGeneral?.(MESH, mesh, { persist: false });
 
-    // `language` rides along because a section POST replaces the section's values wholesale --
-    // sending the toggle alone would erase a stored language preference.
+    // The confirmation names what changed and what it now does, not that something was saved
+    const detail = [
+      changed.has(ARCHIVE_FIELD) && t(archiveTransfer ? 'OfflineArchiveTransferSavedOn' : 'OfflineArchiveTransferSavedOff'),
+      changed.has(RETRY_FIELD) && t('OfflineRetryAttemptsSaved', { count: retryAttempts }),
+      changed.has(LOCKED) && t(lockedModelsWarning ? 'LockedModelsWarningSavedOn' : 'LockedModelsWarningSavedOff'),
+      changed.has(FOLLOW) && t(followSelection ? 'SegEditorFollowSelectionSavedOn' : 'SegEditorFollowSelectionSavedOff'),
+      changed.has(PREVIEW) && t('SegEditorPreviewColorSaved', { color: preview }),
+      changed.has(MESH) && (mesh === SEG_EDITOR_MESH_COLOR_AUTO
+        ? t('SegEditorMeshColorSavedAuto')
+        : t('SegEditorMeshColorSavedFixed', { color: mesh })),
+    ].filter(Boolean).join(' ');
+    // What is applied is now what Cancel would put back
+    setBaseline({ ...values });
+
+    // A section POST replaces the section wholesale, so the payload is composed from every runtime
+    // holder (the language, the offline-transfer settings, UserPreferencesService's server-side
+    // keys, the locked-models value just set among them) with this page's own fields laid over
+    // it. `language` rides along because sending the other fields alone would erase it. The
+    // local-only keys are left out by the service.
+    // The changes are forgotten only once the save has gone through: a rejected save keeps them,
+    // so the retry's message still names them. With nothing named (the language changes at once
+    // and is not tracked here), the message says the settings are saved as shown.
+    const outcome = showSaveOutcome(t('GeneralSettingsSaved'), 'general preferences', detail || t('GeneralSettingsSavedDetail'));
     saveGeneralSection(
       {
         version: PREFERENCES_VERSION,
         values: {
+          ...composeGeneralPreferenceValues(),
           language: i18n.language,
           [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
           [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
-          [LOCKED_MODELS_WARNING_PREFERENCE_KEY]: lockedModelsWarning,
+          [LOCKED]: lockedModelsWarning,
         },
       },
-      // Not the shared `SaveMessage` ("Preferences saved"): a confirmation that names the setting
-      // and what it now does is worth more than one that says something was saved.
-      showSaveOutcome(
-        t('GeneralSettingsSaved'),
-        'general preferences',
-        t(archiveTransfer ? 'OfflineArchiveTransferSavedOn' : 'OfflineArchiveTransferSavedOff')
-      )
+      {
+        onSuccess: result => {
+          changed.clear();
+          outcome.onSuccess(result);
+        },
+        onError: outcome.onError,
+      }
     );
   };
 
+  // Every field on both tabs; nothing is saved until Save
   const onReset = () => {
-    latch.markEdited(ARCHIVE_FIELD);
-    latch.markEdited(RETRY_FIELD);
-    latch.markEdited(LOCKED_MODELS_FIELD);
-    latch.markEdited(PREVIEW_COLOR_FIELD);
-    latch.markEdited(MESH_COLOR_FIELD);
-    latch.markEdited(FOLLOW_SELECTION_FIELD);
+    ALL_FIELDS.forEach(field => {
+      latch.markEdited(field);
+      changed.add(field);
+    });
     setArchiveTransfer(ARCHIVE_TRANSFER_DEFAULT);
     setRetryAttempts(RETRY_ATTEMPTS_DEFAULT);
-    setLockedModelsWarning(lockedModelsWarningDefault());
-    setPreviewColor(previewColorDefault());
-    setMeshColor(meshColorDefault());
-    setFollowSelectionState(followSelectionDefault());
+    setLockedModelsWarning(defaultOf(LOCKED));
+    setFollowSelection(defaultOf(FOLLOW));
+    setPreviewColor(defaultOf(PREVIEW));
+    setMeshColor(defaultOf(MESH));
   };
 
   return (
     <>
-      {isDesktop && <TabHeaderNG title="General Settings" />}
-      <div className={styles.settings}>
-        <div className={styles.wrapper}>
-          <p className={styles.label}>{t('Language')}</p>
-          <div className={styles.languagesContainer}>
-            <button className={styles.selectedLanguage} onClick={() => setIsDropdownOpen((prevState) => !prevState)}>
-              <span>{selectedLanguage?.label}</span>
-              <CaretDownIcon
-                className={classNames(styles.caretIcon, {
-                  [styles.up]: isDropdownOpen,
-                })}
-              />
-            </button>
-            <div
-              className={classNames(styles.languages, {
-                [styles.displayed]: isDropdownOpen,
-              })}
-            >
-              {availableLanguages.map((language) => {
-                return (
-                  <button key={language.value} onClick={() => handleSelectLanguage(language)} className={styles.language}>
-                    {language.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+      {isDesktop && <TabHeaderNG title="General Settings" description={t('GeneralSettingsDescription')} />}
+      <TabsNG value={tab} onValueChange={setTab} className={styles.tabs}>
+        <TabsNG.List className={styles.tabList}>
+          <TabsNG.Trigger value={TAB_APPLICATION} data-cy="general-settings-application">
+            {t('GeneralTabApplication')}
+          </TabsNG.Trigger>
+          <TabsNG.Trigger value={TAB_SEG_EDITOR} data-cy="general-settings-seg-editor">
+            {t('GeneralTabSegEditor')}
+          </TabsNG.Trigger>
+        </TabsNG.List>
+        <TabsNG.Content value={TAB_APPLICATION} className={styles.settings}>
+          <ApplicationSettingsTab
+            archiveTransfer={archiveTransfer}
+            onArchiveTransferChange={handleArchiveTransferChange}
+            retryAttempts={retryAttempts}
+            onRetryAttemptsChange={handleRetryAttemptsChange}
+            onStepRetryAttempts={stepRetryAttempts}
+          />
+        </TabsNG.Content>
+        <TabsNG.Content value={TAB_SEG_EDITOR} className={styles.settings}>
+          <SegEditorSettingsTab
+            lockedModelsWarning={lockedModelsWarning}
+            onLockedModelsWarningChange={handleLockedModelsWarningChange}
+            followSelection={followSelection}
+            onFollowSelectionChange={handleFollowSelectionChange}
+            previewColor={previewColor}
+            onPreviewColorChange={handlePreviewColorChange}
+            meshColorAuto={meshColorAuto}
+            onMeshColorAutoChange={handleMeshColorAutoChange}
+            meshColor={meshColorAuto ? lastMeshPick.current : meshColor}
+            onMeshColorPick={handleMeshColorPick}
+          />
+        </TabsNG.Content>
+      </TabsNG>
 
-        {/* Worded in transfer terms, never as "download an archive": this saves nothing to the
-            user's computer -- the Downloads menu is what does that (#129 AR-6). */}
-        <div className={classNames(styles.wrapper, styles.wrapperTop)}>
-          <p className={styles.label}>{t('Offline storage')}</p>
-          <div className={styles.optionContainer}>
-            <label className={styles.option} htmlFor="offline-archive-transfer">
-              <input
-                id="offline-archive-transfer"
-                type="checkbox"
-                checked={archiveTransfer}
-                onChange={handleArchiveTransferChange}
-              />
-              <span>{t('OfflineArchiveTransferLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('OfflineArchiveTransferHelp')}</p>
-
-            {/* Attempt budget (ohif-viewers#131, FR-12). Sits under the transfer strategy because
-                both describe how an offline copy is fetched, and neither affects a transfer
-                already in progress.
-
-                `Numeric` is the ui-next stepper, so this control looks and behaves like every
-                other numeric input in the application rather than like a one-off. No Tailwind
-                classes are passed to it: the @source list in ui-next's tailwind-integration.css
-                does not cover platform/viewer/src, so utility classes named from here are never
-                generated. The stepper's own defaults are used instead.
-
-                The `label` wraps the control rather than pointing at it with `htmlFor`, because
-                Numeric renders its own input and gives it no id. In the vertical stepper the input
-                is the first labelable descendant, so the implicit association lands on it and not
-                on the increment buttons. */}
-            <label
-              className={classNames(styles.option, styles.optionNumeric)}
-              ref={retryFieldRef}
-            >
-              <Numeric.Container
-                mode="stepper"
-                min={RETRY_ATTEMPTS_MIN}
-                max={RETRY_ATTEMPTS_MAX}
-                step={1}
-                value={retryAttempts}
-                onChange={handleRetryAttemptsChange}
-              >
-                <Numeric.NumberStepper />
-              </Numeric.Container>
-              <span>{t('OfflineRetryAttemptsLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('OfflineRetryAttemptsHelp')}</p>
-          </div>
-        </div>
-
-        {/* Open as Segmentation's warning about locked models (ohif-viewers!92). The dialog's
-            "Don't ask again" clears this; here is where it is turned back on. */}
-        <div className={classNames(styles.wrapper, styles.wrapperTop)}>
-          <p className={styles.label}>{t('Segmentation')}</p>
-          <div className={styles.optionContainer}>
-            <label className={styles.option} htmlFor="locked-models-warning">
-              <input
-                id="locked-models-warning"
-                type="checkbox"
-                checked={lockedModelsWarning}
-                onChange={handleLockedModelsWarningChange}
-              />
-              <span>{t('LockedModelsWarningLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('LockedModelsWarningHelp')}</p>
-          </div>
-        </div>
-
-        {/* The Segmentation Editor's own settings: the colours a pending 3D edit and the edited segment's mesh are drawn in, and whether the views follow the selected segment. */}
-        <div className={classNames(styles.wrapper, styles.wrapperTop)}>
-          <p className={styles.label}>{t('SegEditor')}</p>
-          <div className={styles.optionContainer}>
-            <label className={classNames(styles.option, previewColorStyles.option)} htmlFor="seg-editor-preview-color">
-              <input
-                id="seg-editor-preview-color"
-                className={previewColorStyles.swatch}
-                type="color"
-                value={previewColor}
-                onChange={handlePreviewColorChange}
-              />
-              <span>{t('SegEditorPreviewColorLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('SegEditorPreviewColorHelp')}</p>
-          </div>
-          <div className={styles.optionContainer}>
-            <label className={styles.option} htmlFor="seg-editor-mesh-color-auto">
-              <input
-                id="seg-editor-mesh-color-auto"
-                type="checkbox"
-                checked={meshColorAuto}
-                onChange={handleMeshColorAutoChange}
-              />
-              <span>{t('SegEditorMeshColorAutoLabel')}</span>
-            </label>
-            <label className={classNames(styles.option, previewColorStyles.option)} htmlFor="seg-editor-mesh-color">
-              <input
-                id="seg-editor-mesh-color"
-                className={previewColorStyles.swatch}
-                type="color"
-                value={meshColorAuto ? MESH_SWATCH_FALLBACK : meshColor}
-                disabled={meshColorAuto}
-                onChange={handleMeshColorChange}
-              />
-              <span>{t('SegEditorMeshColorLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('SegEditorMeshColorHelp')}</p>
-          </div>
-          <div className={styles.optionContainer}>
-            <label className={styles.option} htmlFor="seg-editor-follow-selection">
-              <input
-                id="seg-editor-follow-selection"
-                type="checkbox"
-                checked={followSelection}
-                onChange={handleFollowSelectionChange}
-              />
-              <span>{t('SegEditorFollowSelectionLabel')}</span>
-            </label>
-            <p className={styles.optionHelp}>{t('SegEditorFollowSelectionHelp')}</p>
-          </div>
-        </div>
-      </div>
-
-      <TabFooterNG onReset={onReset} onSave={onSave} hasErrors={false} />
+      {/* One footer for both tabs: Save posts the section once, Reset Defaults resets both, and
+          Cancel appears while changes are pending and puts the saved values back */}
+      <TabFooterNG
+        onReset={onReset}
+        onSave={onSave}
+        onCancel={onCancel}
+        changesPending={changesPending}
+        hasErrors={false}
+        resetHint={t('ResetDefaultsHint')}
+        saveHint={t('SaveHint')}
+        cancelHint={t('CancelChangesHint')}
+      />
     </>
   );
 }

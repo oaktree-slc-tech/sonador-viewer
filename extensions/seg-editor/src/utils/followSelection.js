@@ -2,7 +2,7 @@
 // moves the editor's views onto it (the 2D views scroll and pan to its centre, the 3D view frames
 // its surface); when it is off, selecting a segment moves nothing. A general user preference held
 // by UserPreferencesService (@ohif/core), off by default, set from the segmentation header's menu
-// or the Settings page's Seg Editor section; kept in this browser until the server accepts the
+// or the Settings page (General > Segmentation Editor); kept in this browser until the server accepts the
 // key (the service's local-only keys).
 //
 // The framing itself is the editor layout's (it holds the viewports and the editing canvas): it

@@ -1,0 +1,72 @@
+// The colour well (ColorFieldNG): the Settings page's round swatch, as its colour inputs have
+// always been drawn here (a 22px circle in the page's #60646d outline, white on hover and focus),
+// now a button that opens the picker. The popover and its footer are the kit's.
+
+.anchor {
+  display: inline-flex;
+}
+
+// Every property the browser gives a button is set, so the swatch is the same circle whatever
+// stylesheet the page loads around it.
+.swatch {
+  flex: none;
+  box-sizing: border-box;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #60646d;
+  border-radius: 50%;
+  background: none;
+  appearance: none;
+  overflow: hidden;
+  line-height: 0;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: #ffffff;
+    outline: none;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+    // A disabled button swallows pointer events; let them reach the tooltip anchor around it
+    pointer-events: none;
+  }
+}
+
+.fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+// The popover keeps the kit's chrome, its padding included; the picker inside it is react-color's,
+// which paints its own white card and shadow inline. Sit it flat on the popover surface, and keep
+// its hex / rgb fields legible there (react-color sets their text dark and leaves their background
+// to the page).
+.popover {
+  :global(.chrome-picker) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  :global(.chrome-picker) input {
+    background: #ffffff;
+  }
+}
+
+// The action row sits under the picker with the picker's own 8px rhythm around it
+.footer {
+  margin-top: 8px;
+  padding: 0 4px 4px;
+}
+
+.tooltip {
+  max-width: 24rem;
+  white-space: normal;
+}

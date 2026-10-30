@@ -1,6 +1,6 @@
 // The colour a pending 3D edit is previewed in (threeDTools/previewOverlay.js): a general user
 // preference held by UserPreferencesService (@ohif/core), set from the 3D panel's swatch or the
-// Settings page's Seg Editor section. Until the server accepts the key it is kept in this browser
+// Settings page (General > Segmentation Editor). Until the server accepts the key it is kept in this browser
 // (the service's local-only keys).
 
 import { useEffect, useState } from 'react';
