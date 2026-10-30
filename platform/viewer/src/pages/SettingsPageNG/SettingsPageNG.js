@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import OHIF from '@ohif/core';
+import { TooltipProvider } from '@ohif/ui-next';
 
 import AboutSonador from '../../components/AboutSonador/AboutSonador';
 import DeviceList from '../../components/DistortionFilter/DeviceList';
@@ -166,7 +167,11 @@ export default function SettingsPageNG() {
             </div>
           )}
         </div>
-        <div className={styles.right}>{renderTabContent()}</div>
+        {/* The kit's tooltips (the settings rows' hover texts) need a provider above them; the
+            settings route has none of its own, unlike the viewer's panels. */}
+        <div className={styles.right}>
+          <TooltipProvider delayDuration={300}>{renderTabContent()}</TooltipProvider>
+        </div>
       </div>
     </Layout>
   );

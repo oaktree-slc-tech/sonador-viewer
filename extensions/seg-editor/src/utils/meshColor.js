@@ -1,7 +1,7 @@
 // The colour the edit-mode mesh of the segment being edited is drawn in (threeDTools/
 // editModeOverlay.js): 'auto' (the default) follows the segment's own colour, a hex colour is
 // the user's pick. A general user preference held by UserPreferencesService (@ohif/core), set
-// from the 3D panel's swatch beside "Show mesh" or the Settings page's Seg Editor section.
+// from the 3D panel's swatch beside "Show mesh" or the Settings page (General > Segmentation Editor).
 // Until the server accepts the key it is kept in this browser (the service's local-only keys).
 
 import { useEffect, useState } from 'react';

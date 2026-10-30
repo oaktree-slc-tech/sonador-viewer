@@ -5,7 +5,15 @@
   gap: 10px;
   flex-wrap: wrap;
 
+  // Cancel and Save together on the right
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   .reset,
+  .cancel,
   .save {
     padding: 10px 20px;
     border-radius: 10px;
@@ -21,12 +29,22 @@
     background-color: #60646d;
   }
 
+  // The console's cancel grey (Series Tags, Viewer Metadata)
+  .cancel {
+    background-color: #89898b;
+  }
+
   .save {
     background-color: #2e46e9;
-    margin-left: 10px;
 
     &:disabled {
       cursor: not-allowed;
     }
   }
+}
+
+// The buttons' hover texts (the kit's tooltip), wrapped to a readable measure
+.tooltip {
+  max-width: 24rem;
+  white-space: normal;
 }

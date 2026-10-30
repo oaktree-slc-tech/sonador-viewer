@@ -1,0 +1,45 @@
+// The action row of the viewer's NG dialogs, popovers and settings forms: the buttons right-aligned,
+// a grey cancel and a Primary Blue confirm, 8px corners, 14px bold white text. The same row the
+// Viewer Metadata editor (`ViewerMetadataSettings.module.scss` `.actions`) and the display
+// attributes dialog (`DisplayAttributesDialog.module.scss` `.footer`) draw; shared here so a new
+// surface takes the pattern instead of restating it. The kit's `Button` and `FooterAction` are not
+// used for these: on the settings route a kit button rendered with the browser's default button
+// box, and the NG dialogs' own row is the pattern the page already shows.
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.cancel,
+.confirm {
+  all: unset;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 1px solid #a6cdf5;
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.cancel {
+  background-color: #89898b;
+}
+
+.confirm {
+  background-color: #2e46e9;
+}
