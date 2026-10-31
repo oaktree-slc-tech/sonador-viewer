@@ -489,7 +489,7 @@ function _stateLabel(job) {
     case JOB_STATES.QUEUED:
       return 'Queued';
     case JOB_STATES.DOWNLOADING:
-      return 'Downloading';
+      return 'Transferring';
     case JOB_STATES.COMPLETED:
       return 'Completed';
     case JOB_STATES.CANCELLED:
