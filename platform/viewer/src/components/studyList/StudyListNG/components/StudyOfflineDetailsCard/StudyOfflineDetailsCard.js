@@ -43,7 +43,7 @@ const formatBytes = OHIF.utils.formatBytes;
 // go through i18n like every other string in this dialog.
 const SERIES_STATE_LABELS = {
   [SERIES_TRANSFER_STATES.QUEUED]: 'Queued',
-  [SERIES_TRANSFER_STATES.DOWNLOADING]: 'Downloading',
+  [SERIES_TRANSFER_STATES.DOWNLOADING]: 'Transferring',
   [SERIES_TRANSFER_STATES.EXTRACTING]: 'Extracting',
   [SERIES_TRANSFER_STATES.COMPLETE]: 'Complete',
   [SERIES_TRANSFER_STATES.FAILED]: 'Failed',

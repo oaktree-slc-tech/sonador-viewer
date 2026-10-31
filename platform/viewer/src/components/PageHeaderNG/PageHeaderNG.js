@@ -79,7 +79,7 @@ export default function PageHeaderNG({ title }) {
                     {activeDownloadCount > 0 && (
                       <div className={styles.tooltipCount}>
                         {activeDownloadCount}{' '}
-                        {activeDownloadCount === 1 ? t('active download') : t('active downloads')}
+                        {activeDownloadCount === 1 ? t('active transfer') : t('active transfers')}
                       </div>
                     )}
                   </div>

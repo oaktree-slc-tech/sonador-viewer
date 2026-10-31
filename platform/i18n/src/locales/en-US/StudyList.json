@@ -3,10 +3,11 @@
   "AccessionNumber": "Accession #",
   "active download": "active download",
   "active downloads": "active downloads",
+  "active transfer": "active transfer",
   "Active Transfers": "Active Transfers",
+  "active transfers": "active transfers",
   "Add to Current Segmentation": "Add to Current Segmentation",
   "Cancel": "Cancel",
-  "Cancel Download": "Cancel Download",
   "Cancel this download": "Cancel this download",
   "Cancel Transfer": "Cancel Transfer",
   "Cancel Transfers": "Cancel Transfers",
@@ -30,7 +31,7 @@
   "Edit Comment": "Edit Comment",
   "Empty": "Empty",
   "Error": "Error",
-  "Export studies as zip archives to this computer. Monitor and cancel transfers in progress.": "Export studies as zip archives to this computer. Monitor and cancel transfers in progress.",
+  "Export studies as zip archives to this computer. Monitor and cancel downloads in progress.": "Export studies as zip archives to this computer. Monitor and cancel downloads in progress.",
   "Extracting": "Extracting",
   "Failed": "Failed",
   "instances": "instances",
@@ -89,5 +90,6 @@
   "This permanently deletes the data from the imaging server. It cannot be recovered.": "This permanently deletes the data from the imaging server. It cannot be recovered.",
   "Transfer": "Transfer",
   "Transfer details": "Transfer details",
+  "Transferring": "Transferring",
   "Updating the study list...": "Updating the study list..."
 }

@@ -928,7 +928,10 @@ class DownloadManagerServiceClass extends PubSubService {
       this._setState(
         job,
         JOB_STATES.ERROR,
-        `${job.progress.failed} of ${job.progress.total} instance(s) failed to download.`
+        // Shown after "Offline transfer failed" in the toast and under the job in Offline Storage,
+        // so it says what did not reach the device. "DICOM object", not "image": the count covers every
+        // SOP instance the job enumerated, encapsulated PDFs and 3D models included
+        `${job.progress.failed} of ${job.progress.total} DICOM object(s) could not be saved to this device.`
       );
     } else {
       this._setState(job, JOB_STATES.COMPLETED);

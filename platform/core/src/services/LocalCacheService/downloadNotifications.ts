@@ -32,7 +32,7 @@ const _describeJob = (job: any): string =>
   job?.kind === 'series' ? describeSeries(job) : describeStudy(job);
 
 /** Where a queued study can be watched. Repeated in every queue notice, so it lives in one place. */
-const TRACK_PROGRESS = 'Track progress in the Download Manager.';
+const TRACK_PROGRESS = 'Track progress in Offline Storage.';
 
 const _plural = (count: number, singular: string, plural: string): string =>
   count === 1 ? singular : plural;
@@ -95,14 +95,14 @@ export function notifyStudiesQueued({
   }
   if (alreadyDownloading) {
     skipped.push(
-      `${alreadyDownloading} ${_plural(alreadyDownloading, 'study is', 'studies are')} already downloading`
+      `${alreadyDownloading} ${_plural(alreadyDownloading, 'study is', 'studies are')} already being saved offline`
     );
   }
 
   if (!queuedCount) {
     // Nothing to do, but the user pressed a button and is owed an answer for why nothing happened.
     uiNotificationService.show({
-      title: alreadyCached ? 'Already saved offline' : 'Download already in progress',
+      title: alreadyCached ? 'Already saved offline' : 'Transfer already in progress',
       message: `${_capitalize(skipped.join(', and '))}.`,
       type: 'info',
     });
@@ -111,8 +111,8 @@ export function notifyStudiesQueued({
 
   const message = [
     queuedCount === 1
-      ? `${describeStudy(queued[0])} is downloading in the background.`
-      : 'They are downloading in the background.',
+      ? `${describeStudy(queued[0])} is being saved for offline use in the background.`
+      : 'They are being saved for offline use in the background.',
     skipped.length ? `${_capitalize(skipped.join(', and '))}.` : '',
     TRACK_PROGRESS,
   ]
@@ -152,7 +152,7 @@ export function notifySeriesQueued({ job }: { job?: any } = {}): void {
 
   uiNotificationService.show({
     title: 'Series queued for offline storage',
-    message: `${describeSeries(job)} is downloading in the background. ${TRACK_PROGRESS}`,
+    message: `${describeSeries(job)} is being saved for offline use in the background. ${TRACK_PROGRESS}`,
     type: 'info',
     studyInstanceUID: job.StudyInstanceUID,
     seriesInstanceUID: job.SeriesInstanceUID,
@@ -291,7 +291,7 @@ function _onJobStateChanged({ job }): void {
       // (retry, free up space, or remove the partial copy). `details` is what the Issues list
       // renders in its Details drawer.
       const toastId = uiNotificationService.show({
-        title: 'Offline download failed',
+        title: 'Offline transfer failed',
         message: `${label} — ${job.error || 'The data could not be saved to this device.'}`,
         type: 'error',
         autoClose: false,
@@ -323,9 +323,12 @@ function _onJobStateChanged({ job }): void {
         break;
       }
 
+      // The notice does not promise that nothing was kept: the service removes what the job stored,
+      // but a removal that fails is only logged, and the state carries no cleanup result. Point at
+      // the place that shows what is actually on the device instead.
       uiNotificationService.show({
-        title: 'Offline download cancelled',
-        message: `${label} — nothing from this download was kept on the device.`,
+        title: 'Offline transfer cancelled',
+        message: `${label} — the transfer was stopped. Offline Studies shows what is on this device.`,
         type: 'info',
         studyInstanceUID: job.StudyInstanceUID,
         seriesInstanceUID: job.SeriesInstanceUID,

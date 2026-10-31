@@ -235,7 +235,7 @@ export default function DownloadsMenu() {
           <TooltipContent side="bottom">
             <div className={styles.tooltipTitle}>{t('Downloads')}</div>
             <div className={styles.tooltipBody}>
-              {t('Export studies as zip archives to this computer. Monitor and cancel transfers in progress.')}
+              {t('Export studies as zip archives to this computer. Monitor and cancel downloads in progress.')}
               {activeCount > 0 && (
                 <div className={styles.tooltipCount}>
                   {activeCount} {activeCount === 1 ? t('active download') : t('active downloads')}

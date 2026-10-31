@@ -98,12 +98,12 @@ describe('notifyStudiesQueued', () => {
     expect(shown[0].title).toBe('3 studies queued for offline storage');
   });
 
-  it('accounts for studies skipped as already cached or already downloading', () => {
+  it('accounts for studies skipped as already cached or already being saved offline', () => {
     notifyStudiesQueued({ queued: [JOB], alreadyCached: 2, alreadyDownloading: 1 });
 
     expect(shown).toHaveLength(1);
     expect(shown[0].message).toContain('2 studies are already saved offline');
-    expect(shown[0].message).toContain('1 study is already downloading');
+    expect(shown[0].message).toContain('1 study is already being saved offline');
   });
 
   it('explains why nothing happened when every selected study was skipped', () => {
@@ -182,22 +182,26 @@ describe('job outcomes', () => {
       ...JOB,
       id: 'dl-failed',
       state: JOB_STATES.ERROR,
-      error: '3 of 240 instance(s) failed to download.',
+      error: '3 of 240 DICOM object(s) could not be saved to this device.',
     });
 
     expect(shown).toHaveLength(1);
     expect(shown[0].type).toBe('error');
-    expect(shown[0].message).toContain('3 of 240 instance(s) failed to download.');
+    expect(shown[0].message).toContain('3 of 240 DICOM object(s) could not be saved to this device.');
     expect(shown[0].duration).toBe(Infinity);
     // Errors are recorded in the unified log without the caller asking (ohif-viewers#84).
     expect(notificationLogService.getEntries()).toHaveLength(1);
   });
 
-  it('announces a cancelled download', () => {
+  it('announces a cancelled transfer without promising that cleanup succeeded', () => {
     broadcastState({ ...JOB, id: 'dl-cancelled', state: JOB_STATES.CANCELLED });
 
     expect(shown).toHaveLength(1);
-    expect(shown[0].title).toBe('Offline download cancelled');
+    expect(shown[0].title).toBe('Offline transfer cancelled');
+    expect(shown[0].message).toContain('the transfer was stopped');
+    // The service only logs a failed removal, so the notice cannot claim nothing was kept
+    expect(shown[0].message).not.toMatch(/nothing .* kept/);
+    expect(shown[0].message).toContain('Offline Studies');
   });
 
   it('says nothing about a job that is merely progressing', () => {

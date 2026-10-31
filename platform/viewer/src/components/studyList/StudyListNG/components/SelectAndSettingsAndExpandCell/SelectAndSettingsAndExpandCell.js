@@ -130,7 +130,7 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
               badge, for a unified offline-feature presentation (distinct from the zip-export
               'Download' item's cloud-download icon above, AR-6). */}
           <OfflineCacheIcon width={15} height={15} />
-          <span>{isDownloading ? t('Cancel Download') : t('Save Offline Copy')}</span>
+          <span>{isDownloading ? t('Cancel Transfer') : t('Save Offline Copy')}</span>
         </div>
       ),
       onClick: () => {

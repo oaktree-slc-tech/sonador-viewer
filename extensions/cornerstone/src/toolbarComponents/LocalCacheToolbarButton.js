@@ -56,7 +56,7 @@ function LocalCacheToolbarButton({ toolbarClickCallback, button, isActive }) {
 
   const { cached, downloading } = state;
 
-  const label = cached ? 'Remove Offline Copy' : downloading ? 'Downloading…' : 'Save Offline Copy';
+  const label = cached ? 'Remove Offline Copy' : downloading ? 'Transferring…' : 'Save Offline Copy';
   const icon = cached ? 'trash' : 'offline-cache';
   // "Go offline" while a download is in flight cancels it; otherwise queue/remove per cache state.
   const commandName = cached ? 'removeOffline' : downloading ? 'cancelStudyDownload' : 'goOffline';
