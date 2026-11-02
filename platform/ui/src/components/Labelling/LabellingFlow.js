@@ -1,15 +1,30 @@
 import * as _ from 'lodash';
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { useTranslation } from 'react-i18next';
 
 import Icon from '../../elements/Icon/Icon.js';
 import SelectTree from '../selectTree/SelectTree.js';
 
 import EditDescriptionDialog from '../EditDescriptionDialog/EditDescriptionDialog.js';
 import LabellingTransition from './LabellingTransition.js';
+import { LabellingCloseButton, useEscapeKey } from './labellingDismiss.js';
 import OHIFLabellingData from './OHIFLabellingData.js';
 
 import './LabellingFlow.css';
+
+
+// Black or white, whichever reads better on the given #RRGGBB / #RGB background (WCAG luminance)
+const contrastingInk = hex => {
+  const digits = hex.replace('#', '');
+  const full = digits.length === 3 ? digits.split('').map(d => d + d).join('') : digits;
+  const [r, g, b] = [0, 2, 4].map(i => {
+    const c = parseInt(full.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? '#000000' : '#ffffff';
+};
 
 
 const LabellingFlow = ({
@@ -18,10 +33,14 @@ const LabellingFlow = ({
 
   //  Workflow steps:
   //  * Step 1: Load list of available labels/tags
-  //  * Step 2: When an item is selected from the dropdown list, proceed to a "confirm" dialog
-  //    which shows the selected label and provides the option to create a description.
-  //  * Step 3: Once label/tag and description are confirmed, the annotation can be confirmed
-  //    by clicking on an "Accept" button.
+  //  * Step 2: Selecting an item applies it and shows a card with the selected label, where the
+  //    label can be changed and a description added (each change applies when it is made).
+  //  * Step 3: The check (Done) closes the flow.
+  //  The flow stays open until the user closes it (Done, close button or Escape). Escape steps
+  //  back first: from a picker opened on the card it returns to the card, and during a description
+  //  edit it cancels the edit. Opening a picker during a description edit discards the unsaved
+  //  text. When `anatomyData` is provided (the label is a coded tag rather than a location), the
+  //  card also offers a Location picker for the anatomic location.
 
   measurementData,
   editLocation = false,
@@ -33,12 +52,14 @@ const LabellingFlow = ({
   labellingDoneCallback,
   editDescriptionOnDialog = false,
   labelData = OHIFLabellingData,
-  labelWorkflowTitle = 'Assign Tag',
-  relabelButtonTitle = 'Retag',
-  fadeOutTimeout = 1000,
-  searchPlaceholder = 'Search tags',
+  labelWorkflowTitle = 'Set Location',
+  relabelButtonTitle = 'Change Location',
+  searchPlaceholder = 'Search anatomy',
+  anatomyData,
+  anatomyAttr = 'location',
+  labelColor,
 }) => {
-  const [fadeOutTimer, setFadeOutTimer] = useState();
+  const { t } = useTranslation('Common');
   const [showComponent, setShowComponent] = useState(true);
   const descriptionInput = useRef();
   const [state, setState] = useState({
@@ -46,6 +67,12 @@ const LabellingFlow = ({
     editLocation,
     editDescription,
     skipAddLabelButton,
+    pickingAnatomy: false,
+    returnToCard: false,
+    anatomyLabel: measurementData && measurementData[anatomyAttr],
+    color: {},
+    // The last description applied to the measurement; the input is a draft until Save
+    description: (!editDescription && measurementData && measurementData.description) || '',
   });
 
   useEffect(() => {
@@ -68,6 +95,7 @@ const LabellingFlow = ({
       ...state,
       editLocation: newEditLocation,
       measurementData: newMeasurementData,
+      description: newMeasurementData.description || '',
     }));
   }, [editDescription, editLocation, measurementData]);
 
@@ -77,16 +105,30 @@ const LabellingFlow = ({
     }
   }, [state]);
 
-  const relabel = (event) => setState((state) => ({ ...state, editLocation: true }));
+  // Opening a picker from the card ends any description edit; the unsaved draft is discarded
+  const relabel = () => setState((state) => ({
+    ...state, editLocation: true, returnToCard: true, editDescription: false,
+  }));
+
+  const pickAnatomy = () => setState((state) => ({
+    ...state, pickingAnatomy: true, returnToCard: true, editDescription: false,
+  }));
+
+  const backToCard = () => setState((state) => ({
+    ...state, editLocation: false, pickingAnatomy: false, returnToCard: false,
+  }));
 
   const setDescriptionUpdateMode = () => {
-    descriptionInput.current.focus();
+    if (descriptionInput.current) {
+      descriptionInput.current.focus();
+    }
     setState((state) => ({ ...state, editDescription: true }));
   };
 
   const descriptionCancel = () => {
-    const { description = '' } = _.cloneDeep(state);
-    descriptionInput.current.value = description;
+    if (descriptionInput.current) {
+      descriptionInput.current.value = state.description;
+    }
     setState((state) => ({ ...state, editDescription: false }));
   };
 
@@ -97,6 +139,9 @@ const LabellingFlow = ({
   };
 
   const descriptionSave = () => {
+    if (!descriptionInput.current) {
+      return;
+    }
     const description = descriptionInput.current.value;
     updateLabelling({ description });
 
@@ -108,6 +153,9 @@ const LabellingFlow = ({
   };
 
   const selectTreeSelectCallback = (event, itemSelected) => {
+    if (Array.isArray(itemSelected.items)) {
+      return;
+    }
 
     const locationData = {
       [locationAttr]: itemSelected.value,
@@ -122,11 +170,27 @@ const LabellingFlow = ({
     setState((state) => ({
       ...state,
       editLocation: false,
+      returnToCard: false,
+      color: (labelColor && labelColor(itemSelected)) || {},
       measurementData: {
         ...state.measurementData,
         location,
         locationLabel,
       },
+    }));
+  };
+
+  const anatomySelectCallback = (event, itemSelected) => {
+    if (Array.isArray(itemSelected.items)) {
+      return;
+    }
+
+    updateLabelling({ [anatomyAttr]: itemSelected.value });
+    setState((state) => ({
+      ...state,
+      pickingAnatomy: false,
+      returnToCard: false,
+      anatomyLabel: itemSelected.label,
     }));
   };
 
@@ -138,20 +202,21 @@ const LabellingFlow = ({
     }));
   };
 
-  /*
-   * Waits to dismiss the labelling component.
-   *
-   */
-  const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, fadeOutTimeout));
+  // Closing (close button, Escape, check) removes the flow at once, without the exit fade
+  const close = () => labellingDoneCallback();
 
-  const fadeOutAndLeaveFast = () => setShowComponent(false);
-
-  const clearFadeOutTimer = () => {
-    if (fadeOutTimer) {
-      clearTimeout(fadeOutTimer);
-      setFadeOutTimer(null);
+  useEscapeKey(() => {
+    if (editDescriptionOnDialog) {
+      return;
     }
-  };
+    if ((state.editLocation || state.pickingAnatomy) && state.returnToCard) {
+      backToCard();
+    } else if (state.editDescription) {
+      descriptionCancel();
+    } else {
+      close();
+    }
+  });
 
   const descriptionDialogUpdate = (description) => {
     updateLabelling({ description });
@@ -159,8 +224,8 @@ const LabellingFlow = ({
   };
 
   const labellingStateFragment = () => {
-    const { skipAddLabelButton, editLocation, measurementData } = state;
-    const { description, locationLabel, location } = measurementData;
+    const { skipAddLabelButton, editLocation, pickingAnatomy, anatomyLabel, measurementData, description } = state;
+    const { locationLabel, location } = measurementData;
 
     if (!skipAddLabelButton) {
       return (
@@ -169,7 +234,17 @@ const LabellingFlow = ({
         </button>
       );
     } else {
-      if (editLocation) {
+      if (pickingAnatomy) {
+        return (
+          <SelectTree
+            items={anatomyData}
+            columns={1}
+            onSelected={anatomySelectCallback}
+            selectTreeFirstTitle={t('Set Location')}
+            searchPlaceholder={t('Search anatomy')}
+          />
+        );
+      } else if (editLocation) {
         return (
           <SelectTree
             items={labelData}
@@ -182,16 +257,33 @@ const LabellingFlow = ({
       } else {
         return (
           <>
-            <div className="checkIconWrapper" onClick={fadeOutAndLeaveFast}>
-              <Icon name="check" className="checkIcon" />
-            </div>
+            <button
+              type="button"
+              className="checkIconWrapper"
+              onClick={close}
+              title={t('Done')}
+              aria-label={t('Done')}
+              style={state.color.Background ? { backgroundColor: state.color.Background } : undefined}
+            >
+              <Icon
+                name="check"
+                className="checkIcon"
+                style={state.color.Background ? { fill: contrastingInk(state.color.Background) } : undefined}
+              />
+            </button>
             <div className="locationDescriptionWrapper">
-              <div className="location">{locationLabel}</div>
+              <div
+                className="location"
+                style={state.editDescription && state.color.Meaning ? { color: state.color.Meaning } : undefined}
+              >
+                {locationLabel}
+                {anatomyData && anatomyLabel && <span className="anatomy">{anatomyLabel}</span>}
+              </div>
               <div className="description">
                 <input
                   id="descriptionInput"
                   ref={descriptionInput}
-                  defaultValue={description || ''}
+                  defaultValue={description}
                   autoComplete="off"
                   onKeyPress={handleKeyPress}
                 />
@@ -201,6 +293,11 @@ const LabellingFlow = ({
               <button type="button" className="commonButton left" onClick={relabel}>
                 {relabelButtonTitle}
               </button>
+              {anatomyData && (
+                <button type="button" className="commonButton" onClick={pickAnatomy}>
+                  {t(anatomyLabel ? 'Change Location' : 'Add Location')}
+                </button>
+              )}
               <button type="button" className="commonButton right" onClick={setDescriptionUpdateMode}>
                 {description ? 'Edit ' : 'Add '}
                 Description
@@ -225,7 +322,7 @@ const LabellingFlow = ({
       <EditDescriptionDialog
         onCancel={labellingDoneCallback}
         onUpdate={descriptionDialogUpdate}
-        description={state.measurementData.description}
+        description={state.description}
       />
     );
   }
@@ -233,11 +330,15 @@ const LabellingFlow = ({
   return (
     <LabellingTransition displayComponent={showComponent} onTransitionExit={labellingDoneCallback}>
       <>
+        {/* Keys pressed in the flow are its own; Escape is handled before this (useEscapeKey) */}
         <div
-          className={`labellingComponent ${state.editDescription && 'editDescription'}`}
-          onMouseLeave={fadeOutAndLeave}
-          onMouseEnter={clearFadeOutTimer}
+          className={`labellingComponent ${state.editDescription ? 'editDescription' : ''}`}
+          onKeyDown={event => event.stopPropagation()}
         >
+          <LabellingCloseButton
+            onClose={close}
+            className={state.editLocation || state.pickingAnatomy || !state.skipAddLabelButton ? 'onPicker' : 'onCard'}
+          />
           {labellingStateFragment()}
         </div>
       </>
@@ -260,8 +361,12 @@ LabellingFlow.propTypes = {
   labelWorkflowTitle: PropTypes.string,
   relabelButtonTitle: PropTypes.string,
   labelData: PropTypes.array,
-  fadeOutTimeout: PropTypes.number,
   searchPlaceholder: PropTypes.string,
+  anatomyData: PropTypes.array,
+  anatomyAttr: PropTypes.string,
+  // ({ Background, Meaning }) display colors of a picked label: Background fills the check button,
+  // Meaning colors the label while it is lifted for a description edit
+  labelColor: PropTypes.func,
 };
 
 

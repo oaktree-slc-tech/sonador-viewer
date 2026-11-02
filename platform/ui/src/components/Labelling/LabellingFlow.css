@@ -110,6 +110,11 @@
 }
 
 .labellingComponent .checkIconWrapper {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  outline: none;
+  line-height: 0;
   display: inline-block;
   background-color: #337ab7;
   border-radius: 46px;
@@ -125,4 +130,88 @@
   height: 20px;
   margin: 13px;
   fill: black;
+}
+
+.labellingComponent .checkIconWrapper:focus-visible {
+  box-shadow: 0 0 0 2px #8e8e93;
+}
+
+/* Close button: dismisses the flow (Escape also closes it, after stepping back out of a picker or
+   a description edit). Neutral grays only, so it reads
+   as part of the dialog rather than the viewer's accent color. */
+.labellingComponent .labellingCloseButton {
+  appearance: none;
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  line-height: 0;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+/* A 12px glyph leaves ~3px between its tips and the circle, on whole-pixel offsets. It is
+   nudged 1px right, where it reads as optically centred in the circle. */
+.labellingComponent .labellingCloseButton svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+  transform: translateX(1px);
+}
+
+/* Over the picker's gray header */
+.labellingComponent .labellingCloseButton.onPicker {
+  top: 2px;
+  right: 6px;
+  color: #303030;
+}
+
+.labellingComponent .labellingCloseButton.onPicker:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.labellingComponent .labellingCloseButton.onPicker:active {
+  background-color: rgba(0, 0, 0, 0.18);
+}
+
+/* Above the confirm card, on the dark overlay */
+.labellingComponent .labellingCloseButton.onCard {
+  top: -30px;
+  right: 0;
+  color: #ffffff;
+  background-color: #000000;
+  border: 1px solid #44626f;
+}
+
+.labellingComponent .labellingCloseButton.onCard:hover {
+  background-color: #2c2c2e;
+}
+
+.labellingComponent .labellingCloseButton.onCard:active {
+  background-color: #3a3a3c;
+}
+
+.labellingComponent .labellingCloseButton:focus-visible {
+  box-shadow: 0 0 0 2px #8e8e93;
+}
+
+/* Anatomic location of a coded tag, after its meaning on the confirm card */
+.labellingComponent .locationDescriptionWrapper .location .anatomy {
+  margin-left: 8px;
+  color: #6c757d;
+}
+
+.labellingComponent .locationDescriptionWrapper .location .anatomy:before {
+  content: '\00b7';
+  margin-right: 8px;
 }

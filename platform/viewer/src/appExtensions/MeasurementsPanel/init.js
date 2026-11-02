@@ -42,18 +42,8 @@ export default function init({ servicesManager, commandsManager }) {
   });
 
   const _updateLabellingHandler = (labellingData, measurementData) => {
-    const { location, description, response } = labellingData;
-
-    if (location) {
-      measurementData.location = location;
-    }
-
-    measurementData.description = description || '';
-
-    if (response) {
-      measurementData.response = response;
-    }
-
+    // Only the fields this edit supplies change (a location pick no longer clears the description)
+    OHIF.measurements.applyLabellingAttrs(measurementData, labellingData);
     commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
   };
 

@@ -33,7 +33,7 @@ class DICOMSRSeriesTagTool {
 
 		// Unpack series tag values
 		const { value, text, finding, findingSites } = tool;
-		const { scheme, schemeVersion } = (tool.metadata || tool);		
+		const { scheme, schemeVersion, TrackingUniqueIdentifier } = (tool.metadata || tool);
 
 		if (!value || !text) {
 
@@ -46,8 +46,10 @@ class DICOMSRSeriesTagTool {
 
 		return {
 			value, text, finding, findingSites,
-			scheme: scheme || SREnums.SONADOR_CLIENT, 
-			schemeVersion: schemeVersion || SREnums.SONADOR_SCHEME_VERSION, 
+			// The version is the tag's own; a tag without one is written without CodingSchemeVersion
+			scheme: scheme || SREnums.SONADOR_CLIENT,
+			schemeVersion: schemeVersion || undefined,
+			trackingUniqueIdentifier: TrackingUniqueIdentifier,
 			trackingIdentifierTextValue: [CORNERSTONE_TOOLS_SR_TAG, SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG].join(':'),
 		};
 	}

@@ -1,4 +1,5 @@
 import { CodeNameCodeSequenceValues, RELATIONSHIP_TYPE } from '../../enums';
+import { conceptNameValue } from '../../utils/codedConcept';
 
 import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
 import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
@@ -25,7 +26,7 @@ const processTID1410Measurement = (contentSequence) => {
   const UIDREFContentItem = contentSequence.find((group) => group.ValueType === 'UIDREF');
 
   const TrackingIdentifierContentItem = contentSequence.find(
-    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
+    (item) => conceptNameValue(item) === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
   const NUMContentItems = contentSequence.filter((group) => group.ValueType === 'NUM');
@@ -42,7 +43,7 @@ const processTID1410Measurement = (contentSequence) => {
   NUMContentItems.forEach((item) => {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
-    if (item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.Score) {
+    if (conceptNameValue(item) === CodeNameCodeSequenceValues.Score) {
       ContentSequence.forEach((item) => {
         if ([RELATIONSHIP_TYPE.SELECTED_FROM, RELATIONSHIP_TYPE.INFERRED_FROM].includes(item.RelationshipType)) {
           if (item.ReferencedSOPSequence) {

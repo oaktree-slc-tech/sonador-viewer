@@ -69,7 +69,8 @@ const MeasurementTableItem = ({
   onItemClick,
   onEditDescription,
   itemClass,
-  tagBtnLabel = 'Tag',
+  tagBtnLabel = 'Location',
+  tagBtnHint = 'Set anatomic location',
   descriptionBtnLabel = 'Description',
   deleteBtnLabel = 'Delete',
   isSelected = false,
@@ -107,14 +108,25 @@ const MeasurementTableItem = ({
     return identifiers;
   }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, metadataVersion]);
 
-  const getActionButton = (btnLabel, onClickCallback) => {
-    return (
-      <button key={btnLabel} className="btnAction" onClick={onClickCallback}>
+  const getActionButton = (btnLabel, onClickCallback, hint) => {
+    const button = (
+      <button key={btnLabel} className="btnAction" onClick={onClickCallback} aria-label={hint ? t(hint) : undefined}>
         <span style={{ marginRight: '4px' }}>
           <Icon name="edit" width="14px" height="14px" />
         </span>
         {t(btnLabel)}
       </button>
+    );
+    if (!hint) {
+      return button;
+    }
+    return (
+      <TooltipProvider key={btnLabel} delayDuration={300}>
+        <HoverTooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="bottom" className="measurementLabelTooltip">{t(hint)}</TooltipContent>
+        </HoverTooltip>
+      </TooltipProvider>
     );
   };
 
@@ -162,7 +174,7 @@ const MeasurementTableItem = ({
     const actionButtons = [];
 
     if (typeof onRelabel === 'function') {
-      const relabelButton = getActionButton(tagBtnLabel, onRelabelClick);
+      const relabelButton = getActionButton(tagBtnLabel, onRelabelClick, tagBtnHint);
       actionButtons.push(relabelButton);
     }
     if (typeof onEditDescription === 'function') {
@@ -290,6 +302,7 @@ MeasurementTableItem.propTypes = {
   itemClass: PropTypes.string,
   itemIndex: PropTypes.number,
   tagBtnLabel: PropTypes.string,
+  tagBtnHint: PropTypes.string,
   descriptionBtnLabel: PropTypes.string,
   deleteBtnLabel: PropTypes.string,
   isSelected: PropTypes.bool,

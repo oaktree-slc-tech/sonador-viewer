@@ -14,8 +14,8 @@ import _ from 'lodash';
 import { sr as dcmjsSr } from 'dcmjs';
 import { MeasurementApi } from '../../measurements/classes';
 import Enums from '../../measurements/enums';
+import { asArray, codedConcept, conceptNameValue } from './codedConcept';
 
-const { Code, CodedConcept } = dcmjsSr.coding;
 const { TextContentItem } = dcmjsSr.valueTypes;
 const { SonadorCodeValues, RelationshipType } = Enums.SREnums;
 
@@ -40,7 +40,7 @@ function encodeExtendedMeta(measurement, srItem) {
   if (description) {
 
     descriptionSrItem = new TextContentItem({
-      name: new CodedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_DESCRIPTION),
+      name: codedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_DESCRIPTION),
       value: description,
       relationshipType: RelationshipType.CONCEPT_MOD,
     });
@@ -51,7 +51,7 @@ function encodeExtendedMeta(measurement, srItem) {
   if (text) {
     
     textSrItem = new TextContentItem({
-      name: new CodedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_TEXT),
+      name: codedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_TEXT),
       value: text,
       relationshipType: RelationshipType.CONCEPT_MOD,
     });
@@ -62,7 +62,7 @@ function encodeExtendedMeta(measurement, srItem) {
   if (location) {
 
     locationSrItem = new TextContentItem({
-      name: new CodedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION),
+      name: codedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION),
       value: location,
       relationshipType: RelationshipType.CONCEPT_MOD,
     });
@@ -85,12 +85,11 @@ function parseExtendedMeta(srItem, annotation, options) {
   });
 
   // SR Item content sequence
-  const srSeq = _.isArray(srItem) ? srItem : srItem.ContentSequence;
+  const srSeq = asArray(_.isArray(srItem) ? srItem : srItem.ContentSequence);
 
   // Check for description field
   const descriptionSrItem = srSeq.find(contentItem => {
-    return contentItem.ConceptNameCodeSequence 
-      && contentItem.ConceptNameCodeSequence.CodeValue == SonadorCodeValues.DCMSR_MEASUREMENT_DESCRIPTION.value;
+    return conceptNameValue(contentItem) === SonadorCodeValues.DCMSR_MEASUREMENT_DESCRIPTION.value;
   });
   if (descriptionSrItem && descriptionSrItem.TextValue && !annotation.description) {
     annotation.description = descriptionSrItem.TextValue;
@@ -98,8 +97,7 @@ function parseExtendedMeta(srItem, annotation, options) {
 
   // Check for text field
   const textSrItem = srSeq.find(contentItem => {
-    return contentItem.ConceptNameCodeSequence
-      && contentItem.ConceptNameCodeSequence.CodeValue == SonadorCodeValues.DCMSR_MEASUREMENT_TEXT.value;
+    return conceptNameValue(contentItem) === SonadorCodeValues.DCMSR_MEASUREMENT_TEXT.value;
   });
   if (textSrItem && textSrItem.TextValue && !annotation.annotation?.metadata?.text) {
     _.set(annotation, options.textPath, textSrItem.TextValue);
@@ -107,8 +105,7 @@ function parseExtendedMeta(srItem, annotation, options) {
 
   // Check for location field
   const locationSrItem = srSeq.find(contentItem => {
-    return contentItem.ConceptNameCodeSequence
-      && contentItem.ConceptNameCodeSequence.CodeValue == SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION.value;
+    return conceptNameValue(contentItem) === SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION.value;
   });
   if (locationSrItem && locationSrItem.TextValue && !annotation.annotation?.metadata?.location) {
     _.set(annotation, options.locationPath, locationSrItem.TextValue);    

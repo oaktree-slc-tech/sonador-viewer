@@ -4,8 +4,8 @@
 // The measurement group CONTAINS a display attributes CONTAINER, which CONTAINS a `Color`
 // CONTAINER with one TEXT item per color role. HAS CONCEPT MOD cannot be used: its target must be
 // TEXT or CODE. Values are DICOM CIELab triples (`L\a\b`), since SR content items cannot carry
-// RecommendedDisplayCIELabValue. Code values longer than 16 characters are written as
-// LongCodeValue (PS3.3 8.1); readers accept either attribute.
+// RecommendedDisplayCIELabValue. Codes are built by codedConcept.js, which selects the value
+// attribute; readers accept any of the three.
 
 import { sr as dcmjsSr } from 'dcmjs';
 import _ from 'lodash';
@@ -19,31 +19,13 @@ import {
 } from '../../displayAttributes';
 import { MeasurementApi } from '../../measurements/classes';
 import { RelationshipType,SonadorCodeValues } from '../enums';
+import { asArray, codedConcept, conceptNameValue } from './codedConcept';
 
-const { CodedConcept } = dcmjsSr.coding;
 const { ContainerContentItem, TextContentItem } = dcmjsSr.valueTypes;
 const { DCMSR_DISPLAY_ATTRIBUTES, DCMSR_DISPLAY_COLOR, DCMSR_DISPLAY_COLOR_ROLES } = SonadorCodeValues;
 
-const CODE_VALUE_MAX_LENGTH = 16;
-
-// Content items read from a naturalized dataset may hold single-item sequences as objects
-const asArray = value => (_.isNil(value) ? [] : _.isArray(value) ? value : [value]);
-const conceptValue = contentItem => {
-  const concept = asArray(contentItem && contentItem.ConceptNameCodeSequence)[0];
-  return concept && (concept.CodeValue || concept.LongCodeValue);
-};
 const findContentItem = (contentSequence, code) =>
-  asArray(contentSequence).find(contentItem => conceptValue(contentItem) === code.value);
-
-
-function conceptName(code) {
-  const concept = new CodedConcept(code);
-  if (concept.CodeValue.length > CODE_VALUE_MAX_LENGTH) {
-    concept.LongCodeValue = concept.CodeValue;
-    delete concept.CodeValue;
-  }
-  return concept;
-}
+  asArray(contentSequence).find(contentItem => conceptNameValue(contentItem) === code.value);
 
 
 function measurementDisplayAttributes(measurement) {
@@ -55,7 +37,7 @@ function measurementDisplayAttributes(measurement) {
 function encodeDisplayAttributes(measurement, srItem) {
   const color = getDisplayColor({ displayAttributes: measurementDisplayAttributes(measurement) });
   const colorItems = DISPLAY_COLOR_ROLES.filter(role => color[role]).map(role => new TextContentItem({
-    name: conceptName(DCMSR_DISPLAY_COLOR_ROLES[role]),
+    name: codedConcept(DCMSR_DISPLAY_COLOR_ROLES[role]),
     value: hexToDicomLab(color[role]).join('\\'),
     relationshipType: RelationshipType.CONTAINS,
   }));
@@ -65,13 +47,13 @@ function encodeDisplayAttributes(measurement, srItem) {
   }
 
   const colorContainer = new ContainerContentItem({
-    name: conceptName(DCMSR_DISPLAY_COLOR),
+    name: codedConcept(DCMSR_DISPLAY_COLOR),
     relationshipType: RelationshipType.CONTAINS,
   });
   colorContainer.ContentSequence = colorItems;
 
   const displayContainer = new ContainerContentItem({
-    name: conceptName(DCMSR_DISPLAY_ATTRIBUTES),
+    name: codedConcept(DCMSR_DISPLAY_ATTRIBUTES),
     relationshipType: RelationshipType.CONTAINS,
   });
   displayContainer.ContentSequence = [colorContainer];

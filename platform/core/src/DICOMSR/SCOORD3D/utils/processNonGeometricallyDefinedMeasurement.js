@@ -1,5 +1,6 @@
 import SCOORD_TYPES from '../../constants/scoordTypes';
 import { CodeNameCodeSequenceValues, CodingSchemeDesignators } from '../../enums';
+import { conceptCode, conceptCodeValue, conceptName, conceptNameValue } from '../../utils/codedConcept';
 
 import getCoordsFromSCOORDOrSCOORD3D from './getCoordsFromSCOORDOrSCOORD3D';
 import getLabelFromMeasuredValueSequence from './getLabelFromMeasuredValueSequence';
@@ -17,17 +18,17 @@ const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
   const IMAGEContentItem = contentSequence.find((group) => group.ValueType === 'IMAGE');
 
   const TrackingIdentifierContentItem = contentSequence.find(
-    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
+    (item) => conceptNameValue(item) === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
   const Finding = contentSequence.find(
-    (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.Finding
+    (item) => conceptNameValue(item) === CodeNameCodeSequenceValues.Finding
   );
 
   const FindingSites = contentSequence.filter(
     (item) =>
-      item.ConceptNameCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.SRT &&
-      item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.FindingSite
+      conceptName(item)?.CodingSchemeDesignator === CodingSchemeDesignators.SRT &&
+      conceptNameValue(item) === CodeNameCodeSequenceValues.FindingSite
   );
 
   const measurement = {
@@ -40,12 +41,12 @@ const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
 
   if (
     Finding &&
-    Finding.ConceptCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
-    Finding.ConceptCodeSequence.CodeValue === CodeNameCodeSequenceValues.CornerstoneFreeText
+    conceptCode(Finding)?.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
+    conceptCodeValue(Finding) === CodeNameCodeSequenceValues.CornerstoneFreeText
   ) {
     measurement.labels.push({
       label: CORNERSTONE_FREETEXT_CODE_VALUE,
-      value: Finding.ConceptCodeSequence.CodeMeaning,
+      value: conceptCode(Finding)?.CodeMeaning,
     });
   }
 
@@ -53,14 +54,14 @@ const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
   if (FindingSites.length) {
     const cornerstoneFreeTextFindingSite = FindingSites.find(
       (FindingSite) =>
-        FindingSite.ConceptCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
-        FindingSite.ConceptCodeSequence.CodeValue === CodeNameCodeSequenceValues.CornerstoneFreeText
+        conceptCode(FindingSite)?.CodingSchemeDesignator === CodingSchemeDesignators.cornerstoneTools4 &&
+        conceptCodeValue(FindingSite) === CodeNameCodeSequenceValues.CornerstoneFreeText
     );
 
     if (cornerstoneFreeTextFindingSite) {
       measurement.labels.push({
         label: CORNERSTONE_FREETEXT_CODE_VALUE,
-        value: cornerstoneFreeTextFindingSite.ConceptCodeSequence.CodeMeaning,
+        value: conceptCode(cornerstoneFreeTextFindingSite)?.CodeMeaning,
       });
     }
   }
@@ -115,10 +116,10 @@ const processNonGeometricallyDefinedMeasurement = (contentSequence) => {
       };
       measurement.coords.push(coord);
       measurement.labels.push({
-        label: ConceptNameCodeSequence.CodeMeaning,
-        labelCodingSchemeDesignator: ConceptNameCodeSequence.CodingSchemeDesignator,
-        value: ConceptCodeSequence.CodeMeaning,
-        valueCodingSchemeDesignator: ConceptCodeSequence.CodingSchemeDesignator,
+        label: conceptName(item)?.CodeMeaning,
+        labelCodingSchemeDesignator: conceptName(item)?.CodingSchemeDesignator,
+        value: conceptCode(item)?.CodeMeaning,
+        valueCodingSchemeDesignator: conceptCode(item)?.CodingSchemeDesignator,
       });
     });
   }

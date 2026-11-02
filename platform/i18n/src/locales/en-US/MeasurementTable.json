@@ -2,8 +2,10 @@
   "Criteria nonconformities": "Criteria nonconformities",
   "Delete": "Delete",
   "Description": "Description",
+  "Location": "Location",
   "MAX": "MAX",
   "NonTargets": "NonTargets",
   "Relabel": "Relabel",
+  "Set anatomic location": "Set anatomic location",
   "Targets": "Targets"
 }

@@ -1,6 +1,7 @@
-import DICOMReferencedSOPInstanceFinding from './DICOMReferencedSOPInstanceFinding';
+import DICOMReferencedSOPInstanceFinding, { readFindingCode } from './DICOMReferencedSOPInstanceFinding';
 
 
 export default {
   DICOMReferencedSOPInstanceFinding,
+  readFindingCode,
 };

@@ -6,13 +6,14 @@
 import _ from 'lodash';
 
 import { utilities, data as dcmData } from "dcmjs";
-import { adaptersSR as c3dAdaptersSR, helpers as c3dSrHelpers } from '@cornerstonejs/adapters';
+import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
 
 import { MeasurementApi } from '../../measurements/classes'
 import { Enums as MeasurementEnums } from '../../measurements/enums';
 
 import TID1500MeasurementReport from '../utils/TID1500';
 import { findReferencedSOPSequence } from './utils/findReferencedSOP';
+import { asArray, conceptNameMatches, firstItem } from '../utils/codedConcept';
 
 const { MeasurementReport: c3dMeasurementReport } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
@@ -31,37 +32,37 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     const MeasurementService = measurementApi.measurementService;    
 
     // For now, bail out if the dataset is not a TID1500 SR with length measurements
-    if (dataset.ContentTemplateSequence.TemplateIdentifier !== "1500") {
+    if (firstItem(dataset.ContentTemplateSequence)?.TemplateIdentifier !== "1500") {
       throw new Error("This package can currently only interpret DICOM SR TID 1500");
     }
 
-    const REPORT = "Imaging Measurements";
-    const GROUP = "Measurement Group";
-    const TRACKING_IDENTIFIER = "Tracking Identifier";
-    const TRACKING_UNIQUE_IDENTIFIER = "Tracking Unique Identifier";
+    // Content items are matched on code identity (value and designator), in any value attribute and
+    // with sequences naturalized as an object or an array
+    const { CodeNameCodeSequenceValues: codes, DCM } = MeasurementEnums.SREnums;
+    const dcmCode = value => ({ value, schemeDesignator: DCM });
 
     // Identify the Imaging Measurements
-    const imagingMeasurementContent = c3dSrHelpers.toArray(dataset.ContentSequence)
-      .find(c3dSrHelpers.codeMeaningEquals(REPORT));
+    const imagingMeasurementContent = asArray(dataset.ContentSequence)
+      .find(item => conceptNameMatches(item, dcmCode(codes.ImagingMeasurements)));
 
     // Retrieve the Measurements themselves
-    const measurementGroups = c3dSrHelpers.toArray(imagingMeasurementContent.ContentSequence)
-      .filter(c3dSrHelpers.codeMeaningEquals(GROUP));
+    const measurementGroups = asArray(imagingMeasurementContent?.ContentSequence)
+      .filter(item => conceptNameMatches(item, dcmCode(codes.MeasurementGroup)));
 
     // For each of the supported measurement types, compute the measurement data
     const measurementData = {};
 
     measurementGroups.forEach(measurementGroup => {
       try {
-        const measurementGroupContentSequence = c3dSrHelpers.toArray(measurementGroup.ContentSequence);
+        const measurementGroupContentSequence = asArray(measurementGroup.ContentSequence);
 
         const trackingIdentifierGroup = measurementGroupContentSequence.find(
-          contentItem => contentItem.ConceptNameCodeSequence.CodeMeaning === TRACKING_IDENTIFIER);
+          contentItem => conceptNameMatches(contentItem, dcmCode(codes.TrackingIdentifier)));
 
         const { TextValue: trackingIdentifierValue } = trackingIdentifierGroup;
 
         const trackingUniqueIdentifierGroup = measurementGroupContentSequence.find(
-          contentItem => contentItem.ConceptNameCodeSequence.CodeMeaning === TRACKING_UNIQUE_IDENTIFIER);
+          contentItem => conceptNameMatches(contentItem, dcmCode(codes.TrackingUniqueIdentifier)));
 
         const trackingUniqueIdentifierValue = trackingUniqueIdentifierGroup?.UID;
 
@@ -99,12 +100,17 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     return measurementData;
   }
 
+  public static codeValueMatch(group, code, oldCode?) {
+    // Inherited matcher reads CodeValue only; accept LongCodeValue / URNCodeValue as well
+    return conceptNameMatches(group, ...[code, oldCode].filter(Boolean));
+  }
+
   public static getQualitativeEvaluationData(MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, toolType) {
     /*
       Parse reference data and content sequences from the provided MeasurementGroup.
     */
     const { ContentSequence } = MeasurementGroup;
-    const contentSequenceArr = c3dSrHelpers.toArray(ContentSequence);
+    const contentSequenceArr = asArray(ContentSequence);
 
     // Find "primary finding group" (which is used to retrieve the ReferencedSOPSequence) and "secondary findings"
     // with additional qualitative data. The ReferencedSOPSequence for the evaluation data is taken from the 
