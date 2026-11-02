@@ -22,6 +22,7 @@ export default class InputRadio extends Component {
           className="radioInput"
           value={this.props.value}
           onChange={this.onSelected}
+          onKeyDown={this.onKeyDown}
         />
         <span className="wrapperText">{this.props.label}</span>
       </label>
@@ -30,5 +31,13 @@ export default class InputRadio extends Component {
 
   onSelected = (evt) => {
     this.props.onSelected(evt, this.props.itemData);
+  };
+
+  // Space selects a focused radio natively; Enter does the same here
+  onKeyDown = (evt) => {
+    if (evt.key === 'Enter') {
+      evt.preventDefault();
+      this.props.onSelected(evt, this.props.itemData);
+    }
   };
 }

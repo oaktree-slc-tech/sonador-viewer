@@ -1,7 +1,9 @@
+import { codeValueOf, firstItem } from '../../utils/codedConcept';
+
 const getLabelFromMeasuredValueSequence = (ConceptNameCodeSequence, MeasuredValueSequence) => {
-  const { CodeMeaning } = ConceptNameCodeSequence;
-  const { NumericValue, MeasurementUnitsCodeSequence } = MeasuredValueSequence;
-  const { CodeValue } = MeasurementUnitsCodeSequence;
+  const { CodeMeaning } = firstItem(ConceptNameCodeSequence) || {};
+  const { NumericValue, MeasurementUnitsCodeSequence } = firstItem(MeasuredValueSequence) || {};
+  const CodeValue = codeValueOf(firstItem(MeasurementUnitsCodeSequence));
 
   const formatedNumericValue = NumericValue ? Number(NumericValue).toFixed(1) : '';
 

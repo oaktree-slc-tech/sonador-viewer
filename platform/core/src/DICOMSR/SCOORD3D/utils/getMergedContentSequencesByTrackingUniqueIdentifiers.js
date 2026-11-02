@@ -1,4 +1,5 @@
 import { CodeNameCodeSequenceValues } from '../../enums';
+import { conceptNameValue } from '../../utils/codedConcept';
 
 import getSequenceAsArray from './getSequenceAsArray';
 
@@ -9,7 +10,7 @@ const getMergedContentSequencesByTrackingUniqueIdentifiers = (MeasurementGroups)
     const ContentSequence = getSequenceAsArray(MeasurementGroup.ContentSequence);
 
     const TrackingUniqueIdentifierItem = ContentSequence.find(
-      (item) => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingUniqueIdentifier
+      (item) => conceptNameValue(item) === CodeNameCodeSequenceValues.TrackingUniqueIdentifier
     );
 
     if (!TrackingUniqueIdentifierItem) {
@@ -25,7 +26,7 @@ const getMergedContentSequencesByTrackingUniqueIdentifiers = (MeasurementGroups)
       // Add the ContentSequence minus the tracking identifier, as we have this
       // Information in the merged ContentSequence anyway.
       ContentSequence.forEach((item) => {
-        if (item.ConceptNameCodeSequence.CodeValue !== CodeNameCodeSequenceValues.TrackingUniqueIdentifier) {
+        if (conceptNameValue(item) !== CodeNameCodeSequenceValues.TrackingUniqueIdentifier) {
           mergedContentSequencesByTrackingUniqueIdentifiers[trackingUniqueIdentifier].push(item);
         }
       });

@@ -11,9 +11,17 @@ function firstDefinedValue(...args) {
 }
 
 
+function firstPresentValue(...args) {
+	// Retrieve the first value that is not undefined. Unlike firstDefinedValue, null is returned
+	// when it comes first: it records that an attribute was explicitly cleared.
+	return _.find(Array.from(args), val => val !== undefined);
+}
+
+
 const dataProc = {
 	firstDefinedValue,
+	firstPresentValue,
 }
 
 export default dataProc;
-export { firstDefinedValue, }
+export { firstDefinedValue, firstPresentValue, }

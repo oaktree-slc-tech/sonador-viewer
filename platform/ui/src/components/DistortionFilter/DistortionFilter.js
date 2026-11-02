@@ -9,6 +9,9 @@ import OHIF, { sonador, redux } from '@ohif/core';
 import Icon from '../../elements/Icon/Icon.js';
 import SelectTree from '../selectTree/SelectTree.js';
 import LabellingTransition from '../Labelling/LabellingTransition';
+import { LabellingCloseButton, useEscapeKey } from '../Labelling/labellingDismiss.js';
+
+import '../Labelling/LabellingFlow.css';
 
 
 const DistortionFilterFlow = ({
@@ -28,7 +31,6 @@ const DistortionFilterFlow = ({
   distortionFilterDoneCallback,
   groupSelectTitle = 'Select Group Device List for Distortion Check',
   groupSearchPlaceholder = 'Search groups',
-  fadeOutTimeout = 2000,
   msgTemplate = _.template('<%= group %>/<%= device %> ("<%= deviceModel %>"): <%= msg %>'),
   userNotificationTitleTemplate = _.template('Distortion Filter results for "<%= group %>"'),
   userNotificationMsgTemplate = _.template(
@@ -37,22 +39,13 @@ const DistortionFilterFlow = ({
 }) => {
   const { activeServer } = useSelector(redux.selectors.activeOhifServer);
 
-  const [fadeOutTimer, setFadeOutTimer] = useState();
   const [showComponent, setShowComponent] = useState(true);
+  // Closing (close button, Escape, check) removes the flow at once, without the exit fade
+  const close = () => distortionFilterDoneCallback();
+  useEscapeKey(close);
 
   // DisplaySet API
   const displaySetApi = OHIF.display.DisplaySetApi.Instance;  
-
-  // Clear workflow widget
-  const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, fadeOutTimeout));
-  const fadeOutAndLeaveFast = () => setShowComponent(false);
-
-  const clearFadeOutTimer = () => {
-    if (fadeOutTimer) {
-      clearTimeout(fadeOutTimer);
-      setFadeOutTimer(null);
-    }
-  };
 
   // Manage state for group selection
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -131,7 +124,8 @@ const DistortionFilterFlow = ({
   return (
     <LabellingTransition displayComponent={showComponent} onTransitionExit={distortionFilterDoneCallback}>
     <>
-      <div onMouseLeave={fadeOutAndLeave} onMouseEnter={clearFadeOutTimer}>
+      <div className="labellingComponent" onKeyDown={event => event.stopPropagation()}>
+        <LabellingCloseButton onClose={close} className="onPicker" />
         <SelectTree
           items={displayGroups}
           columns={1}
@@ -155,7 +149,6 @@ DistortionFilterFlow.propTypes = {
   distortionFilterDoneCallback: PropTypes.func.isRequired,
   groupSelectTitle: PropTypes.string,
   groupSearchPlaceholder: PropTypes.string,
-  fadeOutTimeout: PropTypes.number,
   msgTemplate: PropTypes.func.isRequired,
   userNotificationTitleTemplate: PropTypes.func.isRequired,
   userNotificationMsgTemplate: PropTypes.func.isRequired,

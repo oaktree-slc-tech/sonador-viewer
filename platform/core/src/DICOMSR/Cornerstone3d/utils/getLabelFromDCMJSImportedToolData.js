@@ -1,5 +1,7 @@
 import { adaptersSR } from '@cornerstonejs/adapters';
 
+import { codeValueOf } from '../../utils/codedConcept';
+
 const { CodeScheme: Cornerstone3DCodeScheme } = adaptersSR.Cornerstone3D;
 
 
@@ -15,14 +17,14 @@ export default function getLabelFromDCMJSImportedToolData(toolData) {
   const { findingSites = [], finding } = toolData;
 
   let freeTextLabel = findingSites.find(
-    fs => fs.CodeValue === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
+    fs => codeValueOf(fs) === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
   );
 
   if (freeTextLabel) {
     return freeTextLabel.CodeMeaning;
   }
 
-  if (finding && finding.CodeValue === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT) {
+  if (finding && codeValueOf(finding) === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT) {
     return finding.CodeMeaning;
   }
 }

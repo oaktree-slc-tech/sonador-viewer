@@ -1,4 +1,5 @@
 import utils from '../../../utils';
+import { codeValueOf, firstItem } from '../../utils/codedConcept';
 
 /**
  * Formatters used to format each of the content items (SR "nodes") which can be
@@ -10,17 +11,17 @@ import utils from '../../../utils';
  */
 const contentItemFormatters = {
   TEXT: contentItem => contentItem.TextValue,
-  CODE: contentItem => contentItem.ConceptCodeSequence?.[0]?.CodeMeaning,
+  CODE: contentItem => firstItem(contentItem.ConceptCodeSequence)?.CodeMeaning,
   UIDREF: contentItem => contentItem.UID,
   NUM: contentItem => {
-    const measuredValue = contentItem.MeasuredValueSequence?.[0];
+    const measuredValue = firstItem(contentItem.MeasuredValueSequence);
 
     if (!measuredValue) {
       return;
     }
 
     const { NumericValue, MeasurementUnitsCodeSequence } = measuredValue;
-    const { CodeValue } = MeasurementUnitsCodeSequence;
+    const CodeValue = codeValueOf(firstItem(MeasurementUnitsCodeSequence));
 
     return `${NumericValue} ${CodeValue}`;
   },

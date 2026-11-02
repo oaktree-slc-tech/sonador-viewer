@@ -81,7 +81,8 @@ const DICOMSRSeriesTagTool = {
       timepointId,
       TrackingUniqueIdentifier: trackingUid,
       scheme: measurementMeta.scheme || measurementData.scheme || measurement.scheme,
-      schemeVersion: measurementMeta.schemeVersion || measurementData.schemeVersion || measurement.schemeVersion,
+      schemeVersion: utils.dataProc.firstPresentValue(
+        measurementMeta.schemeVersion, measurementData.schemeVersion, measurement.schemeVersion),
     });
 
     return _.omit(annotation, 'data');
@@ -101,7 +102,9 @@ const DICOMSRSeriesTagTool = {
     // Tag value
     const value = csToolsAnnotation.value || measurementData.value || annotation.value;
     const scheme = csToolsAnnotation.scheme || measurementMeta.scheme || measurementData.scheme || annotation.scheme;
-    const schemeVersion = csToolsAnnotation.schemeVersion || measurementMeta.schemeVersion || measurementData.schemeVersion || annotation.schemeVersion;
+    // null (a tag without a version) is kept in preference to an older version further down
+    const schemeVersion = utils.dataProc.firstPresentValue(csToolsAnnotation.schemeVersion, measurementMeta.schemeVersion,
+      measurementData.schemeVersion, annotation.schemeVersion);
 
     // Add tag value to measurement root and measurement data sections
     measurement.data.value = value;

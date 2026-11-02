@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 
 import SimpleDialog from '../SimpleViewerDialog/SimpleDialog.js';
+import { useEscapeKey } from '../Labelling/labellingDismiss.js';
 
 import './EditDescriptionDialog.css';
 
@@ -10,6 +11,7 @@ const EditDescriptionDialog = ({ description: propDescription, onCancel, onUpdat
   // Provides a basic dialog with an edit control for modifying a "description"
 
   const [description, setDescription] = useState(propDescription || '');
+  useEscapeKey(onCancel);
 
   const onConfirm = (e) => {
     e.preventDefault();    

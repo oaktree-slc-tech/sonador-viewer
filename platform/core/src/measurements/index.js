@@ -1,3 +1,4 @@
+import applyLabellingAttrs from './lib/applyLabellingAttrs';
 import getDescription from './lib/getDescription';
 import getImageAttributes from './lib/getImageAttributes';
 import getImageIdForImagePath from './lib/getImageIdForImagePath';
@@ -23,6 +24,7 @@ const measurements = {
   tools,
   getLabel,
   getDescription,
+  applyLabellingAttrs,
   getImageAttributes,
   getImageIdForImagePath,
   getImagePath,

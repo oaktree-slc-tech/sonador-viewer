@@ -132,12 +132,9 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         contentProps: {
           measurementData: labellingAttrs0,
           labellingDoneCallback: () => UIDialogService.dismiss({ id: 'labelling' }),
-          updateLabelling: ({ location, description, response }) => {
-
-            measurementData.location = location || labellingAttrs0.location || '';
-            measurementData.description = description || labellingAttrs0.description || '';
-            measurementData.response = response || measurementData.response;
-
+          updateLabelling: (labellingData) => {
+            // Only the fields this edit supplies change; earlier edits in the dialog are kept
+            OHIF.measurements.applyLabellingAttrs(measurementData, labellingData);
             commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
           },
           ...dialogProps,
@@ -209,7 +206,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                       });
                     }
                   },
-                  updateLabelling: ({ value, text, description, scheme, schemeVersion, group, meta }) => {
+                  updateLabelling: ({ value, text, description, location, scheme, schemeVersion, group, meta }) => {
                     // Update measurement service with tag value
 
                     // Add tag to measurement API
@@ -234,11 +231,17 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                     measurementData.value = value || measurementData.value;
                     measurementData.description = description || measurementData.description || '';
                     measurementData.text = text || measurementData.text || '';
-                    measurementData.scheme = scheme || measurementData.metadata?.scheme || measurementData.scheme;
-                    measurementData.schemeVersion = schemeVersion || measurementData.metadata?.scheme || measurementData.schemeVersion
+                    if (location) {
+                      measurementData.location = location;
+                    }
 
-                    // The resolved colors are copied into the finding so the saved SR keeps them
+                    // Selecting a tag replaces its code, including the version: a tag without one
+                    // records null so that the previous tag's version is not carried over. Other
+                    // edits (e.g. the description step) leave the code untouched. The resolved
+                    // colors are copied into the finding so the saved SR keeps them.
                     if (value) {
+                      measurementData.scheme = scheme || measurementData.metadata?.scheme || measurementData.scheme;
+                      measurementData.schemeVersion = schemeVersion || null;
                       measurementData.displayAttributes = OHIF.displayAttributes.resolveDisplayAttributes(
                         OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, meta);
                     }
@@ -522,8 +525,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
           })
           .forEach((m) => {
 
-            // Update measurement data
-            _.extend(m,  _.omit(_.pickBy(measurementData, v => !_.isNil(v)), 'measurementNumber'));
+            // Update measurement data. A null scheme version is kept: it clears the version of a
+            // previously selected tag.
+            const update = _.omit(_.pickBy(measurementData, v => !_.isNil(v)), 'measurementNumber');
+            if (_.has(measurementData, 'schemeVersion')) {
+              update.schemeVersion = measurementData.schemeVersion;
+            }
+            _.extend(m, update);
 
             // Trigger update via measurement API
             measurementApi.updateMeasurement(toolType, m, {

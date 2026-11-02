@@ -10,9 +10,19 @@ import SelectTree from '../selectTree/SelectTree.js';
 
 import LabellingFlow from './LabellingFlow.js';
 import LabellingTransition from './LabellingTransition.js';
+import OHIFLabellingData from './OHIFLabellingData.js';
+import { LabellingCloseButton, useEscapeKey } from './labellingDismiss.js';
 
 import './LabellingFlow.css';
 
+
+// Card colors for a picked tag. Background is the one the finding will be saved with (the tag's
+// own, then the site and built-in defaults); Meaning is used only when the tag sets it itself.
+const tagColor = tag => {
+  const { SERIES_TAG_TOOL, getDisplayColor, resolveDisplayColor } = displayAttributes;
+  const own = getDisplayColor(tag && tag.meta);
+  return { Background: resolveDisplayColor(SERIES_TAG_TOOL, own).Background, Meaning: own.Meaning };
+};
 
 // A tag with a custom background (one that differs from the default display profile) is marked by
 // a band of that color on the inside left edge of its option
@@ -32,33 +42,22 @@ const SeriesTagLabellingFlow = ({
   //  Workflow steps:
   //  * Step 0: Retrieve groups list and prompt user to select one.
   //  * Step 1: Retrieve tags from server and render using th LabellingFlow component.
-  //  * Step 2: When an item is selected from the dropdown list, proceed to a "confirm" dialog
-  //    which shows the selected label and provides the option to create a description.
-  //  * Step 3: Once label/tag and description are confirmed, the annotation can be confirmed
-  //    by clicking on an "Accept" button.
+  //  * Step 2: Selecting a tag applies it and shows LabellingFlow's card, where the anatomic
+  //    location and a description can be added (each change applies when it is made).
+  //  * Step 3: The check (Done) closes the flow; the close button and Escape also dismiss it.
 
   groups,
   server,
   groupSelectTitle = 'Select Group',
   groupSearchPlaceholder = 'Search groups',
   updateLabelling,
-  fadeOutTimeout = 2000,
   labellingDoneCallback,
+  anatomyData = OHIFLabellingData,
   ...props
 }) => {
-  const [fadeOutTimer, setFadeOutTimer] = useState();
   const [showComponent, setShowComponent] = useState(true);
-
-  // Clear workflow widget
-  const fadeOutAndLeave = () => setFadeOutTimer(setTimeout(fadeOutAndLeaveFast, fadeOutTimeout));
-  const fadeOutAndLeaveFast = () => setShowComponent(false);
-
-  const clearFadeOutTimer = () => {
-    if (fadeOutTimer) {
-      clearTimeout(fadeOutTimer);
-      setFadeOutTimer(null);
-    }
-  };
+  // Closing (close button, Escape, check) removes the flow at once, without the exit fade
+  const close = () => labellingDoneCallback();
 
   // Manage state for group selection
   const [selectedGroup, setSelectedGroup] = useState(undefined);
@@ -117,6 +116,17 @@ const SeriesTagLabellingFlow = ({
     }
   }, [selectedGroup, seriesTags, tagsLoaded]);
 
+  // Only one group with tags enabled: select it and go straight to its tags
+  useEffect(() => {
+    if (!selectedGroup && groups.length == 1) {
+      setSelectedGroup(groups[0]);
+    }
+  }, [groups, selectedGroup]);
+
+  // Escape closes the group step; once the tags are shown, LabellingFlow handles it
+  const inTagStep = tagsLoaded && seriesTags.length > 0;
+  useEscapeKey(inTagStep ? null : close);
+
   const onGroupSelected = (evt, group) => {
     // Set selected grop for the workflow
     
@@ -125,23 +135,32 @@ const SeriesTagLabellingFlow = ({
 
   if (!tagsLoaded && groups.length == 1) {
 
-    // Only one group with tags enabled, set as active and trigger tags workflow
-    setTimeout(() => setSelectedGroup(groups[0]), 100);
+    // Tags for the only group are loading
     return (
-        <div className="loading" />
+      <LabellingTransition displayComponent={showComponent} onTransitionExit={labellingDoneCallback}>
+        <div className="labellingComponent" onKeyDown={event => event.stopPropagation()}>
+          <LabellingCloseButton onClose={close} className="onCard" />
+          <div className="loading" />
+        </div>
+      </LabellingTransition>
     );
-  } else if (tagsLoaded && seriesTags.length) {
+  } else if (inTagStep) {
 
     // Load labelling workflow    
     return (
       <LabellingFlow
         {...props}
         labellingDoneCallback={labellingDoneCallback}
-        fadeOutTimeout={fadeOutTimeout}
         labelData={seriesTags}
         updateLabelling={onUpdateLabelling}
         locationAttr='value'
         locationLabelAttr='text'
+        labelWorkflowTitle='Assign Tag'
+        relabelButtonTitle='Retag'
+        searchPlaceholder='Search tags'
+        anatomyData={anatomyData}
+        anatomyAttr='location'
+        labelColor={tagColor}
       />
     );
   } else {
@@ -154,7 +173,8 @@ const SeriesTagLabellingFlow = ({
     return (
       <LabellingTransition displayComponent={showComponent} onTransitionExit={labellingDoneCallback}>
         <>
-        <div onMouseLeave={fadeOutAndLeave} onMouseEnter={clearFadeOutTimer}>
+        <div className="labellingComponent" onKeyDown={event => event.stopPropagation()}>
+          <LabellingCloseButton onClose={close} className="onPicker" />
           <SelectTree
             items={displayGroups}
             columns={1}
