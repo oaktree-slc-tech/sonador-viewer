@@ -10,7 +10,9 @@
 // * 0.1 (2022): basic encoding structures including "Sonador-SEG" and "Sonador-SR" structures
 // * 0.2 (2023-0828): spatial SR constructs (2D/3D point concepts) used for creating SR documents 
 //   that can be used for machine learning applications.
-// * 0.3 (2025-0614): Sonador Viewer extensions establishing extended metadata attributes.
+// * 0.3 (2025-0614): Sonador Viewer extensions establishing extended metadata attributes and the
+//   display attributes. There is no 0.4: display-attribute concept names in files written with
+//   0.4 are read as the same concepts (readers match on the code value).
 
 
 import _ from 'lodash';
@@ -90,7 +92,6 @@ export const SONADOR_CLIENT = `${SONADOR_MANUFACTURER}-Client`;
 export const SONADOR_SCHEME_VERSION_01 = '0.1';
 export const SONADOR_SCHEME_VERSION_02 = '0.2';
 export const SONADOR_SCHEME_VERSION_03 = '0.3';
-export const SONADOR_SCHEME_VERSION_04 = '0.4';
 export const SONADOR_SCHEME_VERSION = SONADOR_SCHEME_VERSION_03;
 
 export const SONADOR_SEG = `${SONADOR_MANUFACTURER}-SEG`;
@@ -191,16 +192,18 @@ export const DCMSR_MEASUREMENT_LOCATION = {
 
 // Sonador Viewer Display Attributes
 
-// Properties which control how a measurement is rendered. Encoded as a CONTAINER (CONTAINS)
-// holding a `Color` CONTAINER with one TEXT item per color role. SR content items cannot carry
-// RecommendedDisplayCIELabValue, so each TEXT value is the DICOM CIELab triple (`L\a\b`, 0-65535).
-// The code values exceed 16 characters and are written as LongCodeValue.
+// Properties which control how a measurement is rendered, written as children of the Finding:
+// a `DisplayAttributes` CONTAINER holding a `Color` CONTAINER with one TEXT item per color role
+// (Comprehensive 3D SR), or the role TEXT items directly (Enhanced SR, which permits no CONTAINER
+// under a CODE item). SR content items cannot carry RecommendedDisplayCIELabValue, so each TEXT
+// value is the DICOM CIELab triple (`L\a\b`, 0-65535). The code values exceed 16 characters
+// and are written as LongCodeValue.
 
 const displayAttributeCode = (value, meaning) => ({
   value: `${SONADOR_MANUFACTURER}-${value}`,
   schemeDesignator: DCMSR_SONADOR_SR.value,
   meaning,
-  schemeVersion: SONADOR_SCHEME_VERSION_04,
+  schemeVersion: SONADOR_SCHEME_VERSION_03,
 });
 
 export const DCMSR_DISPLAY_ATTRIBUTES = displayAttributeCode('DisplayAttributes', 'Display attributes');
@@ -243,8 +246,44 @@ export const RELATIONSHIP_TYPE = {
   INFERRED_FROM: 'INFERRED FROM',
   SELECTED_FROM: 'SELECTED FROM',
   CONCEPT_MOD: 'HAS CONCEPT MOD',
+  HAS_PROPERTIES: 'HAS PROPERTIES',
+  HAS_OBS_CONTEXT: 'HAS OBS CONTEXT',
 };
 export const RelationshipType = RELATIONSHIP_TYPE;
+
+
+// Document class and root template of a Viewer save (the Series-Tag exchange profile with Sonador
+// IO). New documents are Comprehensive 3D SR with the Sonador root template; a re-save keeps the
+// parent's class and template.
+export const SR_DOCUMENT_CLASS = {
+  COMPREHENSIVE_3D: 'Comprehensive3DSR',
+  ENHANCED: 'EnhancedSR',
+};
+// Form of the per-finding display attributes: nested under a container (Comprehensive 3D SR) or
+// flat role items (Enhanced SR)
+export const DISPLAY_LAYOUT = Object.freeze({ NESTED: 'nested', FLAT: 'flat' });
+
+export const SONADOR_SR_TEMPLATE = Object.freeze({
+  TemplateIdentifier: `${SONADOR_SR}.1500`,
+  MappingResource: SONADOR_SR,
+});
+export const DCMR_SR_TEMPLATE = Object.freeze({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
+export const SR_TEMPLATE_IDENTIFIERS = [SONADOR_SR_TEMPLATE.TemplateIdentifier, DCMR_SR_TEMPLATE.TemplateIdentifier];
+
+// Equipment written by the Viewer; the Device Observer mirrors it
+export const SONADOR_VIEWER_MODEL_NAME = `${SONADOR_MANUFACTURER}-Viewer`;
+
+// Observation context (TID 1002 / 1003 / 1004)
+export const ObserverContextCodes = {
+  ObserverType: { value: '121005', meaning: 'Observer Type', schemeDesignator: DCM },
+  Person: { value: '121006', meaning: 'Person', schemeDesignator: DCM },
+  Device: { value: '121007', meaning: 'Device', schemeDesignator: DCM },
+  PersonObserverName: { value: '121008', meaning: 'Person Observer Name', schemeDesignator: DCM },
+  DeviceObserverUID: { value: '121012', meaning: 'Device Observer UID', schemeDesignator: DCM },
+  DeviceObserverName: { value: '121013', meaning: 'Device Observer Name', schemeDesignator: DCM },
+  DeviceObserverManufacturer: { value: '121014', meaning: 'Device Observer Manufacturer', schemeDesignator: DCM },
+  DeviceObserverModelName: { value: '121015', meaning: 'Device Observer Model Name', schemeDesignator: DCM },
+};
 
 
 export const CodingSchemeDesignators = {
@@ -285,6 +324,15 @@ const Enums = {
   SonadorCodeValues,
   RelationshipType,
   SCOORDTypes,
+
+  SR_DOCUMENT_CLASS,
+  DISPLAY_LAYOUT,
+  SONADOR_SR_TEMPLATE,
+  DCMR_SR_TEMPLATE,
+  SR_TEMPLATE_IDENTIFIERS,
+  SONADOR_MANUFACTURER,
+  SONADOR_VIEWER_MODEL_NAME,
+  ObserverContextCodes,
 
   RELATIONSHIP_TYPE,
   SCOORD_TYPES,

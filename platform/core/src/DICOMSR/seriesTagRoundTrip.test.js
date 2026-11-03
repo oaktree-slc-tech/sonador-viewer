@@ -92,9 +92,11 @@ jest.mock('../measurements/classes', () => ({
 
 import { readFindingCode } from './TID300/DICOMReferencedSOPInstanceFinding';
 import { findReferencedSOPSequence } from './Cornerstone3d/utils/findReferencedSOP';
-import { asArray, conceptNameValue, firstItem } from './utils/codedConcept';
+import { asArray, codeValueOf, conceptNameValue, firstItem } from './utils/codedConcept';
+import { dicomLabToHex } from '../displayAttributes';
 import { encodeDisplayAttributes, parseDisplayAttributes } from './utils/dcmsrDisplayAttributes';
 import { encodeExtendedMeta, parseExtendedMeta } from './utils/dcmsrExtendedMeta';
+import { documentSettings } from './utils/srDocument';
 import { SonadorCodeValues } from './enums';
 
 const { DicomDict, DicomMessage, DicomMetaDictionary } = dcmjsData;
@@ -102,6 +104,10 @@ const { DicomDict, DicomMessage, DicomMetaDictionary } = dcmjsData;
 const FIXTURES = path.join(__dirname, '__fixtures__');
 const LEGACY = path.join(FIXTURES, 'series-tag.legacy.dcm');
 const V1 = path.join(FIXTURES, 'series-tag.v1.dcm');
+const V1_ENHANCED = path.join(FIXTURES, 'series-tag.v1-enhanced.dcm');
+
+const ENHANCED_SR = '1.2.840.10008.5.1.4.1.1.88.22';
+const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
 
 const TOOL_TYPE = 'DICOMSRSeriesTagTool';
 const CODES = {
@@ -113,8 +119,14 @@ const EXTENDED_META = ['DCMSR_MEASUREMENT_DESCRIPTION', 'DCMSR_MEASUREMENT_TEXT'
 // The SR document attributes a viewer save copies from the source study
 const DOCUMENT_ATTRIBUTES = [
   'PatientName', 'PatientID', 'PatientBirthDate', 'PatientSex', 'StudyInstanceUID', 'StudyDate', 'StudyTime',
-  'StudyID', 'AccessionNumber', 'ReferringPhysicianName', 'SeriesDescription', 'SeriesNumber', 'Manufacturer',
+  'StudyID', 'AccessionNumber', 'ReferringPhysicianName', 'SeriesDescription', 'SeriesNumber',
 ];
+
+// Committed fixtures carry no study or imaging identifiers: they reference this synthetic study
+const SYNTHETIC = {
+  PatientName: 'Anonymous', PatientID: 'ANONYMOUS', StudyID: '1',
+  StudyInstanceUID: '2.25.1001', SeriesInstanceUID: '2.25.1002', SOPInstanceUID: '2.25.1003',
+};
 
 let MeasurementReport;
 let MeasurementReport3D;
@@ -143,14 +155,29 @@ const trackingUIDOf = group => child(group, CODES.TrackingUniqueIdentifier).UID;
 const findingOf = group => child(group, CODES.Finding);
 const findingCodeOf = group => firstItem(findingOf(group).ConceptCodeSequence);
 const imageOf = group => asArray(findingOf(group).ContentSequence).find(item => item.ValueType === 'IMAGE');
-const extendedMetaOf = group => asArray(group.ContentSequence)
+// Per-finding properties: children of the Finding first, then group-level items (legacy layout)
+const propertiesOf = group => [...asArray(findingOf(group).ContentSequence), ...asArray(group.ContentSequence)];
+const extendedMetaOf = group => propertiesOf(group)
   .filter(item => EXTENDED_META.includes(conceptNameValue(item)))
-  .map(item => ({ code: firstItem(item.ConceptNameCodeSequence), value: item.TextValue }));
-const colorsOf = group => {
-  const display = child(group, SonadorCodeValues.DCMSR_DISPLAY_ATTRIBUTES.value);
-  const color = child(display, SonadorCodeValues.DCMSR_DISPLAY_COLOR.value);
-  return asArray(color.ContentSequence).map(item => [conceptNameValue(item), item.TextValue]);
+  .map(item => ({ code: firstItem(item.ConceptNameCodeSequence), value: item.TextValue, item }));
+const ROLE_CODES = Object.values(SonadorCodeValues.DCMSR_DISPLAY_COLOR_ROLES).map(code => code.value);
+const displayContainerOf = group => propertiesOf(group)
+  .find(item => conceptNameValue(item) === SonadorCodeValues.DCMSR_DISPLAY_ATTRIBUTES.value);
+const colorItemsOf = group => {
+  const display = displayContainerOf(group);
+  const color = display && child(display, SonadorCodeValues.DCMSR_DISPLAY_COLOR.value);
+  return color ? asArray(color.ContentSequence) : propertiesOf(group).filter(item => ROLE_CODES.includes(conceptNameValue(item)));
 };
+const colorsOf = group => colorItemsOf(group).map(item => [conceptNameValue(item), item.TextValue]);
+const layoutOf = group => {
+  const findingItems = asArray(findingOf(group).ContentSequence);
+  if (findingItems.some(item => conceptNameValue(item) === SonadorCodeValues.DCMSR_DISPLAY_ATTRIBUTES.value)) {
+    return 'nested';
+  }
+  return findingItems.some(item => ROLE_CODES.includes(conceptNameValue(item))) ? 'flat' : 'group';
+};
+const templateOf = dataset => _.pick(firstItem(dataset.ContentTemplateSequence), 'TemplateIdentifier', 'MappingResource');
+const rootItem = (dataset, code) => asArray(dataset.ContentSequence).find(item => conceptNameValue(item) === code);
 
 
 function hydrate(group, index) {
@@ -178,16 +205,24 @@ function hydrate(group, index) {
 }
 
 
-function writeSR(source, tools) {
-  // Write the tools through the legacy writer, as a viewer save does, and return the Part 10 bytes
-  const [{ reference }] = tools;
+function writeSR(source, tools, { document, synthetic = false, onDocumentClassUpgrade, encoding: forcedEncoding } = {}) {
+  // Write the tools through the legacy writer, as a viewer save does, and return the Part 10 bytes.
+  // `document` is the save's { documentClass, template, personName } (srDocument.js); a new
+  // Comprehensive 3D SR document by default. `synthetic` replaces the study and image
+  // identifiers with the synthetic study, for committed fixtures.
+  const original = tools[0].reference;
+  const reference = synthetic
+    ? { ...original, ReferencedSOPInstanceUID: SYNTHETIC.SOPInstanceUID }
+    : original;
   const imageId = `wadors:${reference.ReferencedSOPInstanceUID}`;
   const evidence = firstItem(source.CurrentRequestedProcedureEvidenceSequence);
+  const seriesInstanceUID = synthetic
+    ? SYNTHETIC.SeriesInstanceUID : firstItem(evidence.ReferencedSeriesSequence).SeriesInstanceUID;
   const metadataProvider = {
     get: (type) => ({
       generalSeriesModule: {
-        studyInstanceUID: source.StudyInstanceUID,
-        seriesInstanceUID: firstItem(evidence.ReferencedSeriesSequence).SeriesInstanceUID,
+        studyInstanceUID: synthetic ? SYNTHETIC.StudyInstanceUID : source.StudyInstanceUID,
+        seriesInstanceUID,
       },
       sopCommonModule: { sopClassUID: reference.ReferencedSOPClassUID, sopInstanceUID: reference.ReferencedSOPInstanceUID },
     })[type],
@@ -195,14 +230,20 @@ function writeSR(source, tools) {
 
   const toolState = { [imageId]: { [TOOL_TYPE]: { data: tools.map(tool => _.omit(tool, 'reference')) } } };
   const report = MeasurementReport.generateReport(toolState, metadataProvider, {
-    onContentItemCreate: (toolType, { _id }, tid300Measurement, srItem) => {
+    document: document || documentSettings(null),
+    onDocumentClassUpgrade,
+    onContentItemCreate: (toolType, { _id }, tid300Measurement, srItem, encoding) => {
       const measurement = tools.find(tool => tool._id === _id);
       encodeExtendedMeta(measurement, srItem);
-      encodeDisplayAttributes(measurement, srItem);
+      encodeDisplayAttributes(measurement, srItem, forcedEncoding || encoding);
     },
   });
 
-  const dataset = _.extend(_.omit(report.dataset, '_meta', '_vrMap'), _.pick(source, DOCUMENT_ATTRIBUTES));
+  const headers = synthetic
+    ? { ..._.pick(SYNTHETIC, 'PatientName', 'PatientID', 'StudyID', 'StudyInstanceUID'),
+        ..._.pick(source, 'SeriesDescription', 'SeriesNumber') }
+    : _.pick(source, DOCUMENT_ATTRIBUTES);
+  const dataset = _.extend(_.omit(report.dataset, '_meta', '_vrMap'), headers);
   const meta = _.extend({}, report.dataset._meta, {
     MediaStorageSOPClassUID: { Value: [dataset.SOPClassUID], vr: 'UI' },
     MediaStorageSOPInstanceUID: { Value: [dataset.SOPInstanceUID], vr: 'UI' },
@@ -211,6 +252,11 @@ function writeSR(source, tools) {
   dicomDict.dict = DicomMetaDictionary.denaturalizeDataset(JSON.parse(JSON.stringify(dataset)));
   return Buffer.from(dicomDict.write());
 }
+
+// A re-save of the legacy fixture keeps its class (Enhanced SR) and template (`1500` / DCMR)
+const reSaveOf = dataset => documentSettings({
+  SOPClassUID: dataset.SOPClassUID, ...firstItem(dataset.ContentTemplateSequence),
+});
 
 
 describe('legacy Series Tag fixture', () => {
@@ -255,17 +301,40 @@ describe('legacy Series Tag fixture', () => {
 });
 
 
-describe('re-saving the legacy fixture', () => {
+describe('re-saving the legacy fixture (Enhanced SR parent)', () => {
   const legacy = readSR(fs.readFileSync(LEGACY));
   const legacyGroups = measurementGroups(legacy);
 
-  const resave = edit => {
+  const resave = (edit, writeOptions = {}) => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const tools = legacyGroups.map(hydrate);
     warn.mockRestore();
     edit(tools);
-    return { tools, bytes: writeSR(legacy, tools) };
+    return { tools, bytes: writeSR(legacy, tools, { document: reSaveOf(legacy), ...writeOptions }) };
   };
+
+  it('stays Enhanced SR with the parent template, per-finding properties flat under the Finding', () => {
+    const { bytes } = resave(() => {}, { synthetic: true });
+    if (process.env.UPDATE_SR_FIXTURES) {
+      fs.writeFileSync(V1_ENHANCED, bytes);
+    }
+    const dataset = readSR(bytes);
+    expect(dataset.SOPClassUID).toBe(ENHANCED_SR);
+    expect(templateOf(dataset)).toEqual({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
+
+    measurementGroups(dataset).forEach(group => {
+      expect(layoutOf(group)).toBe('flat');
+      extendedMetaOf(group).forEach(({ item }) => expect(item.RelationshipType).toBe('HAS PROPERTIES'));
+      colorItemsOf(group).forEach(item => {
+        expect(item.RelationshipType).toBe('HAS PROPERTIES');
+        expect(firstItem(item.ConceptNameCodeSequence).CodingSchemeVersion).toBe('0.3');
+      });
+      // Nothing is left at group level, and Enhanced SR holds no CONTAINER under the Finding
+      expect(asArray(group.ContentSequence).map(conceptNameValue))
+        .toEqual(['112039', '112040', CODES.Finding]);
+      expect(asArray(findingOf(group).ContentSequence).some(item => item.ValueType === 'CONTAINER')).toBe(false);
+    });
+  });
 
   it('edits one description without a catalogue lookup and keeps everything else', () => {
     const { bytes } = resave(([first]) => {
@@ -328,15 +397,93 @@ describe('re-saving the legacy fixture', () => {
     expect(readFindingCode(findingOf(group)).text).toBe(meaning);
   });
 
-  it('re-applying the catalogue tags writes their versions (the v1 fixture)', () => {
-    const { bytes } = resave(([first]) => {
-      first.metadata.schemeVersion = '0.2';
+  it('is written as Comprehensive 3D SR, with a warning, when it holds content Enhanced SR cannot', () => {
+    // Series Tags in the flat form never need it; a CONTAINER under the Finding does
+    const upgrades = [];
+    const { bytes } = resave(() => {}, {
+      encoding: { layout: 'nested' },
+      onDocumentClassUpgrade: (from, to) => upgrades.push([from, to]),
     });
+    const dataset = readSR(bytes);
+
+    expect(upgrades).toEqual([['EnhancedSR', 'Comprehensive3DSR']]);
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
+    expect(templateOf(dataset)).toEqual({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
+    measurementGroups(dataset).forEach(group => expect(layoutOf(group)).toBe('nested'));
+  });
+});
+
+
+describe('a new document (no parent)', () => {
+  const legacy = readSR(fs.readFileSync(LEGACY));
+  const legacyGroups = measurementGroups(legacy);
+
+  const write = (edit, writeOptions = {}) => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const tools = legacyGroups.map(hydrate);
+    warn.mockRestore();
+    edit(tools);
+    return writeSR(legacy, tools, writeOptions);
+  };
+
+  it('is Comprehensive 3D SR with the Sonador template, per-finding properties nested under the Finding (the v1 fixture)', () => {
+    // The two catalogue tags re-applied, so both carry their version
+    const bytes = write(([first]) => {
+      first.metadata.schemeVersion = '0.2';
+    }, { synthetic: true, document: { ...documentSettings(null), personName: 'Observer^Test' } });
     if (process.env.UPDATE_SR_FIXTURES) {
       fs.writeFileSync(V1, bytes);
     }
-    const groups = measurementGroups(readSR(bytes));
+    const dataset = readSR(bytes);
+    const groups = measurementGroups(dataset);
+
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
+    expect(templateOf(dataset)).toEqual({ TemplateIdentifier: 'Sonador-SR.1500', MappingResource: 'Sonador-SR' });
+    expect(dataset.PertinentOtherEvidenceSequence).toBeUndefined();
+    expect(firstItem(dataset.CurrentRequestedProcedureEvidenceSequence).StudyInstanceUID).toBe(SYNTHETIC.StudyInstanceUID);
     expect(groups.map(group => findingCodeOf(group).CodingSchemeVersion)).toEqual(['0.2', '0.2']);
+    expect(groups.map(trackingUIDOf)).toEqual(legacyGroups.map(trackingUIDOf));
+    expect(groups.map(colorsOf)).toEqual(legacyGroups.map(colorsOf));
+
+    groups.forEach(group => {
+      expect(layoutOf(group)).toBe('nested');
+      const findingItems = asArray(findingOf(group).ContentSequence);
+      expect(findingItems[0].ValueType).toBe('IMAGE');
+      extendedMetaOf(group).forEach(({ item }) => expect(item.RelationshipType).toBe('HAS PROPERTIES'));
+      const display = displayContainerOf(group);
+      expect(display.RelationshipType).toBe('HAS PROPERTIES');
+      expect(firstItem(display.ConceptNameCodeSequence).CodingSchemeVersion).toBe('0.3');
+      const color = child(display, SonadorCodeValues.DCMSR_DISPLAY_COLOR.value);
+      expect(color.RelationshipType).toBe('CONTAINS');
+      colorItemsOf(group).forEach(item => expect(item.RelationshipType).toBe('CONTAINS'));
+      expect(asArray(group.ContentSequence).map(conceptNameValue)).toEqual(['112039', '112040', CODES.Finding]);
+    });
+  });
+
+  it('carries the equipment profile, the Device Observer and the Person Observer', () => {
+    const dataset = readSR(write(() => {}, { document: { ...documentSettings(null), personName: 'Observer^Test' } }));
+    expect(_.pick(dataset, 'Manufacturer', 'ManufacturerModelName', 'SoftwareVersions')).toEqual({
+      Manufacturer: 'Sonador', ManufacturerModelName: 'Sonador-Viewer', SoftwareVersions: 'dev',
+    });
+
+    const rootCodes = asArray(dataset.ContentSequence).map(conceptNameValue);
+    expect(rootCodes.slice(0, 7)).toEqual(['121049', '121008', '121005', '121012', '121013', '121014', '121015']);
+    // dcmjs reads a person name back as [{ Alphabetic }]
+    expect(firstItem(rootItem(dataset, '121008').PersonName).Alphabetic).toBe('Observer^Test');
+    expect(firstItem(rootItem(dataset, '121005').ConceptCodeSequence).CodeValue).toBe('121007');
+    expect(rootItem(dataset, '121012').UID).toMatch(/^2\.25\.\d+$/);
+    expect(['121013', '121014', '121015'].map(code => rootItem(dataset, code).TextValue))
+      .toEqual(['Sonador-Viewer', 'Sonador', 'Sonador-Viewer']);
+    asArray(dataset.ContentSequence).slice(1, 7)
+      .forEach(item => expect(item.RelationshipType).toBe('HAS OBS CONTEXT'));
+  });
+
+  it('omits the Person Observer when the session names nobody, and mints a Device Observer UID per save', () => {
+    const first = readSR(write(() => {}));
+    const second = readSR(write(() => {}));
+    expect(rootItem(first, '121008')).toBeUndefined();
+    expect(rootItem(first, '121012').UID).not.toBe(rootItem(second, '121012').UID);
+    expect(first.SOPInstanceUID).not.toBe(second.SOPInstanceUID);
   });
 });
 
@@ -373,8 +520,8 @@ describe('scheme version of a selected tag', () => {
 function hydrateWithCornerstone3D(dataset) {
   // The production hydration: Cornerstone3D generateToolState and the Series Tag adapter, with the
   // extended meta and display attribute hook parseDicomStructuredReport installs
-  const sopInstanceUIDs = _.uniq(measurementGroups(readSR(fs.readFileSync(LEGACY)))
-    .map(group => imageOf(group).ReferencedSOPSequence.ReferencedSOPInstanceUID));
+  const sopInstanceUIDs = _.uniq(measurementGroups(dataset)
+    .map(group => findReferencedSOPSequence(findingOf(group)).ReferencedSOPInstanceUID));
   const imageIds = _.fromPairs(sopInstanceUIDs.map(uid => [uid, `wadors:${uid}`]));
 
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -450,6 +597,10 @@ describe('Cornerstone3D hydration', () => {
     expectFindings(hydrateWithCornerstone3D(readSR(fs.readFileSync(V1))), ['0.2', '0.2']);
   });
 
+  it('hydrates the Enhanced SR re-save (flat layout)', () => {
+    expectFindings(hydrateWithCornerstone3D(readSR(fs.readFileSync(V1_ENHANCED))), [undefined, '0.2']);
+  });
+
   it('matches concept names written as LongCodeValue (report, group, tracking and finding codes)', () => {
     const dataset = rewriteCodes(readSR(fs.readFileSync(V1)), toLongCodeValue);
     expect(firstItem(findingOf(measurementGroups(dataset)[0]).ConceptNameCodeSequence).LongCodeValue).toBe('121071');
@@ -485,5 +636,40 @@ describe('corrected Series Tag fixture (v1)', () => {
     expect(second).toMatchObject({ value: 'img-qc.metal-artifact', metadata: { schemeVersion: '0.2', location: 'Bone' } });
     expect(first.metadata.TrackingUniqueIdentifier).toBe('2.25.810839409582656272888045085434576840833');
     expect(second.metadata.TrackingUniqueIdentifier).toBe('2.25.259161114598460130268782036364529896765');
+  });
+});
+
+
+// IO → Viewer leg of the exchange profile: Series-Tag documents written by Sonador IO, committed
+// as `__fixtures__/series-tag.io*.dcm`, hydrate through the production Cornerstone3D path
+const IO_FIXTURES = fs.readdirSync(FIXTURES).filter(name => /^series-tag\.io.*\.dcm$/.test(name));
+
+describe('Sonador IO documents', () => {
+  IO_FIXTURES.forEach(name => {
+    it(`${name} hydrates every Series-Tag group with its identity, code and properties`, () => {
+      const dataset = readSR(fs.readFileSync(path.join(FIXTURES, name)));
+      const groups = measurementGroups(dataset).filter(group =>
+        child(group, '112039')?.TextValue === `cornerstoneTools@^4.0.0:${TOOL_TYPE}`);
+      const { findings, warnings } = hydrateWithCornerstone3D(dataset);
+
+      expect(warnings.filter(([message]) => /Unable to generate tool state/.test(message))).toEqual([]);
+      expect(findings).toHaveLength(groups.length);
+      findings.forEach((finding, idx) => {
+        const group = groups[idx];
+        expect(finding.TrackingUniqueIdentifier).toBe(trackingUIDOf(group));
+        expect(finding.annotation.data.value).toBe(readFindingCode(findingOf(group)).value);
+        expect(finding.annotation.data.text).toBe(findingCodeOf(group).CodeMeaning);
+        expect(finding.sopInstanceUid)
+          .toBe(findReferencedSOPSequence(findingOf(group)).ReferencedSOPInstanceUID);
+
+        // Properties against the document's own items, in whichever layout it uses
+        const meta = _.fromPairs(extendedMetaOf(group).map(({ code, value }) => [codeValueOf(code), value]));
+        expect(finding.description).toBe(meta[SonadorCodeValues.DCMSR_MEASUREMENT_DESCRIPTION.value]);
+        expect(finding.annotation.metadata.text).toBe(meta[SonadorCodeValues.DCMSR_MEASUREMENT_TEXT.value]);
+        expect(finding.annotation.metadata.location).toBe(meta[SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION.value]);
+        expect(finding.annotation.data.displayAttributes?.Color || {}).toEqual(_.fromPairs(
+          colorsOf(group).map(([code, lab]) => [code.split('.').pop(), dicomLabToHex(lab)])));
+      });
+    });
   });
 });

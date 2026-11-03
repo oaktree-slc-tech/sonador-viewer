@@ -282,11 +282,15 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
           content: SaveDicomSeriesDialog,
           contentProps: {            
             seriesNumber,
-            onUpdate: ({ SeriesNumber, SeriesDescription }) => {
+            onUpdate: async ({ SeriesNumber, SeriesDescription }) => {
+
+              // The signed-in user is the report's Person Observer
+              const personName = await OHIF.DICOMSR.resolvePersonObserverName(activeServer, sonador.fetchServerSystemInfo);
 
               const measurementApi = OHIF.measurements.MeasurementApi.Instance;
               const promise = measurementApi.storeMeasurements(undefined, {
                 headers: { SeriesNumber, SeriesDescription },
+                observer: { personName },
                 success: () => {
 
                   // Resolve save measurements successfully

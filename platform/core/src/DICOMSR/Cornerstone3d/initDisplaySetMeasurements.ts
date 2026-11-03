@@ -34,6 +34,7 @@ const sopClassUids = [
   sopClassDictionary.BasicTextSR,
   sopClassDictionary.EnhancedSR,
   sopClassDictionary.ComprehensiveSR,
+  sopClassDictionary.Comprehensive3DSR,
 ];
 
 

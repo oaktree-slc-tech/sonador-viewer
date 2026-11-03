@@ -9,6 +9,8 @@ import measurements from '../measurements';
 import MeasurementReport from './SCOORD3D/MeasurementReport';
 import { encodeExtendedMeta } from './utils/dcmsrExtendedMeta';
 import { encodeDisplayAttributes } from './utils/dcmsrDisplayAttributes';
+import { documentSettings, saveParent } from './utils/srDocument';
+import { uiNotificationService } from '../services/UINotificationService';
 
 const { getImageIdForImagePath, MeasurementApi } = measurements;
 
@@ -97,9 +99,28 @@ const parseMeasurementsData = (measurementsData, options) => {
     apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_START, toolState,
   });
 
-  log.info('[DICOM-SR:parseMeasurementsData] annotation data for persistence', toolState);
+  // Document class and root template: the parent's on a re-save (the single SR hydrated for the
+  // study), Comprehensive 3D SR with the Sonador template otherwise
+  const firstImageId = Object.keys(toolState)[0];
+  const generalSeriesModule = firstImageId && cornerstone.metaData.get('generalSeriesModule', firstImageId);
+  const parent = generalSeriesModule ? saveParent(generalSeriesModule.studyInstanceUID) : null;
+  const document = {
+    ...documentSettings(parent),
+    personName: options.observer && options.observer.personName,
+  };
+
+  log.info('[DICOM-SR:parseMeasurementsData] annotation data for persistence', toolState,
+    'documentClass='+document.documentClass, 'parent='+(parent ? parent.SOPInstanceUID : 'none'));
   const report = MeasurementReport.generateReport(toolState, cornerstone.metaData, _.extend({}, _.pick(options, 'headers'), {
-    onContentItemCreate: (toolType, measurementIds, tid300Measurement, srItem) => {
+    document,
+    onDocumentClassUpgrade: (from, to) => {
+      // Raised while the report is built, before it is stored: it states the format, not a save
+      const message = 'The measurements include content an Enhanced SR document cannot hold, so this report '
+        + 'is written as Comprehensive 3D SR rather than Enhanced SR like the report it updates.';
+      log.warn('[DICOM-SR:parseMeasurementsData] '+message+' from='+from+' to='+to);
+      uiNotificationService.show({ title: 'Comprehensive 3D SR required', message, type: 'warning' });
+    },
+    onContentItemCreate: (toolType, measurementIds, tid300Measurement, srItem, encoding) => {
 
       // Retrieve measurement from API
       const { _id: cornerstoneId } = measurementIds;
@@ -109,7 +130,7 @@ const parseMeasurementsData = (measurementsData, options) => {
         // Encoded extended attributes from measurement instance and broadcast via measurement service
         // to allow plugins to modify sequence data.
         encodeExtendedMeta(measurement, srItem);
-        encodeDisplayAttributes(measurement, srItem);
+        encodeDisplayAttributes(measurement, srItem, encoding);
         measurementApi.measurementService._broadcastEvent(measurementApi.measurementService.EVENTS.MEASUREMENTS_DATASYNC, {
           apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_MEASUREMENT, measurement, srItem,
         });

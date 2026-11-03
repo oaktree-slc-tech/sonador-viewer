@@ -657,9 +657,10 @@ function ViewerRetrieveStudyData({
       displayset_triggerload_updated.unsubscribe();
       displayset_datasync.unsubscribe();
 
-      // Clear displaySets and measurements on exit
+      // Clear displaySets and measurements on exit; the measurement session ends here
       displaySetService.onModeExit();
       measurementService.onModeExit();
+      OHIF.DICOMSR.clearHydratedReports();
       customizationService.onModeExit();
       segmentationService.onModeExit();
 

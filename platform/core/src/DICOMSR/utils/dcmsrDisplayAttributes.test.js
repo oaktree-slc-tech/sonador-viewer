@@ -76,18 +76,22 @@ const roundTrip = srItem => DicomMetaDictionary.naturalizeDataset(
   DicomMetaDictionary.denaturalizeDataset(JSON.parse(JSON.stringify(srItem))));
 
 describe('encodeDisplayAttributes', () => {
-  it('writes a CONTAINS container of CIELab TEXT items after the extended meta', () => {
+  it('nested (default): the Finding HAS PROPERTIES the extended meta and a display container of CIELab items', () => {
     const measurement = { description: 'Left lobe', data: { displayAttributes: { Color: COLOR } } };
     const srItem = findingGroup();
 
     encodeExtendedMeta(measurement, srItem);
     encodeDisplayAttributes(measurement, srItem);
 
-    const [finding, description, display] = srItem.ContentSequence;
+    const [finding] = srItem.ContentSequence;
+    expect(srItem.ContentSequence).toHaveLength(1);
     expect(finding.ValueType).toBe('CODE');
+    const [description, display] = finding.ContentSequence;
     expect(description.TextValue).toBe('Left lobe');
+    expect(description.RelationshipType).toBe('HAS PROPERTIES');
     expect(display.ValueType).toBe('CONTAINER');
-    expect(display.RelationshipType).toBe('CONTAINS');
+    expect(display.RelationshipType).toBe('HAS PROPERTIES');
+    expect(conceptOf(display).CodingSchemeVersion).toBe('0.3');
     expect(conceptOf(display).LongCodeValue).toBe(SonadorCodeValues.DCMSR_DISPLAY_ATTRIBUTES.value);
 
     const [color] = display.ContentSequence;
@@ -101,6 +105,32 @@ describe('encodeDisplayAttributes', () => {
       expect(item.RelationshipType).toBe('CONTAINS');
       expect(item.TextValue).toMatch(/^\d+\\\d+\\\d+$/);
     });
+  });
+
+  it('flat: the color role TEXT items are HAS PROPERTIES children of the Finding, with no CONTAINER', () => {
+    const srItem = findingGroup();
+    encodeDisplayAttributes({ displayAttributes: { Color: COLOR } }, srItem, { layout: 'flat' });
+
+    const [finding] = srItem.ContentSequence;
+    expect(finding.ContentSequence.map(item => conceptOf(item).LongCodeValue)).toEqual(
+      ['Background', 'Border', 'Value', 'Meaning'].map(role => SonadorCodeValues.DCMSR_DISPLAY_COLOR_ROLES[role].value));
+    finding.ContentSequence.forEach(item => {
+      expect(item.ValueType).toBe('TEXT');
+      expect(item.RelationshipType).toBe('HAS PROPERTIES');
+    });
+    expect(parseDisplayAttributes(srItem, {}, { path: 'displayAttributes' })).toEqual({ displayAttributes: { Color: COLOR } });
+  });
+
+  it('keeps the group-level container for a group with no Finding', () => {
+    const srItem = findingGroup();
+    srItem.ContentSequence = [];
+    encodeExtendedMeta({ description: 'Left lobe' }, srItem);
+    encodeDisplayAttributes({ displayAttributes: { Color: COLOR } }, srItem, { layout: 'flat' });
+
+    const [description, display] = srItem.ContentSequence;
+    expect(description.RelationshipType).toBe('HAS CONCEPT MOD');
+    expect(display.RelationshipType).toBe('CONTAINS');
+    expect(display.ValueType).toBe('CONTAINER');
   });
 
   it('uses only CONTAINER sources for CONTAINS and keeps CodeValue within 16 characters', () => {
@@ -130,11 +160,12 @@ describe('encodeDisplayAttributes', () => {
   it('writes only the roles that are set and nothing when no color is set', () => {
     const partial = findingGroup();
     encodeDisplayAttributes({ displayAttributes: { Color: { Value: '#FF0000', Background: null } } }, partial);
-    expect(partial.ContentSequence[1].ContentSequence[0].ContentSequence).toHaveLength(1);
+    expect(partial.ContentSequence[0].ContentSequence[0].ContentSequence[0].ContentSequence).toHaveLength(1);
 
     const none = findingGroup();
     encodeDisplayAttributes({ data: {} }, none);
     expect(none.ContentSequence).toHaveLength(1);
+    expect(none.ContentSequence[0].ContentSequence).toBeUndefined();
   });
 });
 
@@ -144,9 +175,22 @@ describe('parseDisplayAttributes', () => {
     encodeDisplayAttributes({ displayAttributes: { Color: COLOR } }, srItem);
 
     const group = writeAndRead(srItem);
-    const color = contentOf(contentOf(group)[1])[0];
+    const color = contentOf(contentOf(contentOf(group)[0])[0])[0];
     expect(conceptOf(color).LongCodeValue).toBe(SonadorCodeValues.DCMSR_DISPLAY_COLOR.value);
     expect(parseDisplayAttributes(group, {}, { path: 'displayAttributes' })).toEqual({ displayAttributes: { Color: COLOR } });
+  });
+
+  it('reads the group-level container of files written before the colors moved under the Finding', () => {
+    const srItem = findingGroup();
+    encodeDisplayAttributes({ displayAttributes: { Color: COLOR } }, srItem);
+    const [finding] = srItem.ContentSequence;
+    const [display] = finding.ContentSequence;
+    display.RelationshipType = 'CONTAINS';
+    delete finding.ContentSequence;
+    srItem.ContentSequence.push(display);
+
+    expect(parseDisplayAttributes(writeAndRead(srItem), {}, { path: 'displayAttributes' }))
+      .toEqual({ displayAttributes: { Color: COLOR } });
   });
 
   it('reads codes written as CodeValue', () => {
@@ -184,7 +228,7 @@ describe('parseDisplayAttributes', () => {
   it('skips an invalid color and keeps the others', () => {
     const srItem = findingGroup();
     encodeDisplayAttributes({ displayAttributes: { Color: { Value: '#FF0000', Meaning: '#00FF00' } } }, srItem);
-    srItem.ContentSequence[1].ContentSequence[0].ContentSequence[1].TextValue = 'not-a-color';
+    srItem.ContentSequence[0].ContentSequence[0].ContentSequence[0].ContentSequence[1].TextValue = 'not-a-color';
 
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const annotation = parseDisplayAttributes(srItem, {}, { path: 'displayAttributes' });
