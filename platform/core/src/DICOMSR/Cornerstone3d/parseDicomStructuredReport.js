@@ -24,6 +24,7 @@ import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
+import { currentSession, registerHydratedReport } from '../utils/srDocument';
 
 const {
   CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION, Cornerstone3D: Cornerstone3dSR,
@@ -55,6 +56,10 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   const { LoggerService, displaySetService } = external.servicesManager.services;
   const measurementApi = MeasurementApi.Instance;
   const measurementService = measurementApi.measurementService;
+
+  // The measurement session this load belongs to (from the retrieval that fetched the report, or
+  // now): nothing from the load enters the measurement service or the save parents once it ends
+  const loadSession = options.loadSession === undefined ? currentSession() : options.loadSession;
 
   if (!displaySetService || !measurementService) {
     throw new Error('Unable to initialize measurements, invalid displaySet or measurementService instance');
@@ -112,6 +117,13 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       linked: _measurements.filter(m => m.loaded).length,
     });
   }
+
+  // The last await is above: if the session was cleared meanwhile, stop before any import
+  if (loadSession !== currentSession()) {
+    log.info('[DICOM-SR:parseDicomStructuredReport:stale] measurement session cleared during the load, report not hydrated');
+    return;
+  }
+
   log.info('[DICOM-SR:parseDicomStructuredReport:link] SR display sets linked to images', linkSummary,
     'imageDisplaySets='+imageDisplaySets.length, 'activeDisplaySets='+(displaySetService.activeDisplaySets?.length ?? 'n/a'));
 
@@ -364,6 +376,10 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     log.warn('[DICOM-SR:parseDicomStructuredReport:skipped] annotations skipped, no image loaded for their SOP instances',
       _.uniq(skippedWithoutImage));
   }
+
+  // Hydrated: a later save keeps this report's document class and template (srDocument.js). A
+  // load that fails before this point, or whose session was cleared meanwhile, is not a parent.
+  registerHydratedReport(instanceSR, loadSession);
 }
 
 

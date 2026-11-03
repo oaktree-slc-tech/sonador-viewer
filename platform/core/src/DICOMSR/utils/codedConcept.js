@@ -73,6 +73,11 @@ const codeMatches = (code, expected) => {
 const conceptNameMatches = (contentItem, ...expected) =>
   expected.some(code => codeMatches(conceptName(contentItem), code));
 
+// The Finding item, `(121071, DCM, "Finding")`, of a measurement group
+const FINDING = { value: '121071', schemeDesignator: 'DCM' };
+const findingItemOf = group =>
+  asArray(group && group.ContentSequence).find(item => conceptNameMatches(item, FINDING));
+
 
 export {
   CODE_VALUE_MAX_LENGTH,
@@ -86,5 +91,6 @@ export {
   conceptName,
   conceptNameMatches,
   conceptNameValue,
+  findingItemOf,
   firstItem,
 };

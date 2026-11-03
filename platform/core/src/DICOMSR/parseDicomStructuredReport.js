@@ -38,6 +38,7 @@ import MeasurementApi from '../measurements/classes/MeasurementApi';
 import initDisplaySetMeasurements from './utils/initDisplaySetMeasurements';
 import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
+import { currentSession } from './utils/srDocument';
 
 import { Cornerstone3D as Cornerstone3dDcmSrParse } from './Cornerstone3d';
 import { Cornerstone as CornerstoneDcmSrParse } from './SCOORD3D';
@@ -60,7 +61,13 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     parseReadOnly: false,
     renderModule: CornerstoneSR.sr,
     parserModule: Cornerstone3dSR.sr,
+    loadSession: currentSession(),
   });
+
+  // A report whose measurement session was cleared since its retrieval began is not loaded
+  if (options.loadSession !== currentSession()) {
+    return undefined;
+  }
 
   // Retrieve references to services and API
   const { LoggerService, displaySetService } = external.servicesManager.services;

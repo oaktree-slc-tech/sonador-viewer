@@ -42,7 +42,13 @@ const isStructuredReportSeries = series => {
   * @returns {boolean}
   */
 
-  const supportedSopClassUIDs = ['1.2.840.10008.5.1.4.1.1.88.22', '1.2.840.10008.5.1.4.1.1.11.1'];
+  // Enhanced, Comprehensive and Comprehensive 3D SR, and Grayscale Softcopy Presentation State
+  const supportedSopClassUIDs = [
+    '1.2.840.10008.5.1.4.1.1.88.22',
+    '1.2.840.10008.5.1.4.1.1.88.33',
+    '1.2.840.10008.5.1.4.1.1.88.34',
+    '1.2.840.10008.5.1.4.1.1.11.1',
+  ];
 
   const firstInstance = series.getFirstInstance();
   const SOPClassUID = firstInstance.getData().metadata.SOPClassUID;

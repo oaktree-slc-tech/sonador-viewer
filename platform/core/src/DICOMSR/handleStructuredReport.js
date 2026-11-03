@@ -17,6 +17,7 @@ import getXHRRetryRequestHook from '../utils/xhrRetryRequestHook';
 import getAllDisplaySets from './Cornerstone3d/utils/getAllDisplaySets';
 import parseDicomStructuredReport from './parseDicomStructuredReport';
 import parseMeasurementsData from './parseMeasurementsData';
+import { currentSession } from './utils/srDocument';
 
 const VERSION_NAME = 'dcmjs-0.0';
 const TRANSFER_SYNTAX_UID = '1.2.840.10008.1.2.1';
@@ -41,6 +42,10 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
   *   }
   */
   const { displaySetService } = external.servicesManager.services;
+
+  // The measurement session this retrieval belongs to; its result is dropped if the session is
+  // cleared while the report is fetched or parsed
+  const loadSession = currentSession();
 
   // Retrieve DICOM-SR data from DICOMweb server
   const config = {
@@ -125,6 +130,11 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
     }
   }
 
+  if (loadSession !== currentSession()) {
+    console.log('[DICOM-SR:retrieveMeasurementFromSR] measurement session cleared during retrieval, report not loaded');
+    return undefined;
+  }
+
   // Parse the array buffer and add to the raw DICOM-SR data as a naturalizedInstance
   if (srDisplaySet && !srDisplaySet.naturalizedSrInstance) {
 
@@ -139,7 +149,7 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
 
   // Retrieve displaySets from 
   const displaySets = getAllDisplaySets(studies);
-  const measurementsData = parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external);
+  const measurementsData = parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external, { loadSession });
 
   return measurementsData;
 };

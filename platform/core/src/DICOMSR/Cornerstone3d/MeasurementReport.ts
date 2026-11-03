@@ -31,9 +31,11 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     const measurementApi = MeasurementApi.Instance;
     const MeasurementService = measurementApi.measurementService;    
 
-    // For now, bail out if the dataset is not a TID1500 SR with length measurements
-    if (firstItem(dataset.ContentTemplateSequence)?.TemplateIdentifier !== "1500") {
-      throw new Error("This package can currently only interpret DICOM SR TID 1500");
+    // TID 1500 reports only, under either root template identifier (`1500` / DCMR or
+    // `Sonador-SR.1500` / Sonador-SR); the mapping resource is not checked
+    const templateIdentifier = firstItem(dataset.ContentTemplateSequence)?.TemplateIdentifier;
+    if (!MeasurementEnums.SREnums.SR_TEMPLATE_IDENTIFIERS.includes(templateIdentifier)) {
+      throw new Error("This package can currently only interpret DICOM SR TID 1500 (template " + templateIdentifier + ")");
     }
 
     // Content items are matched on code identity (value and designator), in any value attribute and

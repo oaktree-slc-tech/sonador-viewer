@@ -115,6 +115,7 @@ import { measurementApiDefaultConfig } from './../configuration.js';
 import utils from './../../utils';
 
 import Enums from '../enums';
+import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
 
 const configuration = {
   ...measurementApiDefaultConfig,
@@ -884,7 +885,8 @@ export default class MeasurementApi {
     options.headers = options.headers || {};
     _.defaults(options.headers, _.pick(tp0, 'PatientID'));
 
-    return storeFn(measurementData, options.filter, server, _.pick(options, 'headers')).then((result) => {
+    // `observer` ({ personName }) names the Person Observer of the report
+    return storeFn(measurementData, options.filter, server, _.pick(options, 'headers', 'observer')).then((result) => {
       log.debug('[measurementAPI:storeMeasurements] measurement storage completed');
 
       // Trigger measurement persistence success and success callback
@@ -2087,6 +2089,9 @@ export default class MeasurementApi {
   clearMeasurements() {
     // Clear all measurements, measurement representations, and tool state from API
     const _api = this;
+
+    // Reports hydrated in the cleared session are no longer save parents
+    clearHydratedReports();
 
     this.measurementService.triggerApiEvent(Enums.EVENTS.MEAUSREMENT_CLEAR_START, {
       api: this, measurementRepresentations: this.tools,
