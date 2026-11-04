@@ -640,9 +640,11 @@ describe('corrected Series Tag fixture (v1)', () => {
 });
 
 
-// IO → Viewer leg of the exchange profile: Series-Tag documents written by Sonador IO, committed
-// as `__fixtures__/series-tag.io*.dcm`, hydrate through the production Cornerstone3D path
-const IO_FIXTURES = fs.readdirSync(FIXTURES).filter(name => /^series-tag\.io.*\.dcm$/.test(name));
+// IO → Viewer leg of the exchange profile: Series-Tag documents written by Sonador IO hydrate through
+// the production Cornerstone3D path. Staged fixtures are named `<producer>.<topic>.<yyyy-mmdd>.dcm`
+// (for example `sonador-io.series-tag.2026-1103.dcm`), so the producer and the date the document was
+// created can be read off the listing; the software versions are in the document itself.
+const IO_FIXTURES = fs.readdirSync(FIXTURES).filter(name => /^sonador-io\..*\.dcm$/.test(name));
 
 describe('Sonador IO documents', () => {
   IO_FIXTURES.forEach(name => {
