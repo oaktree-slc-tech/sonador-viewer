@@ -151,6 +151,26 @@ describe('study removal', () => {
     expect(ok).toBe(false);
     expect(mockPurgeRemoved).not.toHaveBeenCalled();
   });
+
+  it('refreshes the study list itself by default', async () => {
+    mockRemoveStudy.mockResolvedValue({ status: 200 });
+
+    const { removeStudyResource } = useRemoveResource();
+    await removeStudyResource(SERVER, { StudyInstanceUID: STUDY_UID });
+
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['studyList'] });
+  });
+
+  it('issues NO invalidation when the row menu defers the refresh', async () => {
+    mockRemoveStudy.mockResolvedValue({ status: 200 });
+
+    const { removeStudyResource } = useRemoveResource();
+    const ok = await removeStudyResource(SERVER, { StudyInstanceUID: STUDY_UID }, { deferRefresh: true });
+
+    expect(ok).toBe(true);
+    expect(mockPurgeRemoved).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
+  });
 });
 
 

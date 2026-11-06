@@ -24,6 +24,11 @@ import {
 // delete; sequential would be needlessly slow for a selection of ten.
 const MAX_CONCURRENT_REMOVALS = 3;
 
+// How long a study removal holds its outcome, blocking, before the study list refetches. Orthanc's
+// cascade delete and the Sonador change-callback pipeline that prunes the cache both keep running
+// after the DELETE returns; a refetch that lands before they finish lists data that is mid-deletion.
+export const REMOVAL_SETTLE_MS = 3500;
+
 
 const _evictOfflineCopy = async (StudyInstanceUID) => {
   // FR-14: a study removed from the server takes its offline copy with it.
@@ -130,8 +135,8 @@ export default function useRemoveResource() {
   }, []);
 
 
-  const removeStudyResource = useCallback(async (server, descriptor) => {
-    // Single-study removal, from the study-list row menu.
+  const removeStudyResource = useCallback(async (server, descriptor, { deferRefresh = false } = {}) => {
+    // Single-study removal, from the study-list row menu. `deferRefresh` as for the bulk path below.
     setIsRemoving(true);
 
     try {
@@ -146,7 +151,9 @@ export default function useRemoveResource() {
           log: true,
         });
 
-        await invalidateStudyList();
+        if (!deferRefresh) {
+          await invalidateStudyList();
+        }
       }
 
       return ok;

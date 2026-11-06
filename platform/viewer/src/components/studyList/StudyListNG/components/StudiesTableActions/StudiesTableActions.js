@@ -27,7 +27,7 @@ import { ReactComponent as TrashBinIcon } from '@ohif/ui/src/elements/Svg/svgs/t
 import AppContext from '../../../../../context/AppContext';
 import { parseViewerPath } from '../../../../../routes/routesUtil';
 import { useWorkListStore } from '../../../../../store/useWorkListStore';
-import useRemoveResource from '../../hooks/useRemoveResource';
+import useRemoveResource, { REMOVAL_SETTLE_MS } from '../../hooks/useRemoveResource';
 import BulkShareModal from '../BulkShareModal/BulkShareModal';
 import BulkWorklistModal from '../BulkWorklistModal/BulkWorklistModal';
 import { summariseBulkRemoval } from '../RemoveResourceConfirm/describeRemoval';
@@ -42,13 +42,6 @@ import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareM
 import UpdateWorklistModal from './components/UpdateWorklistModal';
 
 import styles from './StudiesTableActions.module.scss';
-
-
-// How long the confirmation holds its outcome before closing and letting the study list refetch.
-// Not a cosmetic pause: Orthanc's cascade delete and the Sonador change-callback pipeline that
-// prunes the cache both run after the DELETE returns, and a refetch that lands mid-cascade was
-// taking the study list down.
-const BULK_REMOVAL_SETTLE_MS = 3500;
 
 
 export default function StudiesTableActions({  selectedRows, isWorkList }) {
@@ -292,7 +285,7 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
     //   1. every DELETE (and its offline-cache eviction) settles, with the overlay still up and
     //      blocking -- nothing in the list is clickable and no refetch can be provoked;
     //   2. the outcome notification goes out, raised inside removeStudiesResource;
-    //   3. the overlay holds for BULK_REMOVAL_SETTLE_MS showing that outcome, which is slack for
+    //   3. the overlay holds for REMOVAL_SETTLE_MS showing that outcome, which is slack for
     //      the server's cascade and the change-callback pipeline to finish pruning;
     //   4. the overlay closes and the selection clears;
     //   5. ONLY THEN the study list refetches.
@@ -324,7 +317,7 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
       clearSelection();
 
       refreshStudyList();
-    }, BULK_REMOVAL_SETTLE_MS);
+    }, REMOVAL_SETTLE_MS);
   };
 
   // Permissions

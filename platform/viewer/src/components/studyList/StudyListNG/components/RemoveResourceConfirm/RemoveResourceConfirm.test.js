@@ -25,7 +25,7 @@ const COMMENT = {
 };
 
 
-function Harness({ isRemoving = false, withFallback = false, onCancel, onConfirm }) {
+function Harness({ isRemoving = false, withFallback = false, onCancel, onConfirm, onParentClick }) {
   // The comment panel's shape: a Remove control per comment, a compose box that survives a
   // removal, and the confirmation mounted while a removal is pending.
   const [open, setOpen] = useState(false);
@@ -33,7 +33,8 @@ function Harness({ isRemoving = false, withFallback = false, onCancel, onConfirm
   const composeRef = useRef(null);
 
   return (
-    <div>
+    // Stands in for the study-list row or thumbnail that renders the dialog and acts on clicks.
+    <div onClick={onParentClick} onMouseDown={onParentClick}>
       {!triggerGone && (
         <button type="button" data-testid="trigger" onClick={() => setOpen(true)}>
           Remove Comment
@@ -68,6 +69,7 @@ Harness.propTypes = {
   withFallback: PropTypes.bool,
   onCancel: PropTypes.func.isRequired,
   onConfirm: PropTypes.func.isRequired,
+  onParentClick: PropTypes.func,
 };
 
 
@@ -200,5 +202,21 @@ describe('RemoveResourceConfirm keyboard behaviour', () => {
     await settle();
 
     expect(document.activeElement).toBe(trigger);
+  });
+
+
+  it('does not pass clicks through to the component that rendered it', () => {
+    const onParentClick = jest.fn();
+    mount({ onCancel: jest.fn(), onConfirm: jest.fn(), onParentClick });
+    open();
+    onParentClick.mockClear();
+
+    act(() => {
+      dialog().dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      dialog().click();
+      buttonNamed('Cancel').click();
+    });
+
+    expect(onParentClick).not.toHaveBeenCalled();
   });
 });
