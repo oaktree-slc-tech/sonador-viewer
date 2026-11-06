@@ -95,6 +95,16 @@ export default function RemoveResourceConfirm({
     event.preventDefault();
   };
 
+  // A portal moves the dialog in the DOM, not in the React tree: without this, a click on Cancel
+  // or Remove also reaches the study-list row (toggling its drawer) or the thumbnail (loading the
+  // series) that rendered the dialog.
+  const isolateEvents = {
+    onClick: (event) => event.stopPropagation(),
+    onDoubleClick: (event) => event.stopPropagation(),
+    onMouseDown: (event) => event.stopPropagation(),
+    onPointerDown: (event) => event.stopPropagation(),
+  };
+
   const overlayClassName = classNames(styles.confirmOverlay, { [styles.confirmOverlayFixed]: !contained });
 
   // `contained` anchors the overlay to the caller's own positioned container, which is right for
@@ -111,7 +121,7 @@ export default function RemoveResourceConfirm({
     return (
       <Dialog.Root open modal>
         {wrap(
-          <Dialog.Overlay className={overlayClassName}>
+          <Dialog.Overlay className={overlayClassName} {...isolateEvents}>
             <Dialog.Content
               className={styles.confirmCard}
               aria-modal="true"
@@ -171,7 +181,7 @@ export default function RemoveResourceConfirm({
       }}
     >
       {wrap(
-        <Dialog.Overlay className={overlayClassName}>
+        <Dialog.Overlay className={overlayClassName} {...isolateEvents}>
           <Dialog.Content
             className={styles.confirmCard}
             aria-modal="true"

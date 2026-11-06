@@ -18,7 +18,12 @@ function ModalNG({ isOpen, children, title, onClose, classes, onModalClick, hide
     if (_.isFunction(onModalClick)) {
       onModalClick(e);
     }
+    e.stopPropagation();
   }
+
+  // The modal is portalled, but React still bubbles its events to the component that rendered it
+  // (a study-list row, a thumbnail). Nothing behind a modal should react to it.
+  const stopPropagation = (e) => e.stopPropagation();
 
   useEffect(() => {
     if (isOpen) {
@@ -42,7 +47,13 @@ function ModalNG({ isOpen, children, title, onClose, classes, onModalClick, hide
   }
 
   return createPortal(
-    <div className="sonadorModal" onClick={onModalClickEvent}>
+    <div
+      className="sonadorModal"
+      onClick={onModalClickEvent}
+      onDoubleClick={stopPropagation}
+      onMouseDown={stopPropagation}
+      onPointerDown={stopPropagation}
+    >
       <div
         role="button" tabIndex={0}
         onKeyDown={(e) => {

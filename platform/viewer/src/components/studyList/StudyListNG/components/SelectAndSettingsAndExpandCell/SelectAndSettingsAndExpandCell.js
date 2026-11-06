@@ -35,7 +35,7 @@ import CreateWorklistModal from '../CreateWorklistModal/CreateWorklistModal';
 import RemoveResourceConfirm from '../RemoveResourceConfirm/RemoveResourceConfirm';
 import StudiesTableShareModal from '../StudiesTableShareModal/StudiesTableShareModal';
 import useLocalCacheVersion from '../../hooks/useLocalCacheVersion';
-import useRemoveResource from '../../hooks/useRemoveResource';
+import useRemoveResource, { REMOVAL_SETTLE_MS } from '../../hooks/useRemoveResource';
 import {
   _getStudyInstanceUID,
   _getStudyDescriptor,
@@ -88,8 +88,9 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
   const [createWorklistModalOpen, setCreateWorklistModalOpen] = useState(false);
   const [isOpenedShareModal, setIsOpenedShareModal] = useState(false);
   const [confirmingRemoveStudy, setConfirmingRemoveStudy] = useState(false);
+  const [removalOutcome, setRemovalOutcome] = useState(null);
 
-  const { isRemoving, removeStudyResource } = useRemoveResource();
+  const { isRemoving, removeStudyResource, refreshStudyList } = useRemoveResource();
 
   const { appConfig } = useContext(AppContext);
 
@@ -308,16 +309,32 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
           kind="study"
           descriptor={removalDescriptor}
           isRemoving={isRemoving}
+          completion={removalOutcome}
           onConfirm={async () => {
-            const ok = await removeStudyResource(activeServer, removalDescriptor);
+            const ok = await removeStudyResource(activeServer, removalDescriptor, { deferRefresh: true });
 
-            setConfirmingRemoveStudy(false);
-
-            // A selection that includes a study that no longer exists would carry it into the
-            // next bulk action (FR-12).
-            if (ok && row.getIsSelected?.()) {
-              row.toggleSelected?.(false);
+            if (!ok) {
+              setConfirmingRemoveStudy(false);
+              return;
             }
+
+            // Same sequence as the bulk toolbar: the dialog holds the outcome, blocking, while the
+            // server finishes its cascade, and only then closes and lets the study list refetch.
+            // Not cleared on unmount: the refetch still has to happen if the row goes first.
+            setRemovalOutcome({ title: t('Study removed') });
+
+            setTimeout(() => {
+              setRemovalOutcome(null);
+              setConfirmingRemoveStudy(false);
+
+              // A selection that includes a study that no longer exists would carry it into the
+              // next bulk action (FR-12).
+              if (row.getIsSelected?.()) {
+                row.toggleSelected?.(false);
+              }
+
+              refreshStudyList();
+            }, REMOVAL_SETTLE_MS);
           }}
           onCancel={() => setConfirmingRemoveStudy(false)}
         />

@@ -268,7 +268,14 @@ export default function StudiesTable({
                     <tr
                       data-cy="study-row"
                       data-study-uid={studyId}
-                      onClick={() => {
+                      onClick={(event) => {
+                        // React bubbles events from portals (dialogs, menus, popovers opened by a
+                        // cell) through the component tree to this row. Only clicks on the row's
+                        // own DOM toggle the drawer.
+                        if (!event.currentTarget.contains(event.target)) {
+                          return;
+                        }
+
                         tableContainerRef.current?.scrollTo({ left: 0 });
                         row.getToggleExpandedHandler()();
                       }}
