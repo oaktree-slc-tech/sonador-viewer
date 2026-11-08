@@ -72,12 +72,11 @@ export default class DICOMSRDisplayTool extends BaseTool {
       trackingUniqueIdentifiers,
     } = module.getters.trackingUniqueIdentifiersForElement(element);
 
-    // Filter toolData to only render the data for the active SR.
     const activeTrackingUniqueIdentifier = trackingUniqueIdentifiers[activeIndex];
 
-    
-    const filteredToolData = toolState.data.filter(
-      td => trackingUniqueIdentifiers.includes(td.TrackingUniqueIdentifier));
+    // Every read-only measurement on the image is drawn. Tool state is already per image, and the
+    // element's list is only set when its display set changes, so it misses reports parsed later.
+    const filteredToolData = toolState.data;
 
     let shouldRepositionTextBoxes = false;
 

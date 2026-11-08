@@ -14,6 +14,9 @@ import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements.js';
 import addMeasurement from './utils/addMeasurement';
 import getMeasurements from './utils/getMeasurements';
 import isRehydratable from './utils/isRehydratable';
+import { findImageForPoints, planeFromInstance } from '../readOnly/imagePlane';
+import { patientPoints } from '../readOnly/renderableData';
+import { renderSRDisplayAnnotations } from '../readOnly/srDisplayAnnotations';
 
 
 const parseSCOORD3D = ({ servicesManager, displaySets }, options) => {
@@ -66,6 +69,16 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
 
   const { sopClassUIDs, images } = imageDisplaySet;
 
+  // The display set's images with their planes, for placing SCOORD3D content by position
+  let _candidates;
+  const candidates = () => {
+    _candidates = _candidates || images.map((image) => {
+      const imageMetadata = image.getData().metadata;
+      return { imageMetadata, plane: planeFromInstance(imageMetadata) };
+    });
+    return _candidates;
+  };
+
   /**
    * Filter measurements that references the correct sop class.
    */
@@ -86,34 +99,15 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
          * (i.e. two source series, with the same frameOfReferenceUID,
          * that have each a frame with the same ImagePositionPatient of the annotation 3D coordinates)
          */
-        for (let i = 0; i < images.length; ++i) {
-          const imageMetadata = images[i].getData().metadata;
-          if (imageMetadata.FrameOfReferenceUID !== coord.ReferencedFrameOfReferenceSequence) {
-            continue;
-          }
+        const match = findImageForPoints(candidates(), patientPoints(coord), {
+          FrameOfReferenceUID: coord.ReferencedFrameOfReferenceSequence,
+        });
 
-          let sliceNormal = [0, 0, 0];
-          const orientation = imageMetadata.ImageOrientationPatient;
-          sliceNormal[0] = orientation[1] * orientation[5] - orientation[2] * orientation[4];
-          sliceNormal[1] = orientation[2] * orientation[3] - orientation[0] * orientation[5];
-          sliceNormal[2] = orientation[0] * orientation[4] - orientation[1] * orientation[3];
-
-          let distanceAlongNormal = 0;
-          for (let j = 0; j < 3; ++j) {
-            distanceAlongNormal += sliceNormal[j] * imageMetadata.ImagePositionPatient[j];
-          }
-
-          // assuming 1 mm tolerance
-          if (Math.abs(distanceAlongNormal - coord.GraphicData[2]) > 1) {
-            continue;
-          }
-
+        if (match) {
           coord.ReferencedSOPSequence = {
-            ReferencedSOPClassUID: imageMetadata.SOPClassUID,
-            ReferencedSOPInstanceUID: imageMetadata.SOPInstanceUID,
+            ReferencedSOPClassUID: match.imageMetadata.SOPClassUID,
+            ReferencedSOPInstanceUID: match.imageMetadata.SOPInstanceUID,
           };
-
-          break;
         }
 
         if (coord.ReferencedSOPSequence === undefined) {
@@ -190,6 +184,7 @@ const checkIfCanAddMeasurementsToDisplaySet = (srDisplaySet, imageDisplaySet) =>
   });
 
   measurementApi.syncMeasurementsAndToolData();
+  renderSRDisplayAnnotations();
 };
 
 

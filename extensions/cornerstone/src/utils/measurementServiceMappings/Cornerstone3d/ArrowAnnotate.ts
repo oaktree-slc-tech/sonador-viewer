@@ -78,6 +78,8 @@ const ArrowAnnotate = {
       displaySetInstanceUID: displaySet.displaySetInstanceUID,
       label: data.text,
       displayText: displayText,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js)
+      displayAttributes: data.displayAttributes,
       data: data.cachedStats,
       type: getValueTypeFromToolType(toolName),
       getReport,

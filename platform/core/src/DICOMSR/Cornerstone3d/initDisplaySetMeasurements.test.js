@@ -52,6 +52,8 @@ jest.mock('../../services/DicomMetadataStore', () => ({
 }));
 jest.mock('../../services/DisplaySetService', () => ({ __esModule: true, default: {} }));
 jest.mock('./utils/isRehydratable', () => ({ __esModule: true, default: () => true }));
+jest.mock('../utils/dcmsrExtendedMeta', () => ({ parseExtendedMeta: () => {} }));
+jest.mock('../utils/dcmsrDisplayAttributes', () => ({ parseDisplayAttributes: () => {} }));
 
 const { linkMeasurementsToDisplaySets } = require('./initDisplaySetMeasurements');
 const classes = require('../../classes').default;

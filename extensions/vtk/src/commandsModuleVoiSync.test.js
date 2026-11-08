@@ -276,6 +276,7 @@ jest.mock('@ohif/core', () => ({
 jest.mock('@ohif/extension-cornerstone', () => ({ utils: {} }), { virtual: true });
 jest.mock('./utils/setMPRLayout.js', () => ({ __esModule: true, default: jest.fn() }));
 jest.mock('./utils/cornerstone3d.js', () => ({ getCornerstone3dViewport: jest.fn() }));
+jest.mock('./components/tools/DICOMSRDisplayTool', () => ({ addSRDisplayToolToGroup: jest.fn() }));
 
 // Required (not ES-imported) so the jest.mock factories above run only after this file's
 // module-scope registries are initialized; an import would hoist above them.

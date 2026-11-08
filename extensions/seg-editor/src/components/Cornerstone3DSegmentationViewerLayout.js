@@ -88,7 +88,7 @@ import { resetSyncLedger } from '../threeDTools/syncLedger';
 import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
-const { SonadorZoomTool, SonadorTrackballRotateTool } = c3dUtils.viewportTools;
+const { SonadorZoomTool, SonadorTrackballRotateTool, addSRDisplayToolToGroup } = c3dUtils.viewportTools;
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -1172,6 +1172,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       // Labelmap palette tools, passive until chosen from the palette
       addLabelmapTools(component.imgTools);
 
+      // Read-only DICOM-SR measurements
+      addSRDisplayToolToGroup(component.imgTools);
+
       // Add viewports to tool group
       const viewportIds = [];
       component._detachViewportListeners = [];
@@ -1630,6 +1633,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
               details: { viewportId },
             }),
           });
+
+          // Read-only DICOM-SR measurements in the volume's Frame of Reference
+          addSRDisplayToolToGroup(component.surfaceTools);
 
           // Add viewports to the tool group
           _.each(views3d, (tab) => {
