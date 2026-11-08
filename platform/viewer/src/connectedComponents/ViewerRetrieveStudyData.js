@@ -661,6 +661,7 @@ function ViewerRetrieveStudyData({
       displaySetService.onModeExit();
       measurementService.onModeExit();
       OHIF.DICOMSR.clearHydratedReports();
+      OHIF.DICOMSR.srDisplayAnnotations.clearSRDisplayAnnotations({ render: false });
       customizationService.onModeExit();
       segmentationService.onModeExit();
 

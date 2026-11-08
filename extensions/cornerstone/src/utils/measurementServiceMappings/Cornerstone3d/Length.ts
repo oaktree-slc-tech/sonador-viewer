@@ -89,6 +89,8 @@ const Length = {
       displaySetInstanceUID: displaySet.displaySetInstanceUID,
       label: data.label,
       displayText: displayText,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js)
+      displayAttributes: data.displayAttributes,
       data: data.cachedStats,
       type: getValueTypeFromToolType(toolName),
       getReport,

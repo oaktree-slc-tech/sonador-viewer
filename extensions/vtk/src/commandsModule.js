@@ -30,6 +30,7 @@ import setMPRLayout from './utils/setMPRLayout.js';
 import { getCornerstone3dViewport } from './utils/cornerstone3d.js';
 
 import { Enums as vtkEnums } from './enums';
+import { addSRDisplayToolToGroup } from './components/tools/DICOMSRDisplayTool';
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -98,6 +99,9 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         mprTools.addTool(C3dWindowLevelTool.toolName);
         mprTools.addTool(C3dPanTool.toolName);
         mprTools.addTool(C3dStackScrollTool.toolName);
+
+        // Read-only DICOM-SR measurements
+        addSRDisplayToolToGroup(mprTools);
 
         // Add viewport to the tool
         mprTools.addViewport(viewportId);

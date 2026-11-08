@@ -25,6 +25,7 @@ import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 import { currentSession, registerHydratedReport } from '../utils/srDocument';
+import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
 
 const {
   CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION, Cornerstone3D: Cornerstone3dSR,
@@ -232,6 +233,19 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     }
   }
 
+  // Every measurement the reader returned for a supported tool belongs to hydration, whatever
+  // its outcome: the read-only pass below never displays it
+  const hydratableTrackingUIDs = new Set();
+  _.each(hydratableMeasurementsInSR, toolDataForAnnotationType => {
+    _.each(toolDataForAnnotationType, toolData => {
+      const uid = toolData.TrackingUniqueIdentifier || toolData.annotation?.data?.TrackingUniqueIdentifier
+        || toolData.annotation?.metadata?.TrackingUniqueIdentifier;
+      if (uid) {
+        hydratableTrackingUIDs.add(uid);
+      }
+    });
+  });
+
   let measurementNumber = 1;
   const skippedWithoutImage = [];
 
@@ -371,6 +385,32 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       ++measurementNumber;
     });
   });
+
+  // Display the measurements of THIS report outside the supported tools, read-only. The study's other
+  // reports are parsed by their own loads: displaying them here would claim their tracking UIDs
+  // before their hydration runs, and hydration would skip them as duplicates.
+  try {
+    const reportSrDisplaySets = srDisplaySets
+      .map(ds => displaySetService.getDisplaySetByUID(ds.displaySetInstanceUID))
+      .filter(ds => ds && ds.SeriesInstanceUID === instanceSR.SeriesInstanceUID);
+    addReadOnlyMeasurements({
+      srDisplaySets: reportSrDisplaySets,
+      imageDisplaySets,
+      imageIds: { sopInstanceUIDToImageId, imageIdsForToolState },
+      excludeTrackingUIDs: hydratableTrackingUIDs,
+    });
+  } catch (error) {
+    if (LoggerService) {
+      LoggerService.error({
+        error,
+        title: 'Unable to display read-only DICOM-SR measurements',
+        message: error.message,
+        notify: true,
+      });
+    } else {
+      log.error('[DICOM-SR:parseDicomStructuredReport:read-only] unable to display read-only measurements', error);
+    }
+  }
 
   if (skippedWithoutImage.length) {
     log.warn('[DICOM-SR:parseDicomStructuredReport:skipped] annotations skipped, no image loaded for their SOP instances',

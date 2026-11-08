@@ -17,6 +17,11 @@ jest.mock('../../log', () => ({ __esModule: true, default: { info: () => {}, war
 jest.mock('../configuration.js', () => ({ measurementApiDefaultConfig: {} }));
 jest.mock('../enums', () => ({ __esModule: true, default: { EVENTS: {} } }));
 jest.mock('../lib/refreshCornerstoneViewports', () => ({ __esModule: true, default: () => {} }));
+const mockClearDisplay = jest.fn();
+jest.mock('../../DICOMSR/readOnly/srDisplayAnnotations', () => ({
+  clearSRDisplayAnnotations: (...args) => mockClearDisplay(...args),
+  setSRDisplayAnnotationVisible: () => {},
+}));
 
 import MeasurementApi from './MeasurementApi';
 import MeasurementService from '../../services/MeasurementService/MeasurementService';
@@ -56,10 +61,12 @@ afterEach(() => jest.restoreAllMocks());
 
 
 describe('MeasurementApi save parents', () => {
-  it('a session clear (MeasurementApi.clearMeasurements) resets them', () => {
+  it('a session clear (MeasurementApi.clearMeasurements) resets them, and removes the read-only display', () => {
     const api = session();
+    mockClearDisplay.mockClear();
     MeasurementApi.prototype.clearMeasurements.call(api);
     expect(saveParent(STUDY)).toBeNull();
+    expect(mockClearDisplay).toHaveBeenCalledTimes(1);
   });
 
   it('removing some measurements (removeMany) keeps the parent of the ones that remain', () => {

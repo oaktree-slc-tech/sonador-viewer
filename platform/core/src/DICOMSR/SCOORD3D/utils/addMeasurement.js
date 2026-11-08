@@ -7,6 +7,8 @@ import OHIF from '../../../';
 
 import TOOL_NAMES from '../../constants/toolNames';
 import getRenderableData from './getRenderableData';
+import { getImagePlane } from '../../readOnly/imagePlane';
+import { addSRDisplayAnnotation } from '../../readOnly/srDisplayAnnotations';
 
 const globalImageIdSpecificToolStateManager = csTools.globalImageIdSpecificToolStateManager;
 
@@ -33,6 +35,11 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
 
   measurement.coords.forEach((coord) => {
     const { GraphicType, GraphicData, ValueType } = coord;
+
+    // A finding placed on an image without coordinates has nothing to draw
+    if (!GraphicType) {
+      return;
+    }
 
     if (measurementData.renderableData[GraphicType] === undefined) {
       measurementData.renderableData[GraphicType] = [];
@@ -62,13 +69,23 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
   // Add measurement extended attributes to data representation which will be
   // added to the measurementService
   measurementData.isReadOnly = true;
-  _.defaults(measurementData, _.pick(measurement, 'description'));
+  _.defaults(measurementData, _.pick(measurement, 'description', 'displayAttributes'));
   measurementData.metadata = _.extend(
     measurementData.metadata || {}, _.defaults(measurement.metadata || {}));
 
   toolData.data.push(measurementData);
 
   addToMeasurementApi({ measurementData, toolName, imageId });
+
+  // The same measurement for the Cornerstone3D viewports, in patient coordinates. The caller
+  // redraws them once its measurements are placed.
+  addSRDisplayAnnotation({
+    measurement,
+    plane: getImagePlane(imageId, imageMetadata),
+    imageId,
+    displaySetInstanceUID,
+    render: false,
+  });
 
   // Add state attributes to displaySet copy of measurement
   measurement.loaded = true;
@@ -78,7 +95,8 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
   // Remove the unneeded coord now its processed, but keep the SOPInstanceUID.
   // NOTE: We assume that each SCOORD in the MeasurementGroup maps onto one frame,
   // It'd be super werid if it didn't anyway as a SCOORD.
-  measurement.ReferencedSOPInstanceUID = measurement.coords[0].ReferencedSOPSequence.ReferencedSOPInstanceUID;
+  const reference = measurement.coords.map((coord) => coord.ReferencedSOPSequence).find(Boolean);
+  measurement.ReferencedSOPInstanceUID = (Array.isArray(reference) ? reference[0] : reference)?.ReferencedSOPInstanceUID;
 
   return {
     measurement,

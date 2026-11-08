@@ -52,6 +52,11 @@ jest.mock('../../utils/dicomPart10', () => ({ isUsablePart10: () => false }));
 jest.mock('../../utils/xhrRetryRequestHook', () => ({ __esModule: true, default: () => () => {} }));
 jest.mock('./utils/getAllDisplaySets', () => ({ __esModule: true, default: () => [] }));
 jest.mock('../parseMeasurementsData', () => ({ __esModule: true, default: () => ({}) }));
+// The read-only pass is recorded, not run
+const mockReadOnly = jest.fn();
+jest.mock('../readOnly/addReadOnlyMeasurements', () => ({
+  __esModule: true, default: (...args) => mockReadOnly(...args),
+}));
 jest.mock('../parseDicomStructuredReport', () => ({
   // The routing wrapper hands the Cornerstone3D route its options, including the load session
   __esModule: true,
@@ -165,6 +170,7 @@ const retrieve = key => retrieveMeasurementFromSR(
 beforeEach(() => {
   clearHydratedReports();
   mockImport.mockClear();
+  mockReadOnly.mockClear();
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
 afterEach(() => jest.restoreAllMocks());
@@ -255,5 +261,31 @@ describe('save parent registration', () => {
     await parse(report('2.25.40', ENHANCED_SR, '1500'));
     await parse(report('2.25.41', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500'));
     expect(saveParent(STUDY)).toBeNull();
+  });
+});
+
+
+describe('read-only display', () => {
+  it('displays the measurements it did not hydrate after hydration, from the registered SR display sets', async () => {
+    await parse(withFinding(report('2.25.90', ENHANCED_SR, '1500')));
+
+    expect(mockImport).toHaveBeenCalledTimes(1);
+    expect(mockReadOnly).toHaveBeenCalledTimes(1);
+    expect(mockReadOnly.mock.invocationCallOrder[0]).toBeGreaterThan(mockImport.mock.invocationCallOrder[0]);
+    expect(mockReadOnly.mock.calls[0][0]).toMatchObject({
+      srDisplaySets: [], imageDisplaySets: [], imageIds: { sopInstanceUIDToImageId: { '2.25.900': 'wadors:image' } },
+    });
+  });
+
+  it('displays nothing from a load whose session was cleared', async () => {
+    const key = withFinding(report('2.25.91', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500'));
+    const release = holdLoad(key);
+    const lateLoad = parse(key);
+
+    clearHydratedReports();
+    release();
+    await lateLoad;
+
+    expect(mockReadOnly).not.toHaveBeenCalled();
   });
 });

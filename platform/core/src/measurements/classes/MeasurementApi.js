@@ -116,6 +116,7 @@ import utils from './../../utils';
 
 import Enums from '../enums';
 import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
+import { clearSRDisplayAnnotations, setSRDisplayAnnotationVisible } from '../../DICOMSR/readOnly/srDisplayAnnotations';
 
 const configuration = {
   ...measurementApiDefaultConfig,
@@ -1074,6 +1075,12 @@ export default class MeasurementApi {
     // Toggle API managed measurement instance
     if (measurement) {
       measurement.visible = visibility;
+
+      // A read-only SR measurement is also drawn in the Cornerstone3D viewports
+      const trackingUid = measurement.TrackingUniqueIdentifier || measurement.metadata?.TrackingUniqueIdentifier;
+      if (measurement.isReadOnly && trackingUid) {
+        setSRDisplayAnnotationVisible(trackingUid, visibility);
+      }
       this.syncMeasurementsAndToolData(
         this.updateMeasurement(measurement.toolType, measurement));
     }
@@ -2090,8 +2097,10 @@ export default class MeasurementApi {
     // Clear all measurements, measurement representations, and tool state from API
     const _api = this;
 
-    // Reports hydrated in the cleared session are no longer save parents
+    // Reports hydrated in the cleared session are no longer save parents, and its read-only
+    // measurements leave the Cornerstone3D viewports
     clearHydratedReports();
+    clearSRDisplayAnnotations();
 
     this.measurementService.triggerApiEvent(Enums.EVENTS.MEAUSREMENT_CLEAR_START, {
       api: this, measurementRepresentations: this.tools,

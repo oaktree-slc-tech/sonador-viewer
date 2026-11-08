@@ -56,6 +56,7 @@ import Cornerstone3DLabelmapBaseView from './Cornerstone3DLabelmapBaseView.js';
 import styles from './Cornerstone3DInspectionView.css';
 
 import ViewportGridOverlayTool from './tools/ViewportGridOverlayTool.js';
+import { addSRDisplayToolToGroup } from './tools/DICOMSRDisplayTool';
 
 const { ViewportType, Events } = c3dEnums;
 const { DisplaySetApi } = OHIF.display;
@@ -196,6 +197,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
       // Activate tools
       component.activateTools('default');
+
+      // Read-only DICOM-SR measurements
+      addSRDisplayToolToGroup(component.imgTools);
 
       // Re-render viewports and udpate state
       component.renderEngine.render();

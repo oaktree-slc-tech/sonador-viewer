@@ -74,10 +74,18 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   const measurementApi = MeasurementApi.Instance;
   const measurementService = measurementApi.measurementService;
 
+  const isCornerstone3dParser = options.parserModule.name == Cornerstone3dSR.sr.name
+    && options.parserModule.version == Cornerstone3dSR.sr.version;
+
   try {
 
-    // Parse read-only annotations from the DICOM-SR file.
-    parseSCOORD3D({ servicesManager: external.servicesManager, displaySets });
+    // Parse read-only annotations from the DICOM-SR file. The Cornerstone3D parser displays the
+    // measurements it does not hydrate itself, after hydration (readOnly/addReadOnlyMeasurements.js):
+    // placed first, a read-only copy would hold the tracking UID and stop the editable measurement
+    // from being imported.
+    if (!isCornerstone3dParser) {
+      parseSCOORD3D({ servicesManager: external.servicesManager, displaySets });
+    }
 
   } catch(err) {
 
@@ -95,7 +103,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     });
   }
 
-  if (options.parserModule.name == Cornerstone3dSR.sr.name && options.parserModule.version == Cornerstone3dSR.sr.version) {
+  if (isCornerstone3dParser) {
 
     // Parse measurements via Cornerstone 3D
     return Cornerstone3dDcmSrParse.parseDicomStructuredReport(part10SRArrayBuffer, displaySets, external, options);

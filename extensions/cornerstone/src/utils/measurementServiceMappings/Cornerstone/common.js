@@ -245,6 +245,13 @@ const commonToAnnotation = (measurementService, measurement, definition) => {
     visible: isVisible,
   }
 
+  // Display colours, wherever the source measurement carries them
+  const displayAttributes = measurement.displayAttributes || measurementData.displayAttributes
+    || measurementMeta.displayAttributes;
+  if (displayAttributes) {
+    annotation.measurementData.displayAttributes = _.cloneDeep(displayAttributes);
+  }
+
   // Back-populate _id and uid properties
   return annotation;
 }

@@ -1,37 +1,23 @@
 import csMath from 'cornerstone-math';
-import { inv } from 'mathjs';
 
 import SCOORD_TYPES from '../../constants/scoordTypes';
+import { planeFromInstance, worldToImage } from '../../readOnly/imagePlane';
 
 
 const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) => {
-  // Retrieves renderable data from the provided GraphicType instance.
+  // Retrieves renderable data, in image (pixel) coordinates, from the provided GraphicType instance.
 
   let renderableData;
 
-  const orientation = imageMetadata.ImageOrientationPatient;
-  const position = imageMetadata.ImagePositionPatient;
-  const pixelSpacing = imageMetadata.PixelSpacing;
-  const sliceSpacing = imageMetadata.SliceThickness ? imageMetadata.SliceThickness : 1;
-  //  https://nipy.org/nibabel/dicom/dicom_orientation.html
-  const M = [
-    [orientation[0] * pixelSpacing[0], orientation[3] * pixelSpacing[1], sliceSpacing, position[0]],
-    [orientation[1] * pixelSpacing[0], orientation[4] * pixelSpacing[1], sliceSpacing, position[1]],
-    [orientation[2] * pixelSpacing[0], orientation[5] * pixelSpacing[1], sliceSpacing, position[2]],
-    [0, 0, 0, 1],
-  ];
-
-  // we need to go from 3D to pixel (cornerstone2D works in pixel coordinates),
-  // we take the inverse.
-  const M1 = inv(M);
-
-  const worldToIJK = (point, M1) => {
-    const worldPoint = {
-      x: M1[0][0] * point.x + M1[0][1] * point.y + M1[0][2] * point.z + M1[0][3],
-      y: M1[1][0] * point.x + M1[1][1] * point.y + M1[1][2] * point.z + M1[1][3],
-      z: M1[2][0] * point.x + M1[2][1] * point.y + M1[2][2] * point.z + M1[2][3],
-    };
-    return worldPoint;
+  // SCOORD3D points are projected onto the image plane (readOnly/imagePlane.js). Without a plane
+  // they cannot be placed, and are dropped.
+  const plane = planeFromInstance(imageMetadata);
+  const worldToIJK = (point) => {
+    if (!plane) {
+      return undefined;
+    }
+    const [x, y] = worldToImage(plane, [point.x, point.y, point.z]);
+    return { x, y };
   };
 
   // https://dicom.innolitics.com/ciods/procedure-log/sr-document-content/00700023
@@ -51,7 +37,7 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
             z: GraphicData[i + 2],
           };
 
-          renderableData.push(worldToIJK(point, M1));
+          renderableData.push(worldToIJK(point));
         }
       } else {
         for (let i = 0; i < GraphicData.length; i += 2) {
@@ -71,7 +57,7 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
             z: GraphicData[i + 2],
           };
 
-          renderableData.push(worldToIJK(point, M1));
+          renderableData.push(worldToIJK(point));
         }
       } else {
         for (let i = 0; i < GraphicData.length; i += 2) {
@@ -91,7 +77,7 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
             z: GraphicData[i + 2],
           };
 
-          renderableData.push(worldToIJK(point, M1));
+          renderableData.push(worldToIJK(point));
         }
       } else {
         for (let i = 0; i < GraphicData.length; i += 2) {
@@ -110,7 +96,7 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
           z: GraphicData[i + 2],
         };
 
-        renderableData.push(worldToIJK(point, M1));
+        renderableData.push(worldToIJK(point));
       }
       break;
     case SCOORD_TYPES.CIRCLE: {
@@ -169,7 +155,7 @@ const getRenderableData = (GraphicType, GraphicData, ValueType, imageMetadata) =
     }
   }
 
-  return renderableData;
+  return Array.isArray(renderableData) ? renderableData.filter(Boolean) : renderableData;
 };
 
 

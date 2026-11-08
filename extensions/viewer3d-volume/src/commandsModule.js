@@ -21,7 +21,7 @@ import setCTVolumeLayout from './utils/setCTVolumeLayout.js';
 
 import { Enums as VolViewerEnums } from './enums';
 
-const { SonadorZoomTool } = c3dUtils.viewportTools;
+const { SonadorZoomTool, addSRDisplayToolToGroup } = c3dUtils.viewportTools;
 const { DisplaySetApi } = OHIF.display;
 
 
@@ -174,6 +174,9 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         volumeTools.addTool(SonadorZoomTool.toolName);
         volumeTools.addTool(C3dPanTool.toolName);
         volumeTools.addTool(C3dTrackballRotateTool.toolName);
+
+        // Read-only DICOM-SR measurements in the volume's Frame of Reference
+        addSRDisplayToolToGroup(volumeTools);
 
         // Add viewport to the tool group
         volumeTools.addViewport(viewportId);
