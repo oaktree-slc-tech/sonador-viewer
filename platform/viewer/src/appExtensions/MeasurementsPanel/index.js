@@ -43,9 +43,10 @@ export default {
       return showLabellingDialog({ editDescriptionOnDialog: true }, tool);
     }
 
-    const ExtendedConnectedMeasurementTable = () => (
+    const ExtendedConnectedMeasurementTable = ({ isOpen }) => (
       <SonadorMeasurementTable
         servicesManager={servicesManager}
+        isOpen={isOpen}
         onRelabel={onRelabel} onEditDescription={onEditDescription}
         onSaveComplete={(message) => {
           if (UINotificationService) {

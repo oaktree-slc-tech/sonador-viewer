@@ -79,19 +79,37 @@
       display: flex
       flex-direction: column
 
-    // The all-annotations toggle row. Its toggle is centred above the rows' toggles: a row ends
-    // 10px short of the list, after its lock slot (1.8rem) and the 0.3rem gap, and this toggle is
-    // 0.09rem wider. The vertical padding leaves equal visible gaps between the drawer header's
-    // bottom edge and the eye, and between the eye and the first group header (whose 3px top
-    // border is the panel background).
+    // The search and all-annotations toggle row. The toggle is centred above the rows' toggles: a
+    // row ends 10px short of the list, after its lock slot (1.8rem) and the 0.3rem gap, and this
+    // toggle is 0.09rem wider. The vertical padding leaves equal visible gaps between the drawer
+    // header's bottom edge and the row, and between the row and the first group header (whose 3px
+    // top border is the panel background). The search box takes the rest of the row: its left
+    // edge lines up with the group titles (14px), and 28px separates it from the toggle.
     .measurementTableVisibilityRow
       flex: 0 0 auto
       display: flex
       align-items: center
       justify-content: flex-end
+      column-gap: 28px
       width: 100%
-      padding: 17px calc(10px + 2.055rem) 7px 0
+      padding: 17px calc(10px + 2.055rem) 7px 14px
       box-sizing: border-box
+
+      .annotationsSearch
+        flex: 1 1 auto
+        min-width: 0
+
+    // The display settings drawer keeps its own height in the column, with the Segmentations
+    // panel's drawer padding and type (its theme's .seg-table-config and font)
+    .annotationsSettings
+      flex: 0 0 auto
+      padding: 0.65rem 0.5rem 0.5rem 1rem
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+
+    .annotationsNoMatch
+      padding: 16px 12px
+      color: var(--text-secondary-color)
+      font-size: 14px
 
     // The section header reads as the Segmentations panel's "Segmentation Editor" header: the
     // same type, size and weight, with room above it and the groups close beneath it
@@ -117,6 +135,15 @@
           line-height: 63px
           padding: 0 10px 0 3px
 
+        // The display settings control in the header, as the Segmentations panel's: a block on a
+        // 13px line, as its header's text sets it
+        span.annotationsSettingsToggle
+          display: block
+          font-size: 13px
+          line-height: 1.1
+          padding: 0
+          cursor: pointer
+
     .measurementTableScroll
       flex: 1 1 auto
       min-height: 0
@@ -129,6 +156,41 @@
     .measurementGroups
       h3
         margin: 0
+
+      // A series sub-group (Group by series): a second-level header under its group, indented and
+      // a step smaller, with the group's own +/- control
+      .measurementSeriesHeader
+        appearance: none
+        display: flex
+        align-items: center
+        width: 100%
+        min-height: 32px
+        margin: 1px 0 0
+        padding: 4px 0 4px 24px
+        border: 0
+        background-color: var(--ui-gray-darker)
+        color: var(--text-primary-color)
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+        font-size: 14px
+        font-weight: 400
+        line-height: 20px
+        text-align: left
+        cursor: pointer
+
+        .measurementSeriesTitle
+          flex: 1 1 auto
+          min-width: 0
+          overflow: hidden
+          text-overflow: ellipsis
+          white-space: nowrap
+
+        .measurementSeriesCount
+          color: var(--ui-sky-blue)
+          padding: 0 12px 0 8px
+
+      .measurementSeriesHeader[data-state="open"] .measurementGroupExpand,
+      .measurementSeriesHeader[data-state="closed"] .measurementGroupCollapse
+        display: none
 
       .measurementGroupHeader
         appearance: none
@@ -217,6 +279,47 @@
         margin-right: 4px
         position: relative
         top: 2px
+
+// The series hover card's annotation types: the type in the card's text, its count in the
+// panel's count colour; "Pending" after a pending type in the active colour, lighter, so it reads
+// apart from the type. The card is rendered outside the panel, so the rules are not nested. The
+// cells set their own border and padding over the page's global table cell rules.
+.seriesAnnotationTypes
+  border-collapse: collapse
+  margin-bottom: 16px
+
+  td
+    border: 0
+    padding: 2px 12px 2px 0
+
+  td:last-child
+    padding-right: 0
+    color: var(--ui-sky-blue)
+
+  .seriesAnnotationPending
+    margin-left: 16px
+    color: var(--active-color)
+    font-weight: 300
+
+// The series thumbnail's instance-count glyph (Thumbnail.styl .image-frames .icon): two stacked
+// squares. The series hover card is rendered outside the panel, so the rule is not nested.
+.seriesFramesGlyph
+  position: relative
+  display: inline-block
+  width: 11px
+  height: 11px
+  margin-left: 4px
+  background-color: #678696
+
+  &:after
+    content: ''
+    position: absolute
+    left: -4px
+    top: -4px
+    width: 11px
+    height: 11px
+    background-color: var(--active-color)
+    box-shadow: 1px 1px rgba(0, 0, 0, .115)
 
 .tooltip-warning
   &.in

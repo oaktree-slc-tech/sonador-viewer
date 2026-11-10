@@ -24,6 +24,8 @@ import VolumeFitNotice, { getVolumeFitNoticeKey } from './components/VolumeFitNo
 import OHIFVtkBaseViewport from './ohifComponents/OHIFVtkBaseViewport.js';
 import ConnectedVTKViewport from './connectedComponents/ConnectedVTKViewport';
 import { uiNotificationService } from '@ohif/core';
+import { mprPaneCamera } from './utils/inspectionCamera';
+import InspectButton from './components/InspectButton';
 
 const segmentationModule = cornerstoneTools.getModule('segmentation');
 
@@ -256,6 +258,9 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
       const { displaySet } = component.props.viewportData;
       const { SeriesDescription, SeriesInstanceUID, displaySetInstanceUID } = displaySet;
 
+      // The Inspector opens on this pane's plane and slice, with the image fitted to its view
+      const initialCamera = mprPaneCamera(component._getOrientation());
+
       component.setState((prevState) => ({
         isInpsectionViewOpen: !prevState.isInpsectionViewOpen,
       }));
@@ -267,6 +272,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
             viewportData={viewportData} isLoaded={isLoaded} imageIds={imageIds}
             onClose={() => component.setState({ isInpsectionViewOpen: false })}
             servicesManager={servicesManager} orientation={component._getOrientation()}
+            initialCamera={initialCamera}
             paintFilterLabelMapImageData={paintFilterLabelMapImageData}
             paintFilterLabelMapDetails={paintFilterLabelMapDetails}
             labelmapRenderingOptions={{
@@ -361,9 +367,7 @@ class OHIFVTKMprViewport extends OHIFVtkBaseViewport {
           )}
         </div>
         {component.state.imageIds && (
-          <div className="zoomButton" onClick={handleToggleInspectionView} >
-            <Icon name="search-plus" width="18px" height="18px" />
-          </div>
+          <InspectButton orientation={component._getOrientation()} onOpen={handleToggleInspectionView} />
         )}
         {childrenWithProps}
       </>

@@ -3,10 +3,17 @@
 
 const mockAnnotations = new Map();
 const mockRender = jest.fn();
+// Set to make Cornerstone3D's announcement of an added annotation fail, after storing it
+const mockAnnounce = { fails: false };
 jest.mock('@cornerstonejs/tools', () => ({
   annotation: {
     state: {
-      addAnnotation: annotation => mockAnnotations.set(annotation.annotationUID, annotation),
+      addAnnotation: (annotation) => {
+        mockAnnotations.set(annotation.annotationUID, annotation);
+        if (mockAnnounce.fails) {
+          throw new TypeError("Cannot destructure property 'FrameOfReferenceUID' of undefined");
+        }
+      },
       getAnnotation: uid => mockAnnotations.get(uid),
       removeAnnotation: uid => mockAnnotations.delete(uid),
       getAllAnnotations: () => [...mockAnnotations.values()],
@@ -75,6 +82,17 @@ describe('addSRDisplayAnnotation', () => {
     expect(annotation.data.handles.points).toEqual([[10, 10, 40], [30, 10, 40]]);
     expect(annotation.data.srPlane.sourceNormal).toEqual([0, 0, 1]);
     expect(mockRender).toHaveBeenCalledWith(['mpr-axial', 'volume-3d']);
+  });
+
+  it('keeps the annotation when a viewport of its Frame of Reference is no longer enabled', () => {
+    mockAnnounce.fails = true;
+    try {
+      const annotation = addSRDisplayAnnotation({ measurement: imageLength, plane: axial, imageId: 'wadors:1' });
+      expect(annotation.annotationUID).toBe(annotationUIDFor('2.25.100'));
+      expect(mockAnnotations.has(annotationUIDFor('2.25.100'))).toBe(true);
+    } finally {
+      mockAnnounce.fails = false;
+    }
   });
 
   it('replaces the annotation of a tracking UID instead of adding a second one', () => {

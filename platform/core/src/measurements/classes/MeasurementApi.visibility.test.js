@@ -156,3 +156,28 @@ describe('session-only annotations (registered visibility sources)', () => {
     expect(api.onMeasurementsUpdated).not.toHaveBeenCalled();
   });
 });
+
+describe('all-visibility listeners (the global visibility choice)', () => {
+  const api = () => ({ measurementService: serviceWith(), tools: {}, toggleVisibilityMeasurement: jest.fn() });
+
+  it('tells each listener the visibility every annotation was given, until it is removed', () => {
+    const listener = jest.fn();
+    const removeListener = MeasurementApi.addAllVisibilityListener(listener);
+    MeasurementApi.prototype.setAllMeasurementsVisibility.call(api(), false);
+    expect(listener).toHaveBeenCalledWith(false);
+
+    removeListener();
+    MeasurementApi.prototype.setAllMeasurementsVisibility.call(api(), true);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the other listeners when one fails', () => {
+    const listener = jest.fn();
+    const removeFailing = MeasurementApi.addAllVisibilityListener(() => { throw new Error('listener'); });
+    const removeListener = MeasurementApi.addAllVisibilityListener(listener);
+    MeasurementApi.prototype.setAllMeasurementsVisibility.call(api(), true);
+    expect(listener).toHaveBeenCalledWith(true);
+    removeFailing();
+    removeListener();
+  });
+});

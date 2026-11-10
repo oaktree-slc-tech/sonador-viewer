@@ -202,17 +202,25 @@ const MeasurementTableItem = ({
             {/* The Segmentations panel's row controls (ui-next DataRow): the visibility toggle, then
                 a slot for the lock */}
             <div className="measurementStatus">
-              <Button
-                size="icon"
-                variant="ghost"
-                className={`annotationVisibilityToggle ${measurementData.isVisible ? '' : 'isHidden'}`}
-                data-cy="measurement-visibility-toggle"
-                aria-label={measurementData.isVisible ? t('Hide') : t('Show')}
-                title={measurementData.isVisible ? t('Hide') : t('Show')}
-                onClick={onToggleVisibility}
-              >
-                {measurementData.isVisible ? <Icons.Hide /> : <Icons.Show />}
-              </Button>
+              <TooltipProvider delayDuration={500}>
+                <HoverTooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className={`annotationVisibilityToggle ${measurementData.isVisible ? '' : 'isHidden'}`}
+                      data-cy="measurement-visibility-toggle"
+                      aria-label={measurementData.isVisible ? t('Hide') : t('Show')}
+                      onClick={onToggleVisibility}
+                    >
+                      {measurementData.isVisible ? <Icons.Hide /> : <Icons.Show />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" data-cy="measurement-visibility-tooltip">
+                    {measurementData.isVisible ? t('Hide') : t('Show')}
+                  </TooltipContent>
+                </HoverTooltip>
+              </TooltipProvider>
               <span className="measurementLockSlot">
                 {Boolean(measurementData.isLocked) && <Icons.Lock data-cy="measurement-locked" />}
               </span>

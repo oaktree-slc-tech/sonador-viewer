@@ -51,7 +51,7 @@ const managerWithActive = (activeContexts) => {
   return commandsManager;
 };
 
-const SESSION_COMMANDS = ['saveMeasurements', 'clearAnnotations', 'reloadAnnotations'];
+const SESSION_COMMANDS = ['saveMeasurements', 'clearAnnotations', 'reloadAnnotations', 'labellingDialog', 'updateTableWithNewMeasurementData', 'seriesTagDialog'];
 
 it.each([
   ['the classic viewport', 'ACTIVE_VIEWPORT::CORNERSTONE'],

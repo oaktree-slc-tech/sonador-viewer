@@ -15,9 +15,13 @@ jest.mock('../../measurements/classes/MeasurementApi', () => ({
 }));
 
 const mockPlaced = [];
+const mockFailing = new Set();
 jest.mock('../SCOORD3D/utils/addMeasurement', () => ({
   __esModule: true,
   default: (measurement, imageId, instance, displaySetInstanceUID) => {
+    if (mockFailing.has(measurement.TrackingUniqueIdentifier)) {
+      throw new Error('measurement not added');
+    }
     measurement.loaded = true;
     mockPlaced.push({ uid: measurement.TrackingUniqueIdentifier, imageId, SOPInstanceUID: instance.SOPInstanceUID, displaySetInstanceUID });
   },
@@ -127,6 +131,21 @@ describe('addReadOnlyMeasurements', () => {
     }]);
     expect(ct.SRLabels[0].labels.color).toMatch(/^hsla\(\d+, 70%, 30%, 1\)$/);
     expect(mockPlaced).toEqual([expect.objectContaining({ uid: '2.25.504', imageId: 'wadors:10' })]);
+  });
+
+  it('skips a measurement that fails to be added, and still adds the others', () => {
+    mockFailing.add('2.25.500');
+    try {
+      const other = { ...angleOnImage, TrackingUniqueIdentifier: '2.25.510' };
+      const summary = addReadOnlyMeasurements({
+        srDisplaySets: [{ measurements: [angleOnImage, other], referencedDisplaySets: [] }], imageDisplaySets: [imageDisplaySet()], imageIds,
+      });
+      expect(mockPlaced.map(placed => placed.uid)).toEqual(['2.25.510']);
+      expect(summary).toEqual({ placed: 1, patientOnly: 0, skipped: 1 });
+      expect(mockApi.syncMeasurementsAndToolData).toHaveBeenCalled();
+    } finally {
+      mockFailing.clear();
+    }
   });
 
   it('skips a measurement whose image the study does not hold', () => {

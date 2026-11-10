@@ -27,7 +27,7 @@ jest.mock('@ohif/ui-next', () => ({
     Lock: props => <span data-icon="lock" {...props} />,
   },
   Tooltip: ({ children }) => children,
-  TooltipContent: () => null,
+  TooltipContent: ({ children, ...props }) => <div role="tooltip" {...props}>{children}</div>,
   TooltipProvider: ({ children }) => children,
   TooltipTrigger: ({ children }) => children,
 }), { virtual: true });
@@ -69,6 +69,8 @@ it('shows the Hide icon for a shown measurement, and hides it on click without s
   expect(toggle().querySelector('[data-icon="hide"]')).not.toBeNull();
   expect(toggle().className).toBe('annotationVisibilityToggle ');
   expect(container.querySelector('[data-legacy-icon="eye"]')).toBeNull();
+  expect(toggle().hasAttribute('title')).toBe(false);
+  expect(container.querySelector('[data-cy="measurement-visibility-tooltip"]').textContent).toBe('Hide');
 
   act(() => toggle().click());
   expect(mockApi.toggleVisibilityMeasurement).toHaveBeenCalledWith('m1', false);
@@ -79,6 +81,7 @@ it('shows the Show icon for a hidden measurement, kept in view', () => {
   render({ isVisible: false });
   expect(toggle().querySelector('[data-icon="show"]')).not.toBeNull();
   expect(toggle().classList.contains('isHidden')).toBe(true);
+  expect(container.querySelector('[data-cy="measurement-visibility-tooltip"]').textContent).toBe('Show');
   act(() => toggle().click());
   expect(mockApi.toggleVisibilityMeasurement).toHaveBeenCalledWith('m1', true);
 });

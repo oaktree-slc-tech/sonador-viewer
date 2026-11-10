@@ -19,6 +19,7 @@ jest.mock('@ohif/core', () => {
   const MeasurementApi = {
     Instance: { get tools() { return mockTools; }, getServiceMeasurementByCornerstoneId: () => undefined },
     _getToolType: m => m.toolType || m.toolName,
+    seriesInstanceUIDOf: m => m.SeriesInstanceUID || m.referenceSeriesUID,
     _getImageIdentifiers: m => ({ imageId: m.referencedImageId || (m.metadata && m.metadata.referencedImageId) }),
   };
   return { __esModule: true, default: { measurements: { MeasurementApi }, DICOMSR: { angleGeometry } } };

@@ -19,7 +19,8 @@ const mapStateToProps = (state, ownProps) => {
   // TODO: If viewport is active, enable prefetching
   const { viewportIndex } = ownProps;
   const isActive = viewportIndex == state.viewports.activeViewportIndex;
-  const viewportLayout = state.viewports.layout.viewports[viewportIndex];
+  // The layout can lack this pane for a moment (a layout change or a study reload)
+  const viewportLayout = ((state.viewports.layout && state.viewports.layout.viewports) || [])[viewportIndex] || {};
   const pluginDetails = viewportLayout.sonador3dseg || {};
 
   return {
@@ -86,3 +87,4 @@ const ConnectedSegmentationEditorViewport = connect(
 )(OHIFSegmentationEditorViewport);
 
 export default ConnectedSegmentationEditorViewport;
+export { mapStateToProps };

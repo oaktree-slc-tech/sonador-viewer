@@ -19,11 +19,22 @@ function SegEditor3DOptionsMenu({ button, activeButtons = [], toolbarClickCallba
 
   const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
   const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
+  // The display set the menu follows: the active viewport's, kept while the viewport briefly has
+  // none (a study reload), then the one it shows next
   const displaySetInstanceUIDRef = useRef(displaySet?.displaySetInstanceUID);
+  if (displaySet && displaySet.displaySetInstanceUID !== displaySetInstanceUIDRef.current) {
+    displaySetInstanceUIDRef.current = displaySet.displaySetInstanceUID;
+  }
+  const displaySetInstanceUID = displaySetInstanceUIDRef.current;
 
-  const _editing = () => !!DisplaySetApi.Instance.displaySetService
-    .getDisplaySetByUID(displaySetInstanceUIDRef.current)?.[EDITING_ATTR];
+  const _editing = () => !!(typeof displaySetInstanceUIDRef.current === 'string'
+    ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUIDRef.current) : undefined)?.[EDITING_ATTR];
   const [editing, setEditing] = useState(_editing);
+
+  // A different display set: take its editing state
+  useEffect(() => {
+    setEditing(_editing());
+  }, [displaySetInstanceUID]);
 
   useEffect(() => {
     const subscription = DisplaySetApi.Instance.displaySetService.subscribe(

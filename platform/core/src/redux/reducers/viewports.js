@@ -193,7 +193,7 @@ const viewports = (state = DEFAULT_STATE, action) => {
         ...action.viewportSpecificData,
       };
 
-      if (action.viewportSpecificData && action.viewportSpecificData.plugin) {
+      if (action.viewportSpecificData && action.viewportSpecificData.plugin && layout.viewports[viewportIndex]) {
         layout.viewports[viewportIndex].plugin = action.viewportSpecificData.plugin;
       }
 

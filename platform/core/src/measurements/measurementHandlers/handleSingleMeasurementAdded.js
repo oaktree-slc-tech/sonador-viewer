@@ -30,8 +30,9 @@ export default function handleSingleMeasurementAdded({ eventData, tool }) {
   // Stop here if there's no measurement data or if it was cancelled
   if (!_measurementData || _measurementData.cancelled) return;
 
-  // Retrieve image and user attributes
-  const imageAttributes = getImageAttributes(eventData.element);
+  // Retrieve image and user attributes: from the element's image, or the image the event names
+  // (a measurement added without a classic element, such as a series tag in the MPR view)
+  const imageAttributes = getImageAttributes(eventData.element, eventData.imageId);
   const userId = user.getUserId();
 
   // Pack measurement data structure and add to the API

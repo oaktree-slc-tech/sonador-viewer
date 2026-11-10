@@ -7,6 +7,28 @@
 
 import { metaData as c3dMetaData } from '@cornerstonejs/core';
 
+// Fields the legacy provider names differently from Cornerstone3D, by module: legacy name ->
+// Cornerstone3D name. The classic stack viewport reports the image it shows by the legacy
+// generalImageModule `sopInstanceUid` (react-cornerstone-viewport's new-image callback).
+const LEGACY_FIELD_NAMES = {
+  generalImageModule: { sopInstanceUid: 'sopInstanceUID' },
+};
+
+/** A Cornerstone3D answer with the legacy names of its fields added, as a copy */
+function withLegacyFieldNames(type, metadata) {
+  const names = LEGACY_FIELD_NAMES[type];
+  if (!names || !metadata || typeof metadata !== 'object') {
+    return metadata;
+  }
+  const missing = Object.entries(names).filter(([legacy, c3d]) => metadata[legacy] === undefined && metadata[c3d] !== undefined);
+  if (!missing.length) {
+    return metadata;
+  }
+  const answer = { ...metadata };
+  missing.forEach(([legacy, c3d]) => { answer[legacy] = metadata[c3d]; });
+  return answer;
+}
+
 /**
  * Wrap Cornerstone3D's metaData.get so it can never break the legacy lookup.
  *
@@ -23,7 +45,7 @@ export function createMetadataDelegate() {
       // normalisation belongs to the Cornerstone3D provider, which is the one place that knows
       // how its own map is keyed; rewriting ids here would give the two front doors different
       // behaviour for the same image.
-      return c3dMetaData.get(type, imageId);
+      return withLegacyFieldNames(type, c3dMetaData.get(type, imageId));
     } catch (error) {
       console.warn(`[legacyBridge] Cornerstone3D metadata lookup failed for ${type}.`, error);
       return undefined;

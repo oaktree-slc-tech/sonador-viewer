@@ -17,6 +17,7 @@ import { cornerstone3dUtils } from '@ohif/extension-vtk';
 import { servicesManager } from '../App';
 
 import ViewportGrid from './../components/ViewportGrid/ViewportGrid';
+import panesToFill from './viewportPaneFill';
 
 import './ViewerMain.css';
 
@@ -166,42 +167,9 @@ export default function ViewerMain({ studies, isStudyLoaded, selectedStudyId, co
   };
 
   const fillEmptyViewportPanes = () => {
-    const dirtyViewportPanes = [];
-
-    if (!displaySets || !displaySets.length) {
-      return;
-    }
-
-    for (let i = 0; i < layout.viewports.length; i++) {
-      const viewportPane = viewportSpecificData[i];
-      const isNonEmptyViewport = viewportPane && viewportPane.StudyInstanceUID && viewportPane.displaySetInstanceUID;
-
-      if (isNonEmptyViewport) {
-        dirtyViewportPanes.push({
-          StudyInstanceUID: viewportPane.StudyInstanceUID,
-          displaySetInstanceUID: viewportPane.displaySetInstanceUID,
-        });
-
-        continue;
-      }
-
-      const foundDisplaySet =
-        displaySets.find(
-          (ds) => !dirtyViewportPanes.some((v) => v.displaySetInstanceUID === ds.displaySetInstanceUID),
-        ) || displaySets[displaySets.length - 1];
-
-      dirtyViewportPanes.push(foundDisplaySet);
-    }
-
-    dirtyViewportPanes.forEach((vp, i) => {
-      if (vp && vp.StudyInstanceUID) {
-        setViewportData({
-          viewportIndex: i,
-          StudyInstanceUID: vp.StudyInstanceUID,
-          displaySetInstanceUID: vp.displaySetInstanceUID,
-        });
-      }
-    });
+    // Assign the empty panes, and refresh the classic ones (viewportPaneFill.js)
+    panesToFill({ layoutViewports: layout.viewports, viewportSpecificData, displaySets })
+      .forEach(assignment => setViewportData(assignment));
   };
 
 

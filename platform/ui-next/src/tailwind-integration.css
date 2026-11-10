@@ -34,6 +34,7 @@
 @source "../../../extensions/viewer3d/src";
 @source "../../../extensions/viewer3d-volume/src";
 @source "../../../extensions/vtk/src";
+@source "../../ui/src/components/measurementTable/*.js";
 
 /*
  * OHIF theme token mappings.

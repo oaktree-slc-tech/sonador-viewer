@@ -3,9 +3,10 @@ import { utils } from '@ohif/core';
 const { studyMetadataManager } = utils;
 
 const viewerbaseGetDisplaySet = (viewportSpecificData = {}, activeViewportIndex) => {
-  // Retrieve the displayset for the currently active viewport
+  // Retrieve the displayset for the currently active viewport; none while the active viewport has
+  // no data (between a study reload's clear and its new display sets, for one)
 
-  const { displaySetInstanceUID, StudyInstanceUID } = viewportSpecificData[activeViewportIndex];
+  const { displaySetInstanceUID, StudyInstanceUID } = (viewportSpecificData || {})[activeViewportIndex] || {};
 
   const studies = studyMetadataManager.all();
 
