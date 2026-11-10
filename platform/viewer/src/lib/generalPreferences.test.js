@@ -67,7 +67,7 @@ const api = require('../api/preferences');
 const { WRITE_QUEUE_STORAGE_KEY } = require('../constants/preferences');
 const { stopPreferenceWriteQueue } = require('./preferenceWriteQueue');
 const { initUserPreferences, resetUserPreferencesInitForTests } = require('../init/initUserPreferences');
-const { persistGeneralPreferences } = require('./generalPreferences');
+const { composeGeneralSettingsWrite, persistGeneralPreferences } = require('./generalPreferences');
 
 const SERVER = { language: 'en-US', offlineArchiveTransfer: false, offlineRetryAttempts: 3 };
 const STORED = { language: 'de-DE', offlineArchiveTransfer: true, offlineRetryAttempts: 5 };
@@ -162,12 +162,49 @@ describe('persisting a choice made before hydration lands', () => {
     expect(posts()[0].payload.values).toEqual({ ...STORED, [WARN]: false });
   });
 
+  it('keeps a stored language as stored, without applying it, while the selector is hidden', async () => {
+    const i18n = require('@ohif/i18n');
+    i18n.changeLanguage.mockClear();
+    api.getUserPreferences.mockResolvedValue(documentWith(STORED));
+    await initUserPreferences();
+
+    // Nothing would let the user leave a partly translated language, so the viewer stays in English
+    expect(i18n.changeLanguage).not.toHaveBeenCalled();
+    expect(i18n.language).toBe('en-US');
+    // ... and a write carries the stored language back rather than replacing it with the default
+    await UserPreferencesService.setGeneral(WARN, false);
+    expect(posts()[0].payload.values.language).toBe('de-DE');
+  });
+
   it('does not wait when hydration was never started', async () => {
     api.getUserPreferenceSection.mockResolvedValue({ version: '0.4', values: {} });
 
     await persistGeneralPreferences();
 
     expect(posts()).toHaveLength(1);
+  });
+});
+
+describe('the section a Settings save writes', () => {
+  it('while the selector is offered, carries the language shown and keeps saving when nothing can be read', async () => {
+    const i18n = require('@ohif/i18n');
+    api.getUserPreferences.mockRejectedValue(new Error('offline'));
+    api.getUserPreferenceSection.mockRejectedValue(new Error('still offline'));
+    await initUserPreferences();
+    i18n.language = 'fr';
+
+    // Every key of the section is then on screen, so the holders serve as the base, as before
+    const write = await composeGeneralSettingsWrite({ [WARN]: false }, { languageSelection: true });
+    expect(write).toEqual({ version: '0.4', values: { ...SERVER, language: 'fr', [WARN]: false } });
+    i18n.language = 'en-US';
+  });
+
+  it('while the selector is hidden, rejects when nothing can be read', async () => {
+    api.getUserPreferences.mockRejectedValue(new Error('offline'));
+    api.getUserPreferenceSection.mockRejectedValue(new Error('still offline'));
+    await initUserPreferences();
+
+    await expect(composeGeneralSettingsWrite({ [WARN]: false })).rejects.toThrow('still offline');
   });
 });
 

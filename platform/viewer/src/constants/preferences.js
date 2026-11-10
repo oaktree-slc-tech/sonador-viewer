@@ -33,6 +33,11 @@ export const PREFERENCE_SECTION_PATHS = {
   [PREFERENCE_SECTIONS.STUDYLIST]: 'studylist',
 };
 
+// Whether Settings offers the language selector. Off until the interface is translated: the
+// bundled locales hold a small part of its strings, so a choice changed almost nothing on screen.
+// While off, a stored language is kept as stored and not applied (lib/languagePreference.js).
+export const LANGUAGE_SELECTION_ENABLED = false;
+
 // Offline-storage transfer strategy (ohif-viewers#129, FR-1). Lives in the existing `general`
 // section rather than a new one: a new section would need its own server endpoint slug, its own
 // applier and a PREFERENCES_VERSION bump for a single boolean (#129 AR-7).

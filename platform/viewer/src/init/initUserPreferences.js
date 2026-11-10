@@ -18,7 +18,6 @@
 // no-op on error, never a crash or an error dialog.
 
 import { DownloadManagerService, displayAttributes, redux, RETRY_ATTEMPTS_DEFAULT, UserPreferencesService } from '@ohif/core';
-import i18n from '@ohif/i18n';
 
 import { getUserPreferences } from '../api/preferences';
 import {
@@ -38,6 +37,7 @@ import {
   startGeneralHydration,
 } from '../lib/generalHydration';
 import { persistGeneralPreferences } from '../lib/generalPreferences';
+import { applyStoredLanguage, resetLanguagePreferenceForTests } from '../lib/languagePreference';
 import {
   flushPreferenceWrites,
   getCurrentPreferenceUser,
@@ -73,9 +73,7 @@ const getHotkeysManager = () =>
 const getReduxStore = () => (typeof window !== 'undefined' && window.store) || null;
 
 const applyGeneral = (values) => {
-  if (typeof values.language === 'string' && values.language && values.language !== i18n.language) {
-    void i18n.changeLanguage(values.language);
-  }
+  applyStoredLanguage(values.language);
 
   // Offline-storage transfer strategy (ohif-viewers#129, FR-1). The service is a module singleton
   // outside the React tree and reads this when a job STARTS, so hydrating it here is all the
@@ -310,4 +308,5 @@ export const initUserPreferences = async () => {
 export const resetUserPreferencesInitForTests = () => {
   hydratedForUser = null;
   resetGeneralHydrationForTests();
+  resetLanguagePreferenceForTests();
 };

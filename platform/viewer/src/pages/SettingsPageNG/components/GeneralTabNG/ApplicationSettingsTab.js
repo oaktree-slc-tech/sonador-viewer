@@ -1,6 +1,8 @@
 // Settings > General > Application: the language and the offline-storage transfer settings, on the
 // settings page's row anatomy (SettingRowNG). Presentational: the state, hydration and Save are
-// GeneralTabNG's; the language is i18n's own and changes at once, as it always has.
+// GeneralTabNG's; the language is i18n's own and changes at once, as it always has. The language
+// row is not offered while LANGUAGE_SELECTION_ENABLED is off (constants/preferences): the other
+// locales translate too little of the interface for a choice to change what is on screen.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,12 +15,14 @@ import useClickOutside from '@ohif/sonador-viewer/src/hooks/useClickOutside';
 import { ReactComponent as CaretDownIcon } from '@ohif/ui/src/elements/Svg/svgs/caret-down.svg';
 import { Numeric } from '@ohif/ui-next';
 
+import { LANGUAGE_SELECTION_ENABLED } from '../../../../constants/preferences';
 import SettingRowNG, { NumericRowNG, SwitchRowNG } from '../SettingRowNG/SettingRowNG';
 
 import styles from './GeneralTabNG.module.scss';
 
 export default function ApplicationSettingsTab({
   archiveTransfer, onArchiveTransferChange, retryAttempts, onRetryAttemptsChange, onStepRetryAttempts,
+  languageSelection = LANGUAGE_SELECTION_ENABLED,
 }) {
   const { t } = useTranslation('UserPreferencesModal');
   const { availableLanguages, language: currentLanguage } = i18n;
@@ -65,21 +69,23 @@ export default function ApplicationSettingsTab({
 
   return (
     <>
-      <SettingRowNG label={t('Language')}>
-        <div className={styles.languagesContainer} ref={ref}>
-          <button type="button" className={styles.selectedLanguage} onClick={() => setIsDropdownOpen(prevState => !prevState)}>
-            <span>{selectedLanguage?.label}</span>
-            <CaretDownIcon className={classNames(styles.caretIcon, { [styles.up]: isDropdownOpen })} />
-          </button>
-          <div className={classNames(styles.languages, { [styles.displayed]: isDropdownOpen })}>
-            {availableLanguages.map(language => (
-              <button type="button" key={language.value} onClick={() => handleSelectLanguage(language)} className={styles.language}>
-                {language.label}
-              </button>
-            ))}
+      {languageSelection && (
+        <SettingRowNG label={t('Language')}>
+          <div className={styles.languagesContainer} ref={ref}>
+            <button type="button" className={styles.selectedLanguage} onClick={() => setIsDropdownOpen(prevState => !prevState)}>
+              <span>{selectedLanguage?.label}</span>
+              <CaretDownIcon className={classNames(styles.caretIcon, { [styles.up]: isDropdownOpen })} />
+            </button>
+            <div className={classNames(styles.languages, { [styles.displayed]: isDropdownOpen })}>
+              {availableLanguages.map(language => (
+                <button type="button" key={language.value} onClick={() => handleSelectLanguage(language)} className={styles.language}>
+                  {language.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </SettingRowNG>
+        </SettingRowNG>
+      )}
 
       {/* Worded in transfer terms, never as "download an archive": this saves nothing to the
           user's computer -- the Downloads menu is what does that (#129 AR-6). */}
@@ -126,4 +132,6 @@ ApplicationSettingsTab.propTypes = {
   onRetryAttemptsChange: PropTypes.func.isRequired,
   /** (delta) => void: Up / Down on the stepper's input */
   onStepRetryAttempts: PropTypes.func.isRequired,
+  /** Whether the language row is offered; LANGUAGE_SELECTION_ENABLED unless given */
+  languageSelection: PropTypes.bool,
 };

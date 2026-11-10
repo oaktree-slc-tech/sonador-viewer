@@ -42,4 +42,14 @@ export const showSaveOutcome = (successMessage, sectionLabel, successDetail) => 
       type: 'error',
     });
   },
+  // Nothing was sent: the section replaces what is stored wholesale, and the settings stored for
+  // the keys the page does not show could not be read to carry them over
+  onUnavailable: () => {
+    uiNotificationService.show({
+      title: `Could not save ${sectionLabel}`,
+      message: 'Your saved settings could not be read from the server, so nothing was sent. ' +
+        'The change applies in this session; save again once the server can be reached.',
+      type: 'error',
+    });
+  },
 });

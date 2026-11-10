@@ -19,6 +19,8 @@ import {
 
 import { surfaceFromGeometry } from '../threeDTools/modelsToLabelmap.js';
 
+import { unitFromMeasurementUnits } from './stlScale.js';
+
 
 // Holder id for the geometry the import reads (the M3D cache counts references per viewport)
 const GEOMETRY_HOLDER = 'seg-editor-import';
@@ -65,7 +67,8 @@ export async function modelsFromStlFiles(files, deps = {}) {
  * @param {Object} params.displaySet - the M3D display set
  * @param {Object[]} params.studies - the viewer's studies
  * @param {Object} [params.deps] - injectable (tests)
- * @returns {Promise<{ models: Array<{ label: string, color?: number[], surface }> }>}
+ * @returns {Promise<{ models: Array<{ label: string, color?: number[], unit?: Object, surface }> }>}
+ *   `unit` is the STL_UNITS entry the instance declares, when it declares one
  */
 export async function modelsFromM3DSeries({ displaySet, studies, deps = {} }) {
   const {
@@ -98,9 +101,13 @@ export async function modelsFromM3DSeries({ displaySet, studies, deps = {} }) {
       const fromPanel = panelSegment(geometryId);
       const metadata = getM3DInstanceMetadata(displaySet.series, sopInstanceUID);
       const color = fromPanel?.color || getM3DInstanceColor(displaySet.series, sopInstanceUID);
+      // The unit the instance declares (Measurement Units Code Sequence), when it does: the
+      // import keeps it as the model's provenance instead of asking (ohif-viewers#151 FR-5)
+      const unit = unitFromMeasurementUnits(metadata);
       models.push({
         label: fromPanel?.label || getM3DInstanceLabel(metadata, i + 1),
         ...(color ? { color: hexToRgb(color) } : {}),
+        ...(unit ? { unit } : {}),
         // A copy: the geometry can be released once read
         surface: surfaceFromGeometry(payload?.parsed),
       });

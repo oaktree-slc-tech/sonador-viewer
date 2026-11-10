@@ -28,8 +28,10 @@ jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({ init: () => {} }),
 jest.mock('../threeDTools/registerHoleFillingWorker', () => ({ registerHoleFillingWorker: () => {} }));
 jest.mock('../threeDTools/registerLabelmapCarveWorker', () => ({ registerLabelmapCarveWorker: () => {} }));
 jest.mock('./pickLocalFiles.js', () => ({ pickLocalFiles: jest.fn() }));
-// The scale check's dialog is UI (the viewer's dialog shell); the tests answer through `askRescale`
+// The unit declaration's dialogs are UI (the viewer's dialog shell); the tests answer through
+// `askModelUnits` and `confirmAsRead`
 jest.mock('../components/confirmDialog', () => ({ callConfirmDialog: jest.fn() }));
+jest.mock('../components/stlUnitsDialog', () => ({ callStlUnitsDialog: jest.fn() }));
 
 
 const SEG = { displaySetInstanceUID: 'seg', Modality: 'SEG' };
@@ -67,8 +69,13 @@ function setup({ segmentationId = 'work', deps = {}, logger = true } = {}) {
     getStudies: jest.fn(() => ['study']),
     fetchInstanceBytes: jest.fn(async () => Uint8Array.from([7, 8, 9])),
     setStatus: jest.fn(),
-    // An image calibrated in millimetres, unless a test says otherwise
+    // An image calibrated in millimetres, unless a test says otherwise, whose bounds are not at
+    // hand (no comparison of the models with it), and models declared in millimetres
     getUnits: jest.fn(() => ({ length: 'mm' })),
+    getImageBounds: jest.fn(() => null),
+    askModelUnits: jest.fn(async () => 'mm'),
+    confirmAsRead: jest.fn(async () => true),
+    recordProvenance: jest.fn(),
     ...deps,
   };
   const { actions, definitions } = createImportCommands({ servicesManager: { services }, deps: allDeps });
@@ -85,8 +92,9 @@ describe('volumeFileKind / isImportableSeries', () => {
     expect(volumeFileKind('labels.txt')).toBeUndefined();
   });
 
-  it('formats bounds in whole millimetres, and a dash when there are none', () => {
+  it('formats bounds rounded, in millimetres or the unit given, and a dash when there are none', () => {
     expect(formatBounds({ min: [-1.6, 0, 2], max: [3.4, 5, 6] })).toBe('x -2 to 3, y 0 to 5, z 2 to 6 mm');
+    expect(formatBounds({ min: [0, 0, 0], max: [3, 3, 3] }, 'grid units')).toBe('x 0 to 3, y 0 to 3, z 0 to 3 grid units');
     expect(formatBounds(null)).toBe('-');
   });
 
@@ -110,12 +118,16 @@ describe('importStlModels', () => {
     expect(deps.pickFiles).toHaveBeenCalledWith(IMPORT_FILE_TYPES.stl);
     expect(deps.readStlFiles).toHaveBeenCalledWith(files);
     expect(deps.importInto).toHaveBeenCalledWith({
-      segmentationId: 'work', payload: { models: [{ label: 'femur' }] }, segmentationService: services.segmentationService,
+      segmentationId: 'work',
+      // The declared unit travels with each model (ohif-viewers#151 FR-5)
+      payload: { models: [{ label: 'femur', provenance: { sourceUnit: 'mm', origin: 'declared', scale: 1, destination: 'mm' } }] },
+      segmentationService: services.segmentationService,
       onProgress: expect.any(Function),
     });
-    // What the 3D view shows while it runs, cleared at the end
+    // What the 3D view shows while it runs: nothing behind the unit dialog, cleared at the end
     expect(deps.setStatus.mock.calls).toEqual([
       ['work', 'Reading 2 file(s)...'],
+      ['work', null],
       ['work', 'Placing 1 segment(s) on the image grid...'],
       ['work', null],
     ]);
@@ -180,7 +192,7 @@ describe('importStlModels', () => {
     await actions.importStlModels();
 
     expect(deps.setStatus.mock.calls.map(([, message]) => message)).toEqual([
-      'Reading 2 file(s)...', 'Placing 2 segment(s) on the image grid...',
+      'Reading 2 file(s)...', null, 'Placing 2 segment(s) on the image grid...',
       'Converting model 2 of 2...', 'Converting model 2 of 2...', null,
     ]);
   });
@@ -219,99 +231,206 @@ describe('importStlModels', () => {
   });
 });
 
-describe('importStlModels: the model scale', () => {
-  // A 200 mm image at the origin, and a femur 300 mm long inside it, as read and in metres
+describe('importStlModels: the model units (ohif-viewers#151 FR-5)', () => {
+  // A 200 mm image at the origin, and a femur 160 mm long inside it, as read and in metres
   const IMAGE = { min: [0, 0, 0], max: [200, 200, 200] };
-  const model = (label, scale) => ({
+  const model = (label, scale, extra = {}) => ({
     label,
     surface: { points: Float32Array.from([20, 20, 20, 180, 40, 40, 40, 180, 40].map(v => v * scale)), polys: [] },
+    ...extra,
   });
+  const points3 = env => env.deps.importInto.mock.calls[0][0].payload.models.map(m => m.surface.points[3]);
+  const provenances = env => env.deps.importInto.mock.calls[0][0].payload.models.map(m => m.provenance);
 
-  function scaleSetup(models, answer, { length = 'mm' } = {}) {
-    const askRescale = jest.fn(async () => answer);
+  function unitsSetup(models, answer, { length = 'mm', bounds = IMAGE, asRead = true } = {}) {
     const env = setup({
       deps: {
         readStlFiles: jest.fn(async () => ({ models })),
-        getImageBounds: jest.fn(() => IMAGE),
+        getImageBounds: jest.fn(() => bounds),
         getUnits: jest.fn(() => ({ length })),
-        askRescale,
+        askModelUnits: jest.fn(async () => answer),
+        confirmAsRead: jest.fn(async () => asRead),
       },
     });
     env.deps.pickFiles.mockResolvedValue([file('femur.stl')]);
-    return { ...env, askRescale };
+    return env;
   }
 
-  it('imports a model that fits the image as millimetres without asking', async () => {
-    const { actions, deps, askRescale } = scaleSetup([model('femur', 1)]);
-    await actions.importStlModels();
-    expect(askRescale).not.toHaveBeenCalled();
-    expect(deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBe(180);
-  });
+  it('asks which unit the models were saved in, offering every unit with none chosen, and converts once', async () => {
+    // A femur saved in metres, declared (wrongly, but explicitly) as inches: the comparison with
+    // the image suggests metres, the declaration wins, and the conversion is by the declared unit
+    const env = unitsSetup([model('femur', 0.001)], 'in');
+    await env.actions.importStlModels();
 
-  it('offers to rescale a model in metres, and rescales it on confirm', async () => {
-    const { actions, deps, askRescale } = scaleSetup([model('femur', 0.001)], 'confirm');
-    await actions.importStlModels();
-
-    expect(askRescale).toHaveBeenCalledTimes(1);
-    const question = askRescale.mock.calls[0][0];
-    expect(question.message).toBe('femur may be in metres rather than millimetres. Read as millimetres, it is 0.16 mm across and does not fit the image (200 mm across). Rescaled from metres, it is 160 mm across.');
-    expect(question.confirmText).toBe('Rescale from m');
-    expect(question.alternateText).toBe('Import as-is');
-    expect(deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(180, 3);
+    expect(env.deps.askModelUnits).toHaveBeenCalledTimes(1);
+    const question = env.deps.askModelUnits.mock.calls[0][0];
+    expect(question.title).toBe('Declare the model units');
+    // The conversion is promised only for a declared unit, beside the Unknown choice
+    expect(question.message).toBe('STL files carry no unit. Choose the source unit for femur. A declared unit is converted to millimetres once and placed in the patient coordinates of the image; Unknown imports the models as read, uncalibrated.');
+    expect(question.options.map(option => option.value)).toEqual(['mm', 'µm', 'cm', 'in', 'm', 'as-read']);
+    expect(question.options[3].label).toBe('inches (in)');
+    expect(question.options[5].label).toBe('Unknown: import as read, uncalibrated');
+    expect(question.confirmText).toBe('Import');
+    // The comparison with the image is advice beside the choice
+    expect(question.suggestions).toEqual(['femur: read as millimetres, 0.16 mm across against an image 200 mm across; from metres, 160 mm across.']);
+    expect(points3(env)[0]).toBeCloseTo(0.18 * 25.4, 3);
+    expect(provenances(env)).toEqual([{ sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' }]);
     // No status over the view while the dialog asks
-    expect(deps.setStatus.mock.calls.map(([, message]) => message)).toEqual([
+    expect(env.deps.setStatus.mock.calls.map(([, message]) => message)).toEqual([
       'Reading 1 file(s)...', null, 'Placing 1 segment(s) on the image grid...', null,
     ]);
   });
 
-  it('imports the model as it is on Import as-is, and nothing on Cancel', async () => {
-    const asIs = scaleSetup([model('femur', 0.001)], 'alternate');
-    await asIs.actions.importStlModels();
-    expect(asIs.deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(0.18, 6);
+  it('leaves a model declared in millimetres alone, imports as read on the unknown choice, and nothing on cancel', async () => {
+    const mm = unitsSetup([model('femur', 1)], 'mm');
+    await mm.actions.importStlModels();
+    expect(points3(mm)[0]).toBe(180);
+    expect(provenances(mm)).toEqual([{ sourceUnit: 'mm', origin: 'declared', scale: 1, destination: 'mm' }]);
 
-    const cancelled = scaleSetup([model('femur', 0.001)], 'cancel');
+    const asRead = unitsSetup([model('femur', 0.001)], 'as-read');
+    await asRead.actions.importStlModels();
+    expect(points3(asRead)[0]).toBeCloseTo(0.18, 6);
+    expect(provenances(asRead)).toEqual([{ sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' }]);
+
+    const cancelled = unitsSetup([model('femur', 0.001)], null);
     expect(await cancelled.actions.importStlModels()).toBeUndefined();
     expect(cancelled.deps.importInto).not.toHaveBeenCalled();
   });
 
-  it('asks once per unit, naming every model in it, and leaves the millimetre models alone', async () => {
-    const { actions, deps, askRescale } = scaleSetup(
-      [model('femur', 0.001), model('tibia', 0.001), model('patella', 1)], 'confirm');
-    await actions.importStlModels();
-    expect(askRescale).toHaveBeenCalledTimes(1);
-    expect(askRescale.mock.calls[0][0].message).toMatch(/^femur, tibia may be in metres/);
-    const points = deps.importInto.mock.calls[0][0].payload.models.map(m => m.surface.points[3]);
-    expect(points[0]).toBeCloseTo(180, 3);
-    expect(points[1]).toBeCloseTo(180, 3);
-    expect(points[2]).toBe(180);
+  it('asks once for every undeclared model, and suggests a unit only for the ones that look wrong as millimetres', async () => {
+    const env = unitsSetup([model('femur', 0.001), model('tibia', 0.001), model('patella', 1)], 'm');
+    await env.actions.importStlModels();
+    expect(env.deps.askModelUnits).toHaveBeenCalledTimes(1);
+    const question = env.deps.askModelUnits.mock.calls[0][0];
+    expect(question.message).toMatch(/Choose the source unit for femur, tibia, patella\./);
+    expect(question.suggestions).toEqual(['femur, tibia: read as millimetres, 0.16 mm across against an image 200 mm across; from metres, 160 mm across.']);
+    // One declaration for the import: every model is converted from metres
+    expect(points3(env).map(v => Math.round(v))).toEqual([180, 180, 180000]);
   });
 
-  it('does not infer a unit on an image without pixel spacing, whose grid steps are not millimetres', async () => {
-    // The same metres-sized model on the same 0-200 grid: calibrated, a conversion is offered;
-    // uncalibrated, the 200 steps say nothing about millimetres, so nothing is suggested or scaled
-    const calibrated = scaleSetup([model('femur', 0.001)], 'confirm');
-    await calibrated.actions.importStlModels();
-    expect(calibrated.askRescale).toHaveBeenCalledTimes(1);
+  it('keeps a unit the source encoded and does not ask about those models', async () => {
+    const inches = { unit: 'in', name: 'inches', factor: 25.4 };
+    const encodedOnly = unitsSetup([model('implant', 1 / 25.4, { unit: inches })], 'mm');
+    await encodedOnly.actions.importStlModels();
+    expect(encodedOnly.deps.askModelUnits).not.toHaveBeenCalled();
+    expect(points3(encodedOnly)[0]).toBeCloseTo(180, 3);
+    expect(provenances(encodedOnly)).toEqual([{ sourceUnit: 'in', origin: 'encoded', scale: 25.4, destination: 'mm' }]);
 
-    const uncalibrated = scaleSetup([model('femur', 0.001)], 'confirm', { length: 'units' });
-    await uncalibrated.actions.importStlModels();
-    expect(uncalibrated.askRescale).not.toHaveBeenCalled();
-    expect(uncalibrated.deps.getImageBounds).not.toHaveBeenCalled();
-    expect(uncalibrated.deps.importInto.mock.calls[0][0].payload.models[0].surface.points[3]).toBeCloseTo(0.18, 6);
-    expect(notifications(uncalibrated.services)).toContainEqual(['info',
-      'The image has no pixel spacing, so the scale of the models could not be checked. They are placed as read, in the image grid\'s units.']);
+    const mixed = unitsSetup([model('implant', 1 / 25.4, { unit: inches }), model('femur', 1)], 'mm');
+    await mixed.actions.importStlModels();
+    expect(mixed.deps.askModelUnits.mock.calls[0][0].message).toMatch(/Choose the source unit for femur\./);
+    expect(provenances(mixed).map(record => record.origin)).toEqual(['encoded', 'declared']);
   });
 
-  it('skips the check when the image bounds are not available', async () => {
-    const { actions, deps, askRescale } = scaleSetup([model('femur', 0.001)]);
-    deps.getImageBounds.mockImplementation(() => {
+  it('imports as read onto an image without a millimetre calibration, after saying so, and records the grid as uncalibrated', async () => {
+    const env = unitsSetup([model('femur', 0.001)], 'm', { length: 'units' });
+    await env.actions.importStlModels();
+    expect(env.deps.askModelUnits).not.toHaveBeenCalled();
+    expect(env.deps.getImageBounds).not.toHaveBeenCalled();
+    expect(env.deps.confirmAsRead).toHaveBeenCalledTimes(1);
+    expect(env.deps.confirmAsRead.mock.calls[0][0]).toMatchObject({
+      title: 'Model units',
+      message: 'The image is not calibrated in millimetres, so a unit declared for femur could not be placed on it. The models are imported as read, in the image grid\'s units, and recorded as uncalibrated.',
+      confirmText: 'Import as read',
+    });
+    expect(points3(env)[0]).toBeCloseTo(0.18, 6);
+    expect(provenances(env)).toEqual([{ sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'unknown' }]);
+
+    // An encoded unit is kept in the record but not applied: nothing physical can be placed
+    const encoded = unitsSetup([model('implant', 1, { unit: { unit: 'in', name: 'inches', factor: 25.4 } })], 'm', { length: 'units' });
+    await encoded.actions.importStlModels();
+    expect(encoded.deps.confirmAsRead).not.toHaveBeenCalled();
+    expect(points3(encoded)[0]).toBe(180);
+    expect(provenances(encoded)).toEqual([{ sourceUnit: 'in', origin: 'encoded', scale: null, destination: 'unknown' }]);
+
+    const declined = unitsSetup([model('femur', 0.001)], 'm', { length: 'units', asRead: false });
+    expect(await declined.actions.importStlModels()).toBeUndefined();
+    expect(declined.deps.importInto).not.toHaveBeenCalled();
+  });
+
+  it('still asks, without a comparison, when the image bounds are not available', async () => {
+    const env = unitsSetup([model('femur', 0.001)], 'mm');
+    env.deps.getImageBounds.mockImplementation(() => {
       throw new Error('no labelmap');
     });
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    await actions.importStlModels();
+    await env.actions.importStlModels();
     warn.mockRestore();
-    expect(askRescale).not.toHaveBeenCalled();
-    expect(deps.importInto).toHaveBeenCalled();
+    expect(env.deps.askModelUnits.mock.calls[0][0].suggestions).toEqual([]);
+    expect(env.deps.importInto).toHaveBeenCalled();
+  });
+
+  it('says what unit the bounds of an empty import are in', async () => {
+    const empty = (label, provenance) => ({
+      segments: [], emptySegments: [{ label, provenance }], overlapVoxels: 0, lockedVoxels: 0, writtenVoxels: 0,
+      sourceBounds: { min: [0, 0, 0], max: [3, 3, 3] }, targetBounds: { min: [0, 0, 0], max: [3, 3, 3] },
+    });
+    const warning = env => notifications(env.services).find(([type]) => type === 'warning')[1];
+
+    // As read onto an uncalibrated image: both spans are in the grid's units
+    const unknownGrid = unitsSetup([model('femur', 1)], 'm', { length: 'units' });
+    unknownGrid.deps.importInto.mockResolvedValue(empty('femur', { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'unknown' }));
+    await unknownGrid.actions.importStlModels();
+    expect(warning(unknownGrid)).toBe('These segments have no voxels on the image grid and were not added: femur. '
+      + 'The image spans x 0 to 3, y 0 to 3, z 0 to 3 grid units; the imported data spans x 0 to 3, y 0 to 3, z 0 to 3 grid units.');
+
+    // Converted from a declared unit onto a calibrated image: both in millimetres
+    const converted = unitsSetup([model('femur', 1)], 'in');
+    converted.deps.importInto.mockResolvedValue(empty('femur', { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' }));
+    await converted.actions.importStlModels();
+    expect(warning(converted)).toMatch(/The image spans x 0 to 3, y 0 to 3, z 0 to 3 mm; the imported data spans x 0 to 3, y 0 to 3, z 0 to 3 mm\.$/);
+
+    // As read onto a calibrated image: the model's own unit is unknown, and the message says so
+    const asRead = unitsSetup([model('femur', 1)], 'as-read');
+    asRead.deps.importInto.mockResolvedValue(empty('femur', { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' }));
+    await asRead.actions.importStlModels();
+    expect(warning(asRead)).toMatch(/The image spans x 0 to 3, y 0 to 3, z 0 to 3 mm; the imported data spans x 0 to 3, y 0 to 3, z 0 to 3 in the models' own units \(unknown\)\.$/);
+
+    // A known unit beside an unknown one in one import: the extent is of the placed coordinates,
+    // one model converted from inches, the other read as millimetres
+    const inches = { unit: 'in', name: 'inches', factor: 25.4 };
+    const mixed = unitsSetup([model('implant', 1, { unit: inches }), model('femur', 1)], 'as-read');
+    mixed.deps.importInto.mockResolvedValue({
+      ...empty('implant', { sourceUnit: 'in', origin: 'encoded', scale: 25.4, destination: 'mm' }),
+      emptySegments: [
+        { label: 'implant', provenance: { sourceUnit: 'in', origin: 'encoded', scale: 25.4, destination: 'mm' } },
+        { label: 'femur', provenance: { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' } },
+      ],
+      sourceBounds: { min: [0, 0, 0], max: [25.4, 25.4, 25.4] },
+    });
+    await mixed.actions.importStlModels();
+    expect(mixed.deps.askModelUnits.mock.calls[0][0].message).toMatch(/Choose the source unit for femur\./);
+    expect(provenances(mixed)).toEqual([
+      { sourceUnit: 'in', origin: 'encoded', scale: 25.4, destination: 'mm' },
+      { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' },
+    ]);
+    expect(warning(mixed)).toBe('These segments have no voxels on the image grid and were not added: implant, femur. '
+      + 'The image spans x 0 to 3, y 0 to 3, z 0 to 3 mm; the imported data spans x 0 to 25, y 0 to 25, z 0 to 25 mm as placed; femur imported as read, unit unknown.');
+  });
+
+  it('records where each added segment came from, and reports it in the units the user knows', async () => {
+    const env = unitsSetup([model('femur', 1 / 25.4), model('tibia', 1 / 25.4)], 'in');
+    env.deps.importInto.mockResolvedValue({
+      segments: [
+        { segmentIndex: 2, label: 'femur', voxels: 10, provenance: { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' } },
+        { segmentIndex: 3, label: 'tibia', voxels: 4, provenance: { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' } },
+        { segmentIndex: 4, label: 'implant', voxels: 4, provenance: { sourceUnit: 'mm', origin: 'encoded', scale: 1, destination: 'mm' } },
+        { segmentIndex: 5, label: 'cup', voxels: 4, provenance: { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' } },
+        { segmentIndex: 6, label: 'hand', voxels: 4 },
+      ],
+      emptySegments: [], overlapVoxels: 0, lockedVoxels: 0, writtenVoxels: 22,
+    });
+    await env.actions.importStlModels();
+    expect(env.deps.recordProvenance.mock.calls).toEqual([
+      ['work', 2, { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' }],
+      ['work', 3, { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' }],
+      ['work', 4, { sourceUnit: 'mm', origin: 'encoded', scale: 1, destination: 'mm' }],
+      ['work', 5, { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'mm' }],
+    ]);
+    expect(notifications(env.services)).toContainEqual(['info',
+      'Units: femur, tibia: declared in inches, converted to millimetres once (× 25.4). '
+      + 'implant: millimetres from the source, no conversion needed. '
+      + 'cup: unit unknown, imported as read and recorded as uncalibrated.']);
   });
 });
 
@@ -387,7 +506,11 @@ describe('addSeriesToCurrentSegmentation', () => {
     expect(deps.readM3DSeries).toHaveBeenCalledWith({ displaySet: STL, studies: ['study'] });
     expect(deps.setStatus.mock.calls[0]).toEqual(['work', 'Loading the models of the series...']);
     expect(notifications(services)[0]).toEqual(['info', 'Importing 2 model(s)...']);
-    expect(deps.importInto).toHaveBeenCalledWith(expect.objectContaining({ payload: { models: [{ label: 'a' }] } }));
+    // The series' models go through the unit declaration as STL files do (ohif-viewers#151 FR-5)
+    expect(deps.askModelUnits).toHaveBeenCalledTimes(1);
+    expect(deps.importInto).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { models: [{ label: 'a', provenance: { sourceUnit: 'mm', origin: 'declared', scale: 1, destination: 'mm' } }] },
+    }));
   });
 
   it('turns other series away', async () => {

@@ -438,3 +438,37 @@ describe('payloadWorldBounds / labelmapWorldBounds', () => {
       .toEqual({ min: [8, 0, 0], max: [10, 2, 1] });
   });
 });
+
+describe('importIntoSegmentation: provenance (ohif-viewers#151 FR-6)', () => {
+  it('carries each entry\'s provenance to the segment it became, and adds none where there was none', async () => {
+    const labelmap = makeLabelmap();
+    const { deps } = makeDeps(labelmap, { 1: {} });
+    const data = new Uint8Array(64);
+    data[2] = 5;
+    data[9] = 9;
+    const provenance = { sourceUnit: 'in', origin: 'declared', scale: 25.4, destination: 'mm' };
+    const payload = {
+      grid: unitGrid(data),
+      segments: [{ value: 5, label: 'liver', provenance }, { value: 9, label: 'plain' }],
+    };
+
+    const result = await importIntoSegmentation({ segmentationId: 'work', payload, deps });
+
+    expect(result.segments).toEqual([
+      { segmentIndex: 2, label: 'liver', voxels: 1, provenance },
+      { segmentIndex: 3, label: 'plain', voxels: 1 },
+    ]);
+    // The service is told the segment, not its provenance
+    expect(deps.addSegment.mock.calls.map(([, config]) => config)).toEqual([{ segmentIndex: 2, label: 'liver' }, { segmentIndex: 3, label: 'plain' }]);
+  });
+
+  it('keeps the provenance of an entry left out as empty, for the report to name its units', async () => {
+    const { deps } = makeDeps(makeLabelmap(), { 1: {} });
+    const provenance = { sourceUnit: 'unknown', origin: 'as-read', scale: null, destination: 'unknown' };
+    const payload = { grid: unitGrid(new Uint8Array(64)), segments: [{ value: 5, label: 'far', provenance }] };
+
+    const result = await importIntoSegmentation({ segmentationId: 'work', payload, deps });
+
+    expect(result.emptySegments).toEqual([{ label: 'far', error: undefined, provenance }]);
+  });
+});

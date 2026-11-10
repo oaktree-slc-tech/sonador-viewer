@@ -1,16 +1,17 @@
 // Settings > General: two tabs under one header and one footer.
-// APPLICATION holds what belongs to the application as a whole: the language and the
-// offline-storage transfer settings. SEGMENTATION EDITOR holds the editor's own preferences: how it
-// opens, follows a selection, and what its 3D tools draw. The tabs are the dialog tabs the Viewer
-// Metadata page uses (components/TabsNG); the tab bodies are presentational
-// (ApplicationSettingsTab, SegEditorSettingsTab) and every field's state, hydration and save live
-// here, so one Save posts the general section once for both tabs.
+// APPLICATION holds what belongs to the application as a whole: the language (hidden until the
+// interface is translated: LANGUAGE_SELECTION_ENABLED) and the offline-storage transfer settings.
+// SEGMENTATION EDITOR holds the editor's own preferences: how it opens, follows a selection, and
+// what its 3D tools draw. The tabs are the dialog tabs the Viewer Metadata page uses
+// (components/TabsNG); the tab bodies are presentational (ApplicationSettingsTab,
+// SegEditorSettingsTab) and every field's state, hydration and save live here, so one Save posts
+// the general section once for both tabs.
 //
 // Persistence is unchanged: the language, the offline-transfer settings and the locked-models
 // warning are the server-side `general` section; the three segEditor* keys are
 // UserPreferencesService's local-only keys (kept in this browser, never posted). A section POST
-// replaces the section wholesale, so Save composes it from every runtime holder
-// (lib/generalPreferences) with this page's own fields laid over it.
+// replaces the section wholesale, so Save lays this page's own fields over a base holding the
+// user's settings for the rest (lib/generalPreferences), and posts nothing if none can be read.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +33,6 @@ import {
   UserPreferencesService,
   UserPreferencesServiceEvents,
 } from '@ohif/core';
-import i18n from '@ohif/i18n';
 
 import TabsNG from '../../../../components/TabsNG/TabsNG';
 import { showSaveOutcome } from '../../../../components/UserPreferences/saveOutcomeNotification';
@@ -40,10 +40,9 @@ import {
   ARCHIVE_TRANSFER_DEFAULT,
   ARCHIVE_TRANSFER_PREFERENCE_KEY,
   PREFERENCE_SECTIONS,
-  PREFERENCES_VERSION,
   RETRY_ATTEMPTS_PREFERENCE_KEY,
 } from '../../../../constants/preferences';
-import { composeGeneralPreferenceValues } from '../../../../lib/generalPreferences';
+import { saveGeneralSettings } from '../../../../lib/generalPreferences';
 import { createHydrationLatch } from '../../../../lib/preferenceHydration';
 import { useUpdateUserPreferenceSection } from '../../../../queries/preferences';
 import { useDeviceStore } from '../../../../store/useDeviceStore';
@@ -221,7 +220,7 @@ export default function GeneralTabNG() {
   const handleMeshColorPick = edit(MESH, setMeshColor);
   const handleMeshColorAutoChange = edit(MESH, auto => setMeshColor(auto ? SEG_EDITOR_MESH_COLOR_AUTO : lastMeshPick.current));
 
-  const { mutate: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
+  const { mutateAsync: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
   const values = {
     [ARCHIVE_FIELD]: archiveTransfer,
@@ -276,34 +275,29 @@ export default function GeneralTabNG() {
     // What is applied is now what Cancel would put back
     setBaseline({ ...values });
 
-    // A section POST replaces the section wholesale, so the payload is composed from every runtime
-    // holder (the language, the offline-transfer settings, UserPreferencesService's server-side
-    // keys, the locked-models value just set among them) with this page's own fields laid over
-    // it. `language` rides along because sending the other fields alone would erase it. The
-    // local-only keys are left out by the service.
+    // A section POST replaces the section wholesale, so this page's own fields are laid over a base
+    // that holds the user's settings for the keys the page does not show -- the language while its
+    // selector is hidden among them: a write still queued, the hydrated holders, or the stored
+    // section read now. The local-only keys are left out by the service. If no base can be read,
+    // nothing is posted: the values stay applied here, and the message says the save did not
+    // reach the account. Saves run one after another (saveGeneralSettings), so a second Save
+    // reads its base only once the first has been submitted, and the newest choice lands last.
     // The changes are forgotten only once the save has gone through: a rejected save keeps them,
-    // so the retry's message still names them. With nothing named (the language changes at once
-    // and is not tracked here), the message says the settings are saved as shown.
+    // so the retry's message still names them. With nothing named (the language is not tracked
+    // here), the message says the settings are saved as shown.
     const outcome = showSaveOutcome(t('GeneralSettingsSaved'), 'general preferences', detail || t('GeneralSettingsSavedDetail'));
-    saveGeneralSection(
+    saveGeneralSettings(
       {
-        version: PREFERENCES_VERSION,
-        values: {
-          ...composeGeneralPreferenceValues(),
-          language: i18n.language,
-          [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
-          [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
-          [LOCKED]: lockedModelsWarning,
-        },
+        [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
+        [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
+        [LOCKED]: lockedModelsWarning,
       },
-      {
-        onSuccess: result => {
+      payload =>
+        saveGeneralSection(payload).then(result => {
           changed.clear();
           outcome.onSuccess(result);
-        },
-        onError: outcome.onError,
-      }
-    );
+        }, outcome.onError)
+    ).catch(outcome.onUnavailable);
   };
 
   // Every field on both tabs; nothing is saved until Save
