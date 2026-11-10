@@ -133,7 +133,19 @@ export function addSRDisplayAnnotation({
     },
   };
 
-  c3dAnnotation.state.addAnnotation(annotation, undefined);
+  try {
+    c3dAnnotation.state.addAnnotation(annotation, undefined);
+  } catch (error) {
+    // The annotation is stored before Cornerstone3D announces it to the viewports of its Frame of
+    // Reference; the announcement fails for a tool group still listing a viewport that is no
+    // longer enabled (a view closed while the report reloads). The annotation is kept and drawn
+    // by the next render.
+    if (!c3dAnnotation.state.getAnnotation(annotation.annotationUID)) {
+      log.warn('[DICOM-SR:srDisplayAnnotations] annotation not added', TrackingUniqueIdentifier, error);
+      return undefined;
+    }
+    log.warn('[DICOM-SR:srDisplayAnnotations] annotation added; its Frame of Reference viewports were not told', error);
+  }
 
   if (render) {
     renderSRDisplayAnnotations();

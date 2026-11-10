@@ -20,7 +20,8 @@ const mapStateToProps = (state, ownProps) => {
   // If viewport is active, enable prefectching.
   const { viewportIndex } = ownProps;
   const isActive = viewportIndex === state.viewports.activeViewportIndex;
-  const viewportLayout = state.viewports.layout.viewports[viewportIndex];
+  // The layout can lack this pane for a moment (a layout change or a study reload)
+  const viewportLayout = ((state.viewports.layout && state.viewports.layout.viewports) || [])[viewportIndex] || {};
   const pluginDetails = viewportLayout.viewer3dvol || viewportLayout.vtk || {};
 
   return {
@@ -83,3 +84,4 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
 
 const ConnectedVTKVolumeViewport = connect(mapStateToProps, mapDispatchToProps, mergeProps)(VTKVolumeViewport);
 export default ConnectedVTKVolumeViewport;
+export { mapStateToProps };

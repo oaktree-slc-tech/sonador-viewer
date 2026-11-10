@@ -314,4 +314,16 @@ describe('viewports reducer', () => {
     expect(clearedViewport).toEqual({});
     expect(updatedOtherViewport).toEqual(originalOtherViewport);
   });
+
+  it('should handle SET_SPECIFIC_DATA for a pane the layout does not hold, without recording its plugin', () => {
+    const initialState = {
+      activeViewportIndex: 0,
+      layout: { numRows: 1, numColumns: 1, viewports: [{ plugin: 'cornerstone' }] },
+      viewportSpecificData: {},
+    };
+    const action = { type: types.SET_SPECIFIC_DATA, viewportIndex: 2, viewportSpecificData: { displaySetInstanceUID: 'ds-1', plugin: 'vtk' } };
+    const state = reducer(initialState, action);
+    expect(state.viewportSpecificData[2]).toEqual({ displaySetInstanceUID: 'ds-1', plugin: 'vtk' });
+    expect(state.layout.viewports).toEqual([{ plugin: 'cornerstone' }]);
+  });
 });

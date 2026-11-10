@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger, Icons, PanelSection, ScrollArea } from '@ohif/ui-next';
+import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger, Icons, Label, PanelSection, ScrollArea, Switch,
+  Tooltip as HelpTag, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
 
@@ -15,11 +18,90 @@ import { Tooltip } from '../tooltip';
 
 import { MeasurementTableItem } from './MeasurementTableItem';
 import { AnnotationsVisibilityRow } from './AnnotationsVisibilityRow';
+import { filterGroups, groupRowsBySeries, queryWords, seriesAnnotationTypes, seriesEntries } from './annotationsOrganization';
+import reconcileSearchVisibility from './searchVisibility';
 
 const { measurements, log } = OHIF;
 const { MeasurementApi } = measurements;
 
 import './MeasurementTable.styl';
+
+// "Group by series" is kept per browser. The other display settings, the search and the collapsed
+// series last while the table is mounted: they reset when another panel is chosen or the table is
+// reloaded
+const GROUP_BY_SERIES_KEY = 'sonador-annotations-group-by-series';
+
+function readGroupBySeries() {
+  try {
+    return window.localStorage.getItem(GROUP_BY_SERIES_KEY) === 'true';
+  } catch (error) {
+    return false;
+  }
+}
+
+function writeGroupBySeries(value) {
+  try {
+    window.localStorage.setItem(GROUP_BY_SERIES_KEY, value ? 'true' : 'false');
+  } catch (error) {
+    // Storage unavailable: the setting lasts while the table is mounted
+  }
+}
+
+/** A series sub-group's heading, translated when it is generated ("Series 4", "Series Unavailable") */
+const seriesLabel = (series, t) => (series.labelKey ? t(series.labelKey, series.labelValues) : series.label);
+
+/** The rows of a group collection */
+const rowsOf = groups => (groups || []).flatMap(group => (group && group.measurements) || []);
+
+
+/**
+ * A series sub-group's hover card, after the study browser's series thumbnail without its image:
+ * the series title; a table of the series' annotation types and counts across every group, the
+ * pending ones on their own lines marked "Pending"; then the series number and instance count (the
+ * thumbnail's stacked-squares glyph) at the left and the modality at the right. The Series
+ * Unavailable group says why its measurements are there instead.
+ */
+function SeriesCard({ series, types, t }) {
+  const unavailable = Boolean(series.help);
+  const hasNumber = series.seriesNumber !== undefined && series.seriesNumber !== null && !Number.isNaN(series.seriesNumber);
+
+  return (
+    <TooltipContent side="right" align="start" sideOffset={8} className="w-64 max-w-xs whitespace-normal" data-cy="series-group-card">
+      <div className="font-semibold leading-snug break-words">{seriesLabel(series, t)}</div>
+      {types.length > 0 && (
+        <table className="seriesAnnotationTypes mt-3 w-full text-xs" data-cy="series-annotation-types">
+          <tbody>
+            {types.map(({ name, pending, count }) => (
+              <tr key={`${pending ? 'pending' : 'saved'}:${name}`}>
+                <td>
+                  {name}
+                  {pending && <span className="seriesAnnotationPending">{t('Pending')}</span>}
+                </td>
+                <td className="text-right tabular-nums">{count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {unavailable ? (
+        <div className="mt-2 text-xs opacity-80">{t(series.help)}</div>
+      ) : (
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs opacity-80">
+          <div className="flex items-center gap-3">
+            {hasNumber && <span><span className="font-black">S:</span> {series.seriesNumber}</span>}
+            {series.instanceCount > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="seriesFramesGlyph" aria-hidden="true" />
+                {series.instanceCount}
+              </span>
+            )}
+          </div>
+          {series.modality && <span className="font-black">{series.modality}</span>}
+        </div>
+      )}
+    </TooltipContent>
+  );
+}
 
 
 const MeasurementTable = ({
@@ -37,6 +119,7 @@ const MeasurementTable = ({
   saveFunction,
   onSaveComplete,
   eventTimeout = 50,
+  isOpen = true,
 }) => {
   // Unpack references to services  
   const { displaySetService } = servicesManager.services;
@@ -49,6 +132,78 @@ const MeasurementTable = ({
   const [selectedKey, setSelectedKey] = useState(null);
   const [savePending, setSavePending] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState([]);
+
+  // Display settings (the drawer under the Annotations header) and the search
+  const [showSettings, setShowSettings] = useState(false);
+  const [groupBySeries, setGroupBySeriesState] = useState(readGroupBySeries);
+  const [applySearchToViews, setApplySearchToViews] = useState(false);
+  const [collapsedSeries, setCollapsedSeries] = useState([]);
+  const [query, setQuery] = useState('');
+  const searching = queryWords(query).length > 0;
+
+  const setGroupBySeries = (value) => {
+    setGroupBySeriesState(value);
+    writeGroupBySeries(value);
+  };
+
+  // Every measurement by series (the measurement API's shared query), for the series hover cards;
+  // computed once per change of the measurements
+  const measurementsBySeries = useMemo(
+    () => (measurementApi && typeof measurementApi.getMeasurementsBySeries === 'function'
+      ? measurementApi.getMeasurementsBySeries() : new Map()),
+    [measurementCollection]
+  );
+
+  // The groups with their matching rows; every group while there is no search
+  const listedGroups = filterGroups(measurementCollection, query);
+
+  // With "Filter annotations in imaging viewports", the annotations the search leaves out are
+  // hidden in the views too while the panel is open, and shown again when they match again, the
+  // search or the setting is cleared, or the panel closes. A later global choice (every annotation
+  // shown or hidden at once, from the panel or View > Annotations) takes them over: after Hide All
+  // they stay hidden when the filter goes. Show All while the filter applies shows the matching
+  // annotations only: the filter hides the others again.
+  const hiddenBySearch = useRef(new Set());
+  const allRows = rowsOf(measurementCollection);
+  const matchingIds = rowsOf(listedGroups).map(row => row.measurementId);
+  const latest = useRef({});
+  const filterActive = isOpen && applySearchToViews && searching;
+  latest.current = { allRows, matchingIds, filterActive };
+  const syncSearchVisibility = (active, rows = latest.current.allRows) => {
+    const { hide, show, hiddenBySearch: next } = reconcileSearchVisibility({
+      rows,
+      matching: new Set(latest.current.matchingIds),
+      active,
+      hiddenBySearch: hiddenBySearch.current,
+    });
+    hiddenBySearch.current = next;
+    if (hide.length || show.length) {
+      hide.forEach(id => measurementApi.toggleVisibilityMeasurement(id, false));
+      show.forEach(id => measurementApi.toggleVisibilityMeasurement(id, true));
+      measurements.refreshCornerstoneViewports();
+    }
+  };
+  useEffect(() => {
+    syncSearchVisibility(filterActive);
+  }, [filterActive, matchingIds.join('|'), allRows.map(row => row.measurementId).join('|')]);
+  useEffect(() => {
+    const removeListener = typeof MeasurementApi.addAllVisibilityListener === 'function'
+      ? MeasurementApi.addAllVisibilityListener((visibility) => {
+        hiddenBySearch.current = new Set();
+        if (visibility && latest.current.filterActive) {
+          // Every annotation was just shown; the rows still hold their earlier visibility
+          syncSearchVisibility(true, latest.current.allRows.map(row => ({ ...row, isVisible: true })));
+        }
+      })
+      : undefined;
+    return () => {
+      if (removeListener) {
+        removeListener();
+      }
+      // Leaving the panel shows what the search hid
+      syncSearchVisibility(false);
+    };
+  }, []);
 
   const pendingCount = useMemo(() => {
     // Calculate the number of pending measurements
@@ -188,26 +343,87 @@ const MeasurementTable = ({
             {t('MAX')} {measureGroup.maxMeasurements}
           </div>
         )}
-        <div className="numberOfItems">{measureGroup.measurements.length}</div>
+        <div className="numberOfItems">
+          {searching && measureGroup.totalCount !== undefined
+            ? t('{{count}} of {{total}}', { count: measureGroup.measurements.length, total: measureGroup.totalCount })
+            : measureGroup.measurements.length}
+        </div>
       </>
     );
   };
 
   const groupKey = (measureGroup, idx) => measureGroup.groupId || `group-${idx}`;
 
+  const seriesKey = (measureGroup, idx, series) => `${groupKey(measureGroup, idx)}::${series.key}`;
+
+  const getSeriesGroups = (measureGroup, idx) => {
+    // A group's rows by series (annotationsOrganization.groupRowsBySeries), each a collapsible
+    // sub-section with the group's own +/- control, open unless the user has collapsed it
+    const seriesGroups = groupRowsBySeries(measureGroup.measurements);
+    const keys = seriesGroups.map(series => seriesKey(measureGroup, idx, series));
+
+    return (
+      <Accordion
+        type="multiple"
+        className="measurementSeriesGroups"
+        value={keys.filter(key => !collapsedSeries.includes(key))}
+        onValueChange={(open) => setCollapsedSeries(previous => [
+          ...previous.filter(key => !keys.includes(key)),
+          ...keys.filter(key => !open.includes(key)),
+        ])}
+      >
+        {seriesGroups.map(series => (
+          <AccordionItem key={series.key} value={seriesKey(measureGroup, idx, series)} className="measurementSeriesGroup">
+            <TooltipProvider delayDuration={500}>
+              <HelpTag>
+                <AccordionTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="measurementSeriesHeader">
+                      <span className="measurementSeriesTitle">{seriesLabel(series, t)}</span>
+                      <span className="measurementSeriesCount">{series.measurements.length}</span>
+                      <span className="measurementGroupToggle" aria-hidden="true">
+                        <Icons.Minus className="measurementGroupCollapse" />
+                        <Icons.Plus className="measurementGroupExpand" />
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                </AccordionTrigger>
+                <SeriesCard series={series} types={seriesAnnotationTypes(seriesEntries(measurementsBySeries, series.key))} t={t} />
+              </HelpTag>
+            </TooltipProvider>
+            <AccordionContent>
+              <TableList headless>{getMeasurements(series)}</TableList>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    );
+  };
+
   const getMeasurementsGroups = () => {
     // Each group (Measurements, Findings, ...) is a collapsible sub-section of Annotations. Groups
     // are open unless the user has collapsed them, so a group that appears later starts open.
-    const keys = measurementCollection.map(groupKey);
+    // While a search is active only the groups with a match are listed.
+    if (searching && !listedGroups.length) {
+      return (
+        <div className="annotationsNoMatch" data-cy="annotations-no-match">
+          {t('No annotations match \u201C{{query}}\u201D', { query: query.trim() })}
+        </div>
+      );
+    }
+    const keys = listedGroups.map(groupKey);
 
     return (
       <Accordion
         type="multiple"
         className="measurementGroups"
         value={keys.filter(key => !collapsedGroups.includes(key))}
-        onValueChange={open => setCollapsedGroups(keys.filter(key => !open.includes(key)))}
+        onValueChange={open => setCollapsedGroups(previous => [
+          ...previous.filter(key => !keys.includes(key)),
+          ...keys.filter(key => !open.includes(key)),
+        ])}
       >
-        {measurementCollection.map((measureGroup, idx) => (
+        {listedGroups.map((measureGroup, idx) => (
           <AccordionItem key={groupKey(measureGroup, idx)} value={groupKey(measureGroup, idx)} className="measurementGroup">
             <AccordionTrigger asChild>
               <button type="button" className="tableListHeader measurementGroupHeader">
@@ -219,13 +435,33 @@ const MeasurementTable = ({
               </button>
             </AccordionTrigger>
             <AccordionContent>
-              <TableList headless>{getMeasurements(measureGroup)}</TableList>
+              {groupBySeries
+                ? getSeriesGroups(measureGroup, idx)
+                : <TableList headless>{getMeasurements(measureGroup)}</TableList>}
             </AccordionContent>
           </AccordionItem>
         ))}
       </Accordion>
     );
   };
+
+  const getDisplaySettings = () => (
+    // The display settings drawer, as the Segmentations panel's (ui-next SegmentationTableConfig)
+    <div className="bg-muted mb-0.5 space-y-2 rounded-b px-1.5 pt-0.5 pb-3 annotationsSettings" data-cy="annotations-settings">
+      <div className="my-2 flex items-center pl-0.5">
+        <Switch id="annotations-group-by-series" checked={groupBySeries} onCheckedChange={setGroupBySeries} />
+        <Label htmlFor="annotations-group-by-series" className="text-muted-foreground ml-2.5 mr-2 text-xs">
+          {t('Group by series')}
+        </Label>
+      </div>
+      <div className="my-2 flex items-center pl-0.5">
+        <Switch id="annotations-search-in-views" checked={applySearchToViews} onCheckedChange={setApplySearchToViews} />
+        <Label htmlFor="annotations-search-in-views" className="text-muted-foreground ml-2.5 mr-2 text-xs">
+          {t('Filter annotations in imaging viewports')}
+        </Label>
+      </div>
+    </div>
+  );
 
   const getTimepointsHeader = () => {
     return timepoints.map((timepoint, index) => {
@@ -282,14 +518,44 @@ const MeasurementTable = ({
           groups scrolling inside it: room for the other annotation kinds the panel is to hold */}
       <div className="measurementTableAnnotations">
         <PanelSection defaultOpen>
-          <PanelSection.Header>
+          <PanelSection.Header className="flex items-center justify-between">
             <span>{t('Annotations')}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              className="annotationsSettingsToggle ml-auto mr-2"
+              aria-label={t('Display Settings')}
+              aria-expanded={showSettings}
+              data-cy="annotations-settings-toggle"
+              onClick={(event) => {
+                event.stopPropagation();
+                setShowSettings(open => !open);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShowSettings(open => !open);
+                }
+              }}
+            >
+              <Icons.Settings className="text-primary h-4 w-4" />
+            </span>
           </PanelSection.Header>
           <PanelSection.Content>
+            {showSettings && getDisplaySettings()}
             <AnnotationsVisibilityRow
-              measurementCollection={measurementCollection}
+              measurementCollection={listedGroups}
+              onQueryChange={setQuery}
+              query={query}
+              searching={searching}
               onToggleAllVisibility={(visible) => {
-                measurementApi.setAllMeasurementsVisibility(visible);
+                if (searching) {
+                  // The matching annotations only
+                  rowsOf(listedGroups).forEach(row => measurementApi.toggleVisibilityMeasurement(row.measurementId, visible));
+                } else {
+                  measurementApi.setAllMeasurementsVisibility(visible);
+                }
                 measurements.refreshCornerstoneViewports();
               }}
             />
@@ -325,7 +591,9 @@ MeasurementTable.propTypes = {
   onEditDescriptionClick: PropTypes.func,
   saveFunction: PropTypes.func,
   onSaveComplete: PropTypes.func,
-  eventTimeout: PropTypes.number,  
+  eventTimeout: PropTypes.number,
+  /** Whether the side panel holding the table is open; it stays mounted while closed */
+  isOpen: PropTypes.bool,  
 };
 
 

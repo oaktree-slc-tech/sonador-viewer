@@ -25,11 +25,22 @@ function SegEditorLayoutSelector({ button, toolbarClickCallback }) {
 
   const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
   const { displaySet } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
+  // The display set the menu follows: the active viewport's, kept while the viewport briefly has
+  // none (a study reload), then the one it shows next
   const displaySetInstanceUIDRef = useRef(displaySet?.displaySetInstanceUID);
+  if (displaySet && displaySet.displaySetInstanceUID !== displaySetInstanceUIDRef.current) {
+    displaySetInstanceUIDRef.current = displaySet.displaySetInstanceUID;
+  }
+  const displaySetInstanceUID = displaySetInstanceUIDRef.current;
 
-  const _current = () => DisplaySetApi.Instance.displaySetService
-    .getDisplaySetByUID(displaySetInstanceUIDRef.current)?.[LAYOUT_ATTR];
+  const _current = () => (typeof displaySetInstanceUIDRef.current === 'string'
+    ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUIDRef.current) : undefined)?.[LAYOUT_ATTR];
   const [current, setCurrent] = useState(_current);
+
+  // A different display set: take its layout
+  useEffect(() => {
+    setCurrent(_current());
+  }, [displaySetInstanceUID]);
 
   useEffect(() => {
     const subscription = DisplaySetApi.Instance.displaySetService.subscribe(

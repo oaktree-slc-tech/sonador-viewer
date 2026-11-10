@@ -663,6 +663,19 @@ describe('legacy metadata delegate', () => {
     expect(mockC3dMetaDataGet).toHaveBeenCalledWith('imagePixelModule', 'wadors:z');
   });
 
+  it('adds the legacy name of the image\'s SOP Instance UID, which the classic stack reports', () => {
+    mockC3dMetaDataGet.mockReturnValue({ sopInstanceUID: '2.25.7', instanceNumber: 3 });
+
+    expect(createMetadataDelegate()('generalImageModule', 'wadors:z'))
+      .toEqual({ sopInstanceUID: '2.25.7', sopInstanceUid: '2.25.7', instanceNumber: 3 });
+    // Other modules, and answers without the field, are returned as they are
+    const plane = { rowCosines: [1, 0, 0] };
+    mockC3dMetaDataGet.mockReturnValue(plane);
+    expect(createMetadataDelegate()('imagePlaneModule', 'wadors:z')).toBe(plane);
+    mockC3dMetaDataGet.mockReturnValue(undefined);
+    expect(createMetadataDelegate()('generalImageModule', 'wadors:z')).toBeUndefined();
+  });
+
   it('returns undefined rather than throwing, so the legacy chain can fall through', () => {
     // Neither library wraps its providers in try/catch: a throwing provider aborts the whole
     // lookup instead of falling through, and this one sits at the top of the legacy chain.

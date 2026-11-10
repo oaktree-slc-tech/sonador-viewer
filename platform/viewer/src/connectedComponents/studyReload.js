@@ -1,6 +1,6 @@
 // A study reload (STUDY_RELOAD, which removing a series also triggers): the measurement session
-// is cleared, then the study data is reloaded. Each step runs whatever the one before it did:
-// clearAnnotations returns nothing, and a failure in it must not leave the reload undone.
+// is cleared, then the study data is reloaded. A failure of clearAnnotations (which returns
+// nothing) is logged, and the session clear and the reload still run.
 
 /**
  * @param {object} params

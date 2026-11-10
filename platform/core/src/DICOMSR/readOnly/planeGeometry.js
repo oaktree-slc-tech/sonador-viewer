@@ -83,11 +83,16 @@ export function planeFromModule(module) {
 }
 
 
-/** Patient point [x, y, z] of an image point [column, row] */
+/**
+ * Patient point [x, y, z] of an image point [column, row]. As DICOM defines the Image Plane Module
+ * (PS3.3 C.7.6.2): the column index runs along the row direction in steps of the column spacing
+ * (PixelSpacing[1]), and the row index along the column direction in steps of the row spacing
+ * (PixelSpacing[0]).
+ */
 export function imageToWorld(plane, [x, y]) {
   const { imagePositionPatient: origin, rowCosines, columnCosines, rowPixelSpacing, columnPixelSpacing } = plane;
-  const u = rowPixelSpacing * (x - 0.5);
-  const v = columnPixelSpacing * (y - 0.5);
+  const u = columnPixelSpacing * (x - 0.5);
+  const v = rowPixelSpacing * (y - 0.5);
 
   return [0, 1, 2].map(i => origin[i] + rowCosines[i] * u + columnCosines[i] * v);
 }
@@ -99,8 +104,8 @@ export function worldToImage(plane, point) {
   const offset = sub(point, origin);
 
   return [
-    dot(offset, rowCosines) / rowPixelSpacing + 0.5,
-    dot(offset, columnCosines) / columnPixelSpacing + 0.5,
+    dot(offset, rowCosines) / columnPixelSpacing + 0.5,
+    dot(offset, columnCosines) / rowPixelSpacing + 0.5,
   ];
 }
 

@@ -174,3 +174,27 @@ it('removes a drawing cancelled with Escape in the same key handler that cancels
   view().keyboardEvent({ detail: { element: 'element', key: 'Escape' } });
   expect(order).toEqual(['cancel', 'remove drawing-1']);
 });
+
+it("opens on the MPR pane's plane and slice once the volume is set, fitted to the resized view", async () => {
+  const _ = jest.requireActual('lodash');
+  const order = [];
+  const component = view();
+  const viewport = { setCamera: jest.fn(), resetCamera: jest.fn(() => order.push('fit')) };
+  component.renderEngine = { resize: jest.fn(() => order.push('resize')) };
+  const camera = { viewPlaneNormal: [1, 0, 0], viewUp: [0, 0, 1], focalPoint: [5, 6, 7], position: [105, 6, 7], parallelScale: 80 };
+  component.props = { ...component.props, initialCamera: camera };
+  component._checkViewportActive = () => ({ viewport });
+  const base = Object.getPrototypeOf(Cornerstone3DInspectionView.prototype);
+  base._setImageVolume = jest.fn(async () => order.push('setVolumes'));
+  viewport.setCamera.mockImplementation(() => order.push('setCamera'));
+
+  await component._setImageVolume();
+  expect(order).toEqual(['setVolumes', 'resize', 'setCamera', 'fit']);
+  expect(viewport.setCamera).toHaveBeenCalledWith(_.omit(camera, 'parallelScale'));
+  expect(component.renderEngine.resize).toHaveBeenCalledWith(true, true);
+
+  component.props = { ...component.props, initialCamera: undefined };
+  viewport.setCamera.mockClear();
+  await component._setImageVolume();
+  expect(viewport.setCamera).not.toHaveBeenCalled();
+});

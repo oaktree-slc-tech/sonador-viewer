@@ -20,7 +20,10 @@ function ViewerSegmentationSurfaceEnabledToolbarButton({
 
   // Toggle button visible based on whether the segmentationSurfaceEnabled property is present. Hide the button if the
   // displaySet property has not yet been defined.
-  let isVisible = _.isNil(DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(_ds0.displaySetInstanceUID)?.[isActiveDisplaySetAttr])
+  // No display set while the active viewport has none (a study reload): the default visibility
+  const uid = _ds0?.displaySetInstanceUID;
+  const displaySet = typeof uid === 'string' ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(uid) : undefined;
+  let isVisible = _.isNil(displaySet?.[isActiveDisplaySetAttr])
     ? isVisibleDefault : true;
 
   return (<>

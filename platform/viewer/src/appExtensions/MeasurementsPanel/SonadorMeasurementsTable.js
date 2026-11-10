@@ -9,7 +9,9 @@ const { MeasurementApi } = measurements;
 
 const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}) => {
   // Version of the Sonador Measurement table which responds to changes in service state.
-  // Table renders are controlled by changing the table GUID (component key).
+  // A change of the data version makes the table read its rows again (ConnectedMeasurementTable
+  // mapStateToProps). The table stays mounted, so its display settings, search and collapsed
+  // groups are kept.
   
   // @signal-handler MeasurementService.EVENTS.MEASUREMENT_UPDATED: re-render item list on programmtic update
   //    of table measurements.
@@ -66,7 +68,7 @@ const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}
     }
   }, []);
 
-  return <ConnectedMeasurementTable key={version} servicesManager={servicesManager} {...props} />;
+  return <ConnectedMeasurementTable dataVersion={version} servicesManager={servicesManager} {...props} />;
 }
 
 

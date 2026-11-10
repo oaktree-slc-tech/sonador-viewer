@@ -10,6 +10,7 @@ jest.mock('@cornerstonejs/core', () => ({
 import {
   distanceFromPlane, findImageForPoints, getImagePlane, imageToWorld, planeFromInstance, worldToImage,
 } from './imagePlane';
+import { imageToPatient, patientToImage } from '../utils/angleGeometry';
 
 const close = (actual, expected, digits = 6) => {
   expect(actual).toHaveLength(expected.length);
@@ -45,6 +46,25 @@ describe('image <-> patient coordinates', () => {
     [[0, 0], [12.25, 7.5], [511.5, 3]].forEach(point => {
       close(worldToImage(axial, imageToWorld(axial, point)), point);
       close(worldToImage(oblique, imageToWorld(oblique, point)), point);
+    });
+  });
+
+  it('pairs the column spacing with the row direction and the row spacing with the column direction', () => {
+    // PixelSpacing [1, 3]: 1 mm between rows, 3 mm between columns (DICOM PS3.3 C.7.6.2)
+    const plane = planeFromInstance({
+      ImagePositionPatient: [0, 0, 0], ImageOrientationPatient: [1, 0, 0, 0, 1, 0], PixelSpacing: [1, 3],
+    });
+    close(imageToWorld(plane, [1.5, 1.5]), [3, 1, 0]);
+    close(worldToImage(plane, [3, 1, 0]), [1.5, 1.5]);
+    close(worldToImage(plane, [9, 4, 0]), [3.5, 4.5]);
+
+    // The hydrated path (angleGeometry, on the Cornerstone3D plane module) places points the same way
+    const module = {
+      imagePositionPatient: [0, 0, 0], rowCosines: [1, 0, 0], columnCosines: [0, 1, 0], rowPixelSpacing: 1, columnPixelSpacing: 3,
+    };
+    [[1.5, 1.5], [3.5, 4.5], [10, 2.25]].forEach((point) => {
+      close(imageToWorld(plane, point), imageToPatient(module, point));
+      close(worldToImage(plane, imageToPatient(module, point)), patientToImage(module, imageToPatient(module, point)));
     });
   });
 

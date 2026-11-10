@@ -63,6 +63,7 @@ import styles from './Cornerstone3DInspectionView.css';
 
 import ViewportGridOverlayTool from './tools/ViewportGridOverlayTool.js';
 import { addSRDisplayToolToGroup } from './tools/DICOMSRDisplayTool';
+import { applyCameraPlacement } from '../utils/inspectionCamera';
 
 const { ViewportType, Events } = c3dEnums;
 const { DisplaySetApi } = OHIF.display;
@@ -88,6 +89,13 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   // freehand and probe tools measure in this session's 3D views; those measurements are not saved.
 
   static id = 'Cornerstone3DInspectionView';
+
+  static propTypes = {
+    ...Cornerstone3DLabelmapBaseView.propTypes,
+    // The camera of the MPR pane the Inspector opens from (utils/inspectionCamera.js): the view
+    // opens on that pane's plane and slice, with the image fitted to the view
+    initialCamera: PropTypes.object,
+  }
 
   constructor(props) {
     super(props);
@@ -144,6 +152,22 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
     const segVolumeId = super._getSegImageVolumeId();
     return segVolumeId ? segVolumeId + options.suffix : segVolumeId;
+  }
+
+  async _setImageVolume(options) {
+    // Set the image volume, then open on the MPR pane's plane and slice (setVolumes resets the
+    // camera), with the image fitted to the view at its full size
+    const component = this;
+    await super._setImageVolume(options);
+
+    const { initialCamera } = component.props;
+    if (initialCamera) {
+      const { viewport } = component._checkViewportActive(options);
+      if (component.renderEngine && typeof component.renderEngine.resize === 'function') {
+        component.renderEngine.resize(true, true);
+      }
+      applyCameraPlacement(viewport, initialCamera);
+    }
   }
 
   async loadSegImageVolume() {

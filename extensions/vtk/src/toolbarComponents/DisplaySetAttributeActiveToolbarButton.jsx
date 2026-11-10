@@ -9,6 +9,9 @@ import { ToolbarButton, viewerbaseGetDisplaySet } from '@ohif/ui';
 
 const { DisplaySetApi } = OHIF.display;
 
+/** A display set by its UID; none without a UID (the service throws for one that is not a string) */
+const displaySetByUID = uid => (typeof uid === 'string' ? DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(uid) : undefined);
+
 
 function DisplaySetAttributeActiveToolbarButton({
 		toolbarClickCallback, button, isActiveDisplaySetAttr, isActiveDefault = false,
@@ -27,7 +30,14 @@ function DisplaySetAttributeActiveToolbarButton({
 	const { id, label, icon } = button;
 	const { viewportSpecificData, activeViewportIndex } = useSelector(redux.selectors.getActiveViewportData);
 	const { displaySet: _ds0 } = viewerbaseGetDisplaySet(viewportSpecificData, activeViewportIndex);
-	const displaySetInstanceUIDRef = useRef(_ds0.displaySetInstanceUID);
+
+	// The display set the button follows: the active viewport's, kept while the viewport briefly
+	// has none (a study reload, such as after removing a series)
+	const displaySetInstanceUIDRef = useRef(_ds0?.displaySetInstanceUID);
+	if (_ds0 && _ds0.displaySetInstanceUID !== displaySetInstanceUIDRef.current) {
+		displaySetInstanceUIDRef.current = _ds0.displaySetInstanceUID;
+	}
+	const displaySetInstanceUID = displaySetInstanceUIDRef.current;
 
 	const _resolveActive = (attrValue) => {
 		// Resolve the active state from the attribute value (default when the attribute is unset)
@@ -38,13 +48,18 @@ function DisplaySetAttributeActiveToolbarButton({
 	};
 
 	// Retrieve current displayset value (or use default if it is not defined)
-	const _ds = DisplaySetApi.Instance.displaySetService.getDisplaySetByUID(displaySetInstanceUIDRef.current);
+	const _ds = displaySetByUID(displaySetInstanceUIDRef.current);
 	const _active = _resolveActive(_ds?.[isActiveDisplaySetAttr]);
 	const _visible = _.isNil(visibleDisplaySetAttr) ? true : !!_ds?.[visibleDisplaySetAttr];
 
 	//  Toggle button active/visible state based on the tracked attributes of the displaySet
 	const [isActive, setActive] = useState(_active);
 	const [isVisible, setVisible] = useState(_visible);
+	useEffect(() => {
+		// A different display set: take its state
+		setActive(_active);
+		setVisible(_visible);
+	}, [displaySetInstanceUID]);
 	useEffect(() => {
 
 		// displaySet API: displaySet changed

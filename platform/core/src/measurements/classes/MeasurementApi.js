@@ -126,6 +126,9 @@ const configuration = {
 // Cornerstone3D views' session-only annotations), each source as { visibilities(), setVisibility(visible) }
 const annotationVisibilitySources = new Set();
 
+// Listeners told when every annotation is shown or hidden at once (setAllMeasurementsVisibility)
+const allVisibilityListeners = new Set();
+
 
 export default class MeasurementApi {
   // Sonador Viewer MeasurementApi. 
@@ -175,6 +178,18 @@ export default class MeasurementApi {
   static addAnnotationVisibilitySource(source) {
     annotationVisibilitySources.add(source);
     return () => annotationVisibilitySources.delete(source);
+  }
+
+  /**
+   * Listen for every annotation being shown or hidden at once, the global visibility choice
+   * (setAllMeasurementsVisibility).
+   *
+   * @param {Function} listener - called with the visibility given to every annotation
+   * @returns {Function} removes the listener
+   */
+  static addAllVisibilityListener(listener) {
+    allVisibilityListeners.add(listener);
+    return () => allVisibilityListeners.delete(listener);
   }
 
   static getConfiguration() {
@@ -1127,6 +1142,13 @@ export default class MeasurementApi {
       annotationVisibilitySources.forEach(source => source.setVisibility(visibility));
       this.onMeasurementsUpdated();
     }
+    allVisibilityListeners.forEach((listener) => {
+      try {
+        listener(visibility);
+      } catch (error) {
+        log.warn('[MeasurementApi] all-visibility listener failed', error);
+      }
+    });
   }
 
   areAllMeasurementsHidden() {
@@ -1146,6 +1168,125 @@ export default class MeasurementApi {
     });
     annotationVisibilitySources.forEach(source => visibility.push(...source.visibilities()));
     return visibility.length > 0 && visibility.every(isVisible => isVisible === false);
+  }
+
+  static seriesInstanceUIDOf(measurement) {
+    // The series a measurement is drawn on, wherever its schema keeps it: a measurement-service
+    // record (referenceSeriesUID), an OHIF v3 or Cornerstone measurement (SeriesInstanceUID), or
+    // their metadata and data sections. Undefined when none records it.
+
+    if (!measurement) {
+      return undefined;
+    }
+    const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(measurement);
+    return measurement.SeriesInstanceUID || measurement.referenceSeriesUID
+      || measurementMeta.SeriesInstanceUID || measurementMeta.referenceSeriesUID
+      || measurementData.SeriesInstanceUID || measurementData.referenceSeriesUID || undefined;
+  }
+
+  static studyInstanceUIDOf(measurement) {
+    // The study of a measurement's series, as seriesInstanceUIDOf finds the series
+
+    if (!measurement) {
+      return undefined;
+    }
+    const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(measurement);
+    return measurement.StudyInstanceUID || measurement.referenceStudyUID
+      || measurementMeta.StudyInstanceUID || measurementMeta.referenceStudyUID
+      || measurementData.StudyInstanceUID || measurementData.referenceStudyUID || undefined;
+  }
+
+  static trackingIdentifierOf(measurement) {
+    // The tracking identifier a measurement read from a report carries ("cornerstoneTools@^4.0.0:Length")
+
+    if (!measurement) {
+      return undefined;
+    }
+    const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(measurement);
+    return measurement.TrackingIdentifier || measurementMeta.TrackingIdentifier || measurementData.TrackingIdentifier
+      || undefined;
+  }
+
+  static measurementToolType(measurement) {
+    // The tool a measurement was drawn with. A measurement read from a report is held under the
+    // display tool's type; its tracking identifier names the tool.
+
+    const trackingIdentifier = MeasurementApi.trackingIdentifierOf(measurement);
+    if (typeof trackingIdentifier === 'string' && trackingIdentifier.includes(':')) {
+      return trackingIdentifier.slice(trackingIdentifier.lastIndexOf(':') + 1);
+    }
+    return measurement ? MeasurementApi._getToolType(measurement) : undefined;
+  }
+
+  getMeasurementsBySeries() {
+    // Every measurement the API holds, by the series it is drawn on: those of the measurement
+    // service (the record, for the representations it manages) and the read-only representations
+    // only the API holds. Measurements without a series are under `null`.
+    //
+    // @returns Map<SeriesInstanceUID|null, entry[]>, each entry:
+    // - measurement: the measurement-service record, or the API representation
+    // - representation: the API representation
+    // - seriesInstanceUID, studyInstanceUID
+    // - toolType: the tool it was drawn with (measurementToolType); trackingIdentifier
+    // - serviceManaged, readOnly, locked
+    // - pending: not yet saved (service managed and not read-only), as the Measurements panel
+    //   lists it under its Pending groups
+
+    const records = new Map();
+    if (this.measurementService && typeof this.measurementService.getMeasurements === 'function') {
+      this.measurementService.getMeasurements().forEach((record) => {
+        const { _id } = MeasurementApi._unpackMeasurementData(record);
+        if (_id) {
+          records.set(_id, record);
+        }
+      });
+    }
+
+    const bySeries = new Map();
+    const seen = new Set();
+    _.each(this.tools, (collection, toolKey) => {
+      (collection || []).forEach((representation) => {
+        const { _id } = MeasurementApi._unpackMeasurementData(representation);
+        if (_id && seen.has(_id)) {
+          return;
+        }
+        if (_id) {
+          seen.add(_id);
+        }
+        const toolType = MeasurementApi._getToolType(representation) || toolKey;
+        const { toolServiceManaged } = this._serviceManagedTool(toolType);
+        const record = toolServiceManaged && _id ? records.get(_id) : undefined;
+        const measurement = record || representation;
+        const { isReadOnly, isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(measurement);
+        const seriesInstanceUID = MeasurementApi.seriesInstanceUIDOf(measurement)
+          || MeasurementApi.seriesInstanceUIDOf(representation) || null;
+
+        const entry = {
+          measurement,
+          representation,
+          seriesInstanceUID,
+          studyInstanceUID: MeasurementApi.studyInstanceUIDOf(measurement) || MeasurementApi.studyInstanceUIDOf(representation),
+          toolType: MeasurementApi.measurementToolType(measurement) || toolType,
+          trackingIdentifier: MeasurementApi.trackingIdentifierOf(measurement),
+          serviceManaged: Boolean(toolServiceManaged),
+          readOnly: Boolean(isReadOnly),
+          locked: Boolean(isLocked || isReadOnly),
+          pending: Boolean(toolServiceManaged) && !isReadOnly,
+        };
+        if (!bySeries.has(seriesInstanceUID)) {
+          bySeries.set(seriesInstanceUID, []);
+        }
+        bySeries.get(seriesInstanceUID).push(entry);
+      });
+    });
+    return bySeries;
+  }
+
+  getMeasurementsForSeries(seriesInstanceUID) {
+    // The measurements drawn on one series (getMeasurementsBySeries); those without a series
+    // for a missing UID
+
+    return this.getMeasurementsBySeries().get(seriesInstanceUID || null) || [];
   }
 
   measurementsCount(filter, options) {
@@ -2168,11 +2309,9 @@ export default class MeasurementApi {
       api: this, measurementRepresentations: this.tools,
     });
 
-    // Clear annotations service
-    let _count = this.measurementsCount(null, { serviceSourceCheck: false });
-    if (_count && _count.service > 0) {
-      this.measurementService.clearMeasurements();
-    }
+    // Clear the measurement service, including measurements it holds unmapped, which the count
+    // of its measurements leaves out
+    this.measurementService.clearMeasurements();
 
     // Clear all measurement representations
     _.each(this.tools, (toolCollection, toolType) => {

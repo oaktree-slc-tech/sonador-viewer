@@ -39,11 +39,14 @@ function ViewerVolumeCropAdjustToolbarButton({ toolbarClickCallback, button }) {
   const displaySetInstanceUID = displaySet?.displaySetInstanceUID;
 
   const { displaySetService } = DisplaySetApi.Instance;
-  const [{ visible, adjustState }, setAdjustState] = useState(
-    () => _readAdjustState(displaySetService.getDisplaySetByUID(displaySetInstanceUID)));
+  // No display set while the active viewport has none (a study reload); the service throws for a
+  // UID that is not a string
+  const _displaySet = () => (typeof displaySetInstanceUID === 'string'
+    ? displaySetService.getDisplaySetByUID(displaySetInstanceUID) : undefined);
+  const [{ visible, adjustState }, setAdjustState] = useState(() => _readAdjustState(_displaySet()));
 
   useEffect(() => {
-    setAdjustState(_readAdjustState(displaySetService.getDisplaySetByUID(displaySetInstanceUID)));
+    setAdjustState(_readAdjustState(_displaySet()));
 
     const subscription = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SET_CHANGED, ({ displaySetInstanceUID: uid, displaySet: _ds }) => {

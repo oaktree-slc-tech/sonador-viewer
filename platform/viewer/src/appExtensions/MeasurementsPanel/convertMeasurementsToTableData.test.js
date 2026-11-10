@@ -24,6 +24,9 @@ jest.mock('@ohif/core', () => {
       getServiceMeasurementByCornerstoneId: _id => mockServiceMeasurements[_id],
     },
     _getToolType: measurement => measurement.toolType,
+    seriesInstanceUIDOf: measurement => measurement.SeriesInstanceUID || measurement.referenceSeriesUID,
+    studyInstanceUIDOf: measurement => measurement.StudyInstanceUID || measurement.referenceStudyUID,
+    trackingIdentifierOf: measurement => measurement.TrackingIdentifier,
     _unpackMeasurementData: measurement => ({
       _id: measurement._id, uid: measurement.uid, measurementMeta: measurement.metadata || {}, measurementData: measurement,
     }),

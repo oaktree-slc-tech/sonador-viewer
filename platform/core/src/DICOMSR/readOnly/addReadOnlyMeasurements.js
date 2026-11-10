@@ -148,42 +148,53 @@ export default function addReadOnlyMeasurements({
 
   (srDisplaySets || []).forEach(srDisplaySet => {
     (srDisplaySet?.measurements || []).forEach(measurement => {
-      const { TrackingUniqueIdentifier } = measurement || {};
-      if (!TrackingUniqueIdentifier || excludeTrackingUIDs.has(TrackingUniqueIdentifier)
-          || measurementApi.getMeasurementByTrackingUid(TrackingUniqueIdentifier)) {
-        return;
-      }
-
-      const placement = _place(measurement, candidates);
-
-      if (placement) {
-        const { candidate, frameNumber } = placement;
-        const imageId = _imageIdFor(candidate.instance, frameNumber, imageIds);
-        if (!imageId) {
-          summary.skipped++;
-          return;
-        }
-
-        _addTextLabels(measurement, candidate);
-        addMeasurement(measurement, imageId, candidate.instance, candidate.displaySet.displaySetInstanceUID);
-        measurement.frameNumber = frameNumber;
-
-        if (Array.isArray(srDisplaySet.referencedDisplaySets)
-            && !srDisplaySet.referencedDisplaySets.includes(candidate.displaySet)) {
-          srDisplaySet.referencedDisplaySets.push(candidate.displaySet);
-        }
-        summary.placed++;
-        return;
-      }
-
-      // Patient coordinates in no image plane: Cornerstone3D viewports only
-      if (addSRDisplayAnnotation({ measurement, render: false })) {
-        summary.patientOnly++;
-      } else {
+      // One measurement that cannot be added is skipped; the others are still added
+      try {
+        addOne(srDisplaySet, measurement);
+      } catch (error) {
+        log.warn('[DICOM-SR:addReadOnlyMeasurements] measurement skipped', measurement?.TrackingUniqueIdentifier, error);
         summary.skipped++;
       }
     });
   });
+
+  /** Add one measurement of a report, counting it in the summary */
+  function addOne(srDisplaySet, measurement) {
+    const { TrackingUniqueIdentifier } = measurement || {};
+    if (!TrackingUniqueIdentifier || excludeTrackingUIDs.has(TrackingUniqueIdentifier)
+        || measurementApi.getMeasurementByTrackingUid(TrackingUniqueIdentifier)) {
+      return;
+    }
+
+    const placement = _place(measurement, candidates);
+
+    if (placement) {
+      const { candidate, frameNumber } = placement;
+      const imageId = _imageIdFor(candidate.instance, frameNumber, imageIds);
+      if (!imageId) {
+        summary.skipped++;
+        return;
+      }
+
+      _addTextLabels(measurement, candidate);
+      addMeasurement(measurement, imageId, candidate.instance, candidate.displaySet.displaySetInstanceUID);
+      measurement.frameNumber = frameNumber;
+
+      if (Array.isArray(srDisplaySet.referencedDisplaySets)
+          && !srDisplaySet.referencedDisplaySets.includes(candidate.displaySet)) {
+        srDisplaySet.referencedDisplaySets.push(candidate.displaySet);
+      }
+      summary.placed++;
+      return;
+    }
+
+    // Patient coordinates in no image plane: Cornerstone3D viewports only
+    if (addSRDisplayAnnotation({ measurement, render: false })) {
+      summary.patientOnly++;
+    } else {
+      summary.skipped++;
+    }
+  }
 
   if (summary.placed) {
     measurementApi.syncMeasurementsAndToolData();

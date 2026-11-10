@@ -12,6 +12,7 @@ import cornerstoneToolEnums from './tools/constants/toolNames.js';
 import setCornerstoneLayout from './utils/setCornerstoneLayout';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import { getEnabledElement } from './state';
+import activeSeriesImageId from './utils/activeSeriesImageId';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
@@ -218,19 +219,27 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                     // Add tag to measurement API
                     const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
                     if (!_id && !uid) {
-                      
-                      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
-                      if (!enabledElement) {
-                        console.warn('[cornerstone:commands:seriesTagDialog] unable to retrieve enabled element');
-                        return;
+
+                      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports }) || {};
+                      if (enabledElement) {
+                        cornerstoneTools.setToolEnabled(
+                          OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {}, element);
+
+                        //  Add measurements to Cornerstone Tool State
+                        cornerstoneTools.addToolState(
+                          element, OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, measurementData);
+                      } else {
+                        // No classic image (the MPR view, for one): the tag is added to the
+                        // measurement API for an image of the active viewport's series
+                        const imageId = activeSeriesImageId(viewports);
+                        if (!imageId) {
+                          console.warn('[cornerstone:commands:seriesTagDialog] unable to find the series of the active viewport');
+                          return;
+                        }
+                        OHIF.measurements.MeasurementHandlers.onAdded({
+                          detail: { toolType: OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, measurementData, imageId },
+                        });
                       }
-
-                      cornerstoneTools.setToolEnabled(
-                        OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {}, element);
-
-                      //  Add measurements to Cornerstone Tool State
-                      cornerstoneTools.addToolState(
-                        element, OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, measurementData);
                     }
 
                     // Add location, description, and response attributes from the tag workflow
@@ -773,10 +782,14 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       storeContexts: [],
       options: {},
     },
+    // Labelling a measurement (the Measurements panel's Relabel and Edit description, the series
+    // tag dialog, and the dialog's update) works whichever viewport is active: the VIEWER context
+    // is always active
     updateTableWithNewMeasurementData: {
       commandFn: actions.updateTableWithNewMeasurementData,
       storeContexts: [],
       options: {},
+      context: 'VIEWER',
     },
     showDownloadViewportModal: {
       commandFn: actions.showDownloadViewportModal,
@@ -842,11 +855,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       commandFn: actions.seriesTagDialog,
       storeContexts: ['viewports', 'servers'],
       options: {},
+      context: 'VIEWER',
     },
     labellingDialog: {
       commandFn: actions.labellingDialog,
       storeContexts: ['viewports'],
       options: {},
+      context: 'VIEWER',
     },
     checkDistortionFilterDialog: {
       commandFn: actions.checkDistortionFilterDialog,

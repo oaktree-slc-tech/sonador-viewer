@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import { measurements, utils } from '@ohif/core';
+import { log, measurements, utils } from '@ohif/core';
 
 const { MeasurementApi } = measurements;
 const { studyMetadataManager } = utils;
@@ -148,7 +148,7 @@ export default function jumpToRowItem(
       throw new Error(emsg);
     }
 
-    displaySet.SOPInstanceUID = data.SOPInstanceUID;
+    displaySet.SOPInstanceUID = sopInstanceUid;
     if (data.frameIndex) {
       displaySet.frameIndex = data.frameIndex;
     }

@@ -216,6 +216,9 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       measurementNumber,
       itemNumber: measurementNumber,
       toolType,
+      // The tool a report's measurement was drawn with ("cornerstoneTools@^4.0.0:Length"): the
+      // row of a measurement read from a report has the display tool's type
+      trackingIdentifier: MeasurementApi.trackingIdentifierOf(measurement),
       measurementId: _id,
       _measurementServiceId: uid,
       label: getMeasurementText(measurement),
@@ -233,8 +236,8 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       data: getDataForEachMeasurementNumber(measurementNumberList, timepoints, displayFunction),
       seriesTagDisplay: seriesTagDisplay(toolType, measurement, measurementMeta, measurementData),
       // Measurement-service records carry the reference UIDs as referenceStudyUID / referenceSeriesUID
-      refStudyInstanceUID: measurement.StudyInstanceUID || measurement.referenceStudyUID || measurementMeta.StudyInstanceUID,
-      refSeriesInstanceUID: measurement.SeriesInstanceUID || measurement.referenceSeriesUID || measurementMeta.SeriesInstanceUID,
+      refStudyInstanceUID: MeasurementApi.studyInstanceUIDOf(measurement),
+      refSeriesInstanceUID: MeasurementApi.seriesInstanceUIDOf(measurement),
       refSOPInstanceUID: measurement.SOPInstanceUID || measurementMeta.SOPInstanceUID,
     };
 
@@ -444,8 +447,10 @@ function getSaveFunction(serverType) {
 }
 
 
-const mapStateToProps = (state) => {
-  // Map state attributes from Redux store to properties for child components
+const mapStateToProps = (state, ownProps) => {
+  // Map state attributes from Redux store to properties for child components. Taking ownProps
+  // makes the rows be read again when the panel's data version changes (SonadorMeasurementsTable):
+  // the measurement service changes records the store still holds by reference.
 
   const { timepointManager, servers } = state;
   const { timepoints, measurements } = timepointManager;
@@ -463,31 +468,35 @@ const mapStateToProps = (state) => {
 };
 
 
+/** The measurement API record of a panel row, by its tool type and measurement id */
+function measurementRecord(measurementData) {
+  const toolType = MeasurementApi._getToolType(measurementData);
+  const { measurementId } = measurementData;
+  const tool = (MeasurementApi.Instance.tools[toolType] || []).find(measurement => measurement._id === measurementId);
+  if (!tool) {
+    OHIF.log.warn('[MeasurementsPanel] measurement not found for labelling', toolType, measurementId);
+  }
+  return tool;
+}
+
+
 const mapDispatchToProps = (dispatch, ownProps) => {
   // Map Redux dispatch state to properties for child components
 
   return {
 
     
-    dispatchRelabel: (event, measurementData, viewportsState) => {
+    dispatchRelabel: (event, measurementData) => {
       // Dispatch a "relabel" event, which allows the user to change the label and description
-      // of the measurement.
+      // of the measurement. Labelling needs no viewport element, so it works whichever viewport
+      // is active (the MPR view has no classic element).
 
       event.persist();
 
-      const activeViewportIndex = (viewportsState && viewportsState.activeViewportIndex) || 0;
-
-      const enabledElements = cornerstone.getEnabledElements();
-      if (!enabledElements || enabledElements.length <= activeViewportIndex) {
-        OHIF.log.error('Failed to find the enabled element');
+      const tool = measurementRecord(measurementData);
+      if (!tool) {
         return;
       }
-
-      const toolType = MeasurementApi._getToolType(measurementData);
-      const { measurementId } = measurementData;
-      const tool = MeasurementApi.Instance.tools[toolType].find((measurement) => {
-        return measurement._id === measurementId;
-      });
 
       // Clone the tool not to set empty location initially
       const toolForLocation = Object.assign({}, tool, { location: null });
@@ -498,22 +507,14 @@ const mapDispatchToProps = (dispatch, ownProps) => {
     },
 
     
-    dispatchEditDescription: (event, measurementData, viewportsState) => {
+    dispatchEditDescription: (event, measurementData) => {
+      // Edit the measurement's description, whichever viewport is active
       event.persist();
 
-      const activeViewportIndex = (viewportsState && viewportsState.activeViewportIndex) || 0;
-
-      const enabledElements = cornerstone.getEnabledElements();
-      if (!enabledElements || enabledElements.length <= activeViewportIndex) {
-        OHIF.log.error('Failed to find the enabled element');
+      const tool = measurementRecord(measurementData);
+      if (!tool) {
         return;
       }
-
-      const toolType = MeasurementApi._getToolType(measurementData);
-      const { measurementId } = measurementData;
-      const tool = MeasurementApi.Instance.tools[toolType].find((measurement) => {
-        return measurement._id === measurementId;
-      });
 
       if (ownProps.onEditDescription) {
         ownProps.onEditDescription(tool);
@@ -611,11 +612,12 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
   // Merge Properties from state, dispatch, and component into a single set of attributes
   
   const { timepoints, saveFunction, measurementCollection } = propsFromState;
-  const { onSaveComplete, servicesManager } = ownProps;
+  const { onSaveComplete, servicesManager, isOpen } = ownProps;
 
   return {
     server: propsFromState.server,
     servicesManager,
+    isOpen,
     timepoints,
     saveFunction,
     measurementCollection,
@@ -680,3 +682,4 @@ const ConnectedMeasurementTable = connect(mapStateToProps, mapDispatchToProps, m
 
 
 export default ConnectedMeasurementTable;
+export { mapDispatchToProps };

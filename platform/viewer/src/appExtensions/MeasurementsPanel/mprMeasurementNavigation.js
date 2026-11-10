@@ -63,9 +63,7 @@ function seriesOf(measurement) {
   if (!measurement) {
     return undefined;
   }
-  const meta = measurement.metadata || {};
-  const series = measurement.SeriesInstanceUID || meta.SeriesInstanceUID || measurement.referenceSeriesUID
-    || (measurement.measurementData && measurement.measurementData.SeriesInstanceUID);
+  const series = measurementApiClass().seriesInstanceUIDOf(measurement);
   if (series) {
     return series;
   }
