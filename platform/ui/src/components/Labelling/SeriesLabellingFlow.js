@@ -11,7 +11,7 @@ import SelectTree from '../selectTree/SelectTree.js';
 import LabellingFlow from './LabellingFlow.js';
 import LabellingTransition from './LabellingTransition.js';
 import OHIFLabellingData from './OHIFLabellingData.js';
-import { LabellingCloseButton, useEscapeKey } from './labellingDismiss.js';
+import { LabellingCloseButton, useEscapeKey, useModalPointerGuard } from './labellingDismiss.js';
 
 import './LabellingFlow.css';
 
@@ -125,6 +125,9 @@ const SeriesTagLabellingFlow = ({
 
   // Escape closes the group step; once the tags are shown, LabellingFlow handles it
   const inTagStep = tagsLoaded && seriesTags.length > 0;
+  // The flow is modal: the viewports do not receive pointer input while it is open
+  useModalPointerGuard();
+
   useEscapeKey(inTagStep ? null : close);
 
   const onGroupSelected = (evt, group) => {

@@ -53,6 +53,63 @@
     width: auto;
     max-width: calc(100% - 10px);
 
+  // The row controls as the Segmentations panel's rows lay them out (ui-next DataRow at the panel's
+  // 0.3rem spacing): the visibility toggle and a lock slot, each 1.8rem, 0.3rem apart. As there,
+  // the toggle shows while the row is hovered or selected, or while the measurement is hidden; the
+  // lock is in the muted foreground colour
+  .measurementStatus
+    display: flex
+    flex: 0 0 auto
+    align-items: center
+    column-gap: 0.3rem
+    align-self: flex-start
+    // Centred on the first text line (1.5rem), as DataRow centres its icons on its label
+    margin-top: calc((1.5rem - 1.8rem) / 2)
+
+    .annotationVisibilityToggle
+      opacity: 0
+
+  .measurementLockSlot
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    width: 1.8rem
+    height: 1.8rem
+    color: unquote('hsl(var(--muted-foreground))')
+
+    svg
+      width: 1.8rem
+      height: 1.8rem
+      // The lock's body sits low in its viewBox; raised so it reads level with the eye
+      position: relative
+      top: -2px
+
+  // Written in full: the indentation of .item-color above ends the .measurementItem block
+  .measurementItem:hover .measurementStatus .annotationVisibilityToggle,
+  .measurementItem.selected .measurementStatus .annotationVisibilityToggle
+    opacity: 1
+
+  .measurementStatus .annotationVisibilityToggle:focus-visible,
+  .measurementStatus .annotationVisibilityToggle.isHidden
+    opacity: 1
+
+  // The row's text as the Segmentations panel's segment labels (DataRow text-base in the panel
+  // theme): Inter, 1rem on a 1.5rem line
+  .measurementItem .displayTexts,
+  .measurementItem .measurementLabel
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
+    font-size: 1rem
+    line-height: 1.5rem
+    font-weight: 400
+
+  // The value line sits closer to the top of the row than the table list's default 9px
+  .tableListItem.measurementItem .itemContent
+    margin-top: 5px
+
+  // The location and description line is secondary to the value line above it
+  .measurementItem .measurementLabel
+    font-size: 0.9rem
+
   .measurementLabel
     margin-top: 0px;
     padding-left: 4px;
@@ -98,9 +155,6 @@
   align-items: center;
   border-radius: 5px;
 
-.displayIcon
-  margin-right: 8px;
-
 .icons .eye-icon
   margin-left: 100px;
   margin-right: -5px;
@@ -113,7 +167,7 @@
   display: flex;
   align-items: center;
   column-gap: 10px;
-  margin: 0 0 6px 4px;
+  margin: 1px 0 0 4px;
   color: var(--text-secondary-color);
 
   // Matches the thumbnail's series/image indicators

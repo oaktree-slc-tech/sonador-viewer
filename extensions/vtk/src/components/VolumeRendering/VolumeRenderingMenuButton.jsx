@@ -22,13 +22,15 @@ export function VolumeRenderingMenuButton({ viewportId: propViewportId }) {
     servicesManager.services.viewportGridService?.getActiveViewportId?.() ||
     null;
 
+  // The menu is positioned against the button's narrow wrapper: w-max sizes it to its widest row,
+  // so labels stay on one line
   return (
     <AllInOneMenu.IconMenu
       icon="viewport-window-level"
       iconClassName="hover:bg-accent text-primary flex h-8 w-8 cursor-pointer items-center justify-center rounded"
       verticalDirection={AllInOneMenu.VerticalDirection.BottomToTop}
       horizontalDirection={AllInOneMenu.HorizontalDirection.LeftToRight}
-      menuClassName="z-50 min-w-[200px]"
+      menuClassName="z-50 w-max min-w-[200px]"
     >
       <VolumeRenderingPresets
         viewportId={viewportId}

@@ -52,7 +52,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       }
 
       // Determine if the active element is enabled and includes an active image reference
-      const enabledElement = cornerstone.getEnabledElement(element);
+      // (cornerstone throws for an element that is not, or is no longer, enabled)
+      let enabledElement;
+      try {
+        enabledElement = cornerstone.getEnabledElement(element);
+      } catch (error) {
+        enabledElement = undefined;
+      }
       if (!enabledElement || !enabledElement.image) {
         log.warn('[cornerstone:commandsManager:getCornerstoneEnabledElement] no enabled element or no image.',
           enabledElement, (enabledElement || {}).image);
@@ -291,13 +297,21 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
               const promise = measurementApi.storeMeasurements(undefined, {
                 headers: { SeriesNumber, SeriesDescription },
                 observer: { personName },
-                success: () => {
+                success: (result) => {
 
-                  // Resolve save measurements successfully
+                  // A full save, a partial one naming the measurements left out, or none
                   UIDialogService.dismiss({ id: 'saveDicomSeries' });
-                  resolve({ title: 'Measurements saved successfully', message: 'Data persisted to '+activeServer.name, });
+                  resolve(OHIF.DICOMSR.saveResultSummary(result, activeServer.name));
                 }
               });
+
+              // Nothing was stored: the report could not be built or the upload failed
+              if (promise && promise.catch) {
+                promise.catch(error => {
+                  UIDialogService.dismiss({ id: 'saveDicomSeries' });
+                  reject({ title: 'Measurements not saved', message: (error && error.message) || 'The report could not be stored.' });
+                });
+              }
             },
             onCancel: () => {
               UIDialogService.dismiss({ id: 'saveDicomSeries' });
@@ -392,10 +406,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       log.debug('[cornerstone:commandsManager:clearAnnotations] annotation count (pre-clear)',
         OHIF.measurements.MeasurementApi.Instance.measurementsCount());
 
-      // Retrieve currently active element
-      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
+      // Retrieve currently active element: there is none while another kind of viewport (MPR, 3D
+      // volume, segmentation editor) is active, and the session is cleared all the same
+      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports }) || {};
       if (!enabledElement || !enabledElement.image) {
-        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image.');
+        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image. '
+          + 'Clear service measurements and return.');
+        OHIF.measurements.MeasurementApi.Instance.clearMeasurements();
         return;
       }
 
@@ -836,20 +853,25 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       storeContexts:  ['viewports', 'servers'],
       options: {},
     },
+    // The measurement session's commands work whichever viewport is active (classic, MPR, 3D volume,
+    // segmentation editor): the VIEWER context is always active
     clearAnnotations: {
       commandFn: actions.clearAnnotations,
       storeContexts: ['viewports'],
       options: {},
+      context: 'VIEWER',
     },
     reloadAnnotations: {
       commandFn: actions.reloadAnnotations,
       storeContexts: ['viewports', 'servers'],
       options: {},
+      context: 'VIEWER',
     },
     saveMeasurements: {
       commandFn: actions.saveMeasurements,
       storeContexts: ['viewports', 'servers'],
       options: { seriesNumber: 42 },
+      context: 'VIEWER',
     },
     reloadStudy: {
       commandFn: actions.reloadStudy,

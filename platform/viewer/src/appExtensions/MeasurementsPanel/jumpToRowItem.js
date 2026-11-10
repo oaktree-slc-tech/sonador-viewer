@@ -1,9 +1,7 @@
 import _ from 'lodash';
 
 import { measurements, utils } from '@ohif/core';
-import { extractStudyIdFromURL } from '@ohif/core/src/utils/extractStudyIdFromURL';
 
-import { servicesManager } from '../../App';
 const { MeasurementApi } = measurements;
 const { studyMetadataManager } = utils;
 
@@ -29,17 +27,7 @@ export default function jumpToRowItem(
   const activeViewportIndex = viewportsState.activeViewportIndex;
   const activeViewport = viewports[activeViewportIndex];
   if (activeViewport.vtk) {
-    const error = new Error('Measurements are not supported by the MPR mode.');
-    const { LoggerService } = servicesManager.services;
-
-    // One call: console, unified Issues list, and a toast (ohif-viewers#84).
-    LoggerService.error({
-      error,
-      title: 'Measurements panel',
-      message: error.message,
-      notify: true,
-      studyInstanceUID: extractStudyIdFromURL(),
-    });
+    // The MPR view navigates in its own panes (mprMeasurementNavigation.js); nothing changes here
     return {
       viewportSpecificData: [],
       layout: [], // TODO: if we need to change layout, we should return this here

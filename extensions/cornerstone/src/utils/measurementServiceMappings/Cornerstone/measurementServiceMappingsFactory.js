@@ -10,6 +10,7 @@ import {
   SUPPORTED_TOOLS, 
 } from './common.js';
 import { Length as LengthMapping } from './Length'
+import { Angle as AngleMapping, CobbAngle as CobbAngleMapping } from './Angle';
 import { DICOMSRSeriesTagTool as DICOMSRSeriesTagToolMapping } from './DICOMSRSeriesTagTool';
 
 
@@ -24,6 +25,14 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
   const commonToMeasurement = csToolsAnnotation => {
     return measurementServiceMappingTools.commonToMeasurement(measurementService, csToolsAnnotation);
   }
+
+  const angleFactory = mapping => _.extend(_.pick(mapping, 'toolName', 'cleanAnnotation'), {
+    toAnnotation: (measurement, definition) => mapping.toAnnotation(measurementService, measurement, definition),
+    toMeasurement: csToolsAnnotation => mapping.toMeasurement(measurementService, csToolsAnnotation),
+    toAltSourceMeasurementSchema: (dstSrc, measurement, src) =>
+      mapping.toAltSourceMeasurementSchema(measurementService, dstSrc, measurement, src),
+    matchingCriteria: { valueType: measurementService.VALUE_TYPES.ANGLE },
+  });
 
   const factories = {
     
@@ -42,6 +51,8 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
         points: 2,
       }
     }),
+    Angle: angleFactory(AngleMapping),
+    CobbAngle: angleFactory(CobbAngleMapping),
     ArrowAnnotateTool: {
       toolName: 'ArrowAnnotate',
       toAnnotation: commonToAnnotation,

@@ -6,6 +6,9 @@ import ohifDisplay from '../display';
 import findMostRecentStructuredReport from './Cornerstone3d/utils/findMostRecentStructuredReport';
 import findStructuredReports from './Cornerstone3d/utils/findStructuredReports';
 import { retrieveMeasurementFromSR, stowSRFromMeasurements } from './handleStructuredReport';
+import measurements from '../measurements';
+import { lockSavedMeasurements, saveResultSummary } from './utils/saveResult';
+import { currentSession } from './utils/srDocument';
 
 
 const retrieveMeasurements = async (server, external = {}) => {
@@ -65,7 +68,7 @@ const storeMeasurements = async (measurementData, filter, server, options) => {
   * @param {Object} measurementData - OHIF measurementData object
   * @param {Object} filter
   * @param {serverType} server
-  * @returns {Object} With message to be displayed on success
+  * @returns {Object} { title, message, type, omitted } of the completed save (utils/saveResult.js)
   */
   log.info('[DICOMSR] storeMeasurements');
 
@@ -80,14 +83,20 @@ const storeMeasurements = async (measurementData, filter, server, options) => {
   const StudyInstanceUID = firstMeasurement && firstMeasurement.StudyInstanceUID;
 
   try {
-    await stowSRFromMeasurements(measurementData, serverUrl, options);
-    if (StudyInstanceUID) {
+    const stored = await stowSRFromMeasurements(measurementData, serverUrl, options) || {};
+    if (StudyInstanceUID && stored.uploaded !== false) {
       studies.deleteStudyMetadataPromise(StudyInstanceUID);
     }
 
-    return {
-      message: 'Measurements saved successfully',
-    };
+    // The measurements the stored report holds, as written, are saved measurements now
+    if (stored.uploaded) {
+      const api = measurements.MeasurementApi && measurements.MeasurementApi.Instance;
+      lockSavedMeasurements(api && api.measurementService, stored.written, { session: currentSession() });
+    }
+
+    // Reported once the report is stored (or, when every measurement was left out, not uploaded):
+    // a full save, a partial one, or none
+    return saveResultSummary({ omitted: stored.omitted, saved: stored.saved }, server.name);
   } catch (error) {
 
     // Create error message

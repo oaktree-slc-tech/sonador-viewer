@@ -32,6 +32,7 @@ import NotFound from '../pages/NotFound/NotFound';
 import { servicesManager, commandsManager } from '../App';
 
 import Viewer from './Viewer';
+import reloadStudyAndMeasurements from './studyReload';
 
 const { DicomMetadataStore, measurements, io } = OHIF;
 const { displaySetService, customizationService, segmentationService } = servicesManager.services;
@@ -608,11 +609,8 @@ function ViewerRetrieveStudyData({
 
         if (apiEvent && apiEvent == OHIF.display.Enums.EVENTS.STUDY_RELOAD) {
           
-          // Clear measurements/annotations and force-reload study data
-          commandsManager.runCommand('clearAnnotations')
-            && measurementApi.clearMeasurements()
-            && measurementApi.measurementService.clearMeasurements();
-          reloadStudyData();
+          // Clear measurements/annotations and force-reload study data (studyReload.js)
+          reloadStudyAndMeasurements({ commandsManager, measurementApi, reloadStudyData, log });
           
         } else if (apiEvent && apiEvent == OHIF.display.Enums.EVENTS.VIEWER_RENDER) {
 
@@ -621,14 +619,11 @@ function ViewerRetrieveStudyData({
           
         } else if (apiEvent && apiEvent == OHIF.display.Enums.EVENTS.DCM_LOCAL_CREATE) {
 
-          // Reload measurements after local DICOM-SR file created
+          // Show a DICOM-SR file created locally. The session's measurements are kept: the report
+          // is not stored until its upload succeeds, a partial save leaves measurements out, and the
+          // ones it stores are locked once it is (DICOMSR utils/saveResult.js). Its measurements are
+          // already in the session, so its load adds only what is new.
           if (apiData.dcm) {
-
-            // Clear annotations
-            commandsManager.runCommand('clearAnnotations')
-              && measurementApi.clearMeasurements() 
-              && measurementApi.measurementService.clearMeasurements();
-            
             setTimeout(async () => {
 
               // Add local DICOM series

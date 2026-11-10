@@ -141,14 +141,18 @@ import { VolumeShade } from './components/VolumeRendering/VolumeShade';
 import ViewportGridOverlayTool from './components/tools/ViewportGridOverlayTool';
 import SonadorZoomTool from './components/tools/SonadorZoomTool';
 import SonadorTrackballRotateTool from './components/tools/SonadorTrackballRotateTool';
-import DICOMSRDisplayTool, { addSRDisplayToolToGroup } from './components/tools/DICOMSRDisplayTool';
+import DICOMSRDisplayTool, { addSRDisplayToolToGroup, setSRDisplayToolEnabled } from './components/tools/DICOMSRDisplayTool';
+import AngleDisplay3DTool, {
+  addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
+} from './components/tools/AngleDisplay3DTool';
 
 import Enums from './enums';
 
 
 const cornerstone3dViewportTools = {
   ViewportGridOverlayTool, SonadorZoomTool, SonadorTrackballRotateTool, getCornerstone3dViewport, removeVolumeActors,
-  DICOMSRDisplayTool, addSRDisplayToolToGroup,
+  DICOMSRDisplayTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled,
+  AngleDisplay3DTool, addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
 }
 
 

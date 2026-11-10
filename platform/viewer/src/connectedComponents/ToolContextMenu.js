@@ -5,7 +5,7 @@ import { ContextMenu } from '@ohif/ui';
 
 import { commandsManager } from '../App';
 
-const toolTypes = ['Angle', 'Bidirectional', 'Length', 'FreehandMouse', 'EllipticalRoi', 'CircleRoi', 'RectangleRoi'];
+const toolTypes = ['Angle', 'CobbAngle', 'Bidirectional', 'Length', 'FreehandMouse', 'EllipticalRoi', 'CircleRoi', 'RectangleRoi'];
 
 const ToolContextMenu = ({ onSetLabel, onSetDescription, isTouchEvent = false, eventData, onClose, onDelete }) => {
   const defaultDropdownItems = [

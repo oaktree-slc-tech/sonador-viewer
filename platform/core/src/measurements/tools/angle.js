@@ -1,10 +1,4 @@
-const displayFunction = (data) => {
-  let text = '';
-  if (data.rAngle && !isNaN(data.rAngle)) {
-    text = data.rAngle.toFixed(2) + String.fromCharCode(parseInt('00B0', 16));
-  }
-  return text;
-};
+import displayFunction from './angleDisplay';
 
 export const angle = {
   id: 'Angle',

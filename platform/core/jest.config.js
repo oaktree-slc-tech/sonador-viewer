@@ -12,7 +12,8 @@ module.exports = {
     '^.+\\.(js|ts|tsx)$': 'babel-jest',
   },
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
-  transformIgnorePatterns: ['/node_modules/(?!@cornerstonejs/dicom-image-loader/)'],
+  // The DICOM-SR tests load the Cornerstone3D adapters from their ESM build
+  transformIgnorePatterns: ['/node_modules/(?!@cornerstonejs/(dicom-image-loader|adapters)/)'],
   moduleNameMapper: {
     ...base.moduleNameMapper,
     '^@cornerstonejs/dicom-image-loader/xhrRequest$':

@@ -1,13 +1,14 @@
 // DICOM-SR encoding of display attributes, kept apart from the extended meta attributes
 // (dcmsrExtendedMeta.js): they describe how a measurement is rendered, not what it records.
 //
-// The colours are properties of the Finding and are written as its children, in the form of the
-// document class:
-// * nested (Comprehensive 3D SR, the default): the Finding HAS PROPERTIES a display attributes
+// The colours are properties of the measurement and are written as children of its property
+// parent (propertyParent.js: the NUM item for Angle and Cobb angle, the Finding otherwise), in the
+// form of the document class:
+// * nested (Comprehensive 3D SR, the default): the parent HAS PROPERTIES a display attributes
 //   CONTAINER, which CONTAINS a `Color` CONTAINER with one TEXT item per color role;
-// * flat (Enhanced SR, which permits no CONTAINER under a CODE item): the role TEXT items are
-//   HAS PROPERTIES children of the Finding, named by their dotted concept names.
-// A group with no Finding keeps the group-level CONTAINS container. Readers accept all three
+// * flat (Enhanced SR, which permits no CONTAINER under a CODE or NUM item): the role TEXT items
+//   are HAS PROPERTIES children of the parent, named by their dotted concept names.
+// A group with no parent item keeps the group-level CONTAINS container. Readers accept all three
 // layouts, including the group-level container of files written before the colours moved.
 // Values are DICOM CIELab triples (`L\a\b`), since SR content items cannot carry
 // RecommendedDisplayCIELabValue. Codes are built by codedConcept.js, which selects the value
@@ -24,8 +25,9 @@ import {
   hexToDicomLab,
 } from '../../displayAttributes';
 import { MeasurementApi } from '../../measurements/classes';
-import { DISPLAY_LAYOUT, RelationshipType, SonadorCodeValues } from '../enums';
+import { DISPLAY_LAYOUT, PROPERTY_PARENT, RelationshipType, SonadorCodeValues } from '../enums';
 import { asArray, codedConcept, conceptNameValue, findingItemOf } from './codedConcept';
+import { numItemsOf, propertyCarrier } from './propertyParent';
 
 const { ContainerContentItem, TextContentItem } = dcmjsSr.valueTypes;
 const { DCMSR_DISPLAY_ATTRIBUTES, DCMSR_DISPLAY_COLOR, DCMSR_DISPLAY_COLOR_ROLES } = SonadorCodeValues;
@@ -42,9 +44,12 @@ function measurementDisplayAttributes(measurement) {
 
 function encodeDisplayAttributes(measurement, srItem, options) {
   // @input options.layout ('nested' | 'flat', default 'nested'): form of the colours under the
-  //   Finding, chosen by the class of the document being written
+  //   parent, chosen by the class of the document being written
+  // @input options.propertyParent ('finding' | 'num', default 'finding'): item the colours are
+  //   written under (propertyParent.js)
   const layout = (options && options.layout) || DISPLAY_LAYOUT.NESTED;
-  const finding = findingItemOf(srItem);
+  const { item: carrier, nested } = propertyCarrier(srItem, options && options.propertyParent);
+  const parentItem = nested ? carrier : undefined;
   const color = getDisplayColor({ displayAttributes: measurementDisplayAttributes(measurement) });
   const roles = DISPLAY_COLOR_ROLES.filter(role => color[role]);
   if (!roles.length) {
@@ -58,7 +63,7 @@ function encodeDisplayAttributes(measurement, srItem, options) {
   }));
 
   let items;
-  if (finding && layout === DISPLAY_LAYOUT.FLAT) {
+  if (parentItem && layout === DISPLAY_LAYOUT.FLAT) {
     items = colorItems(RelationshipType.HAS_PROPERTIES);
   } else {
     const colorContainer = new ContainerContentItem({
@@ -69,13 +74,13 @@ function encodeDisplayAttributes(measurement, srItem, options) {
 
     const displayContainer = new ContainerContentItem({
       name: codedConcept(DCMSR_DISPLAY_ATTRIBUTES),
-      relationshipType: finding ? RelationshipType.HAS_PROPERTIES : RelationshipType.CONTAINS,
+      relationshipType: parentItem ? RelationshipType.HAS_PROPERTIES : RelationshipType.CONTAINS,
     });
     displayContainer.ContentSequence = [colorContainer];
     items = [displayContainer];
   }
 
-  const parent = finding || srItem;
+  const parent = parentItem || srItem;
   parent.ContentSequence = [...asArray(parent.ContentSequence), ...items];
   return srItem;
 }
@@ -87,14 +92,21 @@ function parseDisplayAttributes(srItem, annotation, options) {
   options = options || {};
   _.defaults(options, { path: 'annotation.data.displayAttributes' });
 
-  // Nested under the Finding, flat under the Finding, or the group-level container (legacy)
+  // Nested or flat under the property parent (the NUM item first, for the NUM parent), then under
+  // the Finding, or the group-level container (legacy)
   const groupItems = asArray(_.isArray(srItem) ? srItem : srItem && srItem.ContentSequence);
-  const finding = findingItemOf({ ContentSequence: groupItems });
-  const findingItems = asArray(finding && finding.ContentSequence);
-  const displayContainer = findContentItem(findingItems, DCMSR_DISPLAY_ATTRIBUTES)
+  const group = { ContentSequence: groupItems };
+  const finding = findingItemOf(group);
+  const hasColours = items => !!findContentItem(items, DCMSR_DISPLAY_ATTRIBUTES)
+    || DISPLAY_COLOR_ROLES.some(role => findContentItem(items, DCMSR_DISPLAY_COLOR_ROLES[role]));
+  const numItems = options.propertyParent === PROPERTY_PARENT.NUM
+    ? asArray((numItemsOf(group).find(num => hasColours(asArray(num.ContentSequence))) || {}).ContentSequence)
+    : [];
+  const parentItems = numItems.length ? numItems : asArray(finding && finding.ContentSequence);
+  const displayContainer = findContentItem(parentItems, DCMSR_DISPLAY_ATTRIBUTES)
     || findContentItem(groupItems, DCMSR_DISPLAY_ATTRIBUTES);
   const colorContainer = displayContainer && findContentItem(displayContainer.ContentSequence, DCMSR_DISPLAY_COLOR);
-  const roleItems = colorContainer ? colorContainer.ContentSequence : findingItems;
+  const roleItems = colorContainer ? colorContainer.ContentSequence : parentItems;
   if (!colorContainer && !DISPLAY_COLOR_ROLES.some(role => findContentItem(roleItems, DCMSR_DISPLAY_COLOR_ROLES[role]))) {
     return annotation;
   }

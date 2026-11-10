@@ -78,6 +78,7 @@ function DisplaySetAttributeActiveToolbarButton({
       icon={icon}
       onClick={(evt) => toolbarClickCallback(button, evt)}
       isActive={isActive}
+      isToggle
     />
   );
 }

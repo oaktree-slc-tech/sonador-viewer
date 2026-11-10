@@ -2,6 +2,7 @@ import { CodeNameCodeSequenceValues } from '../../enums';
 import { parseExtendedMeta } from '../../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../../utils/dcmsrDisplayAttributes';
 import { conceptNameValue } from '../../utils/codedConcept';
+import { displayCoordsOf } from '../../utils/angleGeometry';
 
 import getSequenceAsArray from './getSequenceAsArray';
 import processMeasurement from './processMeasurement';
@@ -37,8 +38,12 @@ const getMeasurements = (ImagingMeasurementReportContentSequence) => {
       parseExtendedMeta(MeasurementGroup, measurement, {
         textPath: 'metadata.text',
         locationPath: 'metadata.location',
+        viewsPath: 'metadata.views',
       });
       parseDisplayAttributes(MeasurementGroup, measurement, { path: 'displayAttributes' });
+
+      // Drawn by the read-only display as the report holds it (a Cobb angle as its two lines)
+      measurement.coords = displayCoordsOf(measurement.TrackingIdentifier, measurement.coords);
 
       measurements.push(measurement);
     }

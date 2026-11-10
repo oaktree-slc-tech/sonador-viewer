@@ -122,6 +122,10 @@ const configuration = {
   ...measurementApiDefaultConfig,
 };
 
+// Annotations shown in the views that are neither measurements nor API representations (the
+// Cornerstone3D views' session-only annotations), each source as { visibilities(), setVisibility(visible) }
+const annotationVisibilitySources = new Set();
+
 
 export default class MeasurementApi {
   // Sonador Viewer MeasurementApi. 
@@ -157,6 +161,20 @@ export default class MeasurementApi {
    */
   static setConfiguration(config) {
     Object.assign(configuration, config);
+  }
+
+  /**
+   * Register annotations the global visibility also covers: annotations drawn in the views that
+   * are neither measurements nor representations the API holds.
+   *
+   * @param {object} source
+   * @param {Function} source.visibilities - returns the visibility (boolean) of each annotation
+   * @param {Function} source.setVisibility - shows or hides them all
+   * @returns {Function} unregisters the source
+   */
+  static addAnnotationVisibilitySource(source) {
+    annotationVisibilitySources.add(source);
+    return () => annotationVisibilitySources.delete(source);
   }
 
   static getConfiguration() {
@@ -215,9 +233,11 @@ export default class MeasurementApi {
     const { toolState: globalToolState } = cornerstoneTools.globalImageIdSpecificToolStateManager;
     const { uid, _id } = MeasurementApi._unpackMeasurementData(measurementRep);
 
-    // Locate element to remove based on tool state
-    const imageIdToolState = globalToolState[imageId];
-    const { data: globalToolData } = imageIdToolState[toolType];
+    // Locate element to remove based on tool state. The image may have no tool state: a
+    // representation whose series has left the study (removed, or the study reloaded) resolves its
+    // image path to an image id that was never drawn on.
+    const imageIdToolState = globalToolState && imageId ? globalToolState[imageId] : undefined;
+    const { data: globalToolData } = (imageIdToolState && imageIdToolState[toolType]) || {};
 
     if (!globalToolData || !globalToolData.length) {
       log.warn('[measurementAPI:purgeToolData] no tool data registered with global state for toolType='+toolType);
@@ -1084,6 +1104,48 @@ export default class MeasurementApi {
       this.syncMeasurementsAndToolData(
         this.updateMeasurement(measurement.toolType, measurement));
     }
+  }
+
+  setAllMeasurementsVisibility(visibility) {
+    // Show or hide every measurement, in every view: those of the measurement service (which
+    // holds the global state), the read-only representations only the API holds, and the
+    // registered session-only annotations. Each measurement is updated as its own visibility
+    // toggle updates it; the store is told, so controls that follow the state update when only
+    // session-only annotations changed.
+
+    this.measurementService.setMeasurementsVisibility(visibility);
+    _.each(this.tools, (collection) => {
+      collection.slice().forEach((representation) => {
+        const { uid, _id } = MeasurementApi._unpackMeasurementData(representation);
+        if ((uid && this.measurementService.getMeasurement(uid)) || !_id) {
+          return;
+        }
+        this.toggleVisibilityMeasurement(_id, visibility);
+      });
+    });
+    if (annotationVisibilitySources.size) {
+      annotationVisibilitySources.forEach(source => source.setVisibility(visibility));
+      this.onMeasurementsUpdated();
+    }
+  }
+
+  areAllMeasurementsHidden() {
+    // Whether there are annotations and every one is hidden: the measurements of the measurement
+    // service, the read-only representations only the API holds (as the Measurements panel lists
+    // them) and the registered session-only annotations
+
+    const visibility = [...this.measurementService.getMeasurements()].map(m => m.isVisible);
+    _.each(this.tools, (collection) => {
+      collection.forEach((representation) => {
+        const { uid, _id } = MeasurementApi._unpackMeasurementData(representation);
+        if ((uid && this.measurementService.getMeasurement(uid)) || !_id) {
+          return;
+        }
+        visibility.push(MeasurementApi._unpackMeasurementLifecycleAttrs(representation).isVisible);
+      });
+    });
+    annotationVisibilitySources.forEach(source => visibility.push(...source.visibilities()));
+    return visibility.length > 0 && visibility.every(isVisible => isVisible === false);
   }
 
   measurementsCount(filter, options) {

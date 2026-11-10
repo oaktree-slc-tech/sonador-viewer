@@ -143,14 +143,17 @@ export const SegmentationTableConfig: React.FC<{ children?: React.ReactNode }> =
 
 
       {showInactiveSegmentationControls && (<>
-        <div className="border-input w-full border"></div>
+        {/* The rule sits apart from the Border control above and the toggle below */}
+        <div className="pb-4 pt-2">
+          <div className="border-input w-full border"></div>
+        </div>
         
-        <div className="my-2 flex items-center pl-1">
+        <div className="my-2 flex items-center pl-0.5">
           <Switch
             checked={renderInactiveSegmentations}
             onCheckedChange={toggleRenderInactiveSegmentations}
           />
-          <Label className="text-muted-foreground mx-2 text-xs">
+          <Label className="text-muted-foreground ml-2.5 mr-2 text-xs">
             {t('Display inactive segmentations')}
           </Label>
         </div>

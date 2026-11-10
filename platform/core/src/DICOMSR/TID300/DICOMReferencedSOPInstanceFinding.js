@@ -5,6 +5,7 @@ import { utilities } from "dcmjs";
 
 import { Enums as SREnums } from '../enums';
 import { codedConcept, codeValueOf, firstItem } from '../utils/codedConcept';
+import { keepTrackingUID } from './trackingGroups';
 
 const { TID300Measurement } = utilities.TID300;
 
@@ -17,14 +18,7 @@ export default class DICOMReferencedSOPInstanceFinding extends TID300Measurement
 
   getTrackingGroups() {
     // A finding read from an SR keeps its tracking UID when re-saved (dcmjs mints a new one)
-    const trackingGroups = super.getTrackingGroups();
-    const { trackingUniqueIdentifier } = this.props;
-    if (trackingUniqueIdentifier) {
-      trackingGroups.filter(item => item.ValueType === 'UIDREF').forEach(item => {
-        item.UID = trackingUniqueIdentifier;
-      });
-    }
-    return trackingGroups;
+    return keepTrackingUID(super.getTrackingGroups(), this.props.trackingUniqueIdentifier);
   }
 
   contentItem() {

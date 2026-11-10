@@ -9,6 +9,16 @@ import {
   PanTool as C3dPanTool,
   StackScrollTool as C3dStackScrollTool,
   TrackballRotateTool as C3dTrackballRotateTool,
+  LengthTool as C3dLengthTool,
+  ArrowAnnotateTool as C3dArrowAnnotateTool,
+  AngleTool as C3dAngleTool,
+  CobbAngleTool as C3dCobbAngleTool,
+  BidirectionalTool as C3dBidirectionalTool,
+  EllipticalROITool as C3dEllipticalROITool,
+  RectangleROITool as C3dRectangleROITool,
+  PlanarFreehandROITool as C3dPlanarFreehandROITool,
+  ProbeTool as C3dProbeTool,
+  state as c3dToolsState,
   Enums as c3dToolsEnums,
   addTool as c3dAddTool,
 
@@ -28,11 +38,24 @@ import { utils as cextUtils } from '@ohif/extension-cornerstone';
 
 import setMPRLayout from './utils/setMPRLayout.js';
 import { getCornerstone3dViewport } from './utils/cornerstone3d.js';
+import jumpToWorldPoint, {
+  ALIGN_LIMIT_DEGREES, alignToPlane, DRAWN_ALIGNMENT, planeAlignment,
+} from './utils/jumpToWorldPoint.js';
 
 import { Enums as vtkEnums } from './enums';
 import { addSRDisplayToolToGroup } from './components/tools/DICOMSRDisplayTool';
 
 const { DisplaySetApi } = OHIF.display;
+
+
+// The measurement tools of the MPR panes, every type the viewer's Cornerstone3D views offer (the 3D
+// Inspector's): the saved ones, mirrored from their classic measurements (extensions/cornerstone
+// measurementAnnotationSync), and the session-only ones. Passive: an annotation is drawn in the
+// pane parallel to its plane, and a pending one can be edited there; a saved one stays locked.
+const MPR_MEASUREMENT_TOOLS = [
+  C3dLengthTool, C3dArrowAnnotateTool, C3dAngleTool, C3dCobbAngleTool,
+  C3dBidirectionalTool, C3dEllipticalROITool, C3dRectangleROITool, C3dPlanarFreehandROITool, C3dProbeTool,
+];
 
 
 const commandsModule = ({ commandsManager, servicesManager }) => {
@@ -63,6 +86,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     c3dAddTool(C3dPanTool);
     c3dAddTool(C3dStackScrollTool);
     c3dAddTool(C3dTrackballRotateTool);
+
+    // Measurement tools, for the measurements' annotations. Angle and Cobb angle are the
+    // exchange-value tools registered under the stock names when the cornerstone extension starts;
+    // a tool is registered once.
+    MPR_MEASUREMENT_TOOLS.filter(tool => !c3dToolsState.tools[tool.toolName]).forEach(tool => c3dAddTool(tool));
   }
   
   
@@ -99,6 +127,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         mprTools.addTool(C3dWindowLevelTool.toolName);
         mprTools.addTool(C3dPanTool.toolName);
         mprTools.addTool(C3dStackScrollTool.toolName);
+        MPR_MEASUREMENT_TOOLS.forEach(tool => {
+          mprTools.addTool(tool.toolName);
+          mprTools.setToolPassive(tool.toolName);
+        });
 
         // Read-only DICOM-SR measurements
         addSRDisplayToolToGroup(mprTools);
@@ -320,6 +352,32 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         toolGroupId, toolMode: vtkEnums.MPR.TOOLS.VTK_MPRSLICE_TOOL_LEVEL,
         displaySetInstanceUID: displaySet.displaySetInstanceUID,
       });
+    },
+
+    jumpToMprWorldPoint: ({ worldPoint, viewPlaneNormal, renderId = vtkEnums.MPR.VTK_MPRSLICE_RENDER_ID }) => {
+      // Bring a world point into view in every pane of the MPR view (utils/jumpToWorldPoint.js).
+      // With the normal of the measurement's plane, the pane closest to that plane is first turned
+      // onto it, so the measurement is drawn there. A measurement whose plane is more than
+      // ALIGN_LIMIT_DEGREES from every pane cannot be drawn in any: the panes are left as they are.
+      // Returns { panes, drawn, limitDegrees }: the number of panes, and whether a pane is parallel
+      // to the measurement's plane (true without a normal).
+
+      const renderEngine = c3dGetRenderingEngine(renderId);
+      const panes = renderEngine ? renderEngine.getViewports() : [];
+      const result = { panes: panes.length, drawn: panes.length > 0, limitDegrees: ALIGN_LIMIT_DEGREES };
+      if (viewPlaneNormal && panes.length) {
+        const closest = panes.reduce((best, viewport) =>
+          (planeAlignment(viewport, viewPlaneNormal) > planeAlignment(best, viewPlaneNormal) ? viewport : best));
+        alignToPlane(closest, viewPlaneNormal);
+        if (planeAlignment(closest, viewPlaneNormal) < DRAWN_ALIGNMENT) {
+          return { ...result, drawn: false };
+        }
+      }
+      panes.forEach(viewport => jumpToWorldPoint(viewport, worldPoint));
+      if (panes.length) {
+        renderEngine.render();
+      }
+      return result;
     },
 
     mpr2d: async ({ viewports }) => {
@@ -550,6 +608,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       commandFn: actions.clearMprImageSync,
       options: {},
       context: vtkEnums.VIEWPORT,
+    },
+    jumpToMprWorldPoint: {
+      commandFn: actions.jumpToMprWorldPoint,
+      options: {},
     },
     mpr2d: {
       commandFn: actions.mpr2d,

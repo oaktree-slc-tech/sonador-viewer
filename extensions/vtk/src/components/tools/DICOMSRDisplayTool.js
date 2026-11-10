@@ -235,5 +235,19 @@ function addSRDisplayToolToGroup(toolGroup) {
 }
 
 
+/** Show (enabled: drawn, no input) or hide (disabled) the read-only SR display of a tool group */
+function setSRDisplayToolEnabled(toolGroup, enabled) {
+  const { toolName } = DICOMSRDisplayTool;
+  if (!toolGroup || !toolGroup.hasTool(toolName)) {
+    return;
+  }
+  if (enabled) {
+    toolGroup.setToolEnabled(toolName);
+  } else {
+    toolGroup.setToolDisabled(toolName);
+  }
+}
+
+
 export default DICOMSRDisplayTool;
-export { DICOMSRDisplayTool, addSRDisplayToolToGroup };
+export { DICOMSRDisplayTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled };

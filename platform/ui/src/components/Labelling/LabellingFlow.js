@@ -8,7 +8,7 @@ import SelectTree from '../selectTree/SelectTree.js';
 
 import EditDescriptionDialog from '../EditDescriptionDialog/EditDescriptionDialog.js';
 import LabellingTransition from './LabellingTransition.js';
-import { LabellingCloseButton, useEscapeKey } from './labellingDismiss.js';
+import { LabellingCloseButton, useEscapeKey, useModalPointerGuard } from './labellingDismiss.js';
 import OHIFLabellingData from './OHIFLabellingData.js';
 
 import './LabellingFlow.css';
@@ -204,6 +204,9 @@ const LabellingFlow = ({
 
   // Closing (close button, Escape, check) removes the flow at once, without the exit fade
   const close = () => labellingDoneCallback();
+
+  // The flow is modal: the viewports do not receive pointer input while it is open
+  useModalPointerGuard();
 
   useEscapeKey(() => {
     if (editDescriptionOnDialog) {

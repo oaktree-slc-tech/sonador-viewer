@@ -130,6 +130,21 @@ describe('crop Adjust toolbar button', () => {
     expect(control().querySelector('svg').dataset.icon).toBe('dot-circle');
   });
 
+  it('is one control: one tab stop and one button, whose inner toolbar button is presentational', () => {
+    const { control } = render(CROP_ADJUST.ACTIVE);
+    const root = control().parentElement;
+
+    expect(root.querySelectorAll('[tabindex]')).toHaveLength(1);
+    expect(root.querySelectorAll('[role="button"]')).toHaveLength(1);
+    expect(control().querySelector('.toolbar-button').hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('activates once per click on the inner toolbar button', () => {
+    const { control, onClick } = render(CROP_ADJUST.PAUSED);
+    act(() => control().querySelector('.toolbar-button').click());
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it('activates on Enter keydown and Space keyup, once per press', () => {
     const { control, onClick } = render(CROP_ADJUST.PAUSED);
     act(() => control().focus());

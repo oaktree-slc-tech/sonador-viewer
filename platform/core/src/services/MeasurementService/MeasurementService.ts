@@ -871,6 +871,20 @@ class MeasurementService extends PubSubService {
     return measurementUIDs.forEach(uid => this.toggleVisibilityMeasurement(uid, visibility));
   }
 
+  /**
+   * Show or hide every measurement: the global annotation visibility. Each measurement whose
+   * visibility changes is updated as a single toggle updates it (MEASUREMENT_UPDATED), so every
+   * view that draws it follows.
+   */
+  public setMeasurementsVisibility(visibility: boolean): void {
+    this.toggleVisibilityMeasurementMany([...this.measurements.keys()], visibility);
+  }
+
+  /** Whether every measurement is shown (true when there are none) */
+  public areAllMeasurementsVisible(): boolean {
+    return [...this.measurements.values()].every(measurement => measurement.isVisible !== false);
+  }
+
   public updateColorMeasurement(measurementUID: string, color: number[]): void {
     const measurement = this.measurements.get(measurementUID);
 

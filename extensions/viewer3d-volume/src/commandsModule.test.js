@@ -22,9 +22,14 @@ jest.mock('@cornerstonejs/tools', () => {
 
 const displaySets = {};
 const dispatchSignal = { fn: null };
+const mockMeasurements = { api: null, refresh: jest.fn() };
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: {
+    measurements: {
+      MeasurementApi: { get Instance() { return mockMeasurements.api; } },
+      refreshCornerstoneViewports: (...args) => mockMeasurements.refresh(...args),
+    },
     display: {
       DisplaySetApi: {
         Instance: {
@@ -39,9 +44,19 @@ jest.mock('@ohif/core', () => ({
   },
 }), { virtual: true });
 
+const mockAngleDisplay = { add: jest.fn(), set: jest.fn() };
+const mockSRDisplay = { set: jest.fn() };
 jest.mock('@ohif/extension-vtk', () => ({
-  createViewportToggleFeatureCommand: () => jest.fn(),
-  cornerstone3dUtils: { viewportTools: { SonadorZoomTool: { toolName: 'SonadorZoom' } } },
+  createViewportToggleFeatureCommand: property => jest.fn(() => property),
+  cornerstone3dUtils: {
+    viewportTools: {
+      SonadorZoomTool: { toolName: 'SonadorZoom' },
+      addSRDisplayToolToGroup: jest.fn(),
+      setSRDisplayToolEnabled: (...args) => mockSRDisplay.set(...args),
+      addAngleDisplay3DToolToGroup: (...args) => mockAngleDisplay.add(...args),
+      setAngleDisplay3DEnabled: (...args) => mockAngleDisplay.set(...args),
+    },
+  },
 }), { virtual: true });
 
 jest.mock('./utils/setCTVolumeLayout.js', () => jest.fn());
@@ -227,5 +242,56 @@ describe('crop Adjust control', () => {
     expect(ds.volumeCropAdjustState).toBe(CROP_ADJUST.OFF);
     expect(ds.volumeViewerToolMode).toBe(TOOLS.VOLVIEWER_TOOL_DEFAULT);
     expect(bindings[PRIMARY]).toBeUndefined();
+  });
+});
+
+
+
+describe('annotations in the volume viewer (View -> Annotations)', () => {
+  const definitionsOf = () => commandsModule({ commandsManager: {}, servicesManager: { services: {} } }).definitions;
+  beforeEach(() => {
+    mockAngleDisplay.add.mockClear();
+    mockAngleDisplay.set.mockClear();
+    mockSRDisplay.set.mockClear();
+  });
+
+  it('hides every annotation, in every view, unless all are hidden, then shows them all', () => {
+    const api = { areAllMeasurementsHidden: jest.fn(() => false), setAllMeasurementsVisibility: jest.fn() };
+    mockMeasurements.api = api;
+    definitionsOf().toggleAnnotations.commandFn();
+    expect(api.setAllMeasurementsVisibility).toHaveBeenLastCalledWith(false);
+    expect(mockMeasurements.refresh).toHaveBeenCalled();
+
+    api.areAllMeasurementsHidden.mockReturnValue(true);
+    definitionsOf().toggleAnnotations.commandFn();
+    expect(api.setAllMeasurementsVisibility).toHaveBeenLastCalledWith(true);
+
+    mockMeasurements.api = null;
+    expect(() => definitionsOf().toggleAnnotations.commandFn()).not.toThrow();
+  });
+
+  it('turns on the annotation displays of a reused tool group (each measurement follows its own visibility)', () => {
+    createScene();
+    const reused = scene.toolGroup;
+    reused.addViewport = jest.fn();
+    const component = { props: {}, _checkViewportActive: () => ({ viewportId: 'v', viewport: {} }) };
+    definitionsOf().initVolumeViewerTools.commandFn({ toolGroupId: 'vol', component });
+    expect(mockAngleDisplay.add).toHaveBeenCalledWith(reused, true);
+    expect(mockAngleDisplay.set).toHaveBeenCalledWith(reused, true);
+    expect(mockSRDisplay.set).toHaveBeenCalledWith(reused, true);
+  });
+
+  it('adds the annotation displays, on, to a new tool group', () => {
+    scene.toolGroup = null;
+    const created = { addTool: jest.fn(), addViewport: jest.fn() };
+    const { ToolGroupManager } = jest.requireMock('@cornerstonejs/tools');
+    ToolGroupManager.createToolGroup.mockReturnValueOnce(created);
+    const component = { props: {}, _checkViewportActive: () => ({ viewportId: 'v', viewport: {} }) };
+    definitionsOf().initVolumeViewerTools.commandFn({ toolGroupId: 'vol', component });
+
+    expect(component.volumeTools).toBe(created);
+    expect(mockAngleDisplay.add).toHaveBeenCalledWith(created, true);
+    expect(mockSRDisplay.set).toHaveBeenCalledWith(created, true);
+    expect(created.addViewport).toHaveBeenCalledWith('v');
   });
 });

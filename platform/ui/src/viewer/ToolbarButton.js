@@ -8,7 +8,12 @@ import { Icon } from './../elements/Icon';
 import './toolbar-button.styl';
 
 
-export function ToolbarButton({ isActive = false, className = 'toolbar-button', label = '', icon, iconWhenActive, labelWhenActive, onClick, isExpandable, isExpanded, id }) {
+// A toolbar control operable by pointer and keyboard: a tab stop named by its translated label,
+// activated once per press as a native button is (Enter on keydown, Space on keyup). `isToggle`
+// exposes the active state as aria-pressed; an expandable button exposes its menu state as
+// aria-expanded. `presentational` drops the control semantics for a button inside a wrapper that
+// is itself the focusable control. `domId` is the element's id.
+export function ToolbarButton({ isActive = false, className = 'toolbar-button', label = '', icon, iconWhenActive, labelWhenActive, onClick, isExpandable, isExpanded, id, isToggle = false, domId, presentational = false }) {
   const { t } = useTranslation('Buttons');
 
   // Determine icon display properties
@@ -28,11 +33,43 @@ export function ToolbarButton({ isActive = false, className = 'toolbar-button', 
     }
   };
 
+  const isSpace = event => event.key === ' ' || event.key === 'Spacebar';
+  const handleKeyDown = (event) => {
+    // A held key repeats keydown: one activation per press
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (!event.repeat) {
+        handleClick(event);
+      }
+    } else if (isSpace(event)) {
+      event.preventDefault();
+    }
+  };
+  const handleKeyUp = (event) => {
+    if (isSpace(event)) {
+      event.preventDefault();
+      handleClick(event);
+    }
+  };
+
+  const control = presentational ? {} : {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': t(displayLabel),
+    'aria-pressed': isToggle ? Boolean(isActive) : undefined,
+    'aria-haspopup': isExpandable ? 'true' : undefined,
+    'aria-expanded': isExpandable ? Boolean(isExpanded) : undefined,
+    onKeyDown: handleKeyDown,
+    onKeyUp: handleKeyUp,
+  };
+
   return (
     <div
+      id={domId}
       className={classNames(className, { active: isActive })}
       onClick={handleClick}
       data-cy={label.toLowerCase()}
+      {...control}
     >
       {iconProps && <Icon {...iconProps} />}
       <div className="toolbar-button-label">
@@ -78,6 +115,15 @@ ToolbarButton.propTypes = {
   
   /** Direction of expandable 'caret' symbol */
   isExpanded: PropTypes.bool,
+
+  /** An on/off control: the active state is exposed as aria-pressed */
+  isToggle: PropTypes.bool,
+
+  /** id of the button element */
+  domId: PropTypes.string,
+
+  /** Rendered inside a wrapper that is the focusable control: no role, tab stop or key handling */
+  presentational: PropTypes.bool,
 };
 
 
