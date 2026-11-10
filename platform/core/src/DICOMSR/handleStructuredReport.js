@@ -17,7 +17,7 @@ import getXHRRetryRequestHook from '../utils/xhrRetryRequestHook';
 import getAllDisplaySets from './Cornerstone3d/utils/getAllDisplaySets';
 import parseDicomStructuredReport from './parseDicomStructuredReport';
 import parseMeasurementsData from './parseMeasurementsData';
-import { currentSession } from './utils/srDocument';
+import { confirmReport, currentSession, markReportUnconfirmed } from './utils/srDocument';
 
 const VERSION_NAME = 'dcmjs-0.0';
 const TRANSFER_SYNTAX_UID = '1.2.840.10008.1.2.1';
@@ -168,7 +168,13 @@ const stowSRFromMeasurements = async (measurements, serverUrl, options) => {
   const displaySetApi = display.DisplaySetApi.Instance;
 
   // Create DICOM-SR document from measurements
-  const { dataset } = parseMeasurementsData(measurements, options);
+  const { dataset, omitted, saved, written } = parseMeasurementsData(measurements, options);
+
+  // Every measurement was left out: nothing to store
+  if (saved === 0 && omitted && omitted.length) {
+    return { omitted, saved, uploaded: false };
+  }
+
   const { DicomMetaDictionary, DicomDict } = dcmjs.data;
   const meta = {
     FileMetaInformationVersion: dataset._meta.FileMetaInformationVersion.Value,
@@ -194,6 +200,9 @@ const stowSRFromMeasurements = async (measurements, serverUrl, options) => {
     requestHooks: [getXHRRetryRequestHook()],
   };
 
+  // Shown in the viewer now, stored once the upload succeeds
+  markReportUnconfirmed(dataset.SOPInstanceUID);
+
   // Trigger displaySetApi with DICOM transfer data
   displaySetApi.displaySetService.triggerApiEvent(
     display.Enums.EVENTS.DCM_LOCAL_CREATE, { dcmData: dataset, dcm: part10Buffer });
@@ -202,6 +211,10 @@ const stowSRFromMeasurements = async (measurements, serverUrl, options) => {
   await dicomWeb.storeInstances({
     datasets: [part10Buffer],
   });
+  confirmReport(dataset.SOPInstanceUID);
+
+  // Measurements the report left out, for the save result, and the angles it holds
+  return { omitted: omitted || [], saved, written: written || [], uploaded: true };
 };
 
 

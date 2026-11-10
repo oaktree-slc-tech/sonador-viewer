@@ -72,7 +72,9 @@ const CobbAngle = {
       textBox,
       isLocked,
       isVisible,
-      metadata,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js); the
+      // service accepts only its schema keys at the top level
+      metadata: data.displayAttributes ? { ...metadata, displayAttributes: data.displayAttributes } : metadata,
       referenceSeriesUID: SeriesInstanceUID,
       referenceStudyUID: StudyInstanceUID,
       referencedImageId,
@@ -95,7 +97,7 @@ function getMappedAnnotations(annotation, displaySetService) {
   const targets = Object.keys(cachedStats);
 
   if (!targets.length) {
-    return;
+    return [];
   }
 
   const annotations = [];
@@ -178,7 +180,9 @@ function getDisplayText(mappedAnnotations, displaySet) {
   // Angle is the same for all series
   const { angle, unit, SeriesNumber, SOPInstanceUID, frameNumber } = mappedAnnotations[0];
 
-  const instance = displaySet.instances.find(image => image.SOPInstanceUID === SOPInstanceUID);
+  // For OHIF v2 compatibility, check both instances and images properties
+  const instance = (displaySet.instances || displaySet.images || [])
+    .find(image => image.SOPInstanceUID === SOPInstanceUID);
 
   let InstanceNumber;
   if (instance) {
@@ -187,7 +191,7 @@ function getDisplayText(mappedAnnotations, displaySet) {
 
   const instanceText = InstanceNumber ? ` I: ${InstanceNumber}` : '';
   const frameText = displaySet.isMultiFrame ? ` F: ${frameNumber}` : '';
-  if (angle === undefined) {
+  if (angle === undefined || angle === null) {
     return displayText;
   }
   const roundedAngle = utils.roundNumber(angle, 2);

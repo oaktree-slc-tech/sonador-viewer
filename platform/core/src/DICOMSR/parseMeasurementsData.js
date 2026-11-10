@@ -9,7 +9,9 @@ import measurements from '../measurements';
 import MeasurementReport from './SCOORD3D/MeasurementReport';
 import { encodeExtendedMeta } from './utils/dcmsrExtendedMeta';
 import { encodeDisplayAttributes } from './utils/dcmsrDisplayAttributes';
-import { documentSettings, saveParent } from './utils/srDocument';
+import { currentSession, documentSettings, saveParent } from './utils/srDocument';
+import { propertyParentOf } from './utils/propertyParent';
+import { measurementVersion, omittedMeasurement } from './utils/saveResult';
 import { uiNotificationService } from '../services/UINotificationService';
 
 const { getImageIdForImagePath, MeasurementApi } = measurements;
@@ -109,6 +111,11 @@ const parseMeasurementsData = (measurementsData, options) => {
     personName: options.observer && options.observer.personName,
   };
 
+  const refused = new Set();
+  const omitted = [];
+  // The measurements written to the report, as they were written (utils/saveResult.js), by
+  // measurement-service uid
+  const written = new Map();
   log.info('[DICOM-SR:parseMeasurementsData] annotation data for persistence', toolState,
     'documentClass='+document.documentClass, 'parent='+(parent ? parent.SOPInstanceUID : 'none'));
   const report = MeasurementReport.generateReport(toolState, cornerstone.metaData, _.extend({}, _.pick(options, 'headers'), {
@@ -120,17 +127,38 @@ const parseMeasurementsData = (measurementsData, options) => {
       log.warn('[DICOM-SR:parseMeasurementsData] '+message+' from='+from+' to='+to);
       uiNotificationService.show({ title: 'Comprehensive 3D SR required', message, type: 'warning' });
     },
+    onMeasurementRefused: (toolType, tool, error) => {
+      // Raised once per tool (the report is built twice when its class is upgraded); reported to the
+      // user with the save result, after the report is stored
+      if (refused.has(tool)) {
+        return;
+      }
+      refused.add(tool);
+      const measurement = measurementApi.getMeasurementByCornerstoneId(tool._id);
+      omitted.push(omittedMeasurement(toolType, measurement || tool, error));
+      log.warn('[DICOM-SR:parseMeasurementsData] measurement left out of the report toolType='+toolType
+        +' reason='+(error.code || 'invalid'), error.message, tool);
+    },
     onContentItemCreate: (toolType, measurementIds, tid300Measurement, srItem, encoding) => {
 
       // Retrieve measurement from API
       const { _id: cornerstoneId } = measurementIds;
       const measurement = measurementApi.getMeasurementByCornerstoneId(cornerstoneId);
       if (measurement && measurement.uid) {
+        // The tracking UID the report holds stays with the measurement (dcmjs mints it for a new
+        // one): a re-save keeps it, and the report's own load finds the measurement already held.
+        // The last build is the one stored. The version is taken with it in place.
+        const trackingUID = measurementVersion(measurement, srItem).TrackingUniqueIdentifier;
+        if (trackingUID) {
+          measurement.metadata = { ...(measurement.metadata || {}), TrackingUniqueIdentifier: trackingUID };
+        }
+        written.set(measurement.uid, measurementVersion(measurement, srItem, currentSession()));
 
         // Encoded extended attributes from measurement instance and broadcast via measurement service
         // to allow plugins to modify sequence data.
-        encodeExtendedMeta(measurement, srItem);
-        encodeDisplayAttributes(measurement, srItem, encoding);
+        const propertyParent = propertyParentOf(toolType);
+        encodeExtendedMeta(measurement, srItem, { propertyParent });
+        encodeDisplayAttributes(measurement, srItem, { ...encoding, propertyParent });
         measurementApi.measurementService._broadcastEvent(measurementApi.measurementService.EVENTS.MEASUREMENTS_DATASYNC, {
           apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_MEASUREMENT, measurement, srItem,
         });
@@ -144,7 +172,9 @@ const parseMeasurementsData = (measurementsData, options) => {
     apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_SUCCESS, dcm: report,
   });
 
-  return { dataset: report.dataset, };
+  // Measurements written: every tool of the tool state but those left out
+  const saved = _.sum(_.flatMap(_.values(toolState), byType => _.map(byType, ({ data }) => data.length))) - omitted.length;
+  return { dataset: report.dataset, omitted, saved, written: [...written.values()] };
 };
 
 

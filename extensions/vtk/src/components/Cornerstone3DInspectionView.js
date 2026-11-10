@@ -23,6 +23,12 @@ import {
   AngleTool as C3dAngleTool,
   CobbAngleTool as C3dCobbAngleTool,
   LengthTool as C3dLengthTool,
+  ArrowAnnotateTool as C3dArrowAnnotateTool,
+  BidirectionalTool as C3dBidirectionalTool,
+  EllipticalROITool as C3dEllipticalROITool,
+  RectangleROITool as C3dRectangleROITool,
+  PlanarFreehandROITool as C3dPlanarFreehandROITool,
+  ProbeTool as C3dProbeTool,
   ReferenceLinesTool as C3dReferenceLinesTool,
   OverlayGridTool as C3dOverlayGridTool,
   OrientationMarkerTool as C3dOrientationMarkerTool,
@@ -61,10 +67,25 @@ import { addSRDisplayToolToGroup } from './tools/DICOMSRDisplayTool';
 const { ViewportType, Events } = c3dEnums;
 const { DisplaySetApi } = OHIF.display;
 
+// Measurement tools of the 2D toolbar whose measurements stay in the session's 3D views: they
+// have no DICOM-SR mapping here, so they are marked unsaved and announced as not saved
+// (measurementAnnotationSync). Tool, mode, state flag, toolbar label and icon.
+const SESSION_TOOLS = [
+  { tool: C3dBidirectionalTool, mode: 'bidirectional-tool', stateKey: 'bidirectionalToolActive', label: 'Bidirectional', icon: 'measure-target' },
+  { tool: C3dEllipticalROITool, mode: 'ellipse-tool', stateKey: 'ellipseToolActive', label: 'Ellipse', icon: 'circle-o' },
+  { tool: C3dRectangleROITool, mode: 'rectangle-tool', stateKey: 'rectangleToolActive', label: 'Rectangle', icon: 'square-o' },
+  { tool: C3dPlanarFreehandROITool, mode: 'freehand-tool', stateKey: 'freehandToolActive', label: 'Freehand', icon: 'inline-edit' },
+  { tool: C3dProbeTool, mode: 'probe-tool', stateKey: 'probeToolActive', label: 'Probe', icon: 'dot-circle' },
+];
+const SESSION_TOOL_STATE = _.fromPairs(SESSION_TOOLS.map(({ stateKey }) => [stateKey, false]));
+
 
 class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   // VTK viewport which renders the provided volume and allows inspection of its properties.
-  // Allows access to zoon, levels, pan, length, and angle tools.
+  // Allows access to zoom, levels, pan, and the length, angle, Cobb angle and arrow annotation
+  // tools. Measurements drawn on an acquired image are saved like those drawn in 2D (the
+  // cornerstone extension's measurementAnnotationSync). The bidirectional, ellipse, rectangle,
+  // freehand and probe tools measure in this session's 3D views; those measurements are not saved.
 
   static id = 'Cornerstone3DInspectionView';
 
@@ -85,6 +106,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     lengthToolActive: false,
     angleToolActive: false,
     cobbAngleToolActive: false,
+    arrowToolActive: false,
+    ...SESSION_TOOL_STATE,
 
     // Display tools
     gridActive: false,
@@ -148,6 +171,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     c3dAddTool(C3dAngleTool);
     c3dAddTool(C3dLengthTool);
     c3dAddTool(C3dCobbAngleTool);
+    c3dAddTool(C3dArrowAnnotateTool);
+    SESSION_TOOLS.forEach(({ tool }) => c3dAddTool(tool));
 
     // Add anatomical orientation and scale overlay indicators as part of the inspection "grid".
     // The grid tools are enabled/disabled as a single unit.
@@ -185,6 +210,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       component.imgTools.addTool(C3dScaleOverlayTool.toolName);
       component.imgTools.addTool(ViewportGridOverlayTool.toolName);
       component.imgTools.addTool(C3dCobbAngleTool.toolName);
+      component.imgTools.addTool(C3dArrowAnnotateTool.toolName);
+      SESSION_TOOLS.forEach(({ tool }) => component.imgTools.addTool(tool.toolName));
 
       // Add viewports to tool group
       const _v3d_id = component.getViewportId();
@@ -247,8 +274,11 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       imgTools.setToolPassive(C3dZoomTool.toolName, options);
       imgTools.setToolPassive(C3dWindowLevelTool.toolName, options);
       imgTools.setToolPassive(C3dPanTool.toolName, options);
+      imgTools.setToolPassive(C3dLengthTool.toolName, options);
       imgTools.setToolPassive(C3dAngleTool.toolName, options);
       imgTools.setToolPassive(C3dCobbAngleTool.toolName, options);
+      imgTools.setToolPassive(C3dArrowAnnotateTool.toolName, options);
+      SESSION_TOOLS.forEach(({ tool }) => imgTools.setToolPassive(tool.toolName, options));
     }
   }
 
@@ -343,6 +373,25 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
             { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
           ]
         })
+      } else if (mode == 'arrow-tool') {
+
+        // Set Arrow Annotate Tool to left mouse button
+        imgTools.setToolActive(C3dArrowAnnotateTool.toolName, {
+          bindings: [
+            { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
+          ]
+        });
+      } else {
+        const sessionTool = SESSION_TOOLS.find(entry => entry.mode == mode);
+        if (sessionTool) {
+
+          // Set the measurement tool to left mouse button
+          imgTools.setToolActive(sessionTool.tool.toolName, {
+            bindings: [
+              { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
+            ]
+          });
+        }
       }
 
       // Update the state if tool mode is different than current mode
@@ -369,6 +418,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       lengthToolActive: false, 
       angleToolActive: false,
       cobbAngleToolActive: false,
+      arrowToolActive: false,
+      ...SESSION_TOOL_STATE,
     });
 
     this.setState(options);
@@ -428,6 +479,25 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const component = this;
     component.selectionToolState({ cobbAngleToolActive: true });
     component.activateTools('cobb-angle-tool');
+  }
+
+  activateArrowTool() {
+    // Activate arrow annotation tool
+
+    const component = this;
+    component.selectionToolState({ arrowToolActive: true });
+    component.activateTools('arrow-tool');
+  }
+
+  activateSessionTool(mode) {
+    // Activate a measurement tool whose measurements stay in this session's 3D views
+
+    const component = this;
+    const sessionTool = SESSION_TOOLS.find(entry => entry.mode == mode);
+    if (sessionTool) {
+      component.selectionToolState({ [sessionTool.stateKey]: true });
+      component.activateTools(mode);
+    }
   }
 
   toggleGrid() {
@@ -563,37 +633,45 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const component = this;
     const { paintFilterLabelMapDetails } = component.props;
     const { stackScrollActive, zoomActive, levelsActive, panActive, lengthToolActive, 
-      angleToolActive, cobbAngleToolActive, gridActive, segDisplayActive } = component.state;
+      angleToolActive, cobbAngleToolActive, arrowToolActive, gridActive, segDisplayActive } = component.state;
 
     return (
       <div className="inspectionViewRoot"><div className="inspectionViewModalContent" >
         <div className="inspectionViewModalToolbar">
-          <ToolbarButton label="Stack Scroll" icon="bars" 
+          <ToolbarButton isToggle label="Stack Scroll" icon="bars" 
             isActive={stackScrollActive} onClick={component.activateStackScroll.bind(component)}
           />
-          <ToolbarButton label="Zoom" icon="search-plus"
+          <ToolbarButton isToggle label="Zoom" icon="search-plus"
             isActive={zoomActive} onClick={component.activateZoomTool.bind(component)}
           />
-          <ToolbarButton label="Levels" icon="level"
+          <ToolbarButton isToggle label="Levels" icon="level"
             isActive={levelsActive} onClick={component.activateLevelTool.bind(component)}
           />
-          <ToolbarButton label="Pan" icon="arrows"
+          <ToolbarButton isToggle label="Pan" icon="arrows"
             isActive={panActive} onClick={component.activatePanTool.bind(component)}
           />
-          <ToolbarButton label="Length" icon="measure-temp"
+          <ToolbarButton isToggle label="Length" icon="measure-temp"
             isActive={lengthToolActive} onClick={component.activateLengthTool.bind(component)}
           />
-          <ToolbarButton label="Angle" icon="angle-left"
+          <ToolbarButton isToggle label="Angle" icon="angle-left"
             isActive={angleToolActive} onClick={component.activateAngleTool.bind(component)}
           />
-          <ToolbarButton label="Cobb Angle" icon="cobb-angle"
+          <ToolbarButton isToggle label="Cobb Angle" icon="cobb-angle"
             isActive={cobbAngleToolActive} onClick={component.activateCobbAngleTool.bind(component)}
           />
-          <ToolbarButton icon="grid-multi" label='Grid'
+          <ToolbarButton isToggle label="Annotate" icon="measure-non-target"
+            isActive={arrowToolActive} onClick={component.activateArrowTool.bind(component)}
+          />
+          {SESSION_TOOLS.map(({ mode, stateKey, label, icon }) => (
+            <ToolbarButton isToggle key={mode} label={label} icon={icon}
+              isActive={component.state[stateKey]} onClick={() => component.activateSessionTool(mode)}
+            />
+          ))}
+          <ToolbarButton isToggle icon="grid-multi" label='Grid'
             isActive={gridActive} onClick={component.toggleGrid.bind(component)}
           />
           {paintFilterLabelMapDetails && (
-            <ToolbarButton icon='cube' iconWhenActive='cube-3d-solid' label='Segmentations'
+            <ToolbarButton isToggle icon='cube' iconWhenActive='cube-3d-solid' label='Segmentations'
               isActive={segDisplayActive} onClick={component.toggleSegDisplay.bind(component)}
             />
           )}

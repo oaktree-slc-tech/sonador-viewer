@@ -24,6 +24,7 @@ import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
+import { propertyParentOf } from '../utils/propertyParent';
 import { currentSession, registerHydratedReport } from '../utils/srDocument';
 import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
 
@@ -161,9 +162,11 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   // Rehydrate measurement instances via Cornerstone3D
   let storedMeasurementByAnnotationType = Cornerstone3dSR.sr.measurementReport.generateToolState(
     instanceSR, sopInstanceUIDToImageId, options.metaData, undefined, {
+      imageIdsForToolState,
       onContentItemParse: (toolType, annotation, srItem) => {
-        parseExtendedMeta(srItem, annotation);
-        parseDisplayAttributes(srItem, annotation);
+        const propertyParent = propertyParentOf(toolType);
+        parseExtendedMeta(srItem, annotation, { propertyParent });
+        parseDisplayAttributes(srItem, annotation, { propertyParent });
       },
     });
 

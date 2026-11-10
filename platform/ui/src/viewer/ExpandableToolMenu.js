@@ -53,7 +53,26 @@ class ExpandableToolMenu extends React.Component {
     this.state = {
       isExpanded: false,
     };
+
+    // The menu is portaled to the end of the document: a keyboard user is moved into it when it
+    // opens and back to its trigger when it closes from inside
+    this.menuId = _.uniqueId('expandable-tool-menu-');
+    this.triggerId = `${this.menuId}-trigger`;
+    this.openedByKeyboard = false;
   }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (!prevState.isExpanded && this.state.isExpanded && this.openedByKeyboard) {
+      // The overlay mounts after this render
+      setTimeout(() => {
+        const first = document.getElementById(this.menuId)?.querySelector('[tabindex="0"]');
+        if (first) {
+          first.focus();
+        }
+      }, 0);
+    }
+  }
+
   
   toolbarMenuOverlay = () => {
     // Create overlay for toolbar. Provides a redux provider to ensure that custom
@@ -62,11 +81,13 @@ class ExpandableToolMenu extends React.Component {
 
     return (
       <Tooltip placement="bottom" className="tooltip-toolbar-overlay" id={`${Math.random()}_tooltip-toolbar-overlay}`}>
-        {reduxStore ? (
-            <Provider store={reduxStore}>{this.getButtons()}</Provider>
-          ) : (
-            this.getButtons()
-        )}        
+        <div id={this.menuId} role="group" aria-label={this.props.label}>
+          {reduxStore ? (
+              <Provider store={reduxStore}>{this.getButtons()}</Provider>
+            ) : (
+              this.getButtons()
+          )}
+        </div>
       </Tooltip>
     );
   }
@@ -128,7 +149,9 @@ class ExpandableToolMenu extends React.Component {
     return this.props.icon;
   };
 
-  onExpandableToolClick = () => {
+  onExpandableToolClick = (event) => {
+    // ToolbarButton passes the activating event: keydown for Enter, keyup for Space
+    this.openedByKeyboard = !!event && (event.type === 'keydown' || event.type === 'keyup');
     if (this.props.onGroupMenuClick) {
       this.props.onGroupMenuClick();
     }
@@ -138,6 +161,11 @@ class ExpandableToolMenu extends React.Component {
   };
 
   onOverlayHide = () => {
+    // Closed from inside the menu (Escape): focus returns to the trigger
+    const menu = document.getElementById(this.menuId);
+    if (menu && menu.contains(document.activeElement)) {
+      document.getElementById(this.triggerId)?.focus();
+    }
     this.setState({
       isExpanded: false,
     });
@@ -157,6 +185,7 @@ class ExpandableToolMenu extends React.Component {
         <ToolbarButton
           key="menu-button"
           type="tool"
+          domId={this.triggerId}
           label={this.props.label}
           icon={this.activeIcon()}
           className={'toolbar-button expandableToolMenu'}

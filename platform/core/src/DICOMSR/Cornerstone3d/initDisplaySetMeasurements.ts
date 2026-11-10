@@ -15,6 +15,7 @@ import { findReferencedSOP } from './utils/findReferencedSOP';
 import { codeValueOf, conceptCode, conceptCodeValue, conceptName, conceptNameValue, firstItem } from '../utils/codedConcept';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
+import { displayCoordsOf } from '../utils/angleGeometry';
 
 const { Enums: MeasurementEnums, SREnums } = measurements;
 const { CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION } = MeasurementEnums;
@@ -162,8 +163,12 @@ function _getMeasurements(ImagingMeasurementReportContentSequence) {
         parseExtendedMeta(mergedContentSequence, measurement, {
           textPath: 'metadata.text',
           locationPath: 'metadata.location',
+          viewsPath: 'metadata.views',
         });
         parseDisplayAttributes(mergedContentSequence, measurement, { path: 'displayAttributes' });
+
+        // Drawn by the read-only display as the report holds it (a Cobb angle as its two lines)
+        measurement.coords = displayCoordsOf(measurement.TrackingIdentifier, measurement.coords);
 
         measurements.push(measurement);
       }

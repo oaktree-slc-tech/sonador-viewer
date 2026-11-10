@@ -14,6 +14,8 @@ import { Enums as MeasurementEnums } from '../../measurements/enums';
 import TID1500MeasurementReport from '../utils/TID1500';
 import { findReferencedSOPSequence } from './utils/findReferencedSOP';
 import { asArray, conceptNameMatches, firstItem } from '../utils/codedConcept';
+import { isAngleTool } from '../utils/angleGeometry';
+import { isDisplayOnlyDocument, isUnconfirmedReport } from '../utils/srDocument';
 
 const { MeasurementReport: c3dMeasurementReport } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
@@ -54,6 +56,13 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     // For each of the supported measurement types, compute the measurement data
     const measurementData = {};
 
+    // The Angle and Cobb angle groups of an application document (Sonador-SR root title) are not
+    // hydrated (the read-only display shows them)
+    const displayOnly = isDisplayOnlyDocument(dataset);
+
+    // A report the upload has not confirmed as stored holds no saved measurements yet
+    const locked = !isUnconfirmedReport(dataset.SOPInstanceUID);
+
     measurementGroups.forEach(measurementGroup => {
       try {
         const measurementGroupContentSequence = asArray(measurementGroup.ContentSequence);
@@ -71,9 +80,14 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
         const toolAdapter = hooks?.getToolClass?.(measurementGroup, dataset, this.measurementAdapterByToolType) 
           || this.getAdapterForTrackingIdentifier(trackingIdentifierValue);
 
-        if (toolAdapter) {
+        if (toolAdapter && displayOnly && isAngleTool(toolAdapter.toolType)) {
+          console.info('[DICOMSR:MeasurementReport:generateToolState] display-only document, '
+            + `${toolAdapter.toolType} group not hydrated trackingUID=${trackingUniqueIdentifierValue}`);
+        } else if (toolAdapter) {
+          // The per-frame image ids go to the Sonador adapters; the library ones ignore them
           const measurement = toolAdapter.getMeasurementData(
-            measurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifierValue);
+            measurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifierValue,
+            { imageIdsForToolState: options.imageIdsForToolState, locked });
 
           measurement.TrackingUniqueIdentifier = trackingUniqueIdentifierValue;
 

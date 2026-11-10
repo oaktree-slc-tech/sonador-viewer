@@ -397,3 +397,52 @@ describe('SeriesTagLabellingFlow', () => {
     expect(container.querySelector('.locationDescriptionWrapper .location').style.color).toBe('');
   });
 });
+
+
+describe('while a labelling flow is open', () => {
+  // A viewport beside the dialog, listening as cornerstone-tools does (bubbling, on the element)
+  let viewport;
+  let received;
+  beforeEach(() => {
+    received = [];
+    viewport = document.createElement('div');
+    viewport.className = 'viewport-element';
+    ['mousedown', 'mousemove', 'mouseup', 'click', 'dblclick', 'wheel', 'touchstart', 'contextmenu']
+      .forEach(type => viewport.addEventListener(type, () => received.push(type)));
+    document.body.appendChild(viewport);
+    container.className = 'DraggableItem';
+  });
+  afterEach(() => {
+    viewport.remove();
+    container.className = '';
+  });
+
+  const send = (target, type) => act(() => {
+    target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+  });
+  const flow = () => render(
+    <LabellingFlow measurementData={{}} labelData={ANATOMY} labellingDoneCallback={() => {}} updateLabelling={() => {}} />
+  );
+
+  it('keeps pointer input from the viewport, letting a release through', () => {
+    flow();
+    ['mousedown', 'mousemove', 'click', 'dblclick', 'wheel', 'touchstart', 'contextmenu'].forEach(type => send(viewport, type));
+    send(viewport, 'mouseup');
+    expect(received).toEqual(['mouseup']);
+  });
+
+  it('leaves input inside the flow to the flow', () => {
+    flow();
+    const inside = [];
+    container.addEventListener('mousedown', () => inside.push('mousedown'));
+    send(container.querySelector('.labellingComponent'), 'mousedown');
+    expect(inside).toEqual(['mousedown']);
+  });
+
+  it('gives the viewport its input back once the flow closes', () => {
+    flow();
+    remount();
+    send(viewport, 'mousedown');
+    expect(received).toEqual(['mousedown']);
+  });
+});

@@ -13,6 +13,8 @@ import { InputDialog } from '@ohif/ui';
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
 import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
+import CobbAngleTool from './tools/CobbAngleTool';
+import lockable from './tools/lockableMeasurementTool';
 import initCornerstoneTools from './initCornerstoneTools.js';
 import { connectToolsToMeasurementService } from './initMeasurementService.js';
 import { initDataServiceIntegration } from './initDataIntegrations.js';
@@ -91,11 +93,13 @@ export default function init({ servicesManager, commandsManager, configuration }
 
   const toolsGroupedByType = {
     touch: [csTools.PanMultiTouchTool, csTools.ZoomTouchPinchTool],
+    // The tools of saved measurements leave a locked one alone (tools/lockableMeasurementTool.js)
     annotations: [
-      csTools.ArrowAnnotateTool,
+      lockable(csTools.ArrowAnnotateTool),
       csTools.BidirectionalTool,
-      csTools.LengthTool,
-      csTools.AngleTool,
+      lockable(csTools.LengthTool),
+      lockable(csTools.AngleTool),
+      lockable(CobbAngleTool),
       csTools.FreehandRoiTool,
       csTools.EllipticalRoiTool,
       csTools.DragProbeTool,

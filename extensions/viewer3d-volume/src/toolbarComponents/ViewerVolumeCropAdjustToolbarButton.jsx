@@ -110,6 +110,7 @@ function ViewerVolumeCropAdjustToolbarButton({ toolbarClickCallback, button }) {
           label={label}
           icon={icon}
           isActive={isActive}
+          presentational
           onClick={(evt) => toolbarClickCallback(button, evt)}
         />
       </div>

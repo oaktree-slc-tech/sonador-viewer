@@ -36,6 +36,7 @@ jest.mock('@cornerstonejs/adapters', () => {
         && item.CodeValue == c.CodeValue);
     }
   }
+  MeasurementReport3D.registerTrackingIdentifier = () => {};
   MeasurementReport3D.measurementAdapterByToolType = new Map();
   class BaseAdapter3D {
     static init(toolType, representation) {
@@ -52,6 +53,13 @@ jest.mock('@cornerstonejs/adapters', () => {
     }
   }
 
+  // Stand-ins for the library angle adapters the Sonador set extends (angleRoundTrip.test.js
+  // covers them with the real ones)
+  class Angle extends BaseAdapter3D {}
+  Angle.init('Angle');
+  class CobbAngle extends BaseAdapter3D {}
+  CobbAngle.init('CobbAngle');
+
   return {
     adaptersSR: {
       Cornerstone: { MeasurementReport },
@@ -59,6 +67,8 @@ jest.mock('@cornerstonejs/adapters', () => {
         CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} },
         MeasurementReport: MeasurementReport3D,
         BaseAdapter3D,
+        Angle,
+        CobbAngle,
       },
     },
     // As in the pinned package
@@ -643,8 +653,9 @@ describe('corrected Series Tag fixture (v1)', () => {
 // IO → Viewer leg of the exchange profile: Series-Tag documents written by Sonador IO hydrate through
 // the production Cornerstone3D path. Staged fixtures are named `<producer>.<topic>.<yyyy-mmdd>.dcm`
 // (for example `sonador-io.series-tag.2026-1103.dcm`), so the producer and the date the document was
-// created can be read off the listing; the software versions are in the document itself.
-const IO_FIXTURES = fs.readdirSync(FIXTURES).filter(name => /^sonador-io\..*\.dcm$/.test(name));
+// created can be read off the listing; the software versions are in the document itself. The
+// angle documents are covered by angleRoundTrip.test.js.
+const IO_FIXTURES = fs.readdirSync(FIXTURES).filter(name => /^sonador-io\.series-tag\..*\.dcm$/.test(name));
 
 describe('Sonador IO documents', () => {
   IO_FIXTURES.forEach(name => {

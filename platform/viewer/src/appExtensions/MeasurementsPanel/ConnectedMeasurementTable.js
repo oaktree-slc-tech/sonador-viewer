@@ -12,6 +12,8 @@ import { MeasurementTable } from '@ohif/ui';
 
 import { commandsManager } from '../../App';
 import jumpToRowItem from './jumpToRowItem.js';
+import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigation.js';
+import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -309,7 +311,7 @@ function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, 
 }
 
 
-function convertMeasurementsToTableData(toolCollections, timepoints) {
+export function convertMeasurementsToTableData(toolCollections, timepoints) {
   /**
   * Take measurements from MeasurementAPI structure and convert into a measurementTable structure.
   *
@@ -334,7 +336,7 @@ function convertMeasurementsToTableData(toolCollections, timepoints) {
   toolgroups2tablegroups(tableMeasurements, toolCollections, tools, timepoints, (tool, csMeasurementData) => {
 
     // Unpack measurement attributes, check if the tool is service managed
-    const { toolServiceManaged } = MeasurementApi.Instance._serviceManagedTool(tool.name);
+    const { toolServiceManaged } = MeasurementApi.Instance._serviceManagedTool(tool.id);
     const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(csMeasurementData);
 
     // Primary measurement groups are those not managed by the MeasurementService or those which are marked as read only
@@ -348,7 +350,7 @@ function convertMeasurementsToTableData(toolCollections, timepoints) {
   toolgroups2tablegroups(pendingMeasurements, toolCollections, tools, timepoints, (tool, csMeasurementData) => {
 
     // Unpack measurement attributes, check if the tool is service managed and unlocked
-    const { toolServiceManaged } = MeasurementApi.Instance._serviceManagedTool(tool.name);
+    const { toolServiceManaged } = MeasurementApi.Instance._serviceManagedTool(tool.id);
     const { isLocked, isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(csMeasurementData);
 
     // Pending measurement groups are those managed by the MeasurementService and which are unlocked
@@ -521,42 +523,71 @@ const mapDispatchToProps = (dispatch, ownProps) => {
     
     dispatchJumpToRowItem: (measurementData, viewportsState, timepointManagerState, options) => {
       // Dispath a "jump to row item" event. Navigating to a row item loads the image the measurement
-      // is associated with and renders (or re-loads) annotations active measurements.
+      // is associated with and renders (or re-loads) annotations active measurements. While the MPR
+      // view is open, a measurement of its series is shown in the MPR panes; one of another series
+      // is shown in the stack viewport once the user agrees to close the MPR view
+      // (mprMeasurementNavigation.js).
 
-      const actionData = jumpToRowItem(measurementData, viewportsState, timepointManagerState, dispatch, options);
+      const activateMeasurement = () => {
+        const toolType = MeasurementApi._getToolType(measurementData);
+        const { measurementNumber } = measurementData;
+        const measurementApi = MeasurementApi.Instance;
 
-      actionData.viewportSpecificData.forEach((viewportSpecificData) => {
-        const { viewportIndex, displaySet } = viewportSpecificData;
-        dispatch(setViewportSpecificData(viewportIndex, displaySet));
-      });
+        Object.keys(measurementApi.tools).forEach((toolType) => {
+          const measurements = measurementApi.tools[toolType];
 
-      const toolType = MeasurementApi._getToolType(measurementData);
-      const { measurementNumber } = measurementData;
-      const measurementApi = MeasurementApi.Instance;
-
-      Object.keys(measurementApi.tools).forEach((toolType) => {
-        const measurements = measurementApi.tools[toolType];
-
-        measurements.forEach((measurement) => {
-          measurement.active = false;
+          measurements.forEach((measurement) => {
+            measurement.active = false;
+          });
         });
-      });
 
-      const measurementsToActive = measurementApi.tools[toolType].filter((measurement) => {
-        return measurement.measurementNumber === measurementNumber;
-      });
+        const measurementsToActive = measurementApi.tools[toolType].filter((measurement) => {
+          return measurement.measurementNumber === measurementNumber;
+        });
 
-      measurementsToActive.forEach((measurementToActive) => {
-        measurementToActive.active = true;
-      });
+        measurementsToActive.forEach((measurementToActive) => {
+          measurementToActive.active = true;
+        });
 
-      measurementApi.syncMeasurementsAndToolData();
+        measurementApi.syncMeasurementsAndToolData();
 
-      cornerstone.getEnabledElements().forEach((enabledElement) => {
-        if (enabledElement.image) {
-          cornerstone.updateImage(enabledElement.element);
-        }
-      });
+        cornerstone.getEnabledElements().forEach((enabledElement) => {
+          if (enabledElement.image) {
+            cornerstone.updateImage(enabledElement.element);
+          }
+        });
+      };
+
+      const jumpInStack = (viewports, timepointManager) => {
+        const actionData = jumpToRowItem(measurementData, viewports, timepointManager, dispatch, options);
+
+        actionData.viewportSpecificData.forEach((viewportSpecificData) => {
+          const { viewportIndex, displaySet } = viewportSpecificData;
+          dispatch(setViewportSpecificData(viewportIndex, displaySet));
+        });
+        activateMeasurement();
+      };
+
+      if (isMprActive(viewportsState)) {
+        const uiDialogService = ownProps.servicesManager && ownProps.servicesManager.services.UIDialogService;
+        navigateToMeasurementInMpr({
+          measurementData,
+          viewportsState,
+          commandsManager,
+          confirm: dialog => callConfirmDialog({ uiDialogService, ...dialog }),
+          navigateOutsideMpr: () => {
+            const state = window.store.getState();
+            jumpInStack(state.viewports, state.timepointManager);
+          },
+        }).then((outcome) => {
+          if (outcome === 'shown') {
+            activateMeasurement();
+          }
+        }).catch(error => OHIF.log.error('[viewer:measurementTable] unable to navigate to the measurement in MPR', error));
+        return;
+      }
+
+      jumpInStack(viewportsState, timepointManagerState);
 
       // Needs to update viewports.layout state to set layout
       //const layout = actionData.layout;

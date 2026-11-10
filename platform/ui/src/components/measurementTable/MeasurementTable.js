@@ -14,6 +14,7 @@ import { TableList } from '../tableList';
 import { Tooltip } from '../tooltip';
 
 import { MeasurementTableItem } from './MeasurementTableItem';
+import { AnnotationsVisibilityRow } from './AnnotationsVisibilityRow';
 
 const { measurements, log } = OHIF;
 const { MeasurementApi } = measurements;
@@ -111,7 +112,8 @@ const MeasurementTable = ({
           onSaveComplete({
             title: result.title || 'STOW SR',
             message: result.message,
-            type: 'success',
+            // A partial save is a warning (DICOMSR saveResultSummary)
+            type: result.type || 'success',
           });
         }
       } catch (error) {
@@ -284,6 +286,13 @@ const MeasurementTable = ({
             <span>{t('Annotations')}</span>
           </PanelSection.Header>
           <PanelSection.Content>
+            <AnnotationsVisibilityRow
+              measurementCollection={measurementCollection}
+              onToggleAllVisibility={(visible) => {
+                measurementApi.setAllMeasurementsVisibility(visible);
+                measurements.refreshCornerstoneViewports();
+              }}
+            />
             <ScrollArea className="measurementTableScroll">
               <div>{getMeasurementsGroups()}</div>
             </ScrollArea>

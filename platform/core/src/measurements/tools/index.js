@@ -2,6 +2,7 @@ import { angle } from './angle';
 import { arrowAnnotate } from './arrowAnnotate';
 import { bidirectional } from './bidirectional';
 import { circleRoi } from './circleRoi';
+import { cobbAngle } from './cobbAngle';
 
 import { ellipticalRoi } from './ellipticalRoi';
 import { freehandMouse } from './freehandMouse';
@@ -25,6 +26,7 @@ export {
   nonTarget,
   rectangleRoi,
   angle,
+  cobbAngle,
   targetCR,
   targetNE,
   targetUN,

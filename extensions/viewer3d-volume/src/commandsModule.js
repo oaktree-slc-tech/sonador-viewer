@@ -21,7 +21,16 @@ import setCTVolumeLayout from './utils/setCTVolumeLayout.js';
 
 import { Enums as VolViewerEnums } from './enums';
 
-const { SonadorZoomTool, addSRDisplayToolToGroup } = c3dUtils.viewportTools;
+const {
+  SonadorZoomTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled, addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
+} = c3dUtils.viewportTools;
+
+// The volume viewer's annotation displays: the read-only DICOM-SR measurements and the Angle and
+// Cobb angle measurements. Each measurement is shown or hidden with its global visibility.
+function enableAnnotationDisplay(toolGroup) {
+  setSRDisplayToolEnabled(toolGroup, true);
+  setAngleDisplay3DEnabled(toolGroup, true);
+}
 const { DisplaySetApi } = OHIF.display;
 
 
@@ -175,8 +184,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         volumeTools.addTool(C3dPanTool.toolName);
         volumeTools.addTool(C3dTrackballRotateTool.toolName);
 
-        // Read-only DICOM-SR measurements in the volume's Frame of Reference
+        // Annotations of the volume's Frame of Reference (display only): read-only DICOM-SR
+        // measurements, and Angle and Cobb angle measurements
         addSRDisplayToolToGroup(volumeTools);
+        addAngleDisplay3DToolToGroup(volumeTools, true);
+        enableAnnotationDisplay(volumeTools);
 
         // Add viewport to the tool group
         volumeTools.addViewport(viewportId);
@@ -188,8 +200,24 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         component.volumeTools = volumeTools;
         volumeTools.addViewport(viewportId);
 
+        // The group outlives the view: make sure its annotation displays are on
+        addAngleDisplay3DToolToGroup(volumeTools, true);
+        enableAnnotationDisplay(volumeTools);
+
         console.log('[VolViewer] add tools reference for viewportId='+viewportId);
       }
+    },
+
+    toggleAnnotations: () => {
+      // View -> Annotations drives the global annotation visibility, as the Measurements panel's
+      // all-annotations toggle does: every annotation is hidden, in every view, unless all are
+      // hidden already, then all are shown
+      const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+      if (!measurementApi) {
+        return;
+      }
+      measurementApi.setAllMeasurementsVisibility(measurementApi.areAllMeasurementsHidden());
+      OHIF.measurements.refreshCornerstoneViewports();
     },
 
     deactivateVolumeViewerTools: ({ toolGroupId, removeAllBindings = true }) => {
@@ -638,6 +666,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     toggleSegmentationSurface: {
       commandFn: createViewportToggleFeatureCommand('segmentationSurfaceEnabled'),
       storeContexts: ['viewports'],
+      options: {},
+    },
+    toggleAnnotations: {
+      commandFn: actions.toggleAnnotations,
       options: {},
     },
   };

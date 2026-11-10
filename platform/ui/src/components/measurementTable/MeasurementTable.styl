@@ -79,6 +79,20 @@
       display: flex
       flex-direction: column
 
+    // The all-annotations toggle row. Its toggle is centred above the rows' toggles: a row ends
+    // 10px short of the list, after its lock slot (1.8rem) and the 0.3rem gap, and this toggle is
+    // 0.09rem wider. The vertical padding leaves equal visible gaps between the drawer header's
+    // bottom edge and the eye, and between the eye and the first group header (whose 3px top
+    // border is the panel background).
+    .measurementTableVisibilityRow
+      flex: 0 0 auto
+      display: flex
+      align-items: center
+      justify-content: flex-end
+      width: 100%
+      padding: 17px calc(10px + 2.055rem) 7px 0
+      box-sizing: border-box
+
     // The section header reads as the Segmentations panel's "Segmentation Editor" header: the
     // same type, size and weight, with room above it and the groups close beneath it
     > div > div > h3

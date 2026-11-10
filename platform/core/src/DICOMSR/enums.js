@@ -77,6 +77,8 @@ export const CORNERSTONE_TOOLS_SR_TAG = 'cornerstoneTools@^4.0.0';
 export const CORNERSTONE_3D_MANUFACTURER = 'Cornerstone3D';
 export const CORNERSTONE_3D_TOOLS_SOURCE_NAME = `${CORNERSTONE_3D_MANUFACTURER}Tools-Sonador`;
 export const CORNERSTONE_3D_TOOLS_SOURCE_VERSION = '0.1';
+// Tracking identifier prefix written by the Cornerstone3D adapters (accepted on read)
+export const CORNERSTONE_3D_TAG = 'Cornerstone3DTools@^0.1.0';
 
 
 export const SONADOR_MANUFACTURER = 'Sonador';
@@ -189,6 +191,18 @@ export const DCMSR_MEASUREMENT_LOCATION = {
   schemeVersion: SONADOR_SCHEME_VERSION_03,
 }
 
+// * `view` (TEXT, one item per view): the view a measurement was created in (`coronal`, `sagittal`,
+//    `axial`, `3d`). Descriptive only, never a visibility rule; values are kept as read.
+
+export const MEASUREMENT_VIEW = `${SONADOR_MANUFACTURER}-Measurement.View`;
+export const MEASUREMENT_VIEW_MEANING = 'View a measurement was created in. Descriptive measurement attribute.';
+export const DCMSR_MEASUREMENT_VIEW = {
+  value: MEASUREMENT_VIEW,
+  schemeDesignator: DCMSR_SONADOR_SR.value,
+  meaning: MEASUREMENT_VIEW_MEANING,
+  schemeVersion: SONADOR_SCHEME_VERSION_03,
+}
+
 
 // Sonador Viewer Display Attributes
 
@@ -235,6 +249,7 @@ export const SonadorCodeValues = {
   DCMSR_MEASUREMENT_DESCRIPTION,
   DCMSR_MEASUREMENT_TEXT,
   DCMSR_MEASUREMENT_LOCATION,
+  DCMSR_MEASUREMENT_VIEW,
   DCMSR_DISPLAY_ATTRIBUTES,
   DCMSR_DISPLAY_COLOR,
   DCMSR_DISPLAY_COLOR_ROLES,
@@ -262,6 +277,9 @@ export const SR_DOCUMENT_CLASS = {
 // Form of the per-finding display attributes: nested under a container (Comprehensive 3D SR) or
 // flat role items (Enhanced SR)
 export const DISPLAY_LAYOUT = Object.freeze({ NESTED: 'nested', FLAT: 'flat' });
+// Item that carries a measurement's properties (description, text, location, view, display
+// attributes): the Finding of a group that has one, or the NUM item of a quantitative tool
+export const PROPERTY_PARENT = Object.freeze({ FINDING: 'finding', NUM: 'num' });
 
 export const SONADOR_SR_TEMPLATE = Object.freeze({
   TemplateIdentifier: `${SONADOR_SR}.1500`,
@@ -308,6 +326,7 @@ const Enums = {
   CORNERSTONE_TOOLS_SR_TAG,
   CORNERSTONE_3D_TOOLS_SOURCE_NAME,
   CORNERSTONE_3D_TOOLS_SOURCE_VERSION,
+  CORNERSTONE_3D_TAG,
 
   SONADOR_PROJECT,
   SONADOR_VIEWER,
@@ -327,6 +346,7 @@ const Enums = {
 
   SR_DOCUMENT_CLASS,
   DISPLAY_LAYOUT,
+  PROPERTY_PARENT,
   SONADOR_SR_TEMPLATE,
   DCMR_SR_TEMPLATE,
   SR_TEMPLATE_IDENTIFIERS,

@@ -1,0 +1,49 @@
+// The visibility toggles of the Annotations drawer, sized and coloured as the Segmentations panel
+// renders its own (ui-next DataRow and AddSegmentRow inside SonadorSegmentationPanelTheme): a ghost
+// icon button in the panel's secondary text colour, with the primary colour at 25% behind it on
+// hover; the Show icon keeps its own blue. The panel scales Tailwind's spacing (--spacing 0.3rem
+// for the segment rows, 0.315rem for the row above them), so the 24px classes there render at
+// 1.8rem and 1.89rem. platform/ui is not a Tailwind source, so the styling is explicit here.
+$rowToggleSize = 1.8rem
+$allToggleSize = 1.89rem
+
+.annotationVisibilityToggle
+  appearance: none
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  flex: 0 0 auto
+  width: $rowToggleSize
+  height: $rowToggleSize
+  margin: 0
+  padding: 0
+  border: 0
+  border-radius: 4px
+  background-color: transparent
+  color: var(--text-secondary-color)
+  cursor: pointer
+  transition: opacity 0.15s ease, background-color 0.15s ease
+
+  &:hover
+    // unquote: Stylus would evaluate hsl() itself
+    background-color: unquote('hsl(var(--primary) / 0.25)')
+
+  &:focus-visible
+    outline: 1px solid var(--active-color)
+
+  svg
+    flex: 0 0 auto
+    width: $rowToggleSize
+    height: $rowToggleSize
+
+  // The all-annotations toggle, as the all-segments toggle (with its heavier stroke)
+  &.allAnnotations
+    width: $allToggleSize
+    height: $allToggleSize
+
+    svg
+      width: $allToggleSize
+      height: $allToggleSize
+
+      path
+        stroke-width: 1.33px

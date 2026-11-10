@@ -482,12 +482,16 @@ export default function SonadorSegmentationEditorPanel({
             <SegmentationTable.Config>
               {/* Follow selected segment: a display preference, so it sits with the display settings
                   (owner's call, 2026-10-27), in the drawer's own switch row idiom */}
-              <div className="border-input w-full border"></div>
+              {/* A single control follows the rule, so it sits closer than in the display settings, and
+                  the row keeps room above the segmentation header below */}
+              <div className="pb-3 pt-2">
+                <div className="border-input w-full border"></div>
+              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="my-2 flex items-center pl-1" data-cy="seg-editor-follow-selection">
+                  <div className="my-2 flex items-center pb-3 pl-0.5" data-cy="seg-editor-follow-selection">
                     <Switch id="seg-editor-follow-selection-switch" checked={followSelection} onCheckedChange={editorOnFollowSelection} />
-                    <Label htmlFor="seg-editor-follow-selection-switch" className="text-muted-foreground mx-2 text-xs">
+                    <Label htmlFor="seg-editor-follow-selection-switch" className="text-muted-foreground ml-2.5 mr-2 text-xs">
                       {t('Follow selected segment')}
                     </Label>
                   </div>

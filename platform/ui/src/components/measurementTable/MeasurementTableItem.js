@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { Tooltip as HoverTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/ui-next';
+import { Button, Icons, Tooltip as HoverTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/ui-next';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableListItem } from '../tableList';
@@ -13,6 +13,7 @@ import { Icon } from './../../elements/Icon';
 
 import { subscribeSeriesMetadata } from './metadataEventConcerns';
 import './MeasurementTableItem.styl';
+import './VisibilityToggle.styl';
 
 const { measurements } = OHIF;
 const { DicomMetadataStore } = OHIF;
@@ -198,17 +199,23 @@ const MeasurementTableItem = ({
         <div>
           <div className="measurementContent">
             <div className="displayTexts">{getDataDisplayText()}</div>
+            {/* The Segmentations panel's row controls (ui-next DataRow): the visibility toggle, then
+                a slot for the lock */}
             <div className="measurementStatus">
-              <Icon
-                className={measurementData.isLocked ? `displayIcon` : ''}
-                name={measurementData.isVisible ? 'eye' : 'eye-closed'}
-                width="20px"
-                height="20px"
+              <Button
+                size="icon"
+                variant="ghost"
+                className={`annotationVisibilityToggle ${measurementData.isVisible ? '' : 'isHidden'}`}
+                data-cy="measurement-visibility-toggle"
+                aria-label={measurementData.isVisible ? t('Hide') : t('Show')}
+                title={measurementData.isVisible ? t('Hide') : t('Show')}
                 onClick={onToggleVisibility}
-              />
-            {Boolean(measurementData.isLocked) && (
-              <Icon name="lock" width="20px" height="20px" />
-            )}
+              >
+                {measurementData.isVisible ? <Icons.Hide /> : <Icons.Show />}
+              </Button>
+              <span className="measurementLockSlot">
+                {Boolean(measurementData.isLocked) && <Icons.Lock data-cy="measurement-locked" />}
+              </span>
             </div>
           </div>
           {refMeta && (<div className="referenceMeta">

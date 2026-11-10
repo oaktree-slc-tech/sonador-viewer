@@ -57,13 +57,11 @@ const _getPointsFromHandles = handles => {
   
   Object.keys(handles).map(handle => {
     if (['start', 'end'].includes(handle)) {
-      const point = {};
-      if (handles[handle].x) point.x = handles[handle].x;
-      if (handles[handle].y) point.y = handles[handle].y;
-      
-      if (point.x && point.y) {
-        points.push(point);
-      }  
+      // 0 is a coordinate: an image edge
+      const { x, y } = handles[handle];
+      if (_.isFinite(x) && _.isFinite(y)) {
+        points.push({ x, y });
+      }
     }
   });
 
@@ -92,7 +90,7 @@ const _getAttributes = element => {
 const point2handle = (p, i) => {
   // Convert the point array to an object representation for Cornerstone Tools
   
-  if (_.isObject(p) && p.x && p.y) {
+  if (_.isObject(p) && !_.isArray(p) && _.isFinite(p.x) && _.isFinite(p.y)) {
     
     // Point already in object format, return as-i
     return p;

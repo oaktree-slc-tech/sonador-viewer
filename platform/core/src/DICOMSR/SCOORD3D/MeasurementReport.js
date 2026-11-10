@@ -23,10 +23,11 @@ const { DicomMetaDictionary: dcmjsDicomMetaDictionary } = dcmjsData;
 const { MeasurementReport: csMeasurementReport } = c3dAdaptersSR.Cornerstone;
 
 
-function getTID300ContentItem(tool, ReferencedSOPSequence, adapterClass) {
-  // Retrieve a TID300 Content item from the provided adapter class
+function getTID300ContentItem(tool, ReferencedSOPSequence, adapterClass, context) {
+  // Retrieve a TID300 Content item from the provided adapter class. `context` ({ imageId,
+  // metadataProvider }) is the image the tool was drawn on.
 
-  const args = adapterClass.getTID300RepresentationArguments(tool);
+  const args = adapterClass.getTID300RepresentationArguments(tool, context);
   args.ReferencedSOPSequence = ReferencedSOPSequence;
 
   // Create TID 300 measurement, add references to measurement service UID and tool ID for
@@ -41,8 +42,9 @@ function getTID300ContentItem(tool, ReferencedSOPSequence, adapterClass) {
 }
 
 
-function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence) {
-  // Retreive measurement data from the tool type  
+function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, onMeasurementRefused) {
+  // Retreive measurement data from the tool type. A tool the adapter refuses to encode is left
+  // out of the report and passed to `onMeasurementRefused(toolType, tool, error)`.
 
   const toolTypeData = toolData[toolType];
   const toolClass = SonadorCornerstoneMeasurementReport.CORNERSTONE_TOOL_CLASSES_BY_TOOL_TYPE[toolType];
@@ -54,13 +56,22 @@ function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence) {
   const Measurements = toolTypeData.data.map(tool => {      
 
       // Retrieve TID300 measurement and annotate properties with the toolType
-      const tid300 = getTID300ContentItem(tool, ReferencedSOPSequence, toolClass);
+      let tid300;
+      try {
+        tid300 = getTID300ContentItem(tool, ReferencedSOPSequence, toolClass, context);
+      } catch (error) {
+        console.warn('[DICOM-SR:MeasurementReport:generateReport] measurement not written toolType='+toolType, error);
+        if (_.isFunction(onMeasurementRefused)) {
+          onMeasurementRefused(toolType, tool, error);
+        }
+        return null;
+      }
       _.defaults(tid300.props, { cornerstoneToolType: toolType });
       
       return tid300;
-  });
+  }).filter(Boolean);
   
-  return new TID1501MeasurementGroup(Measurements);
+  return Measurements.length ? new TID1501MeasurementGroup(Measurements) : undefined;
 }
 
 
@@ -92,6 +103,8 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
     //     (toolType, { uid, _id }, tid300Measurement, srItem, { documentClass, layout })
     //   - onDocumentClassUpgrade (function): called with (from, to) when an Enhanced SR save holds
     //     content Enhanced SR cannot, and is written as Comprehensive 3D SR instead
+    //   - onMeasurementRefused (function): called with (toolType, tool, error) for a tool the
+    //     adapter cannot encode (an incomplete or degenerate angle); the tool is left out
     // @returns { dataset, documentClass }
     options = options || {};
     const document = options.document || {};
@@ -190,8 +203,9 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
       });
 
       // Loop through each tool type for the image
+      const context = { imageId, metadataProvider };
       toolTypes.forEach(toolType => {
-        const group = getMeasurementGroup(toolType, toolData, ReferencedSOPSequence);
+        const group = getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, options.onMeasurementRefused);
         if (group) {
           allMeasurementGroups.push(group);
         }

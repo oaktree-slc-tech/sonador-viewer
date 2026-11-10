@@ -1,6 +1,8 @@
 jest.mock('../../App', () => ({ commandsManager: {} }));
 jest.mock('./jumpToRowItem.js', () => () => {});
 jest.mock('cornerstone-core', () => ({}), { virtual: true });
+// The MPR navigation reads image planes from Cornerstone3D (mprMeasurementNavigation.js)
+jest.mock('@cornerstonejs/core', () => ({ metaData: { get: () => undefined } }), { virtual: true });
 jest.mock('@ohif/ui', () => ({ MeasurementTable: () => null }));
 jest.mock('@ohif/core', () => {
   const displayAttributes = jest.requireActual('../../../../core/src/displayAttributes');

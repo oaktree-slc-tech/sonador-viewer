@@ -3,6 +3,7 @@ import { DisplaySetAttributeActiveToolbarButton } from '@ohif/extension-vtk';
 import Viewer3DCTToolbarButton from './toolbarComponents/Viewer3DToolbarButton';
 import ViewerImageRenderingEnabledToolbarButton from './toolbarComponents/ViewerImageRenderingEnabledToolbarButton';
 import ViewerSegmentationSurfaceEnabledToolbarButton from './toolbarComponents/ViewerSegmentationSurfaceEnabledToolbarButton';
+import ViewerAnnotationsEnabledToolbarButton from './toolbarComponents/ViewerAnnotationsEnabledToolbarButton';
 import ViewerVolumeCroppingToolbarButton from './toolbarComponents/ViewerVolumeCroppingToolbarButton';
 import ViewerVolumeCropAdjustToolbarButton from './toolbarComponents/ViewerVolumeCropAdjustToolbarButton';
 import ViewerVolumeRotateToolbarButton from './toolbarComponents/ViewerVolumeRotateToolbarButton';
@@ -57,8 +58,9 @@ const definitions = [
     commandOptions: {},
   },
   {
+    // What the viewer shows: the volume, the segmentation surfaces and the annotations
     id: 'CTViewportOptions',
-    label: 'More',
+    label: 'View',
     icon: 'ellipse-circle',
     buttons: [
       {
@@ -78,7 +80,18 @@ const definitions = [
         type: TOOLBAR_BUTTON_TYPES.COMMAND,
         commandName: 'toggleSegmentationSurface',
         commandOptions: {},
-      }
+      },
+      {
+        // Every annotation of the volume's Frame of Reference (read-only DICOM-SR measurements,
+        // Angle and Cobb angle measurements), with the Annotate icon of the 2D toolbar
+        id: 'CTVolumeAnnotationsEnabled',
+        label: 'Annotations',
+        icon: 'measure-target',
+        CustomComponent: ViewerAnnotationsEnabledToolbarButton,
+        type: TOOLBAR_BUTTON_TYPES.COMMAND,
+        commandName: 'toggleAnnotations',
+        commandOptions: {},
+      },
     ]
   },
   {

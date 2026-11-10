@@ -154,3 +154,51 @@ describe('coded findings and incomplete groups', () => {
     expect(measurements.map(m => m.TrackingUniqueIdentifier)).toEqual(['2.25.5']);
   });
 });
+
+
+describe('Angle and Cobb angle measurements for the read-only display', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { data: dcmjsData } = require('dcmjs');
+  const contentOf = file => {
+    const buffer = fs.readFileSync(path.join(__dirname, '..', '__fixtures__', file));
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    return dcmjsData.DicomMetaDictionary.naturalizeDataset(dcmjsData.DicomMessage.readFile(arrayBuffer).dict).ContentSequence;
+  };
+
+  it('draw a Cobb angle as its two lines, each on the referenced image', () => {
+    const [cobbAngle] = getMeasurements(contentOf('sonador-viewer.cobb-angle-image.2026-1108.dcm'));
+    expect(cobbAngle.TrackingIdentifier).toBe('cornerstoneTools@^4.0.0:CobbAngle');
+    expect(cobbAngle.coords).toHaveLength(2);
+    cobbAngle.coords.forEach(coord => {
+      expect(coord).toMatchObject({ GraphicType: 'POLYLINE', ValueType: 'SCOORD' });
+      expect(coord.GraphicData).toHaveLength(4);
+      expect(coord.ReferencedSOPSequence).toBeDefined();
+    });
+  });
+
+  it('draw an Angle as its polyline (p1, vertex, vertex, p3)', () => {
+    const [angle] = getMeasurements(contentOf('sonador-viewer.angle-image.2026-1108.dcm'));
+    expect(angle.coords).toHaveLength(1);
+    expect(angle.coords[0].GraphicData).toHaveLength(8);
+  });
+});
+
+describe('displayCoordsOf', () => {
+  const { displayCoordsOf } = jest.requireActual('../utils/angleGeometry');
+  const ref = { ReferencedSOPSequence: { ReferencedSOPInstanceUID: '2.25.900' } };
+
+  it('splits a Cobb angle polyline of either prefix and coordinate domain, and nothing else', () => {
+    const image = { ValueType: 'SCOORD', GraphicType: 'POLYLINE', GraphicData: [1, 2, 3, 4, 5, 6, 7, 8], ...ref };
+    expect(displayCoordsOf('Cornerstone3DTools@^0.1.0:CobbAngle', [image]).map(c => c.GraphicData)).toEqual([[1, 2, 3, 4], [5, 6, 7, 8]]);
+    const patient = { ValueType: 'SCOORD3D', GraphicType: 'POLYLINE', GraphicData: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+    expect(displayCoordsOf('cornerstoneTools@^4.0.0:CobbAngle', [patient]).map(c => c.GraphicData))
+      .toEqual([[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]]);
+
+    expect(displayCoordsOf('cornerstoneTools@^4.0.0:Angle', [image])).toEqual([image]);
+    expect(displayCoordsOf('cornerstoneTools@^4.0.0:Length', [image])).toEqual([image]);
+    const short = { ...image, GraphicData: [1, 2, 3, 4] };
+    expect(displayCoordsOf('cornerstoneTools@^4.0.0:CobbAngle', [short])).toEqual([short]);
+    expect(displayCoordsOf(undefined, [image])).toEqual([image]);
+  });
+});

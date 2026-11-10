@@ -10,6 +10,9 @@
 //   a CODE or NUM item) is written as Comprehensive 3D SR instead, with a warning.
 // * Equipment and the Device Observer are the Viewer's on every save; the Person Observer is the
 //   signed-in user, omitted when the session does not name one.
+// * isDisplayOnlyDocument classifies a document whose root concept is in the `Sonador-SR` scheme
+//   (an application document). The Cornerstone3D report reader does not hydrate its Angle and
+//   Cobb angle groups; other groups are not affected by the classification.
 
 import _ from 'lodash';
 
@@ -20,6 +23,7 @@ import {
   ObserverContextCodes,
   RELATIONSHIP_TYPE,
   SONADOR_MANUFACTURER,
+  SONADOR_SR,
   SONADOR_SR_TEMPLATE,
   SONADOR_VIEWER_MODEL_NAME,
   SR_DOCUMENT_CLASS,
@@ -127,6 +131,15 @@ function applyRootContent(content, { template, personName, deviceObserverUID } =
 }
 
 
+// Document kind
+
+function isDisplayOnlyDocument(dataset) {
+  // True for a document whose root concept name is coded in the Sonador-SR scheme
+  const rootConcept = firstItem(dataset && dataset.ConceptNameCodeSequence);
+  return !!rootConcept && rootConcept.CodingSchemeDesignator === SONADOR_SR;
+}
+
+
 // Document class
 
 function requiresComprehensive(contentItem, parent) {
@@ -195,12 +208,27 @@ function clearHydratedReports() {
 }
 
 
+// Reports written by this Viewer and shown before the upload confirms they are stored. Their
+// measurements hydrate unlocked: until the report is stored they are not saved, and a failed
+// upload must leave them editable for a retry.
+
+const unconfirmedReports = new Set();
+
+const markReportUnconfirmed = SOPInstanceUID => SOPInstanceUID && unconfirmedReports.add(SOPInstanceUID);
+const confirmReport = SOPInstanceUID => unconfirmedReports.delete(SOPInstanceUID);
+const isUnconfirmedReport = SOPInstanceUID => unconfirmedReports.has(SOPInstanceUID);
+
+
 export {
   applyRootContent,
   clearHydratedReports,
+  confirmReport,
   currentSession,
   documentSettings,
   equipment,
+  isDisplayOnlyDocument,
+  isUnconfirmedReport,
+  markReportUnconfirmed,
   observerContextItems,
   personObserverName,
   registerHydratedReport,

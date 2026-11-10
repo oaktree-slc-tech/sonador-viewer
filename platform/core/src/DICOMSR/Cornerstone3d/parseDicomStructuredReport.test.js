@@ -26,9 +26,12 @@ jest.mock('../utils/initDisplaySetMeasurements', () => ({
   __esModule: true, default: () => ({ imageDisplaySets: [], srDisplaySets: [] }),
 }));
 jest.mock('./initDisplaySetMeasurements', () => ({ linkMeasurementsToDisplaySets: () => {} }));
-jest.mock('./utils/sopInstanceImageIds', () => ({
-  buildSopInstanceImageIds: () => ({ sopInstanceUIDToImageId: { '2.25.900': 'wadors:image' }, imageIdsForToolState: { '2.25.900': [] } }),
-}));
+// Image ids of the study: an instance, and a multiframe instance with two frames
+const mockImageIds = () => ({
+  sopInstanceUIDToImageId: { '2.25.900': 'wadors:image', '2.25.906': 'wadors:multiframe/1' },
+  imageIdsForToolState: { '2.25.900': [], '2.25.906': [undefined, 'wadors:multiframe/1', 'wadors:multiframe/2'] },
+});
+jest.mock('./utils/sopInstanceImageIds', () => ({ buildSopInstanceImageIds: () => mockImageIds() }));
 
 // Retrieval boundaries: the DICOMweb response is held per SOP instance until released
 const mockRetrievals = {};
@@ -86,7 +89,7 @@ jest.mock('../../services/DicomMetadataStore', () => ({
 const mockImport = jest.fn(() => 'measurement-uid');
 const mockMeasurementApi = {
   measurementService: { _broadcastEvent: () => {}, getMeasurement: () => ({}), EVENTS: {} },
-  _serviceSourceMappings: () => ({ source: {}, mappings: [{}], mappingDefinitions: ['DICOMSRSeriesTagTool'] }),
+  _serviceSourceMappings: () => ({ source: {}, mappings: [{}], mappingDefinitions: ['DICOMSRSeriesTagTool', 'Angle'] }),
   _serviceManagedTool: () => ({ toolServiceManaged: true, source: { annotationToMeasurement: mockImport } }),
   getMeasurementByTrackingUid: () => undefined,
   _apiSourceServiceMeasurement: () => true,
@@ -95,6 +98,7 @@ const mockMeasurementApi = {
 // Tool state the report reader returns for a report holding a finding (other reports are read by
 // the production Cornerstone3D reader)
 const mockToolStates = {};
+const mockReaderOptions = [];
 jest.mock('../../measurements/classes/MeasurementApi', () => ({
   __esModule: true, default: { get Instance() { return mockMeasurementApi; } },
 }));
@@ -110,8 +114,10 @@ jest.mock('../../measurements/enums', () => {
     get: () => {
       const reader = jest.requireActual('./MeasurementReport').default;
       return {
-        generateToolState: (dataset, ...args) => mockToolStates[dataset.SOPInstanceUID]
-          || reader.generateToolState(dataset, ...args),
+        generateToolState: (dataset, ...args) => {
+          mockReaderOptions.push(args[3]);
+          return mockToolStates[dataset.SOPInstanceUID] || reader.generateToolState(dataset, ...args);
+        },
       };
     },
   });
@@ -287,5 +293,30 @@ describe('read-only display', () => {
     await lateLoad;
 
     expect(mockReadOnly).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('multiframe references', () => {
+  it('hands the reader the image id of every frame and imports an angle on the frame it references', async () => {
+    const key = report('2.25.60', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500');
+    mockToolStates[key] = {
+      Angle: [{
+        sopInstanceUid: '2.25.906', TrackingUniqueIdentifier: `${key}.tracking`,
+        annotation: {
+          data: { frameNumber: 2, handles: { points: [[120.5, 10.5, 20], [110.5, 10.5, 20], [110.5, 20.5, 20]] } },
+          metadata: { referencedImageId: 'wadors:multiframe/2' },
+        },
+      }],
+    };
+    mockReaderOptions.length = 0;
+    await parse(key);
+
+    expect(mockReaderOptions[0].imageIdsForToolState).toEqual(mockImageIds().imageIdsForToolState);
+    const [[toolName, { annotation }]] = mockImport.mock.calls;
+    expect(toolName).toBe('Angle');
+    expect(annotation.data.imageId).toBe('wadors:multiframe/2');
+    expect(annotation.metadata.referencedImageId).toBe('wadors:multiframe/2');
+    expect(annotation.data.handles.points[0]).toEqual([120.5, 10.5, 20]);
   });
 });
