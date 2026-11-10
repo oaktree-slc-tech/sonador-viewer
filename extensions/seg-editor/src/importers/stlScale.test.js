@@ -1,7 +1,8 @@
 // The scale check of an STL import: which unit a model looks to be in, against the image
 
 import {
-  extentOf, modelsNeedingRescale, overlapFraction, pointBounds, rescaleModel, suggestStlUnit,
+  extentOf, modelsNeedingRescale, overlapFraction, pointBounds, rescaleModel, STL_UNIT_BY_CODE, STL_UNITS,
+  suggestStlUnit, unitFromMeasurementUnits,
 } from './stlScale';
 
 
@@ -82,5 +83,29 @@ describe('rescaleModel / modelsNeedingRescale', () => {
       ['m', ['femur', 'patella']],
       ['cm', ['pin']],
     ]);
+  });
+});
+
+describe('the declarable units and an encoded unit (ohif-viewers#151 FR-5)', () => {
+  it('lists the CID 7063 units the import handles, millimetres first, each reachable by its code', () => {
+    expect(STL_UNITS.map(unit => unit.unit)).toEqual(['mm', 'µm', 'cm', 'in', 'm']);
+    expect(STL_UNITS.map(unit => unit.factor)).toEqual([1, 0.001, 10, 25.4, 1000]);
+    expect(STL_UNIT_BY_CODE.in.name).toBe('inches');
+    expect(STL_UNIT_BY_CODE.furlong).toBeUndefined();
+  });
+
+  it('reads a model instance\'s Measurement Units Code Sequence by its UCUM code', () => {
+    const encoded = (CodeValue, CodingSchemeDesignator = 'UCUM') => ({ MeasurementUnitsCodeSequence: [{ CodeValue, CodingSchemeDesignator, CodeMeaning: 'x' }] });
+    expect(unitFromMeasurementUnits(encoded('mm'))).toBe(STL_UNIT_BY_CODE.mm);
+    expect(unitFromMeasurementUnits(encoded('um'))).toBe(STL_UNIT_BY_CODE['µm']);
+    expect(unitFromMeasurementUnits(encoded('[in_i]'))).toBe(STL_UNIT_BY_CODE.in);
+    expect(unitFromMeasurementUnits(encoded(' m '))).toBe(STL_UNIT_BY_CODE.m);
+    // Without a designator the code is read as UCUM; another scheme, an unknown code or no
+    // sequence declare nothing
+    expect(unitFromMeasurementUnits({ MeasurementUnitsCodeSequence: [{ CodeValue: 'cm' }] })).toBe(STL_UNIT_BY_CODE.cm);
+    expect(unitFromMeasurementUnits(encoded('mm', 'DCM'))).toBeUndefined();
+    expect(unitFromMeasurementUnits(encoded('ft'))).toBeUndefined();
+    expect(unitFromMeasurementUnits({})).toBeUndefined();
+    expect(unitFromMeasurementUnits(undefined)).toBeUndefined();
   });
 });

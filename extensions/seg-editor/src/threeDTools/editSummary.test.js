@@ -1,6 +1,6 @@
 // The Selection panel's edit summary line
 
-import { editSummary, writeStatusText } from './editSummary';
+import { depthText, editSummary, writeStatusText } from './editSummary';
 
 const t = (key, options = {}) => key.replace(/{{(\w+)}}/g, (_m, name) => options[name]);
 
@@ -59,5 +59,30 @@ describe('editSummary: synchronizations (ohif-viewers#152)', () => {
       + '2D views updated: 40 voxel(s) removed, 2 added, 0 outside the edit region');
     expect(acknowledgedText(t, { defects: null })).toBe('surface synchronized');
     expect(acknowledgedText(t, null)).toBe('');
+  });
+});
+
+describe('editSummary: the removal depth with its basis (ohif-viewers#151 FR-7)', () => {
+  it('states a world-unit depth with its voxel reading, and a voxel-unit depth with its world reading', () => {
+    expect(depthText(t, { basis: 'world', unit: 'mm', value: 2, world: 2, voxels: 4 })).toBe('depth 2 mm (≈ 4 vox)');
+    expect(depthText(t, { basis: 'voxels', unit: 'units', value: 4, world: 4, voxels: 4 })).toBe('depth 4 vox (= 4 units)');
+    expect(depthText(t, { basis: 'voxels', unit: 'units', value: 3, world: 2.25, voxels: 3 })).toBe('depth 3 vox (= 2.25 units)');
+  });
+
+  it('leaves the other reading out when the grid steps are not known, and says nothing without a depth', () => {
+    expect(depthText(t, { basis: 'world', unit: 'units', value: 3.5, world: 3.5, voxels: null })).toBe('depth 3.5 units');
+    expect(depthText(t, { basis: 'world', unit: 'mm', value: 0, world: 0, voxels: 0 })).toBe('depth 0 mm (≈ 0 vox)');
+    expect(depthText(t, null)).toBe('');
+    expect(depthText(t, { basis: 'world', value: -1 })).toBe('');
+  });
+
+  it('puts the depth on a removal line, after what was removed and closed', () => {
+    const line = editSummary(t, {
+      faces: 12, holes: 1, methods: { flat: 1 }, closed: true, write: 'queued',
+      depth: { basis: 'world', unit: 'mm', value: 2, world: 2, voxels: 4 },
+    });
+    expect(line).toBe('12 face(s) removed, 1 hole(s) closed (1 flat); depth 2 mm (≈ 4 vox); result closed; 2D views updating...');
+    // A repair has no depth
+    expect(editSummary(t, { repair: true, holes: 2, methods: {}, depth: { basis: 'world', value: 2 } })).not.toMatch(/depth/);
   });
 });

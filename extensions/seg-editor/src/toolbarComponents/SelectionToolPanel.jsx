@@ -4,14 +4,14 @@ import PropTypes from 'prop-types';
 
 import { Button, Icons } from '@ohif/ui-next';
 
+import { meshColorFor } from '../threeDTools/editModeOverlay';
 import {
   EDIT_SETTINGS,
   get3DToolState,
   is3DTargetEditable,
   LASSO_SHAPES,
+  LENGTH_BASIS,
   PAINT_MODES,
-  PAINT_RADIUS,
-  REMOVAL_DEPTH,
   request3DToolAction,
   SELECTION_ACTIONS,
   set3DToolOption,
@@ -21,11 +21,10 @@ import {
   THREE_D_TOOLS,
   WELD_FRACTION,
 } from '../threeDTools/threeDToolState';
-import { meshColorFor } from '../threeDTools/editModeOverlay';
 import { setMeshColor, useMeshColor } from '../utils/meshColor';
 import { setPreviewColor, usePreviewColor } from '../utils/previewColor';
 import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
-import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/segEditorUnits';
+import { unitHintFor, useSegEditorUnits } from '../utils/segEditorUnits';
 
 import { AdvancedField, Card, ColorSwatch, SegmentedRow, SliderRow, Tip, ToggleRow } from './panelControls';
 
@@ -98,10 +97,39 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
 
   useEffect(() => subscribe3DToolState(setState), []);
 
-  // Lengths are in the reference series' patient units: mm, or the grid's steps without spacing
+  // Lengths are in the reference series' patient units: mm, or the grid's steps without a patient
+  // calibration (the hint says why: no spacing, a detector spacing only, a malformed value)
   const units = useSegEditorUnits();
   const lengthUnit = t(units.length);
-  const lengthHint = units.length === LENGTH_UNITS.generic ? t(GENERIC_UNIT_HINT) : undefined;
+  const unitHint = unitHintFor(units);
+  const lengthHint = unitHint ? t(unitHint) : undefined;
+
+  // Depth and Brush size as the state resolves them (ohif-viewers#151 FR-3): in world units on a
+  // calibrated grid, with the same length read in voxels beneath; in voxel units (whole steps of
+  // the grid's smallest spacing) on an uncalibrated grid whose steps are known, with the length in
+  // grid units beneath. The cells' sizes are shown with either, so a count on an anisotropic grid
+  // is not read as that many cells along every axis.
+  const depth = state.lengths.removalDepth;
+  const brush = state.lengths.paintRadius;
+  const round3 = value => Number(Number(value).toPrecision(3));
+  const cellsOf = spacing => spacing.map(round3).join(' × ');
+  const lengthUnitFor = length => (length.basis === LENGTH_BASIS.voxels ? t('vox') : lengthUnit);
+  const lengthHintFor = length => (length.basis === LENGTH_BASIS.voxels
+    ? [
+      length.reference
+        ? t("Voxel units: whole steps of the grid's smallest spacing ({{step}}). The cells are {{cells}} across, so a count is not that many cells along every axis.", { step: round3(length.reference), cells: cellsOf(length.spacing) })
+        : t('Voxel units: whole steps of the grid\'s smallest spacing.'),
+      lengthHint,
+    ].filter(Boolean).join(' ')
+    : lengthHint);
+  const lengthNote = length => {
+    if (!length.reference) {
+      return undefined;
+    }
+    return length.basis === LENGTH_BASIS.voxels
+      ? t('= {{world}} grid units · cells {{cells}}', { world: round3(length.world), cells: cellsOf(length.spacing) })
+      : t('≈ {{count}} voxel(s) · cells {{cells}} {{unit}}', { count: round3(length.voxels), cells: cellsOf(length.spacing), unit: lengthUnit });
+  };
   const segments = key => SEGMENTS[key].map(value => ({ value, label: t(SEGMENT_LABELS[value]) }));
 
   // The colour a pending edit's changed faces are drawn in (a user preference, also on the
@@ -231,12 +259,13 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
               id="seg-editor-paint-radius"
               label={t('Brush size')}
               hint={t('Radius of the brush')}
-              unit={lengthUnit}
-              unitHint={lengthHint}
-              value={state.paintRadius}
-              range={PAINT_RADIUS}
+              unit={lengthUnitFor(brush)}
+              unitHint={lengthHintFor(brush)}
+              value={brush.value}
+              range={brush.range}
               disabled={!!preview}
-              onChange={value => set('paintRadius', value)}
+              onChange={value => set(brush.settingKey, value)}
+              note={lengthNote(brush)}
             />
           </>
         ) : (
@@ -325,12 +354,13 @@ export default function SelectionToolPanel({ tool = THREE_D_TOOLS.Lasso }) {
             id="seg-editor-depth"
             label={t('Depth')}
             hint={t("Also removes the segment's voxels within this distance of the removed points in the 2D views")}
-            unit={lengthUnit}
-            unitHint={lengthHint}
-            value={state.removalDepth}
-            range={REMOVAL_DEPTH}
+            unit={lengthUnitFor(depth)}
+            unitHint={lengthHintFor(depth)}
+            value={depth.value}
+            range={depth.range}
             disabled={!!preview}
-            onChange={value => set('removalDepth', value)}
+            onChange={value => set(depth.settingKey, value)}
+            note={lengthNote(depth)}
           />
           <button
             type="button"

@@ -1496,7 +1496,10 @@ describe('SegEditorSurfaceView 3D tools', () => {
       expect(api.presentation[geometryId].visible).toBe(false);
       expect(get3DToolState().preview).toEqual({
         points: 1, faces: 0, holes: 1, methods: { fitted: 1 }, closed: true, openEdges: 0, repair: false,
-        preexistingLoops: 0, introduced: null, before: null, after: { closed: true }, conditioning: null, write: 'queued',
+        preexistingLoops: 0, introduced: null, before: null, after: { closed: true }, conditioning: null,
+        // The depth as set, in world units: the test's grid has no units record, so no voxel reading
+        depth: { basis: 'world', unit: 'units', value: 3.5, voxels: null, world: 3.5 },
+        write: 'queued',
       });
       expect(view._changeOverlay).not.toBeNull();
       expect(api.scene.add).toHaveBeenCalledWith(view._changeOverlay);

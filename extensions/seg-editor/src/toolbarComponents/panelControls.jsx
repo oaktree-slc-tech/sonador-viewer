@@ -102,7 +102,7 @@ const RANGE_SHAPE = PropTypes.shape({ min: PropTypes.number, max: PropTypes.numb
  * A setting as a number field: typed or stepped values apply as they are entered (the state
  * clamps them to the slider's range), and an unfinished entry is put back on blur.
  */
-export function NumberField({ id, label, value, range, disabled, onChange }) {
+export function NumberField({ id, label, value, range, disabled, onChange, describedBy }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
 
@@ -127,6 +127,7 @@ export function NumberField({ id, label, value, range, disabled, onChange }) {
       disabled={disabled}
       className="h-6 w-16 px-1.5 text-right text-xs tabular-nums"
       aria-label={label}
+      aria-describedby={describedBy}
       onChange={change}
       onBlur={() => setDraft(String(value))}
       data-cy={id}
@@ -141,23 +142,34 @@ NumberField.propTypes = {
   range: RANGE_SHAPE.isRequired,
   disabled: PropTypes.bool,
   onChange: PropTypes.func.isRequired,
+  /** The ids of the elements that describe the field */
+  describedBy: PropTypes.string,
 };
 
 /**
  * A numeric setting: its label, number field and unit on one line, the slider beneath. The wheel
  * steps it while the pointer is over the row.
+ *
+ * The unit's hover text is for the pointer; from the keyboard, the number field and the slider's
+ * thumb are described by the unit with that text (a visually hidden line) and by the note, so a
+ * unit such as voxel units is defined wherever the setting takes focus. The row is positioned so
+ * that line (absolutely positioned, as sr-only is) is laid out inside it: otherwise its containing
+ * block is the page, since the side panel scrolls without being positioned, and a row below the
+ * fold stretches the page and gives it a second scrollbar beside the panel's.
  */
-export function SliderRow({ id, label, hint, unit, unitHint, value, range, disabled, onChange }) {
+export function SliderRow({ id, label, hint, unit, unitHint, value, range, disabled, onChange, note }) {
   const row = useRef(null);
   useWheelStep(row, { value, step: range.step, onChange, disabled });
+  const unitDescription = unit ? [unit, unitHint].filter(Boolean).join('. ') : '';
+  const describedBy = [unitDescription && `${id}-unit-description`, note && `${id}-note`].filter(Boolean).join(' ') || undefined;
   return (
-    <div ref={row} className="flex flex-col gap-3 pb-1 pt-0.5">
+    <div ref={row} className="relative flex flex-col gap-3 pb-1 pt-0.5">
       <div className="flex items-center justify-between gap-2">
         <Tip text={hint}>
           <label htmlFor={`${id}-value`} className="text-[13px]">{label}</label>
         </Tip>
         <span className="flex items-center gap-1.5">
-          <NumberField id={`${id}-value`} label={label} value={value} range={range} disabled={disabled} onChange={onChange} />
+          <NumberField id={`${id}-value`} label={label} value={value} range={range} disabled={disabled} onChange={onChange} describedBy={describedBy} />
           <Unit unit={unit} hint={unitHint} />
         </span>
       </div>
@@ -168,9 +180,16 @@ export function SliderRow({ id, label, hint, unit, unitHint, value, range, disab
         value={[value]}
         disabled={disabled}
         aria-label={label}
+        thumbProps={{ 'aria-label': label, 'aria-describedby': describedBy }}
         onValueChange={([next]) => onChange(next)}
         data-cy={id}
       />
+      {unitDescription && (
+        <span id={`${id}-unit-description`} className="sr-only">{unitDescription}</span>
+      )}
+      {note && (
+        <p id={`${id}-note`} className="text-muted-foreground -mt-1.5 text-xs" data-cy={`${id}-note`}>{note}</p>
+      )}
     </div>
   );
 }
@@ -185,6 +204,8 @@ SliderRow.propTypes = {
   range: RANGE_SHAPE.isRequired,
   disabled: PropTypes.bool,
   onChange: PropTypes.func.isRequired,
+  /** A line under the slider: the same length read in the other basis */
+  note: PropTypes.string,
 };
 
 /**
