@@ -28,6 +28,8 @@
     "start": "yarn run dev"
   },
   "peerDependencies": {
+    "@cornerstonejs/adapters": "~4.22.13",
+    "@cornerstonejs/core": "~4.22.13",
     "@ohif/core": "^0.50.0",
     "@ohif/extension-seg-editor": "^0.2.0",
     "@ohif/extension-viewerm3d": "^0.1.0",

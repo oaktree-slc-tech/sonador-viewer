@@ -1,15 +1,18 @@
-// Display of the Angle and Cobb angle annotations in a Cornerstone3D 3D (volume rendering)
+// Display of the Length, Angle and Cobb angle annotations in a Cornerstone3D 3D (volume rendering)
 // viewport: every annotation of those tools in the viewport's Frame of Reference, including the
-// ones the classic measurements are mirrored to (extensions/cornerstone measurementAnnotationSync). This
-// tool only draws them. The stock Angle / Cobb angle tools offer an annotation only to views whose
-// plane is parallel to it, which a rotating 3D view almost never is, so this tool draws them
-// whatever the camera: the lines, the handles and the value (DICOMSR angleGeometry
-// `annotationAngle`; for a mirrored measurement, the value its classic record and SR hold).
+// ones the classic and out-of-plane measurements are mirrored to (extensions/cornerstone
+// measurementAnnotationSync). This tool only draws them. The stock tools offer an annotation only to
+// views whose plane is parallel to it, which a rotating 3D view almost never is, so this tool draws
+// them whatever the camera: the lines, the handles and the value (DICOMSR angleGeometry
+// `annotationLength`, in mm, and `annotationAngle`: for a mirrored measurement, the value its record
+// and SR hold while its points are unchanged). The tool keeps its name, which the views
+// that add it use.
 //
 // Display only: it takes no mouse input, and editing stays with the 2D and inspection views. Add it to a tool
 // group with `addAngleDisplay3DToolToGroup`; `setAngleDisplay3DEnabled` shows or hides it.
 
-import { annotationAngle } from '@ohif/core/src/DICOMSR/utils/angleGeometry';
+import { annotationAngle, annotationLength } from '@ohif/core/src/DICOMSR/utils/angleGeometry';
+import { NON_PLANAR_COBB_ANGLE } from '@ohif/core/src/DICOMSR/utils/outOfPlane';
 
 import { utilities as c3dUtils } from '@cornerstonejs/core';
 import {
@@ -23,8 +26,10 @@ import {
 
 const { drawHandles, drawLine, drawLinkedTextBox, drawPolyline } = c3dSvgDrawing;
 
-// Tools whose annotations are drawn, with their point counts
-const ANGLE_TOOLS = { Angle: 3, CobbAngle: 4 };
+// Tools whose annotations are drawn, with their point counts: a Cobb angle whose lines lie in no
+// common plane is kept under its own tool name, which no slice tool draws, and drawn as a Cobb angle
+const DISPLAYED_TOOLS = { Length: 2, Angle: 3, CobbAngle: 4, [NON_PLANAR_COBB_ANGLE]: 4 };
+const drawnAs = toolName => (toolName === NON_PLANAR_COBB_ANGLE ? 'CobbAngle' : toolName);
 
 
 class AngleDisplay3DTool extends AnnotationTool {
@@ -44,15 +49,15 @@ class AngleDisplay3DTool extends AnnotationTool {
   getHandleNearImagePoint = () => undefined;
 
   _annotations(viewport) {
-    // Visible Angle / Cobb angle annotations of the viewport's Frame of Reference, with complete
-    // geometry
+    // Visible Length / Angle / Cobb angle annotations of the viewport's Frame of Reference, with
+    // complete geometry
     const FrameOfReferenceUID = viewport.getFrameOfReferenceUID();
-    return Object.keys(ANGLE_TOOLS).flatMap(toolName =>
+    return Object.keys(DISPLAYED_TOOLS).flatMap(toolName =>
       (c3dAnnotation.state.getAnnotations(toolName, viewport.element) || []).filter(annotation =>
         annotation.metadata?.FrameOfReferenceUID === FrameOfReferenceUID
         && c3dAnnotation.visibility.isAnnotationVisible(annotation.annotationUID)
-        && annotation.data?.handles?.points?.length === ANGLE_TOOLS[toolName])
-        .map(annotation => ({ toolName, annotation })));
+        && annotation.data?.handles?.points?.length === DISPLAYED_TOOLS[toolName])
+        .map(annotation => ({ toolName: drawnAs(toolName), annotation })));
   }
 
   renderAnnotation = (enabledElement, svgDrawingHelper) => {
@@ -79,7 +84,9 @@ class AngleDisplay3DTool extends AnnotationTool {
       const lineOptions = { color, width: this.getStyle('lineWidth', styleSpecifier, annotation) };
 
       const canvasCoordinates = data.handles.points.map(point => viewport.worldToCanvas(point));
-      if (toolName === 'Angle') {
+      if (toolName === 'Length') {
+        drawLine(svgDrawingHelper, annotationUID, 'line', canvasCoordinates[0], canvasCoordinates[1], lineOptions);
+      } else if (toolName === 'Angle') {
         drawPolyline(svgDrawingHelper, annotationUID, 'angle', canvasCoordinates, lineOptions);
       } else {
         drawLine(svgDrawingHelper, annotationUID, 'line1', canvasCoordinates[0], canvasCoordinates[1], lineOptions);
@@ -89,15 +96,16 @@ class AngleDisplay3DTool extends AnnotationTool {
 
       // The value; 0 is a value, and an incomplete or degenerate angle without a matching record
       // value has none
-      const value = annotationAngle(toolName, data);
+      const value = toolName === 'Length' ? annotationLength(data) : annotationAngle(toolName, data);
       if (!Number.isFinite(value)) {
         return;
       }
+      const unit = toolName === 'Length' ? 'mm' : String.fromCharCode(176);
       drawLinkedTextBox(
         svgDrawingHelper,
         annotationUID,
         'textBox',
-        [`${c3dUtils.roundNumber(value)} ${String.fromCharCode(176)}`],
+        [`${c3dUtils.roundNumber(value)} ${unit}`],
         c3dToolsUtilities.drawing.getTextBoxCoordsCanvas(canvasCoordinates),
         canvasCoordinates,
         {},

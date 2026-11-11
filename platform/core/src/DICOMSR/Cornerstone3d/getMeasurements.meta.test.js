@@ -202,3 +202,82 @@ describe('displayCoordsOf', () => {
     expect(displayCoordsOf(undefined, [image])).toEqual([image]);
   });
 });
+
+
+describe('properties under the NUM item', () => {
+  const num = (code, value, children) => ({
+    RelationshipType: 'CONTAINS', ValueType: 'NUM', ConceptNameCodeSequence: [{ CodeValue: code, CodingSchemeDesignator: 'SCT', CodeMeaning: code }],
+    MeasuredValueSequence: [{ NumericValue: value, MeasurementUnitsCodeSequence: [{ CodeValue: 'mm', CodingSchemeDesignator: 'UCUM' }] }],
+    ContentSequence: children,
+  });
+  const scoord3d = (GraphicData, name) => ({
+    RelationshipType: name ? 'HAS PROPERTIES' : 'INFERRED FROM', ValueType: 'SCOORD3D', GraphicType: 'POLYLINE', GraphicData,
+    ReferencedFrameOfReferenceUID: '2.25.10', ...(name ? { ConceptNameCodeSequence: sonador(name) } : {}),
+  });
+  const uidref = (code, UID) => ({ RelationshipType: 'HAS PROPERTIES', ValueType: 'UIDREF', ConceptNameCodeSequence: sonador(code), UID });
+  const colour = (role, lab) => text('HAS PROPERTIES', `Sonador-DisplayAttributes.Color.${role}`, lab);
+  const group = (tool, uid, items) => ({
+    RelationshipType: 'CONTAINS', ValueType: 'CONTAINER', ConceptNameCodeSequence: dcm('125007', 'Measurement Group'),
+    ContentSequence: [
+      { RelationshipType: 'HAS OBS CONTEXT', ValueType: 'TEXT', ConceptNameCodeSequence: dcm('112039', 'Tracking Identifier'),
+        TextValue: `cornerstoneTools@^4.0.0:${tool}` },
+      { RelationshipType: 'HAS OBS CONTEXT', ValueType: 'UIDREF', ConceptNameCodeSequence: dcm('112040', 'Tracking Unique Identifier'), UID: uid },
+      ...items,
+    ],
+  });
+  const finding = children => ({
+    RelationshipType: 'CONTAINS', ValueType: 'CODE', ConceptNameCodeSequence: dcm('121071', 'Finding'),
+    ConceptCodeSequence: [{ CodeValue: 'x', CodingSchemeDesignator: '99TEST', CodeMeaning: 'Finding' }], ContentSequence: children,
+  });
+
+  it('reads description, text, location, view, source series and colours of a Python-written Length from its NUM', () => {
+    const [length] = getMeasurements(report([group('Length', '2.25.20', [num('410668003', 31.2, [
+      scoord3d([0, 0, 0, 0, 31.2, 0]),
+      text('HAS PROPERTIES', 'Sonador-Measurement.Description', 'Femoral neck'),
+      text('HAS PROPERTIES', 'Sonador-Measurement.Text', 'CT'),
+      text('HAS PROPERTIES', 'Sonador-Measurement.Location', 'Bone'),
+      text('HAS PROPERTIES', 'Sonador-Measurement.View', ' sagittal '),
+      uidref('Sonador-Measurement.Source-Series', '2.25.30'),
+      // The flat form of older Enhanced SR reports: colour roles directly under the NUM
+      colour('Border', '65535\\32768\\32768'),
+    ])])]));
+
+    expect(length.description).toBe('Femoral neck');
+    expect(length.metadata).toMatchObject({ text: 'CT', location: 'Bone', views: ['sagittal'], sourceSeries: '2.25.30' });
+    expect(length.displayAttributes.Color.Border).toMatch(/^#[0-9A-F]{6}$/);
+    expect(length.coords).toHaveLength(1);
+  });
+
+  it('keeps an unknown View value verbatim, trimmed', () => {
+    const [angle] = getMeasurements(report([group('Angle', '2.25.21', [num('285285000', 12, [
+      scoord3d([10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0]),
+      text('HAS PROPERTIES', 'Sonador-Measurement.View', '  frog-leg lateral '),
+    ])])]));
+    expect(angle.metadata.views).toEqual(['frog-leg lateral']);
+  });
+
+  it("reads the NUM's properties, not the Finding's, when a group holds both", () => {
+    const [length] = getMeasurements(report([group('Length', '2.25.22', [
+      finding([text('HAS PROPERTIES', 'Sonador-Measurement.Description', 'Finding description')]),
+      num('410668003', 10, [scoord3d([0, 0, 0, 10, 0, 0]), text('HAS PROPERTIES', 'Sonador-Measurement.Description', 'NUM description')]),
+    ])]));
+    expect(length.description).toBe('NUM description');
+  });
+
+  it('takes the typed properties from the first NUM that carries any, and keeps every NUM with its own children', () => {
+    const unknown = { RelationshipType: 'HAS PROPERTIES', ValueType: 'TEXT', ConceptNameCodeSequence: [{ CodeValue: '99-x', CodingSchemeDesignator: '99PLAN', CodeMeaning: 'Plan item' }], TextValue: 'kept' };
+    const construction = scoord3d([1, 1, 1, 2, 2, 2, 3, 3, 3], 'Sonador-Measurement.ConstructionPoints');
+    const [circle] = getMeasurements(report([group('CircleROI', '2.25.23', [
+      num('Area', 78.5, [construction, scoord3d([0, 0, 0, 5, 0, 0]), unknown]),
+      num('Radius', 5, [scoord3d([0, 0, 0, 5, 0, 0]), text('HAS PROPERTIES', 'Sonador-Measurement.Description', 'Radius NUM')]),
+    ])]));
+
+    expect(circle.description).toBe('Radius NUM');
+    // The construction points are not the geometry
+    expect(circle.coords.every(coord => coord.GraphicData.length === 6)).toBe(true);
+    // Each NUM keeps its children, the unknown and construction items with their own NUM
+    expect(circle.numItems).toHaveLength(2);
+    expect(circle.numItems[0].ContentSequence).toEqual([construction, scoord3d([0, 0, 0, 5, 0, 0]), unknown]);
+    expect(circle.numItems[1].ContentSequence.map(item => item.ValueType)).toEqual(['SCOORD3D', 'TEXT']);
+  });
+});

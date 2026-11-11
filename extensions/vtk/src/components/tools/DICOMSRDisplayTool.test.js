@@ -109,6 +109,13 @@ describe('DICOMSRDisplayTool', () => {
     expect(mockDrawn.find(item => item.kind === 'textBox').args[0]).toEqual(['20.00 mm', 'Finding site: Femur']);
   });
 
+  it('draws a measurement and its labels in its stored display colour', () => {
+    mockAnnotations.push({ ...lengthAnnotation, data: { ...lengthAnnotation.data, displayColor: { Border: '#3366FF' } } });
+    render(viewportOf(VolumeViewport, 'volume3d', {}));
+    expect(mockDrawn.find(item => item.kind === 'line').args[2]).toMatchObject({ color: '#3366FF' });
+    expect(mockDrawn.find(item => item.kind === 'textBox').args[4]).toMatchObject({ color: '#3366FF' });
+  });
+
   it('draws in a slice view only what lies in the displayed slice', () => {
     mockAnnotations.push(lengthAnnotation);
 

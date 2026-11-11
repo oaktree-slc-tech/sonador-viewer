@@ -142,6 +142,16 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
           updateLabelling: (labellingData) => {
             // Only the fields this edit supplies change; earlier edits in the dialog are kept
             OHIF.measurements.applyLabellingAttrs(measurementData, labellingData);
+
+            // An out-of-plane measurement is its measurement-service record; the panel and the writer
+            // read its location and description from its metadata first
+            if (OHIF.DICOMSR.outOfPlane.isOutOfPlaneMeasurement(measurementData)) {
+              const { measurementService } = OHIF.measurements.MeasurementApi.Instance;
+              // The dialog's record stays current, so a later edit in the dialog keeps this one
+              measurementData.metadata = OHIF.measurements.applyLabellingAttrs({ ...measurementData.metadata }, labellingData);
+              measurementService.update(measurementData.uid, { ...measurementData }, true);
+              return;
+            }
             commandsManager.runCommand('updateTableWithNewMeasurementData', measurementData);
           },
           ...dialogProps,

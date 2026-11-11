@@ -5,6 +5,8 @@ const mockAddTool = jest.fn();
 // Annotations by tool name, and annotation UIDs hidden
 const mockAnnotations = {};
 const mockHidden = new Set();
+// The unit the stock Length tool measures in (`mm` on a calibrated image, `px` otherwise)
+let mockLengthUnit = 'mm';
 jest.mock('@cornerstonejs/tools', () => {
   // As the published 4.22.13 tools: the renderer is an instance property and draws a label only
   // for a truthy cached angle
@@ -76,9 +78,31 @@ jest.mock('@cornerstonejs/tools', () => {
     }
   }
   AngleTool.toolName = 'Angle';
+  // As the published 4.22.13 LengthTool: the calibrated length of the points, read by the default
+  // text lines (`${roundNumber(length)} ${unit}`, roundNumber giving two decimals here)
+  class LengthTool extends StockTool {
+    constructor() {
+      super();
+      this.configuration = { getTextLines: (data, targetId) => {
+        const { length, unit } = data.cachedStats[targetId];
+        return length === undefined || length === null || isNaN(length) ? undefined : [`${length.toFixed(2)} ${unit}`];
+      } };
+    }
+    _calculateCachedStats(annotation) {
+      const [a, b] = annotation.data.handles.points;
+      const length = distance(a, b);
+      Object.keys(annotation.data.cachedStats).forEach(id => {
+        const unit = mockLengthUnit;
+        annotation.data.cachedStats[id] = { length, unit, statsArray: [{ name: 'length', value: length, unit, type: 'Linear' }] };
+      });
+      return annotation.data.cachedStats;
+    }
+  }
+  LengthTool.toolName = 'Length';
   return {
     AngleTool,
     CobbAngleTool,
+    LengthTool,
     addTool: (...args) => mockAddTool(...args),
     annotation: {
       state: { getAnnotations: toolName => mockAnnotations[toolName] || [] },
@@ -91,7 +115,7 @@ jest.mock('@ohif/core', () => ({
   default: { DICOMSR: { angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry') } },
 }), { virtual: true });
 
-import { ExchangeAngleTool, ExchangeCobbAngleTool, registerExchangeAngleTools } from './exchangeAngleTools';
+import { ExchangeAngleTool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools } from './exchangeAngleTools';
 import { CobbAngleTool } from '@cornerstonejs/tools';
 
 const annotationOf = (points, recordValue) => ({ data: { handles: { points }, cachedStats: { 'imageId:a': {} }, recordValue } });
@@ -130,9 +154,38 @@ it('does the same for Angle', () => {
   expect(statsOf(ExchangeAngleTool, annotationOf(points, { value: 89.5, points })).angle).toBe(89.5);
 });
 
+describe('Length', () => {
+  // Endpoints 50 mm apart; a record stored with 49.876 mm
+  const POINTS = [[0, 0, 0], [30, 40, 0]];
+  const labelOf = annotation => new ExchangeLengthTool().configuration.getTextLines(annotation.data, 'imageId:a');
+  afterEach(() => { mockLengthUnit = 'mm'; });
+
+  it('shows the stored length while the points are unchanged, in the statistics and the label', () => {
+    const annotation = annotationOf(POINTS.map(point => point.slice()), { value: 49.876, points: POINTS });
+    const stats = statsOf(ExchangeLengthTool, annotation);
+    expect(stats).toMatchObject({ length: 49.876, unit: 'mm' });
+    expect(stats.statsArray).toEqual([{ name: 'length', value: 49.876, unit: 'mm', type: 'Linear' }]);
+    expect(labelOf(annotation)).toEqual(['49.88 mm']);
+  });
+
+  it('shows the measured length after an edit, for a new drawing, and on an uncalibrated image', () => {
+    const edited = annotationOf(POINTS.map(point => point.slice()), { value: 49.876, points: POINTS });
+    edited.data.handles.points[1] = [60, 80, 0];
+    expect(statsOf(ExchangeLengthTool, edited).length).toBeCloseTo(100, 6);
+    expect(labelOf(edited)).toEqual(['100.00 mm']);
+
+    const drawn = annotationOf(POINTS.map(point => point.slice()));
+    expect(statsOf(ExchangeLengthTool, drawn).length).toBeCloseTo(50, 6);
+
+    mockLengthUnit = 'px';
+    const uncalibrated = annotationOf(POINTS.map(point => point.slice()), { value: 49.876, points: POINTS });
+    expect(statsOf(ExchangeLengthTool, uncalibrated)).toMatchObject({ length: 50, unit: 'px' });
+  });
+});
+
 it('registers under the stock tool names', () => {
   registerExchangeAngleTools();
-  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle']);
+  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle', 'Length']);
 });
 
 

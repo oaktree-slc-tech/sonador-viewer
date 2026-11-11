@@ -116,6 +116,7 @@ import utils from './../../utils';
 
 import Enums from '../enums';
 import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
+import { isCarriedForward, isOutOfPlaneMeasurement } from '../../DICOMSR/utils/outOfPlane';
 import { clearSRDisplayAnnotations, setSRDisplayAnnotationVisible } from '../../DICOMSR/readOnly/srDisplayAnnotations';
 
 const configuration = {
@@ -914,6 +915,16 @@ export default class MeasurementApi {
 
         // Add measurements to the 
         measurementData[toolGroup.id] = [...measurementData[toolGroup.id], ..._measurements];
+
+        // Out-of-plane measurements of the tool (Cornerstone3D records in patient coordinates): the
+        // pending ones, and the held ones no loaded series shares a Frame of Reference with
+        const outOfPlane = this.measurementService.getMeasurements().filter((m) => {
+          const { isReadOnly, isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
+          const pending = !Boolean(isReadOnly) && !Boolean(isLocked);
+          return m.toolName == tool.id && isOutOfPlaneMeasurement(m) && (pending || isCarriedForward(m))
+            && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
+        });
+        measurementData[toolGroup.id] = [...measurementData[toolGroup.id], ...outOfPlane];
       });
     });
 
@@ -1107,6 +1118,11 @@ export default class MeasurementApi {
       return this.measurementService.toggleVisibilityMeasurement(measurement.uid, visibility);
     }
 
+    // An out-of-plane measurement is a service record only; its panel row carries its uid
+    if (!measurement && isOutOfPlaneMeasurement(this.measurementService.getMeasurement(_id))) {
+      return this.measurementService.toggleVisibilityMeasurement(_id, visibility);
+    }
+
     // Toggle API managed measurement instance
     if (measurement) {
       measurement.visible = visibility;
@@ -1221,7 +1237,9 @@ export default class MeasurementApi {
   getMeasurementsBySeries() {
     // Every measurement the API holds, by the series it is drawn on: those of the measurement
     // service (the record, for the representations it manages) and the read-only representations
-    // only the API holds. Measurements without a series are under `null`.
+    // only the API holds. Measurements without a series are under `null`. Measurements drawn in the
+    // viewports only and not listed in the Measurements panel (an application document's) are left
+    // out.
     //
     // @returns Map<SeriesInstanceUID|null, entry[]>, each entry:
     // - measurement: the measurement-service record, or the API representation
@@ -1231,6 +1249,7 @@ export default class MeasurementApi {
     // - serviceManaged, readOnly, locked
     // - pending: not yet saved (service managed and not read-only), as the Measurements panel
     //   lists it under its Pending groups
+    // - outOfPlane: an out-of-plane measurement (a service record only), under its source series
 
     const records = new Map();
     if (this.measurementService && typeof this.measurementService.getMeasurements === 'function') {
@@ -1247,7 +1266,8 @@ export default class MeasurementApi {
     _.each(this.tools, (collection, toolKey) => {
       (collection || []).forEach((representation) => {
         const { _id } = MeasurementApi._unpackMeasurementData(representation);
-        if (_id && seen.has(_id)) {
+        // Measurements drawn in the viewports only (an application document's) are not listed
+        if ((_id && seen.has(_id)) || representation.isListed === false) {
           return;
         }
         if (_id) {
@@ -1279,6 +1299,32 @@ export default class MeasurementApi {
         bySeries.get(seriesInstanceUID).push(entry);
       });
     });
+
+    // Out-of-plane measurements have no representation here: their records, by source series
+    if (this.measurementService && typeof this.measurementService.getMeasurements === 'function') {
+      this.measurementService.getMeasurements()
+        .filter(record => isOutOfPlaneMeasurement(record) && record.metadata.isListed !== false)
+        .forEach((record) => {
+          const { isReadOnly, isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(record);
+          const seriesInstanceUID = record.metadata.sourceSeries || record.referenceSeriesUID || null;
+          if (!bySeries.has(seriesInstanceUID)) {
+            bySeries.set(seriesInstanceUID, []);
+          }
+          bySeries.get(seriesInstanceUID).push({
+            measurement: record,
+            representation: undefined,
+            seriesInstanceUID,
+            studyInstanceUID: record.referenceStudyUID,
+            toolType: record.toolName,
+            trackingIdentifier: MeasurementApi.trackingIdentifierOf(record),
+            serviceManaged: true,
+            readOnly: Boolean(isReadOnly),
+            locked: Boolean(isLocked || isReadOnly),
+            pending: !isLocked && !isReadOnly,
+            outOfPlane: true,
+          });
+        });
+    }
     return bySeries;
   }
 

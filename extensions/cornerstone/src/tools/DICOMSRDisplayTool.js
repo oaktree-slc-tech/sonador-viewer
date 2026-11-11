@@ -9,6 +9,7 @@ import csTools, {
 } from 'cornerstone-tools';
 
 import cornerstone from 'cornerstone-core';
+import { displayAttributes } from '@ohif/core';
 
 
 /** Internal imports */
@@ -89,10 +90,12 @@ export default class DICOMSRDisplayTool extends BaseTool {
       const isVisible = _.isNil(visible) ? true : visible;
       if (!isVisible) continue;
 
+      // The measurement's stored display colour (its Border role), else the tool colour; the
+      // active measurement is highlighted either way
       const color =
         data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier
           ? toolColors.getActiveColor()
-          : toolColors.getToolColor();
+          : displayAttributes.getDisplayColor(data).Border || toolColors.getToolColor();
       const lineWidth = 2;
       const options = {
         color,

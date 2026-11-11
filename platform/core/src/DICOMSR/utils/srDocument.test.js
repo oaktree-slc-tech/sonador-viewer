@@ -5,10 +5,11 @@ jest.mock('@cornerstonejs/adapters', () => ({
 import {
   applyRootContent,
   clearHydratedReports,
+  documentKind,
   documentSettings,
+  isApplicationDocument,
   personObserverName,
   registerHydratedReport,
-  requiresComprehensive,
   resolvePersonObserverName,
   saveParent,
 } from './srDocument';
@@ -32,9 +33,9 @@ describe('documentSettings', () => {
     });
   });
 
-  it("keeps an Enhanced SR parent's class and template", () => {
+  it("writes a new version of an Enhanced SR report as Comprehensive 3D SR, with the parent's template", () => {
     expect(documentSettings({ SOPClassUID: ENHANCED_SR, TemplateIdentifier: '1500', MappingResource: 'DCMR' })).toEqual({
-      documentClass: 'EnhancedSR', template: { TemplateIdentifier: '1500', MappingResource: 'DCMR' },
+      documentClass: 'Comprehensive3DSR', template: { TemplateIdentifier: '1500', MappingResource: 'DCMR' },
     });
   });
 
@@ -62,6 +63,47 @@ describe('saveParent', () => {
     registerHydratedReport(report('2.25.11', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500', 'Sonador-SR'));
     expect(saveParent('2.25.1')).toBeNull();
     expect(saveParent('2.25.2')).toMatchObject({ SOPClassUID: COMPREHENSIVE_3D_SR });
+  });
+
+  it('is never an application document', () => {
+    const application = {
+      ...report('2.25.30', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500', 'Sonador-SR', '2.25.3'),
+      ConceptNameCodeSequence: [{ CodeValue: 'Clinical-Report', CodingSchemeDesignator: 'Sonador-SR' }],
+    };
+    registerHydratedReport(application);
+    expect(saveParent('2.25.3')).toBeNull();
+
+    // An exchange document of the same study is the parent, the application document is not counted
+    registerHydratedReport({
+      ...report('2.25.31', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500', 'Sonador-SR', '2.25.3'),
+      ConceptNameCodeSequence: [{ CodeValue: '126000', CodingSchemeDesignator: 'DCM' }],
+    });
+    expect(saveParent('2.25.3')).toMatchObject({ SOPInstanceUID: '2.25.31' });
+  });
+});
+
+
+describe('documentKind', () => {
+  const rooted = code => ({ ConceptNameCodeSequence: code && [code] });
+
+  it('is an exchange document for (126000, DCM), matched on code value and scheme designator', () => {
+    expect(documentKind(rooted({ CodeValue: '126000', CodingSchemeDesignator: 'DCM' }))).toBe('exchange');
+    expect(documentKind(rooted({ LongCodeValue: '126000', CodingSchemeDesignator: 'DCM' }))).toBe('exchange');
+    expect(documentKind(rooted({ CodeValue: '126000', CodingSchemeDesignator: '99LOCAL' }))).toBe('other');
+  });
+
+  it('is an application document for a root concept in the Sonador-SR scheme, whatever the template', () => {
+    const application = { ...rooted({ CodeValue: 'Clinical-Report', CodingSchemeDesignator: 'Sonador-SR' }),
+      ContentTemplateSequence: [{ TemplateIdentifier: 'Sonador-SR.1500', MappingResource: 'Sonador-SR' }] };
+    expect(documentKind(application)).toBe('application');
+    expect(isApplicationDocument(application)).toBe(true);
+    expect(isApplicationDocument(rooted({ CodeValue: '126000', CodingSchemeDesignator: 'DCM' }))).toBe(false);
+  });
+
+  it('is another kind for any other root concept, or none', () => {
+    expect(documentKind(rooted({ CodeValue: '18748-4', CodingSchemeDesignator: 'LN' }))).toBe('other');
+    expect(documentKind(rooted(undefined))).toBe('other');
+    expect(documentKind(undefined)).toBe('other');
   });
 });
 
@@ -117,21 +159,5 @@ describe('applyRootContent', () => {
     const root = applyRootContent(content(), { template: { TemplateIdentifier: '1500', MappingResource: 'DCMR' } });
     expect(root.ContentTemplateSequence).toEqual([{ MappingResource: 'DCMR', TemplateIdentifier: '1500' }]);
     expect(root.ContentSequence.map(conceptNameValue)).not.toContain('121008');
-  });
-});
-
-
-describe('requiresComprehensive', () => {
-  const tree = children => ({ ValueType: 'CONTAINER', ContentSequence: children });
-
-  it('is true for an SCOORD3D item or a CONTAINER under a CODE or NUM item', () => {
-    expect(requiresComprehensive(tree([{ ValueType: 'NUM', ContentSequence: [{ ValueType: 'SCOORD3D' }] }]))).toBe(true);
-    expect(requiresComprehensive(tree([{ ValueType: 'CODE', ContentSequence: [{ ValueType: 'CONTAINER' }] }]))).toBe(true);
-    expect(requiresComprehensive(tree([{ ValueType: 'NUM', ContentSequence: [{ ValueType: 'CONTAINER' }] }]))).toBe(true);
-  });
-
-  it('is false for the flat Series-Tag form and for SCOORD under NUM', () => {
-    expect(requiresComprehensive(tree([tree([{ ValueType: 'CODE', ContentSequence: [{ ValueType: 'IMAGE' }, { ValueType: 'TEXT' }] }])]))).toBe(false);
-    expect(requiresComprehensive(tree([{ ValueType: 'NUM', ContentSequence: [{ ValueType: 'SCOORD' }] }]))).toBe(false);
   });
 });

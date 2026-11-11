@@ -22,7 +22,9 @@ jest.mock('./ConnectedMeasurementTable.js', () => ({
 jest.mock('@ohif/core', () => {
   let count = 0;
   const service = {
-    EVENTS: { MEASUREMENT_UPDATED: 'updated', MEASUREMENTS_DATASYNC: 'datasync' },
+    EVENTS: {
+      MEASUREMENT_UPDATED: 'updated', MEASUREMENTS_DATASYNC: 'datasync', RAW_MEASUREMENT_ADDED: 'raw-added', MEASUREMENT_REMOVED: 'removed',
+    },
     subscribe: (event, handler) => {
       mockHandlers[event] = handler;
       return { unsubscribe: () => {} };
@@ -34,6 +36,7 @@ jest.mock('@ohif/core', () => {
       Enums: { EVENTS: { MEASUREMENT_CLEAR_SUCCESS: 'cleared' } },
     },
     utils: { guid: () => `v${(count += 1)}` },
+    DICOMSR: { outOfPlane: { isOutOfPlaneMeasurement: measurement => !!(measurement && measurement.metadata && measurement.metadata.outOfPlane) } },
   };
 }, { virtual: true });
 
@@ -59,6 +62,35 @@ it('reads the rows again on a service update or a clear, keeping the table mount
   expect(mockRenders.mock.calls[mockRenders.mock.calls.length - 1][0]).not.toBe(second);
 
   expect(mockMounts).toHaveBeenCalledTimes(1);
+  act(() => root.unmount());
+  jest.useRealTimers();
+});
+
+it('reads the rows again when an out-of-plane measurement is added, changed (saved) or removed', () => {
+  jest.useFakeTimers();
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  act(() => root.render(<SonadorMeasurementTable servicesManager={{}} renderTimeout={50} />));
+  const latest = () => mockRenders.mock.calls[mockRenders.mock.calls.length - 1][0];
+
+  [
+    () => mockHandlers['raw-added']({ measurement: { metadata: { outOfPlane: true } } }),
+    // Locked by a save: an update without notYetUpdatedAtSource
+    () => mockHandlers.updated({ measurement: { metadata: { outOfPlane: true } } }),
+    () => mockHandlers.removed({ measurement: 'oop-1' }),
+  ].forEach((event) => {
+    const before = latest();
+    act(event);
+    act(() => jest.advanceTimersByTime(50));
+    expect(latest()).not.toBe(before);
+  });
+
+  // A classic update the store carries does not
+  const before = latest();
+  act(() => mockHandlers.updated({ measurement: {} }));
+  act(() => jest.advanceTimersByTime(50));
+  expect(latest()).toBe(before);
+
   act(() => root.unmount());
   jest.useRealTimers();
 });

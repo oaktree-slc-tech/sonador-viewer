@@ -13,13 +13,16 @@ import { addSRDisplayAnnotation } from '../../readOnly/srDisplayAnnotations';
 const globalImageIdSpecificToolStateManager = csTools.globalImageIdSpecificToolStateManager;
 
 
-export default function addMeasurement(measurement, imageId, imageMetadata, displaySetInstanceUID) {
+export default function addMeasurement(measurement, imageId, imageMetadata, displaySetInstanceUID, options = {}) {
   /**
   * Add a measurement to a display set.
   *
   * @param {*} measurement
   * @param {*} imageId
   * @param {*} displaySetInstanceUID
+  * @param {object} [options]
+  * @param {boolean} [options.listed=true] - false for a measurement drawn in the viewports only and
+  *   left out of the Measurements panel (one of an application document)
   */
   // TODO -> Render rotated ellipse 
 
@@ -69,6 +72,9 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
   // Add measurement extended attributes to data representation which will be
   // added to the measurementService
   measurementData.isReadOnly = true;
+  if (options.listed === false) {
+    measurementData.isListed = false;
+  }
   _.defaults(measurementData, _.pick(measurement, 'description', 'displayAttributes'));
   measurementData.metadata = _.extend(
     measurementData.metadata || {}, _.defaults(measurement.metadata || {}));

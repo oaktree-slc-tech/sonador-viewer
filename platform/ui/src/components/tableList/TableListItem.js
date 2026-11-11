@@ -16,6 +16,9 @@ export class TableListItem extends Component {
     itemMetaClass: PropTypes.string,
     itemKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     onItemClick: PropTypes.func.isRequired,
+    // Wraps the index cell (a note that opens on the cell only); attributes of the cell
+    renderItemIndex: PropTypes.func,
+    itemIndexProps: PropTypes.object,
   };
 
   static defaultProps = {
@@ -24,15 +27,18 @@ export class TableListItem extends Component {
   };
 
   render() {
+    const itemIndex = (
+      <div className={`itemIndex ${this.props.itemMetaClass}`} style={this.props.itemIndexStyle} {...this.props.itemIndexProps}>
+        <div className="tableitem-index">{this.props.itemIndex}</div>
+        {this.props.itemMeta}
+        <span className="warning-icon">
+          <Icon name="exclamation-triangle" />
+        </span>
+      </div>
+    );
     return (
       <div className={`tableListItem ${this.props.itemClass}`} onClick={this.onItemClick}>
-        <div className={`itemIndex ${this.props.itemMetaClass}`} style={this.props.itemIndexStyle}>
-          <div className="tableitem-index">{this.props.itemIndex}</div>
-          {this.props.itemMeta}
-          <span className="warning-icon">
-            <Icon name="exclamation-triangle" />
-          </span>
-        </div>
+        {this.props.renderItemIndex ? this.props.renderItemIndex(itemIndex) : itemIndex}
         <div className="itemContent">{this.props.children}</div>
       </div>
     );

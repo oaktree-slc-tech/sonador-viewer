@@ -148,23 +148,52 @@ function calibrationOf(module, pixelAspectRatio) {
 const SAME_POINT_TOLERANCE = 1e-6;
 
 /**
- * Value of a Cornerstone3D Angle / Cobb angle annotation (`data` with `handles.points` in patient
- * coordinates): the value of the classic record it mirrors (`recordValue`, { value, points }) while
- * the points are unchanged, otherwise the value computed from its points. A computed value is NaN
- * for incomplete or degenerate geometry; a matching record value is returned as stored.
+ * The value of the measurement record a Cornerstone3D annotation mirrors (`data.recordValue`,
+ * { value, points }) while the annotation's `handles.points` are those points (within 1e-6);
+ * undefined otherwise.
  */
-function annotationAngle(toolType, data) {
+function unchangedRecordValue(data) {
   const { handles, recordValue } = data || {};
   const points = (handles && handles.points) || [];
   const unchanged = recordValue && _.isFinite(recordValue.value) && recordValue.points
     && recordValue.points.length === points.length
     && recordValue.points.every((point, i) => point.length === points[i].length
       && point.every((value, j) => Math.abs(value - points[i][j]) <= SAME_POINT_TOLERANCE));
-  if (unchanged) {
-    return recordValue.value;
+  return unchanged ? recordValue.value : undefined;
+}
+
+/**
+ * Value of a Cornerstone3D Angle / Cobb angle annotation (`data` with `handles.points` in patient
+ * coordinates): the value of the record it mirrors while the points are unchanged
+ * (`unchangedRecordValue`), otherwise the value computed from its points. A computed value is NaN
+ * for incomplete or degenerate geometry; a matching record value is returned as stored.
+ */
+function annotationAngle(toolType, data) {
+  const recorded = unchangedRecordValue(data);
+  if (recorded !== undefined) {
+    return recorded;
   }
+  const points = (data && data.handles && data.handles.points) || [];
   const count = toolType === ANGLE_TOOL_NAMES.ANGLE ? 3 : 4;
   return points.length === count ? encodedAngle(encodedPoints(toolType, points)) : NaN;
+}
+
+/**
+ * The length (mm) of a Length annotation: the record's value while the annotation has the points it
+ * belongs to (a measurement read from a report keeps the value it was stored with), else the
+ * distance between its two patient points; NaN without two points.
+ */
+function annotationLength(data) {
+  const recorded = unchangedRecordValue(data);
+  if (recorded !== undefined) {
+    return recorded;
+  }
+  const points = (data && data.handles && data.handles.points) || [];
+  if (points.length !== 2) {
+    return NaN;
+  }
+  const [a, b] = points;
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
 }
 
 
@@ -197,7 +226,9 @@ function displayCoordsOf(TrackingIdentifier, coords) {
 export {
   angleBetweenLines,
   annotationAngle,
+  annotationLength,
   calibrationOf,
+  unchangedRecordValue,
   imageToPatient,
   isPlane,
   patientToImage,

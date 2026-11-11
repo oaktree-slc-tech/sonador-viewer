@@ -63,7 +63,8 @@ import styles from './Cornerstone3DInspectionView.css';
 
 import ViewportGridOverlayTool from './tools/ViewportGridOverlayTool.js';
 import { addSRDisplayToolToGroup } from './tools/DICOMSRDisplayTool';
-import { applyCameraPlacement } from '../utils/inspectionCamera';
+import { applyCameraPlacement, snapToNearestSlice } from '../utils/inspectionCamera';
+import { isDecimatedVolumeId } from '../utils/cornerstone3d';
 
 const { ViewportType, Events } = c3dEnums;
 const { DisplaySetApi } = OHIF.display;
@@ -156,18 +157,41 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
   async _setImageVolume(options) {
     // Set the image volume, then open on the MPR pane's plane and slice (setVolumes resets the
-    // camera), with the image fitted to the view at its full size
+    // camera), with the image fitted to the view at its full size. A view parallel to the
+    // acquisition opens on the nearest acquired slice.
     const component = this;
     await super._setImageVolume(options);
 
-    const { initialCamera } = component.props;
+    const { initialCamera, imageIds } = component.props;
+    const { viewport } = component._checkViewportActive(options);
     if (initialCamera) {
-      const { viewport } = component._checkViewportActive(options);
       if (component.renderEngine && typeof component.renderEngine.resize === 'function') {
         component.renderEngine.resize(true, true);
       }
       applyCameraPlacement(viewport, initialCamera);
     }
+    if (snapToNearestSlice(viewport, imageIds) && typeof viewport.render === 'function') {
+      viewport.render();
+    }
+    component._registerDrawingVolume();
+  }
+
+  _registerDrawingVolume() {
+    // Drawings made here on any plane become out-of-plane measurements of this series (not when the
+    // volume is at reduced resolution); see DICOMSR utils/outOfPlane.js
+    const component = this;
+    if (component._unregisterDrawingVolume) {
+      component._unregisterDrawingVolume();
+    }
+    const volumeId = component._getImageVolumeId();
+    const { displaySet } = component.props.viewportData || {};
+    const volume = component._volume || c3dCache.getVolume(volumeId);
+    component._unregisterDrawingVolume = OHIF.DICOMSR.outOfPlane.registerDrawingVolume(volumeId, {
+      StudyInstanceUID: displaySet && displaySet.StudyInstanceUID,
+      SeriesInstanceUID: displaySet && displaySet.SeriesInstanceUID,
+      FrameOfReferenceUID: volume && volume.metadata && volume.metadata.FrameOfReferenceUID,
+      reducedResolution: isDecimatedVolumeId(volumeId),
+    });
   }
 
   async loadSegImageVolume() {
@@ -647,6 +671,11 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       // Remove keyboard event handlers
       component.cornerstone3dViewProps.element.removeEventListener(
         c3dToolsEnums.Events.KEY_DOWN, component.boundKeyboardEvent);
+    }
+
+    if (component._unregisterDrawingVolume) {
+      component._unregisterDrawingVolume();
+      component._unregisterDrawingVolume = null;
     }
 
     super.componentWillUnmount();

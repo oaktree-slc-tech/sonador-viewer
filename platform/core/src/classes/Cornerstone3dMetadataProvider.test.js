@@ -172,6 +172,27 @@ describe('Cornerstone3dMetadataProvider + StackManager registration', () => {
     expect(firstFrame.ImagePositionPatient).toEqual([0, 0, 0]);
   });
 
+  it('answers what the Cornerstone3D SEG adapter asks of a sonadorlocal: id', () => {
+    // createFromDICOMSegBuffer maps frames to images by generalImageModule.sopInstanceUID, checks
+    // dimensions against instance Rows/Columns, and reads orientation and series from
+    // imagePlaneModule / generalSeriesModule. Frames of a multiframe image share the SOP UID.
+    [`sonadorlocal:${SINGLE_FRAME_SOP}`, `sonadorlocal:${MULTI_FRAME_SOP}?frame=2`].forEach(imageId => {
+      const sopInstanceUID = imageId.includes(MULTI_FRAME_SOP) ? MULTI_FRAME_SOP : SINGLE_FRAME_SOP;
+
+      expect(c3dMetadataProvider.get('generalImageModule', imageId).sopInstanceUID).toBe(sopInstanceUID);
+      expect(c3dMetadataProvider.get('generalSeriesModule', imageId).seriesInstanceUID)
+        .toBe('1.2.840.113619.2.1.9');
+      expect(c3dMetadataProvider.get('instance', imageId)).toMatchObject({ Rows: 512, Columns: 512 });
+
+      const imagePlaneModule = c3dMetadataProvider.get('imagePlaneModule', imageId);
+      expect(imagePlaneModule.rowCosines).toEqual([1, 0, 0]);
+      expect(imagePlaneModule.columnCosines).toEqual([0, 1, 0]);
+    });
+
+    expect(c3dMetadataProvider.get('imagePlaneModule', `sonadorlocal:${MULTI_FRAME_SOP}?frame=2`)
+      .imagePositionPatient).toEqual([0, 0, 2]);
+  });
+
   it('leaves resolution of a remote wadouri id unchanged', () => {
     // Same registration call, remote id shape: nothing about the existing path moves.
     const remoteInstance = makeInstance({ SOPInstanceUID: '1.2.840.113619.2.1.300' });

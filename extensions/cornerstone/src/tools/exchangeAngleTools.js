@@ -8,12 +8,15 @@
 // The stock renderers skip the label of an angle that is exactly 0 (they test the value for
 // truthiness); the tools draw that label after the stock render.
 //
+// The Length tool likewise shows a mirrored record's stored length while the points are unchanged,
+// in millimetres; a new or edited Length shows the stock calibrated length.
+//
 // They keep the stock tool names and are registered before any view registers the stock tools,
-// so every tool group that adds `Angle` or `CobbAngle` gets them.
+// so every tool group that adds `Length`, `Angle` or `CobbAngle` gets them.
 
 import _ from 'lodash';
 
-import { addTool, annotation as c3dAnnotation, AngleTool, CobbAngleTool } from '@cornerstonejs/tools';
+import { addTool, annotation as c3dAnnotation, AngleTool, CobbAngleTool, LengthTool } from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
 
@@ -102,12 +105,38 @@ class ExchangeCobbAngleTool extends CobbAngleTool {
 }
 
 
+class ExchangeLengthTool extends LengthTool {
+  _calculateCachedStats(annotation, ...args) {
+    const stats = super._calculateCachedStats(annotation, ...args);
+    const recorded = OHIF.DICOMSR.angleGeometry.unchangedRecordValue(annotation.data);
+    if (recorded === undefined) {
+      return stats;
+    }
+    const { cachedStats } = annotation.data;
+    Object.keys(cachedStats || {}).forEach(targetId => {
+      const targetStats = cachedStats[targetId];
+      // Only a length the stock tool measured in millimetres is the record's
+      if (!targetStats || targetStats.unit !== 'mm') {
+        return;
+      }
+      cachedStats[targetId] = {
+        ...targetStats,
+        length: recorded,
+        statsArray: (targetStats.statsArray || []).map(stat => (stat.name === 'length' ? { ...stat, value: recorded } : stat)),
+      };
+    });
+    return cachedStats;
+  }
+}
+
+
 /** Register the exchange tools under the stock names (a later stock registration is ignored) */
 function registerExchangeAngleTools() {
   addTool(ExchangeAngleTool);
   addTool(ExchangeCobbAngleTool);
+  addTool(ExchangeLengthTool);
 }
 
 
 export default registerExchangeAngleTools;
-export { exchangeValue, ExchangeAngleTool, ExchangeCobbAngleTool, registerExchangeAngleTools };
+export { exchangeValue, ExchangeAngleTool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools };

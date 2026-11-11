@@ -14,8 +14,11 @@ import isRehydratable from './utils/isRehydratable';
 import { findReferencedSOP } from './utils/findReferencedSOP';
 import { codeValueOf, conceptCode, conceptCodeValue, conceptName, conceptNameValue, firstItem } from '../utils/codedConcept';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
+import { propertyParentOf } from '../utils/propertyParent';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 import { displayCoordsOf } from '../utils/angleGeometry';
+import { documentKind } from '../utils/srDocument';
+import { DCMSR_MEASUREMENT_CONSTRUCTION_POINTS, SR_DOCUMENT_KIND } from '../enums';
 
 const { Enums: MeasurementEnums, SREnums } = measurements;
 const { CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION } = MeasurementEnums;
@@ -31,7 +34,7 @@ type InstanceMetadata = Types.InstanceMetadata;
 
 // Bumped when the report parsing below changes: a display set parsed by an older version of this
 // module (kept alive across a hot reload) is parsed again
-const PARSER_VERSION = 5;
+const PARSER_VERSION = 6;
 
 const sopClassUids = [
   sopClassDictionary.BasicTextSR,
@@ -158,14 +161,20 @@ function _getMeasurements(ImagingMeasurementReportContentSequence) {
       const measurement = _processMeasurement(mergedContentSequence);
       if (measurement) {
 
-        // Extended meta (description, text, location) and display attributes, in the shape the
-        // read-only display and the Measurements panel read (as SCOORD3D/utils/getMeasurements)
+        // Extended meta (description, text, location, view, source series, drawing plane) and
+        // display attributes, in the shape the read-only display and the Measurements panel read (as
+        // SCOORD3D/utils/getMeasurements), from the tool's property parent: the NUM item for Length,
+        // Angle, Cobb angle and circles
+        const propertyParent = propertyParentOf(_trackedToolType(measurement.TrackingIdentifier));
         parseExtendedMeta(mergedContentSequence, measurement, {
+          propertyParent,
           textPath: 'metadata.text',
           locationPath: 'metadata.location',
           viewsPath: 'metadata.views',
+          sourceSeriesPath: 'metadata.sourceSeries',
+          drawingPlanePath: 'metadata.drawingPlane',
         });
-        parseDisplayAttributes(mergedContentSequence, measurement, { path: 'displayAttributes' });
+        parseDisplayAttributes(mergedContentSequence, measurement, { path: 'displayAttributes', propertyParent });
 
         // Drawn by the read-only display as the report holds it (a Cobb angle as its two lines)
         measurement.coords = displayCoordsOf(measurement.TrackingIdentifier, measurement.coords);
@@ -177,6 +186,22 @@ function _getMeasurements(ImagingMeasurementReportContentSequence) {
 
   return measurements;
 }
+
+
+// The tool a tracking identifier names ("cornerstoneTools@^4.0.0:Length" -> "Length")
+const _trackedToolType = (TrackingIdentifier?: string) => (typeof TrackingIdentifier === 'string'
+  ? TrackingIdentifier.slice(TrackingIdentifier.lastIndexOf(':') + 1) : undefined);
+
+// The NUM items of a group as the report holds them, each with its own children (properties,
+// construction points and any content the Viewer does not model): kept with their NUM, never
+// moved or flattened
+const _numItemsOf = mergedContentSequence => mergedContentSequence.filter(item => item.ValueType === 'NUM');
+
+// The graphic a NUM's value is inferred from: an SCOORD or SCOORD3D child other than its
+// construction points, which are auxiliary data and never drawn
+const _inferredGraphicOf = ContentSequence => _getSequenceAsArray(ContentSequence).find(child =>
+  (child?.ValueType === 'SCOORD' || child?.ValueType === 'SCOORD3D')
+  && conceptNameValue(child) !== DCMSR_MEASUREMENT_CONSTRUCTION_POINTS.value);
 
 
 function _getMergedContentSequencesByTrackingUniqueIdentifiers(MeasurementGroups) {
@@ -291,6 +316,7 @@ function _processTID1410Measurement(mergedContentSequence) {
     coords: [_getCoordsFromSCOORDOrSCOORD3D(graphicItem)],
     TrackingUniqueIdentifier: UIDREFContentItem.UID,
     TrackingIdentifier: TrackingIdentifierContentItem?.TextValue,
+    numItems: _numItemsOf(mergedContentSequence),
   };
 
   NUMContentItems.forEach(item => {
@@ -355,6 +381,7 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     coords: [],
     TrackingUniqueIdentifier: UIDREFContentItem.UID,
     TrackingIdentifier: TrackingIdentifierContentItem?.TextValue,
+    numItems: _numItemsOf(mergedContentSequence),
   };
 
   if (
@@ -393,9 +420,7 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
     // The graphic the value is inferred from, when the NUM carries one
-    const graphicItem = _getSequenceAsArray(ContentSequence).find(
-      child => child?.ValueType === 'SCOORD' || child?.ValueType === 'SCOORD3D'
-    );
+    const graphicItem = _inferredGraphicOf(ContentSequence);
     if (graphicItem) {
       measurement.coords.push(_getCoordsFromSCOORDOrSCOORD3D(graphicItem));
     }
@@ -592,8 +617,11 @@ function _getDisplaySetsFromSeries(displaySet, instances, servicesManager) {
 
   const is3DSR = SOPClassUID === sopClassDictionary.Comprehensive3DSR;
 
-  const isImagingMeasurementReport =
-    conceptNameValue(instance) === CodeNameCodeSequenceValues.ImagingMeasurementReport;
+  // The document kind, by the root concept name: an exchange document's measurements are hydrated;
+  // an application document's are displayed read-only (utils/srDocument.js)
+  const kind = documentKind(instance);
+  const isImagingMeasurementReport = kind === SR_DOCUMENT_KIND.EXCHANGE;
+  const isApplicationDocument = kind === SR_DOCUMENT_KIND.APPLICATION;
 
   const newDisplaySet = {
     ...displaySet,
@@ -610,6 +638,7 @@ function _getDisplaySetsFromSeries(displaySet, instances, servicesManager) {
     referencedImages: null,
     measurements: null,
     isImagingMeasurementReport,
+    isApplicationDocument,
     sopClassUids,
     instance,
     label: SeriesDescription || `Series ${SeriesNumber} - 'SR'`,
@@ -633,7 +662,7 @@ async function _load(srDisplaySet, servicesManager) {
   if (!srDisplaySet.isLoaded || srDisplaySet._parserVersion !== PARSER_VERSION) {
     const { ContentSequence } = srDisplaySet.instance;
 
-    if (srDisplaySet.isImagingMeasurementReport) {
+    if (srDisplaySet.isImagingMeasurementReport || srDisplaySet.isApplicationDocument) {
       srDisplaySet.referencedImages = _getReferencedImagesList(ContentSequence)
       srDisplaySet.measurements = _getMeasurements(ContentSequence);
     } else {

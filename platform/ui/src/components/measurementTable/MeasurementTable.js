@@ -115,6 +115,7 @@ const MeasurementTable = ({
   onRelabelClick,
   onDeleteClick,
   onEditDescriptionClick,
+  onOpenInMprClick,
   selectedMeasurementId,
   saveFunction,
   onSaveComplete,
@@ -327,6 +328,7 @@ const MeasurementTable = ({
           onRelabel={onRelabelClick}
           onDelete={onDeleteClick}
           onEditDescription={onEditDescriptionClick}
+          onOpenInMpr={onOpenInMprClick}
           isSelected={isSelected}
           isActive={isActive}
         />
@@ -589,6 +591,7 @@ MeasurementTable.propTypes = {
   onRelabelClick: PropTypes.func,
   onDeleteClick: PropTypes.func,
   onEditDescriptionClick: PropTypes.func,
+  onOpenInMprClick: PropTypes.func,
   saveFunction: PropTypes.func,
   onSaveComplete: PropTypes.func,
   eventTimeout: PropTypes.number,

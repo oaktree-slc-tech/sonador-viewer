@@ -81,7 +81,16 @@ describe('addSRDisplayAnnotation', () => {
     expect(annotation.metadata.referencedImageId).toBeUndefined();
     expect(annotation.data.handles.points).toEqual([[10, 10, 40], [30, 10, 40]]);
     expect(annotation.data.srPlane.sourceNormal).toEqual([0, 0, 1]);
+    expect(annotation.data.displayColor).toEqual({});
     expect(mockRender).toHaveBeenCalledWith(['mpr-axial', 'volume-3d']);
+  });
+
+  it('carries the stored display colours of the measurement', () => {
+    const annotation = addSRDisplayAnnotation({
+      measurement: { ...imageLength, displayAttributes: { Color: { Border: '#3366ff', Value: 'not a colour' } } },
+      plane: axial, imageId: 'wadors:1',
+    });
+    expect(annotation.data.displayColor).toEqual({ Border: '#3366FF' });
   });
 
   it('keeps the annotation when a viewport of its Frame of Reference is no longer enabled', () => {

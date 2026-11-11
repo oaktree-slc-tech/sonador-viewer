@@ -57,12 +57,19 @@ jest.mock('@cornerstonejs/tools', () => ({
 }), { virtual: true });
 
 const mockManaged = {};
+// The DICOMSR enums the out-of-plane modules read
+jest.mock('@cornerstonejs/adapters', () => ({
+  adaptersSR: { Cornerstone3D: { CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} } } },
+}), { virtual: true });
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: {
     log: { warn: () => {}, info: () => {}, debug: () => {} },
     DICOMSR: {
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
+      outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
+      drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
+      measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
       SREnums: { TOOL_NAMES: {} },
     },
     utils: { dataProc: { firstDefinedValue: (...values) => values.find(value => value !== undefined) }, guid: () => 'guid-1' },

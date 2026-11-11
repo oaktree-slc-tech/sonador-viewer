@@ -4,13 +4,16 @@
 
 // This module provides two methods:
 // 1. encodeExtendedMeta: encodes DICOM-SR extended attributes from a measurement as content items
-//    of a TID 1501 measurement group. They are `HAS PROPERTIES` TEXT children of the item the
-//    tool's property parent names (propertyParent.js): the NUM item for Angle and Cobb angle, the
-//    group's Finding otherwise (the same flat form in Enhanced and Comprehensive 3D SR). A group
-//    with neither keeps them as group-level `HAS CONCEPT MOD` items.
+//    of a TID 1501 measurement group. They are `HAS PROPERTIES` children of the item the tool's
+//    property parent names (propertyParent.js): the NUM item for Length, Angle and Cobb angle, the
+//    group's Finding otherwise. A group with neither keeps them as group-level `HAS CONCEPT MOD`
+//    items. Description, text, location, view and drawing plane are TEXT; the source series is
+//    UIDREF. The source series and the drawing plane are written only when the measurement carries
+//    them (a patient-domain one), the drawing plane as the text it was read with.
 // 2. parseExtendedMeta: parses the attributes back into toolState as part of loading DICOM-SR
 //    data from DCM.js. It reads children of the property parent first and, for files written
-//    before the attributes moved there, the Finding and group-level items.
+//    before the attributes moved there, the group-level items (propertyParent.js: a NUM-parent
+//    tool never reads a Finding's children).
 
 import _ from 'lodash';
 
@@ -20,7 +23,7 @@ import Enums from '../../measurements/enums';
 import { asArray, codedConcept, conceptNameValue } from './codedConcept';
 import { propertyCandidates, propertyCarrier } from './propertyParent';
 
-const { TextContentItem } = dcmjsSr.valueTypes;
+const { TextContentItem, UIDRefContentItem } = dcmjsSr.valueTypes;
 const { SonadorCodeValues, RelationshipType } = Enums.SREnums;
 
 const EXTENDED_META = [
@@ -29,7 +32,10 @@ const EXTENDED_META = [
   ['location', SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION],
 ];
 const EXTENDED_META_CODES = [
-  ...EXTENDED_META.map(([, code]) => code.value), SonadorCodeValues.DCMSR_MEASUREMENT_VIEW.value,
+  ...EXTENDED_META.map(([, code]) => code.value),
+  SonadorCodeValues.DCMSR_MEASUREMENT_VIEW.value,
+  SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES.value,
+  SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE.value,
 ];
 
 
@@ -51,6 +57,8 @@ function encodeExtendedMeta(measurement, srItem, options) {
   };
   const views = asArray(measurementMeta.views || measurementData.views || measurement.views)
     .filter(view => _.isString(view) && view !== '');
+  const sourceSeries = measurementMeta.sourceSeries || measurementData.sourceSeries;
+  const drawingPlane = measurementMeta.drawingPlane || measurementData.drawingPlane;
 
   const { item: parent, relationshipType } = propertyCarrier(srItem, options.propertyParent);
   const textItem = (code, value) => new TextContentItem({ name: codedConcept(code), value, relationshipType });
@@ -58,6 +66,10 @@ function encodeExtendedMeta(measurement, srItem, options) {
   const items = [
     ...EXTENDED_META.filter(([key]) => values[key]).map(([key, code]) => textItem(code, values[key])),
     ...views.map(view => textItem(SonadorCodeValues.DCMSR_MEASUREMENT_VIEW, view)),
+    ...(_.isString(sourceSeries) && sourceSeries ? [new UIDRefContentItem({
+      name: codedConcept(SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES), value: sourceSeries, relationshipType,
+    })] : []),
+    ...(_.isString(drawingPlane) && drawingPlane ? [textItem(SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE, drawingPlane)] : []),
   ];
 
   parent.ContentSequence = [...asArray(parent.ContentSequence), ...items];
@@ -75,6 +87,8 @@ function parseExtendedMeta(srItem, annotation, options) {
     textPath: 'annotation.metadata.text',
     locationPath: 'annotation.metadata.location',
     viewsPath: 'annotation.metadata.views',
+    sourceSeriesPath: 'annotation.metadata.sourceSeries',
+    drawingPlanePath: 'annotation.metadata.drawingPlane',
   });
 
   // Children of the property parent first, then the Finding and group-level items (files written
@@ -108,6 +122,17 @@ function parseExtendedMeta(srItem, annotation, options) {
     .filter(Boolean);
   if (views.length && !annotation.annotation?.metadata?.views) {
     _.set(annotation, options.viewsPath, views);
+  }
+
+  // Source series (UIDREF) and drawing plane (TEXT, kept as written; utils/drawingPlane.js reads it)
+  const sourceSeries = candidates.find(item =>
+    conceptNameValue(item) === SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES.value && item.UID);
+  if (sourceSeries) {
+    _.set(annotation, options.sourceSeriesPath, sourceSeries.UID);
+  }
+  const drawingPlane = textOf(SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE);
+  if (drawingPlane) {
+    _.set(annotation, options.drawingPlanePath, drawingPlane);
   }
 
   return annotation;

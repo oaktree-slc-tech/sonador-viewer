@@ -14,8 +14,9 @@ import { Enums as MeasurementEnums } from '../../measurements/enums';
 import TID1500MeasurementReport from '../utils/TID1500';
 import { findReferencedSOPSequence } from './utils/findReferencedSOP';
 import { asArray, conceptNameMatches, firstItem } from '../utils/codedConcept';
-import { isAngleTool } from '../utils/angleGeometry';
-import { isDisplayOnlyDocument, isUnconfirmedReport } from '../utils/srDocument';
+import TOOL_NAMES from '../constants/toolNames';
+import frameImageIds from './utils/frameImageIds';
+import { isApplicationDocument, isUnconfirmedReport, markApplicationMeasurement } from '../utils/srDocument';
 
 const { MeasurementReport: c3dMeasurementReport } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
@@ -53,12 +54,15 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     const measurementGroups = asArray(imagingMeasurementContent?.ContentSequence)
       .filter(item => conceptNameMatches(item, dcmCode(codes.MeasurementGroup)));
 
-    // For each of the supported measurement types, compute the measurement data
+    // For each of the supported measurement types, compute the measurement data. Every adapter looks
+    // its image up by `SOPInstanceUID:frame` (the library's Length as well as the Viewer's own).
     const measurementData = {};
+    const imageIds = frameImageIds(sopInstanceUIDToImageIdMap, options.imageIdsForToolState);
 
-    // The Angle and Cobb angle groups of an application document (Sonador-SR root title) are not
-    // hydrated (the read-only display shows them)
-    const displayOnly = isDisplayOnlyDocument(dataset);
+    // The measurement groups of an application document (Sonador-SR root title) are not hydrated:
+    // the read-only display shows them. Its Series Tags are the exception, hydrated read-only and
+    // locked as from any document.
+    const applicationDocument = isApplicationDocument(dataset);
 
     // A report the upload has not confirmed as stored holds no saved measurements yet
     const locked = !isUnconfirmedReport(dataset.SOPInstanceUID);
@@ -80,16 +84,19 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
         const toolAdapter = hooks?.getToolClass?.(measurementGroup, dataset, this.measurementAdapterByToolType) 
           || this.getAdapterForTrackingIdentifier(trackingIdentifierValue);
 
-        if (toolAdapter && displayOnly && isAngleTool(toolAdapter.toolType)) {
-          console.info('[DICOMSR:MeasurementReport:generateToolState] display-only document, '
+        if (toolAdapter && applicationDocument && toolAdapter.toolType !== TOOL_NAMES.DICOM_SR_SERIES_TAG) {
+          console.info('[DICOMSR:MeasurementReport:generateToolState] application document, '
             + `${toolAdapter.toolType} group not hydrated trackingUID=${trackingUniqueIdentifierValue}`);
         } else if (toolAdapter) {
           // The per-frame image ids go to the Sonador adapters; the library ones ignore them
           const measurement = toolAdapter.getMeasurementData(
-            measurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifierValue,
+            measurementGroup, imageIds, metadata, trackingIdentifierValue,
             { imageIdsForToolState: options.imageIdsForToolState, locked });
 
           measurement.TrackingUniqueIdentifier = trackingUniqueIdentifierValue;
+          if (applicationDocument) {
+            markApplicationMeasurement(trackingUniqueIdentifierValue);
+          }
 
           // Trigger content parse callback
           if (measurement && _.isFunction(options.onContentItemParse)) {

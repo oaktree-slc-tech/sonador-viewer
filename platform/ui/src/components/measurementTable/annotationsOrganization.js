@@ -2,8 +2,8 @@
 // each group's rows by series.
 //
 // A row matches a search when every word typed appears, case-insensitively, in one of its fields:
-// the measurement type, its label and location, its description, and its series' modality and
-// series description. Grouped by series, each group's rows are split into one sub-group per
+// the measurement type, its label and location, its description, the view of an out-of-plane
+// measurement, and its series' modality and series description. Grouped by series, each group's rows are split into one sub-group per
 // series, ordered by series number and headed by the series description; rows whose series cannot
 // be resolved (its metadata not loaded, not part of this study, or not recorded) form a last
 // sub-group, "Series Unavailable". A sub-group's hover card lists the series' annotation types
@@ -88,6 +88,7 @@ function rowSearchText(row, series = seriesOf(row)) {
     ...(rowToolType(row) !== row.toolType ? toolTypeNames(row.toolType) : []),
     row.label, row.location, row.description,
     tag.value, tag.meaning,
+    row.outOfPlane && row.outOfPlane.view,
     series && series.Modality, series && series.SeriesDescription,
   ].filter(value => value !== undefined && value !== null && value !== '')
     .join(' ').toLowerCase();
@@ -191,14 +192,15 @@ function seriesEntries(bySeries, key) {
 /**
  * A series' annotation types for its hover card, from its MeasurementApi entries (every group:
  * Measurements, Findings and their Pending groups): one line per type and count, the saved ones
- * first, then the pending ones, each most frequent first.
+ * first, then the pending ones, each most frequent first. Out-of-plane measurements are a type of
+ * their own ("3D Length").
  *
  * @returns {object[]} { name, pending, count }
  */
 function seriesAnnotationTypes(entries) {
   const counts = new Map();
-  (entries || []).forEach(({ toolType, pending }) => {
-    const name = toolTypeName(toolType);
+  (entries || []).forEach(({ toolType, pending, outOfPlane }) => {
+    const name = `${outOfPlane ? '3D ' : ''}${toolTypeName(toolType)}`;
     const id = `${pending ? 1 : 0}:${name}`;
     const line = counts.get(id) || { name, pending: Boolean(pending), count: 0 };
     line.count += 1;

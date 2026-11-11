@@ -9,10 +9,12 @@ import measurements from '../measurements';
 import MeasurementReport from './SCOORD3D/MeasurementReport';
 import { encodeExtendedMeta } from './utils/dcmsrExtendedMeta';
 import { encodeDisplayAttributes } from './utils/dcmsrDisplayAttributes';
-import { currentSession, documentSettings, saveParent } from './utils/srDocument';
+import { currentSession, documentSettings, isApplicationMeasurement, saveParent } from './utils/srDocument';
 import { propertyParentOf } from './utils/propertyParent';
+import { drawnViewOf } from './utils/measurementView';
 import { measurementVersion, omittedMeasurement } from './utils/saveResult';
-import { uiNotificationService } from '../services/UINotificationService';
+import { isOutOfPlaneMeasurement, patientKeyOf, patientToolData } from './utils/outOfPlane';
+import DicomMetadataStore from '../services/DicomMetadataStore';
 
 const { getImageIdForImagePath, MeasurementApi } = measurements;
 
@@ -45,6 +47,8 @@ const parseMeasurementsData = (measurementsData, options) => {
 
   const toolState = {};
   const unsupportedTools = [];
+  // The series of the patient-domain measurements, by tool state key
+  const patientSeries = {};
 
   Object.keys(measurementsData).forEach((measurementType) => {
     const measurements = measurementsData[measurementType];
@@ -57,6 +61,24 @@ const parseMeasurementsData = (measurementsData, options) => {
 
       if (!uid) {
         log.warn('[DICOM-SR:parseMeasurementsData] unable to persist measurement, invalid UID', measurement);
+        return;
+      }
+
+      // An out-of-plane measurement holds its patient points; it has no image
+      if (isOutOfPlaneMeasurement(measurement)) {
+        if (isApplicationMeasurement(measurement.metadata.TrackingUniqueIdentifier)) {
+          log.info('[DICOM-SR:parseMeasurementsData] measurement of an application document not written',
+            measurement.metadata.TrackingUniqueIdentifier);
+          return;
+        }
+        // A held measurement is keyed by itself: its evidence is that of the report it was read from
+        const { carriedEvidence } = measurement.metadata;
+        const key = patientKeyOf(carriedEvidence ? measurement.uid
+          : measurement.metadata.sourceSeries || measurement.referenceSeriesUID);
+        patientSeries[key] = patientSeries[key] || seriesEvidence(measurement);
+        toolState[key] = toolState[key] || {};
+        toolState[key][toolType] = toolState[key][toolType] || { data: [] };
+        toolState[key][toolType].data.push(patientToolData(measurement));
         return;
       }
 
@@ -78,12 +100,21 @@ const parseMeasurementsData = (measurementsData, options) => {
 
       if (isToolSupported(toolType) && toolServiceManaged) {
         
+        // Unpack measurement data from the annotation for deyhdration to DICOM-SR
+        const { measurementData: annotationData } = MeasurementApi._unpackMeasurementData(annotation);
+
+        // A measurement hydrated from an application document is never written: the save would
+        // copy it into another document
+        const trackingUID = annotationData && (annotationData.TrackingUniqueIdentifier
+          || (annotationData.metadata && annotationData.metadata.TrackingUniqueIdentifier));
+        if (isApplicationMeasurement(trackingUID)) {
+          log.info('[DICOM-SR:parseMeasurementsData] measurement of an application document not written', trackingUID);
+          return;
+        }
+
         // Retrieve references to report data structure, initialize if it does not exist
         toolState[imageId] = toolState[imageId] || {};
         toolState[imageId][toolType] = toolState[imageId][toolType] || { data: [], };
-
-        // Unpack measurement data from the annotation and add it to the toolState array for deyhdration to DICOM-SR.
-        const { measurementData: annotationData } = MeasurementApi._unpackMeasurementData(annotation);
         toolState[imageId][toolType].data.push(annotationData);
 
       } else {
@@ -104,7 +135,9 @@ const parseMeasurementsData = (measurementsData, options) => {
   // Document class and root template: the parent's on a re-save (the single SR hydrated for the
   // study), Comprehensive 3D SR with the Sonador template otherwise
   const firstImageId = Object.keys(toolState)[0];
-  const generalSeriesModule = firstImageId && cornerstone.metaData.get('generalSeriesModule', firstImageId);
+  const generalSeriesModule = firstImageId && (patientSeries[firstImageId]
+    ? { studyInstanceUID: patientSeries[firstImageId].StudyInstanceUID }
+    : cornerstone.metaData.get('generalSeriesModule', firstImageId));
   const parent = generalSeriesModule ? saveParent(generalSeriesModule.studyInstanceUID) : null;
   const document = {
     ...documentSettings(parent),
@@ -120,21 +153,14 @@ const parseMeasurementsData = (measurementsData, options) => {
     'documentClass='+document.documentClass, 'parent='+(parent ? parent.SOPInstanceUID : 'none'));
   const report = MeasurementReport.generateReport(toolState, cornerstone.metaData, _.extend({}, _.pick(options, 'headers'), {
     document,
-    onDocumentClassUpgrade: (from, to) => {
-      // Raised while the report is built, before it is stored: it states the format, not a save
-      const message = 'The measurements include content an Enhanced SR document cannot hold, so this report '
-        + 'is written as Comprehensive 3D SR rather than Enhanced SR like the report it updates.';
-      log.warn('[DICOM-SR:parseMeasurementsData] '+message+' from='+from+' to='+to);
-      uiNotificationService.show({ title: 'Comprehensive 3D SR required', message, type: 'warning' });
-    },
+    patientSeries,
     onMeasurementRefused: (toolType, tool, error) => {
-      // Raised once per tool (the report is built twice when its class is upgraded); reported to the
-      // user with the save result, after the report is stored
+      // Raised once per tool; reported to the user with the save result, after the report is stored
       if (refused.has(tool)) {
         return;
       }
       refused.add(tool);
-      const measurement = measurementApi.getMeasurementByCornerstoneId(tool._id);
+      const measurement = measurementOf(tool);
       omitted.push(omittedMeasurement(toolType, measurement || tool, error));
       log.warn('[DICOM-SR:parseMeasurementsData] measurement left out of the report toolType='+toolType
         +' reason='+(error.code || 'invalid'), error.message, tool);
@@ -142,9 +168,20 @@ const parseMeasurementsData = (measurementsData, options) => {
     onContentItemCreate: (toolType, measurementIds, tid300Measurement, srItem, encoding) => {
 
       // Retrieve measurement from API
-      const { _id: cornerstoneId } = measurementIds;
-      const measurement = measurementApi.getMeasurementByCornerstoneId(cornerstoneId);
+      const measurement = measurementOf(measurementIds);
       if (measurement && measurement.uid) {
+        // A measurement written for the first time (no tracking UID yet) was drawn in this session:
+        // it is labelled with the view it was drawn in (Sonador-Measurement.View). One read from a
+        // report keeps the views it was read with, and gets none it did not have.
+        const firstWrite = !(measurement.metadata && measurement.metadata.TrackingUniqueIdentifier);
+        if (firstWrite && !_.size(measurement.metadata && measurement.metadata.views)) {
+          const { imageId } = MeasurementApi._getImageIdentifiers(measurement);
+          const view = drawnViewOf(toolType, measurement, imageId && cornerstone.metaData.get('imagePlaneModule', imageId));
+          if (view) {
+            measurement.metadata = { ...(measurement.metadata || {}), views: [view] };
+          }
+        }
+
         // The tracking UID the report holds stays with the measurement (dcmjs mints it for a new
         // one): a re-save keeps it, and the report's own load finds the measurement already held.
         // The last build is the one stored. The version is taken with it in place.
@@ -172,10 +209,45 @@ const parseMeasurementsData = (measurementsData, options) => {
     apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_SUCCESS, dcm: report,
   });
 
+  function measurementOf({ uid, _id }) {
+    // The classic record of a tool, or the out-of-plane record (its uid is the tool's)
+    const classic = measurementApi.getMeasurementByCornerstoneId(_id);
+    if (classic) {
+      return classic;
+    }
+    const record = uid && measurementApi.measurementService.getMeasurement(uid);
+    return isOutOfPlaneMeasurement(record) ? record : undefined;
+  }
+
   // Measurements written: every tool of the tool state but those left out
   const saved = _.sum(_.flatMap(_.values(toolState), byType => _.map(byType, ({ data }) => data.length))) - omitted.length;
   return { dataset: report.dataset, omitted, saved, written: [...written.values()] };
 };
+
+
+function seriesEvidence(measurement) {
+  // The study, series and instances of the series an out-of-plane measurement was drawn on; for a
+  // held one whose series is not loaded, the evidence of the report it was read from
+  const { carriedEvidence } = measurement.metadata;
+  if (carriedEvidence) {
+    return carriedEvidence;
+  }
+  const StudyInstanceUID = measurement.referenceStudyUID;
+  const SeriesInstanceUID = measurement.metadata.sourceSeries || measurement.referenceSeriesUID;
+  let series;
+  try {
+    series = DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID);
+  } catch (error) {
+    series = undefined;
+  }
+  const instances = ((series && series.instances) || [])
+    .filter(instance => instance && instance.SOPInstanceUID)
+    .map(instance => _.pick(instance, 'SOPClassUID', 'SOPInstanceUID'));
+  if (!instances.length) {
+    log.warn('[DICOM-SR:parseMeasurementsData] no instances of the source series for the evidence', SeriesInstanceUID);
+  }
+  return { StudyInstanceUID, SeriesInstanceUID, instances };
+}
 
 
 export default parseMeasurementsData;

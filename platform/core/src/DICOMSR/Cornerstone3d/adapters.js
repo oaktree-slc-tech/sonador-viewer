@@ -16,10 +16,14 @@ import { readFindingCode } from '../TID300/DICOMReferencedSOPInstanceFinding';
 import { asArray, conceptNameValue, firstItem } from '../utils/codedConcept';
 import { encodingWarnings, handlePointsOf, imageToPatient, isPlane } from '../utils/angleGeometry';
 import { findImageForPoints, planeFromModule } from '../readOnly/planeGeometry';
+import { DCMSR_MEASUREMENT_DRAWING_PLANE } from '../enums';
+import { drawingPlaneProblem } from '../utils/drawingPlane';
+import frameImageIds from './utils/frameImageIds';
 
 const { TID300Measurement } = utilities.TID300;
 const {
   BaseAdapter3D, MeasurementReport: LibraryMeasurementReport, Angle: LibraryAngle, CobbAngle: LibraryCobbAngle,
+  Length: LibraryLength,
 } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
 
@@ -88,14 +92,17 @@ class DICOMSRSeriesTagTool extends BaseAdapter3D {
 }
 
 
-// Angle and Cobb angle: the library adapters (Cobb angle representation, both tracking identifier
-// prefixes; Angle reads its handles from encoded points 0, 1 and 3), completed with what the
-// exchange profile needs from a hydrated measurement:
+// Length, Angle and Cobb angle: the library adapters (Cobb angle representation, both tracking
+// identifier prefixes; Angle reads its handles from encoded points 0, 1 and 3), completed with what
+// the exchange profile needs from a hydrated measurement:
 // * the image of the referenced frame, never another frame of the same instance;
 // * patient points mapped from image points as DICOM defines them (angleGeometry.js), the mapping
 //   the classic bridge, the writer and the Cornerstone3D mirror invert;
 // * for a patient-domain (SCOORD3D) polyline, the loaded image of the polyline's Frame of
-//   Reference whose plane holds all four points, so the measurement can be drawn and edited;
+//   Reference whose plane holds all its points, so the measurement can be drawn and edited;
+//   unless it has a valid Sonador-Measurement.Drawing-Plane: it was drawn off the acquired images
+//   and stays an out-of-plane measurement (`outOfPlane`), whatever image holds its points. A
+//   malformed Drawing-Plane is logged and treated as absent;
 // * the stored value, kept as read, and the geometry it was read with (`sourceGeometry`), so an
 //   unchanged re-save writes both back as they were;
 // * the tracking identifier, which a re-save keeps;
@@ -116,24 +123,6 @@ const graphicPoints = coordinates => {
   const data = Array.from(coordinates.GraphicData || [], Number);
   return _.chunk(data, size).filter(point => point.length === size);
 };
-
-function frameImageIds(sopInstanceUIDToImageIdMap, imageIdsForToolState) {
-  // The library looks images up as `SOPInstanceUID:frame`. The viewer keeps the first frame's id by
-  // SOP instance and every frame's id by frame number; a frame without an id stays unresolved.
-  return new Proxy(sopInstanceUIDToImageIdMap, {
-    get: (target, key) => {
-      if (typeof key !== 'string' || key in target || !key.includes(':')) {
-        return target[key];
-      }
-      const [SOPInstanceUID, frame] = key.split(':');
-      const frames = imageIdsForToolState && imageIdsForToolState[SOPInstanceUID];
-      if (frames) {
-        return frames[Number(frame)];
-      }
-      return Number(frame) === 1 ? target[SOPInstanceUID] : undefined;
-    },
-  });
-}
 
 function imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata) {
   // Every loaded image (each frame of a multiframe instance) with its plane
@@ -156,7 +145,10 @@ function imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metad
   });
 }
 
-function completeAngleState(adapter, state, MeasurementGroup, context) {
+// The cached statistic each tool's stored value is shown as
+const STAT_NAMES = { Length: 'length', Angle: 'angle', CobbAngle: 'angle' };
+
+function completeMeasurementState(adapter, state, MeasurementGroup, context) {
   const { sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked = true } = context;
   const { num, coordinates } = coordinateItemOf(MeasurementGroup);
   const { annotation } = state;
@@ -166,15 +158,32 @@ function completeAngleState(adapter, state, MeasurementGroup, context) {
   }
 
   const points = graphicPoints(coordinates);
-  encodingWarnings(adapter.toolType, points).forEach(message => console.warn(
-    `[DICOMSR:Cornerstone3D:${adapter.toolType}] ${message} trackingUID=${TrackingUniqueIdentifier}`));
+  const isAngle = adapter.toolType !== 'Length';
+  if (isAngle) {
+    encodingWarnings(adapter.toolType, points).forEach(message => console.warn(
+      `[DICOMSR:Cornerstone3D:${adapter.toolType}] ${message} trackingUID=${TrackingUniqueIdentifier}`));
+  }
 
   const isPatientDomain = coordinates.ValueType === 'SCOORD3D';
   const reference = firstItem(asArray(coordinates.ContentSequence).find(item => item.ValueType === 'IMAGE')?.ReferencedSOPSequence);
   annotation.metadata.coordinateDomain = isPatientDomain ? 'patient' : 'image';
 
+  // A valid Drawing-Plane keeps a patient-domain measurement off the images
+  const drawingPlaneItem = asArray(num && num.ContentSequence)
+    .find(item => conceptNameValue(item) === DCMSR_MEASUREMENT_DRAWING_PLANE.value);
+  const drawingPlaneText = drawingPlaneItem && drawingPlaneItem.TextValue;
+  const problem = isPatientDomain && drawingPlaneText !== undefined ? drawingPlaneProblem(drawingPlaneText, points) : undefined;
+  if (problem) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] malformed Drawing-Plane "${drawingPlaneText}" (${problem}), `
+      + `treated as absent trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const outOfPlane = isPatientDomain && drawingPlaneText !== undefined && !problem;
+  if (outOfPlane) {
+    annotation.metadata.outOfPlane = true;
+  }
+
   let placement;
-  if (isPatientDomain && !annotation.metadata.referencedImageId) {
+  if (isPatientDomain && !outOfPlane && !annotation.metadata.referencedImageId) {
     const image = findImageForPoints(imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata),
       points, { FrameOfReferenceUID: coordinates.ReferencedFrameOfReferenceUID });
     if (image) {
@@ -197,14 +206,15 @@ function completeAngleState(adapter, state, MeasurementGroup, context) {
       module = undefined;
     }
     if (isPlane(module)) {
-      annotation.data.handles.points = handlePointsOf(adapter.toolType, points).map(point => imageToPatient(module, point));
+      const handlePoints = isAngle ? handlePointsOf(adapter.toolType, points) : points;
+      annotation.data.handles.points = handlePoints.map(point => imageToPatient(module, point));
     }
   }
 
   const measuredValue = firstItem(num && num.MeasuredValueSequence);
-  const storedAngle = measuredValue && !_.isNil(measuredValue.NumericValue) ? Number(measuredValue.NumericValue) : null;
+  const storedValue = measuredValue && !_.isNil(measuredValue.NumericValue) ? Number(measuredValue.NumericValue) : null;
   if (referencedImageId) {
-    annotation.data.cachedStats = { [`imageId:${referencedImageId}`]: { angle: storedAngle } };
+    annotation.data.cachedStats = { [`imageId:${referencedImageId}`]: { [STAT_NAMES[adapter.toolType]]: storedValue } };
   }
 
   annotation.metadata.sourceGeometry = {
@@ -215,7 +225,7 @@ function completeAngleState(adapter, state, MeasurementGroup, context) {
     ReferencedFrameNumber: reference && reference.ReferencedFrameNumber,
     // The image a patient-domain polyline was placed on
     placement,
-    value: storedAngle,
+    value: storedValue,
   };
   annotation.metadata.TrackingUniqueIdentifier = TrackingUniqueIdentifier;
   annotation.metadata.TrackingIdentifier = trackingIdentifier;
@@ -226,7 +236,7 @@ function completeAngleState(adapter, state, MeasurementGroup, context) {
   return state;
 }
 
-function registerAngleAdapter(adapter) {
+function registerAdapter(adapter) {
   // Replaces the library adapter of the same tool type, for every tracking identifier it accepts
   LibraryMeasurementReport.registerTool(adapter, true);
   LibraryMeasurementReport.registerTrackingIdentifier(adapter, ...adapter.trackingIdentifiers);
@@ -234,13 +244,13 @@ function registerAngleAdapter(adapter) {
 
 // `options.imageIdsForToolState` (SOP instance -> image id by frame number) and `options.locked` are
 // passed by the Sonador report's generateToolState; the library adapters ignore them
-function angleMeasurementData(adapter, LibraryAdapter, args) {
+function measurementData(adapter, LibraryAdapter, args) {
   const [MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifier, options] = args;
   const imageIdsForToolState = options && options.imageIdsForToolState;
   const locked = !options || options.locked !== false;
   const state = LibraryAdapter.getMeasurementData.call(adapter, MeasurementGroup,
     frameImageIds(sopInstanceUIDToImageIdMap, imageIdsForToolState), metadata, trackingIdentifier);
-  return completeAngleState(adapter, state, MeasurementGroup, {
+  return completeMeasurementState(adapter, state, MeasurementGroup, {
     sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked,
   });
 }
@@ -248,18 +258,26 @@ function angleMeasurementData(adapter, LibraryAdapter, args) {
 
 class Angle extends LibraryAngle {
   static getMeasurementData(...args) {
-    return angleMeasurementData(this, LibraryAngle, args);
+    return measurementData(this, LibraryAngle, args);
   }
 }
-registerAngleAdapter(Angle);
+registerAdapter(Angle);
 
 
 class CobbAngle extends LibraryCobbAngle {
   static getMeasurementData(...args) {
-    return angleMeasurementData(this, LibraryCobbAngle, args);
+    return measurementData(this, LibraryCobbAngle, args);
   }
 }
-registerAngleAdapter(CobbAngle);
+registerAdapter(CobbAngle);
+
+
+class Length extends LibraryLength {
+  static getMeasurementData(...args) {
+    return measurementData(this, LibraryLength, args);
+  }
+}
+registerAdapter(Length);
 
 
 // Adapter Module
@@ -268,8 +286,9 @@ const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
   DICOMSRSeriesTagTool,
   Angle,
   CobbAngle,
+  Length,
 });
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, CobbAngle };
+export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, CobbAngle, Length };

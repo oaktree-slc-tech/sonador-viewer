@@ -8,6 +8,12 @@
 // A supported-tool measurement is never displayed here, even when hydration placed nothing, and a
 // measurement whose tracking UID the MeasurementApi already holds (placed by an earlier load) is
 // skipped, so hydration always wins and a measurement is never shown twice.
+//
+// An application document (utils/srDocument.js) is displayed, never hydrated. Of its groups, only
+// those with a Cornerstone tracking identifier and coordinates of a graphic type the read-only
+// layer draws are drawn; the others are ignored. Its measurements are drawn in the viewports and
+// are not listed in the Measurements panel. One log line per document names the groups drawn and
+// the groups ignored.
 
 import log from '../../log';
 import MeasurementApi from '../../measurements/classes/MeasurementApi';
@@ -89,6 +95,42 @@ function _place(measurement, candidates) {
 }
 
 
+// Tracking identifier prefixes of the Cornerstone tools, and the graphic types the read-only layer
+// draws (readOnly/renderableData.js)
+const CORNERSTONE_TRACKING_PREFIXES = ['cornerstoneTools@^4.0.0:', 'Cornerstone3DTools@^0.1.0:'];
+const DRAWN_GRAPHIC_TYPES = ['POINT', 'MULTIPOINT', 'POLYLINE', 'POLYGON', 'CIRCLE', 'ELLIPSE'];
+
+
+/**
+ * Why a group of an application document is not drawn, or undefined when it is: its tracking
+ * identifier is not a Cornerstone tool's, or its coordinates are of a graphic type the read-only
+ * layer does not draw. A CIRCLE in patient coordinates is not a defined SCOORD3D graphic type.
+ */
+function _ignoredReason(measurement) {
+  const trackingIdentifier = measurement.TrackingIdentifier || '';
+  if (!CORNERSTONE_TRACKING_PREFIXES.some(prefix => trackingIdentifier.startsWith(prefix))) {
+    return 'not a Cornerstone tracking identifier';
+  }
+  const coords = (measurement.coords || []).filter(coord => coord && coord.GraphicType);
+  if (!coords.length) {
+    return 'no coordinates';
+  }
+  const undrawn = coords.find(coord => !DRAWN_GRAPHIC_TYPES.includes(coord.GraphicType)
+    || (coord.ValueType === 'SCOORD3D' && coord.GraphicType === 'CIRCLE'));
+  return undrawn ? `${undrawn.ValueType} ${undrawn.GraphicType} is not drawn` : undefined;
+}
+
+
+/**
+ * The labels a read-only measurement is drawn with: its description, when it has one, else the
+ * labels the report gives it (the NUM value and unit)
+ */
+function _displayLabels(measurement) {
+  const description = measurement.description || measurement.metadata?.description;
+  return description ? [{ label: description, value: '' }] : measurement.labels;
+}
+
+
 function _labelColor(label) {
   // A dark colour that stays the same for the same text, as overlay labels need one
   const text = `${label.label}${label.value}`;
@@ -147,25 +189,43 @@ export default function addReadOnlyMeasurements({
   const summary = { placed: 0, patientOnly: 0, skipped: 0 };
 
   (srDisplaySets || []).forEach(srDisplaySet => {
+    const application = !!srDisplaySet?.isApplicationDocument;
+    const groups = { drawn: [], ignored: [] };
+
     (srDisplaySet?.measurements || []).forEach(measurement => {
+      const group = `${measurement?.TrackingIdentifier || '(no tracking identifier)'} ${measurement?.TrackingUniqueIdentifier || ''}`.trim();
+      const ignoredReason = application ? _ignoredReason(measurement || {}) : undefined;
+      if (ignoredReason) {
+        groups.ignored.push(`${group}: ${ignoredReason}`);
+        return;
+      }
+
       // One measurement that cannot be added is skipped; the others are still added
       try {
-        addOne(srDisplaySet, measurement);
+        if (addOne(srDisplaySet, measurement, { listed: !application })) {
+          groups.drawn.push(group);
+        }
       } catch (error) {
         log.warn('[DICOM-SR:addReadOnlyMeasurements] measurement skipped', measurement?.TrackingUniqueIdentifier, error);
         summary.skipped++;
       }
     });
+
+    if (application) {
+      log.info('[DICOM-SR:addReadOnlyMeasurements] application document '+srDisplaySet.SOPInstanceUID
+        +': groups drawn', groups.drawn, 'groups ignored', groups.ignored);
+    }
   });
 
-  /** Add one measurement of a report, counting it in the summary */
-  function addOne(srDisplaySet, measurement) {
+  /** Add one measurement of a report, counting it in the summary; true when it is drawn */
+  function addOne(srDisplaySet, measurement, { listed }) {
     const { TrackingUniqueIdentifier } = measurement || {};
     if (!TrackingUniqueIdentifier || excludeTrackingUIDs.has(TrackingUniqueIdentifier)
         || measurementApi.getMeasurementByTrackingUid(TrackingUniqueIdentifier)) {
-      return;
+      return false;
     }
 
+    measurement.labels = _displayLabels(measurement);
     const placement = _place(measurement, candidates);
 
     if (placement) {
@@ -173,11 +233,11 @@ export default function addReadOnlyMeasurements({
       const imageId = _imageIdFor(candidate.instance, frameNumber, imageIds);
       if (!imageId) {
         summary.skipped++;
-        return;
+        return false;
       }
 
       _addTextLabels(measurement, candidate);
-      addMeasurement(measurement, imageId, candidate.instance, candidate.displaySet.displaySetInstanceUID);
+      addMeasurement(measurement, imageId, candidate.instance, candidate.displaySet.displaySetInstanceUID, { listed });
       measurement.frameNumber = frameNumber;
 
       if (Array.isArray(srDisplaySet.referencedDisplaySets)
@@ -185,15 +245,16 @@ export default function addReadOnlyMeasurements({
         srDisplaySet.referencedDisplaySets.push(candidate.displaySet);
       }
       summary.placed++;
-      return;
+      return true;
     }
 
     // Patient coordinates in no image plane: Cornerstone3D viewports only
     if (addSRDisplayAnnotation({ measurement, render: false })) {
       summary.patientOnly++;
-    } else {
-      summary.skipped++;
+      return true;
     }
+    summary.skipped++;
+    return false;
   }
 
   if (summary.placed) {
@@ -205,4 +266,4 @@ export default function addReadOnlyMeasurements({
   return summary;
 }
 
-export { addReadOnlyMeasurements };
+export { addReadOnlyMeasurements, CORNERSTONE_TRACKING_PREFIXES, DRAWN_GRAPHIC_TYPES };

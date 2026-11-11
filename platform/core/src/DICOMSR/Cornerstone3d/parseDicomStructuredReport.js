@@ -24,9 +24,13 @@ import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
-import { propertyParentOf } from '../utils/propertyParent';
+import { numItemsOf, propertyParentOf } from '../utils/propertyParent';
 import { currentSession, registerHydratedReport } from '../utils/srDocument';
 import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
+import {
+  carriedEvidenceOf, heldOutOfPlaneRecord, isOutOfPlaneMeasurement, OUT_OF_PLANE_TOOLS, seriesOfFrameOfReference,
+} from '../utils/outOfPlane';
+import guid from '../../utils/guid';
 
 const {
   CORNERSTONE_3D_TOOLS_SOURCE_NAME, CORNERSTONE_3D_TOOLS_SOURCE_VERSION, Cornerstone3D: Cornerstone3dSR,
@@ -167,6 +171,9 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
         const propertyParent = propertyParentOf(toolType);
         parseExtendedMeta(srItem, annotation, { propertyParent });
         parseDisplayAttributes(srItem, annotation, { propertyParent });
+        // The group's NUM items as the report holds them, each with its own children (content the
+        // Viewer does not model included): kept with their NUM, never moved or flattened
+        _.set(annotation, 'annotation.metadata.numItems', numItemsOf(srItem));
       },
     });
 
@@ -284,6 +291,14 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
             } = instance);
           }
         }
+      }
+
+      // A patient-domain Length, Angle or Cobb angle on no image (its Drawing-Plane says it was
+      // drawn off the acquired images, no loaded image holds its points, or no loaded series
+      // shares its Frame of Reference) is held as an out-of-plane measurement
+      if (!imageId && isPatientDomainState(annotationType, toolData)) {
+        addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR });
+        return;
       }
 
       // Prevent rendering of annotations without a defined imageId
@@ -427,3 +442,43 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
 
 export default parseDicomStructuredReport;
+
+
+/** Whether a hydrated tool state is a patient-domain Length, Angle or Cobb angle */
+function isPatientDomainState(annotationType, toolData) {
+  const metadata = (toolData.annotation && toolData.annotation.metadata) || {};
+  return OUT_OF_PLANE_TOOLS.includes(annotationType) && !!metadata.sourceGeometry
+    && metadata.sourceGeometry.valueType === 'SCOORD3D';
+}
+
+function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }) {
+  // Hold a hydrated patient-domain group as an out-of-plane measurement-service record, once. One
+  // whose Frame of Reference no loaded series shares keeps the report's evidence for its series, so
+  // that a save writes it again.
+  const record = heldOutOfPlaneRecord(annotationType, toolData, instanceSR.StudyInstanceUID);
+  const { TrackingUniqueIdentifier } = record.metadata;
+
+  if (!seriesOfFrameOfReference(record.FrameOfReferenceUID, DicomMetadataStore).length) {
+    record.metadata.carriedEvidence = carriedEvidenceOf(instanceSR, record);
+    if (!record.metadata.carriedEvidence.instances.length) {
+      log.warn('[DICOM-SR:parseDicomStructuredReport:out-of-plane] the report lists no evidence for a held measurement;'
+        + ' a save writes it again with none', TrackingUniqueIdentifier);
+    }
+  }
+
+  if (measurementService.getMeasurements().some(m => isOutOfPlaneMeasurement(m)
+      && m.metadata.TrackingUniqueIdentifier === TrackingUniqueIdentifier)) {
+    log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] out-of-plane measurement already held', TrackingUniqueIdentifier);
+    return;
+  }
+  const { source } = measurementApi._serviceManagedTool(annotationType, {
+    sourceName: Cornerstone3dSR.sr.name, sourceVersion: Cornerstone3dSR.sr.version,
+  });
+  if (!source) {
+    log.warn('[DICOM-SR:parseDicomStructuredReport:out-of-plane] no Cornerstone3D source for', annotationType, TrackingUniqueIdentifier);
+    return;
+  }
+  measurementService.addRawMeasurement(source, annotationType, { id: guid(), annotation: { data: {} } }, () => record);
+}
+
+

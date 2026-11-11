@@ -117,3 +117,25 @@ it("lists a series' annotation types from the API's by-series query, saved first
     .toEqual([{ name: 'Arrow Annotation', pending: false, count: 1 }, { name: 'Series Tag', pending: false, count: 1 }]);
   expect(seriesEntries(undefined, '2.25.21')).toEqual([]);
 });
+
+
+it('searches the view of an out-of-plane measurement', () => {
+  const sagittal = row('o1', { toolType: 'CobbAngle', outOfPlane: { view: 'Sagittal', viewName: 'sagittal' }, refSeriesInstanceUID: '2.25.22' });
+  expect(matchesQuery(sagittal, 'sagittal')).toBe(true);
+  expect(matchesQuery(sagittal, 'cobb sagittal')).toBe(true);
+  expect(matchesQuery(row('o2', { outOfPlane: { view: 'Oblique' } }), 'sagittal')).toBe(false);
+  expect(matchesQuery(length, 'sagittal')).toBe(false);
+});
+
+it('counts out-of-plane measurements as a type of their own on the series card', () => {
+  const entries = [
+    { toolType: 'Length' }, { toolType: 'Length', outOfPlane: true }, { toolType: 'Length', outOfPlane: true },
+    { toolType: 'CobbAngle', outOfPlane: true, pending: true },
+  ];
+  expect(seriesAnnotationTypes(entries)).toEqual([
+    { name: '3D Length', pending: false, count: 2 },
+    { name: 'Length', pending: false, count: 1 },
+    { name: '3D Cobb Angle', pending: true, count: 1 },
+  ]);
+});
+

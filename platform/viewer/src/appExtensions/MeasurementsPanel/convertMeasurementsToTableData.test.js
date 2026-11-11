@@ -7,8 +7,13 @@ jest.mock('cornerstone-core', () => ({}), { virtual: true });
 // The MPR navigation reads image planes from Cornerstone3D (mprMeasurementNavigation.js)
 jest.mock('@cornerstonejs/core', () => ({ metaData: { get: () => undefined } }), { virtual: true });
 jest.mock('@ohif/ui', () => ({ MeasurementTable: () => null }));
-// Measurement-service records by cornerstone id
+// The drawing-plane utilities read the Cornerstone3D SR code scheme
+jest.mock('@cornerstonejs/adapters', () => ({
+  adaptersSR: { Cornerstone3D: { CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} } } },
+}), { virtual: true });
+// Measurement-service records by cornerstone id, and the out-of-plane records of the service
 const mockServiceMeasurements = {};
+const mockOutOfPlane = [];
 
 jest.mock('@ohif/core', () => {
   const { angle } = jest.requireActual('../../../../core/src/measurements/tools/angle');
@@ -22,6 +27,7 @@ jest.mock('@ohif/core', () => {
     Instance: {
       _serviceManagedTool: toolType => ({ toolServiceManaged: SERVICE_TOOLS.includes(toolType) }),
       getServiceMeasurementByCornerstoneId: _id => mockServiceMeasurements[_id],
+      measurementService: { getMeasurements: () => mockOutOfPlane },
     },
     _getToolType: measurement => measurement.toolType,
     seriesInstanceUIDOf: measurement => measurement.SeriesInstanceUID || measurement.referenceSeriesUID,
@@ -34,9 +40,15 @@ jest.mock('@ohif/core', () => {
   };
   return {
     __esModule: true,
-    default: { redux: { actions: {} }, measurements: { MeasurementApi }, display: { DisplaySetApi: {} } },
+    default: {
+      redux: { actions: {} }, measurements: { MeasurementApi }, display: { DisplaySetApi: {} },
+      DICOMSR: {
+        outOfPlane: jest.requireActual('../../../../core/src/DICOMSR/utils/outOfPlane'),
+        drawingPlane: jest.requireActual('../../../../core/src/DICOMSR/utils/drawingPlane'),
+      },
+    },
     DICOMSR: { isToolSupported: () => true, Enums: { TOOL_NAMES: {} }, SREnums: { TOOL_NAMES: { DICOM_SR_SERIES_TAG: 'DICOMSRSeriesTagTool' } } },
-    DicomMetadataStore: {},
+    DicomMetadataStore: { getStudyInstanceUIDs: () => [], getStudy: () => undefined },
     displayAttributes: {},
   };
 });
@@ -68,3 +80,30 @@ it('keeps read-only measurements in Measurements', () => {
   expect(groupsOf({ CobbAngle: [drawn('CobbAngle', { isReadOnly: true })] }))
     .toEqual([['Measurements', ['CobbAngle']]]);
 });
+
+it('leaves out a measurement drawn in the viewports only (one of an application document)', () => {
+  expect(groupsOf({
+    CobbAngle: [drawn('CobbAngle', { isReadOnly: true, isListed: false })],
+    Angle: [drawn('Angle', { isReadOnly: true })],
+  })).toEqual([['Measurements', ['Angle']]]);
+});
+
+it('numbers the rows in the order it lists them, saved then pending, out-of-plane measurements included', () => {
+  const outOfPlane = (uid, isLocked) => ({
+    uid, toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], length: 50, isLocked, FrameOfReferenceUID: '2.25.7001',
+    metadata: { outOfPlane: true, views: ['sagittal'] },
+  });
+  mockOutOfPlane.push(outOfPlane('oop-saved', true), outOfPlane('oop-pending', false));
+  // Classic measurement numbers that are not sequential
+  const groups = convertMeasurementsToTableData({
+    CobbAngle: [drawn('CobbAngle', { isReadOnly: true, measurementNumber: 4 })],
+    Angle: [drawn('Angle', { measurementNumber: 9 })],
+  }, timepoints);
+  mockOutOfPlane.length = 0;
+
+  expect(groups.map(group => [group.groupName, group.measurements.map(row => [row.measurementId, row.itemNumber])])).toEqual([
+    ['Measurements', [['CobbAngle-1', 1], ['oop-saved', 2]]],
+    ['Pending Measurements', [['Angle-1', 3], ['oop-pending', 4]]],
+  ]);
+});
+

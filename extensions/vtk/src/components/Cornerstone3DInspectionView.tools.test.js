@@ -37,9 +37,15 @@ jest.mock('@cornerstonejs/tools', () => {
     segmentation: {},
   };
 }, { virtual: true });
-jest.mock('@ohif/core', () => ({ __esModule: true, default: { display: { DisplaySetApi: {} } } }), { virtual: true });
+const mockRegisterDrawingVolume = jest.fn(() => () => {});
+jest.mock('@ohif/core', () => ({
+  __esModule: true,
+  default: { display: { DisplaySetApi: {} }, DICOMSR: { outOfPlane: { registerDrawingVolume: (...args) => mockRegisterDrawingVolume(...args) } } },
+}), { virtual: true });
 jest.mock('@ohif/ui', () => ({ OHIFModal: () => null, Icon: () => null, ToolbarButton: () => null }), { virtual: true });
-jest.mock('../utils/cornerstone3d.js', () => ({ getVolumeIdForDisplaySet: jest.fn(), inspectVtkLabelmapImage: jest.fn() }));
+jest.mock('../utils/cornerstone3d.js', () => ({
+  getVolumeIdForDisplaySet: jest.fn(), inspectVtkLabelmapImage: jest.fn(), isDecimatedVolumeId: id => id.endsWith('#decimated'),
+}));
 jest.mock('../enums', () => ({ __esModule: true, default: {} }));
 jest.mock('./Cornerstone3DLabelmapBaseView.js', () => {
   class Base { setState() {} }
@@ -184,6 +190,9 @@ it("opens on the MPR pane's plane and slice once the volume is set, fitted to th
   const camera = { viewPlaneNormal: [1, 0, 0], viewUp: [0, 0, 1], focalPoint: [5, 6, 7], position: [105, 6, 7], parallelScale: 80 };
   component.props = { ...component.props, initialCamera: camera };
   component._checkViewportActive = () => ({ viewport });
+  component._getImageVolumeId = () => 'volume::inspection';
+  component._volume = { metadata: { FrameOfReferenceUID: '2.25.7001' } };
+  component.props = { ...component.props, viewportData: { displaySet: { StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.2' } } };
   const base = Object.getPrototypeOf(Cornerstone3DInspectionView.prototype);
   base._setImageVolume = jest.fn(async () => order.push('setVolumes'));
   viewport.setCamera.mockImplementation(() => order.push('setCamera'));
@@ -192,6 +201,10 @@ it("opens on the MPR pane's plane and slice once the volume is set, fitted to th
   expect(order).toEqual(['setVolumes', 'resize', 'setCamera', 'fit']);
   expect(viewport.setCamera).toHaveBeenCalledWith(_.omit(camera, 'parallelScale'));
   expect(component.renderEngine.resize).toHaveBeenCalledWith(true, true);
+  // Its drawings become out-of-plane measurements of the series it shows
+  expect(mockRegisterDrawingVolume).toHaveBeenCalledWith('volume::inspection', {
+    StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.2', FrameOfReferenceUID: '2.25.7001', reducedResolution: false,
+  });
 
   component.props = { ...component.props, initialCamera: undefined };
   viewport.setCamera.mockClear();

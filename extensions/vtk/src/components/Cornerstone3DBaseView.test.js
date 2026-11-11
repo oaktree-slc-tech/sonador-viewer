@@ -54,9 +54,13 @@ jest.mock('@cornerstonejs/core', () => ({
 
 jest.mock('@cornerstonejs/core/utilities/triggerEvent', () => jest.fn(), { virtual: true });
 
+const mockToolGroups = {};
+const mockAnnotations = [];
+const mockTeardown = [];
 jest.mock('@cornerstonejs/tools', () => ({
   init: jest.fn(),
-  ToolGroupManager: {},
+  ToolGroupManager: { getToolGroupForViewport: viewportId => mockToolGroups[viewportId] },
+  CrosshairsTool: { toolName: 'Crosshairs' },
   SynchronizerManager: {},
   WindowLevelTool: { toolName: 'WindowLevel' },
   ZoomTool: { toolName: 'Zoom' },
@@ -64,7 +68,15 @@ jest.mock('@cornerstonejs/tools', () => ({
   StackScrollTool: { toolName: 'StackScroll' },
   Enums: {},
   addTool: jest.fn(),
-  annotation: { state: { getAllAnnotations: jest.fn(() => []), removeAnnotation: jest.fn() } },
+  annotation: {
+    state: {
+      getAllAnnotations: jest.fn(() => mockAnnotations),
+      removeAnnotation: jest.fn((uid) => {
+        mockTeardown.push(`removeAnnotation:${uid}`);
+        mockAnnotations.splice(mockAnnotations.findIndex(item => item.annotationUID === uid), 1);
+      }),
+    },
+  },
   segmentation: {
     state: { getSegmentations: jest.fn(() => []), removeSegmentation: jest.fn() },
     helpers: {},
@@ -460,3 +472,81 @@ describe('volume creation lifecycle', () => {
     expect(onLoadError).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('unmounting the view', () => {
+  const crosshairs = viewportId => ({ annotationUID: `crosshairs-${viewportId}`, metadata: { toolName: 'Crosshairs' }, data: { viewportId } });
+  const toolGroup = () => ({ removeViewports: jest.fn((engineId, viewportId) => mockTeardown.push(`removeViewports:${viewportId}`)) });
+
+  beforeEach(() => {
+    mockTeardown.length = 0;
+    mockAnnotations.length = 0;
+    Object.keys(mockToolGroups).forEach(key => delete mockToolGroups[key]);
+  });
+
+  it('withdraws a pane of a shared engine from its tool group before disabling it, keeping the crosshairs annotations', async () => {
+    const view = makeView({ engineCleanup: false });
+    const viewportId = view.getViewportId();
+    const group = toolGroup();
+    mockToolGroups[viewportId] = group;
+    mockAnnotations.push(crosshairs(viewportId), crosshairs('other-pane'));
+    view.renderEngine = {
+      id: 'test-engine',
+      getViewports: () => [{ id: viewportId }, { id: 'other-pane' }],
+      disableElement: jest.fn(() => mockTeardown.push('disableElement')),
+      resize: jest.fn(), render: jest.fn(() => mockTeardown.push('render')), destroy: jest.fn(),
+    };
+
+    await view.componentWillUnmount();
+    expect(group.removeViewports).toHaveBeenCalledWith('test-engine', viewportId);
+    expect(mockTeardown).toEqual([`removeViewports:${viewportId}`, 'disableElement', 'render']);
+    // The crosshairs tool expects an annotation for every element it is active on
+    expect(mockAnnotations.map(item => item.annotationUID)).toEqual([`crosshairs-${viewportId}`, 'crosshairs-other-pane']);
+  });
+
+  it('withdraws every viewport of an engine it destroys, first', async () => {
+    const view = makeView();
+    const viewportId = view.getViewportId();
+    mockToolGroups[viewportId] = toolGroup();
+    mockToolGroups['other-pane'] = toolGroup();
+    view.renderEngine = {
+      id: 'test-engine',
+      getViewports: () => [{ id: viewportId }, { id: 'other-pane' }],
+      destroy: jest.fn(async () => mockTeardown.push('destroy')),
+    };
+
+    await view.componentWillUnmount();
+    expect(mockTeardown).toEqual([`removeViewports:${viewportId}`, 'removeViewports:other-pane', 'destroy']);
+  });
+
+  it('withdraws its own viewport when another view has already destroyed the shared engine', async () => {
+    const view = makeView();
+    const viewportId = view.getViewportId();
+    mockToolGroups[viewportId] = toolGroup();
+    // As the public RenderingEngine: no destroyed flag of its own, its implementation throws
+    view.renderEngine = {
+      id: 'test-engine',
+      getViewports: () => { throw new Error('this.destroy() has been manually called to free up memory'); },
+      destroy: jest.fn(async () => mockTeardown.push('destroy')),
+    };
+
+    await expect(view.componentWillUnmount()).resolves.toBeUndefined();
+    expect(mockTeardown).toEqual([`removeViewports:${viewportId}`, 'destroy']);
+  });
+
+  it("withdraws the engine's viewports of a view that names no single viewport (the editor's tabs)", async () => {
+    const view = makeView();
+    view.getViewportId = () => { throw new Error('Unable to retrieve viewport ID, please specify active tab name'); };
+    mockToolGroups['editor-axial'] = toolGroup();
+    mockToolGroups['editor-3d'] = toolGroup();
+    view.renderEngine = {
+      id: 'test-engine',
+      getViewports: () => [{ id: 'editor-axial' }, { id: 'editor-3d' }],
+      destroy: jest.fn(async () => mockTeardown.push('destroy')),
+    };
+
+    await expect(view.componentWillUnmount()).resolves.toBeUndefined();
+    expect(mockTeardown).toEqual(['removeViewports:editor-axial', 'removeViewports:editor-3d', 'destroy']);
+  });
+});
+

@@ -83,13 +83,27 @@ jest.mock('../../store', () => ({
 jest.mock('../../services/DicomMetadataStore', () => ({
   __esModule: true,
   default: { getInstanceByImageId: key => mockDatasets[key] },
-  DicomMetadataStore: { getInstance: (study, series, sop) => mockDatasets[sop] },
+  DicomMetadataStore: {
+    getInstance: (study, series, sop) => mockDatasets[sop],
+    // The loaded image series: one, of Frame of Reference 2.25.7001
+    getStudyInstanceUIDs: () => ['2.25.1'],
+    getStudy: () => ({ StudyInstanceUID: '2.25.1', series: [{ SeriesInstanceUID: '2.25.2', instances: [{ FrameOfReferenceUID: '2.25.7001' }] }] }),
+    getSeries: (study, series) => (series === '2.25.2' ? { SeriesInstanceUID: '2.25.2' } : undefined),
+  },
 }));
 
 const mockImport = jest.fn(() => 'measurement-uid');
+const mockRaw = [];
 const mockMeasurementApi = {
-  measurementService: { _broadcastEvent: () => {}, getMeasurement: () => ({}), EVENTS: {} },
-  _serviceSourceMappings: () => ({ source: {}, mappings: [{}], mappingDefinitions: ['DICOMSRSeriesTagTool', 'Angle'] }),
+  measurementService: {
+    _broadcastEvent: () => {}, getMeasurement: () => ({}), EVENTS: {},
+    getMeasurements: () => mockRaw.map(({ record }) => record),
+    addRawMeasurement: jest.fn((source, toolName, data, toSchema) => {
+      mockRaw.push({ source, toolName, record: { ...toSchema(data), uid: data.id } });
+      return data.id;
+    }),
+  },
+  _serviceSourceMappings: () => ({ source: {}, mappings: [{}], mappingDefinitions: ['DICOMSRSeriesTagTool', 'Angle', 'Length'] }),
   _serviceManagedTool: () => ({ toolServiceManaged: true, source: { annotationToMeasurement: mockImport } }),
   getMeasurementByTrackingUid: () => undefined,
   _apiSourceServiceMeasurement: () => true,
@@ -128,6 +142,7 @@ import parseDicomStructuredReport from './parseDicomStructuredReport';
 import { retrieveMeasurementFromSR } from '../handleStructuredReport';
 import { clearHydratedReports, saveParent } from '../utils/srDocument';
 
+const CT_IMAGE = '1.2.840.10008.5.1.4.1.1.2';
 const STUDY = '2.25.1001';
 const ENHANCED_SR = '1.2.840.10008.5.1.4.1.1.88.22';
 const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
@@ -186,6 +201,25 @@ describe('save parent registration', () => {
   it('registers a report once its hydration succeeds', async () => {
     await parse(report('2.25.10', ENHANCED_SR, '1500'));
     expect(saveParent(STUDY)).toMatchObject({ SOPInstanceUID: '2.25.10', SOPClassUID: ENHANCED_SR, TemplateIdentifier: '1500' });
+  });
+
+  it('never registers an application document (Sonador-SR root title), which a save would regenerate', async () => {
+    const key = report('2.25.15', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500');
+    mockDatasets[key].ConceptNameCodeSequence = [{ CodeValue: 'Clinical-Report', CodingSchemeDesignator: 'Sonador-SR' }];
+    await parse(key);
+    expect(saveParent(STUDY)).toBeNull();
+  });
+
+  it("keeps a hydrated measurement's NUM items with their own children, unknown content included", async () => {
+    await parse(report('2.25.16', COMPREHENSIVE_3D_SR, '1500'));
+    const { onContentItemParse } = mockReaderOptions[mockReaderOptions.length - 1];
+    const unknown = { ValueType: 'TEXT', RelationshipType: 'HAS PROPERTIES', ConceptNameCodeSequence: [{ CodeValue: '99-x', CodingSchemeDesignator: '99PLAN' }], TextValue: 'kept' };
+    const num = { ValueType: 'NUM', ConceptNameCodeSequence: [{ CodeValue: '410668003', CodingSchemeDesignator: 'SCT' }], ContentSequence: [unknown] };
+    const state = { annotation: { metadata: {}, data: {} } };
+
+    onContentItemParse('Length', state, { ContentSequence: [num] });
+    expect(state.annotation.metadata.numItems).toEqual([num]);
+    expect(state.annotation.metadata.numItems[0].ContentSequence).toEqual([unknown]);
   });
 
   it('ignores a load that fails: it is not a parent and does not displace the one that loaded', async () => {
@@ -320,3 +354,155 @@ describe('multiframe references', () => {
     expect(annotation.data.handles.points[0]).toEqual([120.5, 10.5, 20]);
   });
 });
+
+
+describe('a patient-domain measurement on no loaded image', () => {
+  // As the reader returns a patient-domain Length with a valid Drawing-Plane, or one no loaded image holds
+  const withPatientLength = (key, metadata = {}) => {
+    mockToolStates[key] = {
+      Length: [{
+        description: 'Femoral neck',
+        annotation: {
+          data: { handles: { points: [[5, 2, 0], [5, 20, 0]] }, displayAttributes: { Color: { Border: '#FF8800' } } },
+          metadata: {
+            TrackingUniqueIdentifier: `${key}.tracking`, TrackingIdentifier: 'cornerstoneTools@^4.0.0:Length',
+            coordinateDomain: 'patient', outOfPlane: true, sourceSeries: '2.25.2', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'],
+            isLocked: true, isReadOnly: true,
+            sourceGeometry: { valueType: 'SCOORD3D', graphicData: [5, 2, 0, 5, 20, 0], FrameOfReferenceUID: '2.25.7001', value: 18 },
+            ...metadata,
+          },
+        },
+      }],
+    };
+    return key;
+  };
+  beforeEach(() => {
+    mockRaw.length = 0;
+    mockMeasurementApi.measurementService.addRawMeasurement.mockClear();
+  });
+
+  it('is held as a locked, listed out-of-plane measurement with its points, value and properties', async () => {
+    await parse(withPatientLength(report('2.25.70', COMPREHENSIVE_3D_SR, '1500')));
+    expect(mockImport).not.toHaveBeenCalled();
+    expect(mockRaw).toHaveLength(1);
+    const [{ toolName, record }] = mockRaw;
+    expect(toolName).toBe('Length');
+    expect(record).toMatchObject({
+      toolName: 'Length', points: [[5, 2, 0], [5, 20, 0]], FrameOfReferenceUID: '2.25.7001', length: 18,
+      referenceStudyUID: STUDY, referenceSeriesUID: '2.25.2', description: 'Femoral neck', isLocked: true,
+      data: { length: 18, displayAttributes: { Color: { Border: '#FF8800' } } },
+      metadata: {
+        outOfPlane: true, TrackingUniqueIdentifier: '2.25.70.tracking', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'],
+        sourceSeries: '2.25.2', isLocked: true, isReadOnly: true,
+      },
+    });
+    expect(record.metadata.isListed).toBeUndefined();
+    // Kept from the read-only display, as every hydrated measurement is
+    expect(mockReadOnly.mock.calls[0][0].excludeTrackingUIDs.has('2.25.70.tracking')).toBe(true);
+  });
+
+  it('is held whatever its Frame of Reference, and once', async () => {
+    const key = withPatientLength(report('2.25.71', COMPREHENSIVE_3D_SR, '1500'), {
+      outOfPlane: undefined, drawingPlane: undefined,
+      sourceGeometry: { valueType: 'SCOORD3D', graphicData: [5, 2, 7, 5, 20, 7], FrameOfReferenceUID: '2.25.9999', value: 18 },
+    });
+    await parse(key);
+    await parse(key);
+    expect(mockRaw.map(({ record }) => record.FrameOfReferenceUID)).toEqual(['2.25.9999']);
+  });
+
+  describe('whose Frame of Reference no loaded series shares', () => {
+    const EVIDENCE = [{
+      StudyInstanceUID: STUDY,
+      ReferencedSeriesSequence: [
+        { SeriesInstanceUID: '2.25.2', ReferencedSOPSequence: [{ ReferencedSOPClassUID: CT_IMAGE, ReferencedSOPInstanceUID: '2.25.2.1' }] },
+        { SeriesInstanceUID: '2.25.5001', ReferencedSOPSequence: [
+          { ReferencedSOPClassUID: CT_IMAGE, ReferencedSOPInstanceUID: '2.25.5001.1' },
+          { ReferencedSOPClassUID: CT_IMAGE, ReferencedSOPInstanceUID: '2.25.5001.2' },
+        ] },
+      ],
+    }];
+    const ELSEWHERE = { valueType: 'SCOORD3D', graphicData: [5, 2, 7, 5, 20, 7], FrameOfReferenceUID: '2.25.9999', value: 18 };
+    const heldReport = (SOPInstanceUID, metadata) => {
+      const key = withPatientLength(report(SOPInstanceUID, COMPREHENSIVE_3D_SR, '1500'), { sourceGeometry: ELSEWHERE, ...metadata });
+      mockDatasets[key].CurrentRequestedProcedureEvidenceSequence = EVIDENCE;
+      return key;
+    };
+    const SERIES_EVIDENCE = {
+      StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.5001',
+      instances: [{ SOPClassUID: CT_IMAGE, SOPInstanceUID: '2.25.5001.1' }, { SOPClassUID: CT_IMAGE, SOPInstanceUID: '2.25.5001.2' }],
+    };
+
+    it("keeps the report's evidence for its source series, so that a save writes it again", async () => {
+      await parse(heldReport('2.25.72', { sourceSeries: '2.25.5001' }));
+      expect(mockRaw[0].record.metadata.carriedEvidence).toEqual({ ...SERIES_EVIDENCE, instances: tagged(SERIES_EVIDENCE) });
+    });
+
+    const REQUESTED = 'CurrentRequestedProcedureEvidenceSequence';
+    const OTHER = 'PertinentOtherEvidenceSequence';
+    const tagged = ({ StudyInstanceUID, SeriesInstanceUID, instances }, evidenceContainer = REQUESTED) =>
+      instances.map(instance => ({ StudyInstanceUID, SeriesInstanceUID, evidenceContainer, ...instance }));
+
+    const LOADED_EVIDENCE = tagged({ StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.2', instances: [{ SOPClassUID: CT_IMAGE, SOPInstanceUID: '2.25.2.1' }] });
+
+    it('without a Source-Series, keeps every instance its report lists, each under its series, loaded or not', async () => {
+      const second = {
+        SeriesInstanceUID: '2.25.5002', ReferencedSOPSequence: [{ ReferencedSOPClassUID: CT_IMAGE, ReferencedSOPInstanceUID: '2.25.5002.1' }],
+      };
+      const key = heldReport('2.25.73', { sourceSeries: undefined });
+      mockDatasets[key].CurrentRequestedProcedureEvidenceSequence = [
+        ...EVIDENCE, { StudyInstanceUID: STUDY, ReferencedSeriesSequence: second },
+      ];
+      await parse(key);
+      const { carriedEvidence, sourceSeries } = mockRaw[0].record.metadata;
+      expect(sourceSeries).toBeUndefined();
+      expect(carriedEvidence).toEqual({
+        StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.2',
+        instances: [
+          ...LOADED_EVIDENCE,
+          ...tagged(SERIES_EVIDENCE),
+          { StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.5002', evidenceContainer: REQUESTED, SOPClassUID: CT_IMAGE, SOPInstanceUID: '2.25.5002.1' },
+        ],
+      });
+    });
+
+    it('with a Source-Series the report lists no evidence for, keeps every instance its report lists', async () => {
+      await parse(heldReport('2.25.74', { sourceSeries: '2.25.6001' }));
+      expect(mockRaw[0].record.metadata).toMatchObject({
+        sourceSeries: '2.25.6001', carriedEvidence: { instances: [...LOADED_EVIDENCE, ...tagged(SERIES_EVIDENCE)] },
+      });
+    });
+
+    it('without a Source-Series, keeps evidence whose only series is loaded under another Frame of Reference', async () => {
+      const key = heldReport('2.25.76', { sourceSeries: undefined });
+      mockDatasets[key].CurrentRequestedProcedureEvidenceSequence = [{ StudyInstanceUID: STUDY, ReferencedSeriesSequence: [EVIDENCE[0].ReferencedSeriesSequence[0]] }];
+      await parse(key);
+      expect(mockRaw[0].record.metadata.carriedEvidence).toEqual({ StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.2', instances: LOADED_EVIDENCE });
+    });
+
+    it('keeps the references of the Pertinent Other Evidence Sequence, under that container, alone or with the other', async () => {
+      const only = heldReport('2.25.78', { sourceSeries: '2.25.5001' });
+      mockDatasets[only].PertinentOtherEvidenceSequence = mockDatasets[only].CurrentRequestedProcedureEvidenceSequence;
+      delete mockDatasets[only].CurrentRequestedProcedureEvidenceSequence;
+      await parse(only);
+      expect(mockRaw[0].record.metadata.carriedEvidence.instances).toEqual(tagged(SERIES_EVIDENCE, OTHER));
+
+      const both = heldReport('2.25.79', { sourceSeries: undefined });
+      mockDatasets[both].CurrentRequestedProcedureEvidenceSequence = [{ StudyInstanceUID: STUDY, ReferencedSeriesSequence: [EVIDENCE[0].ReferencedSeriesSequence[1]] }];
+      mockDatasets[both].PertinentOtherEvidenceSequence = [{ StudyInstanceUID: STUDY, ReferencedSeriesSequence: [EVIDENCE[0].ReferencedSeriesSequence[0]] }];
+      await parse(both);
+      expect(mockRaw[1].record.metadata.carriedEvidence.instances).toEqual([...tagged(SERIES_EVIDENCE), ...tagged({ ...SERIES_EVIDENCE, SeriesInstanceUID: '2.25.2', instances: [{ SOPClassUID: CT_IMAGE, SOPInstanceUID: '2.25.2.1' }] }, OTHER)]);
+    });
+
+    it('is carried forward with no evidence when its report lists none, and not at all when a loaded series shares its frame', async () => {
+      const key = heldReport('2.25.77', { sourceSeries: undefined });
+      delete mockDatasets[key].CurrentRequestedProcedureEvidenceSequence;
+      await parse(key);
+      await parse(withPatientLength(report('2.25.75', COMPREHENSIVE_3D_SR, '1500')));
+      expect(mockRaw.map(({ record }) => record.metadata.carriedEvidence)).toEqual([
+        { StudyInstanceUID: STUDY, SeriesInstanceUID: undefined, instances: [] }, undefined,
+      ]);
+    });
+  });
+});
+

@@ -25,8 +25,8 @@ const {
   SonadorZoomTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled, addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
 } = c3dUtils.viewportTools;
 
-// The volume viewer's annotation displays: the read-only DICOM-SR measurements and the Angle and
-// Cobb angle measurements. Each measurement is shown or hidden with its global visibility.
+// The volume viewer's annotation displays: the read-only DICOM-SR measurements and the Length,
+// Angle and Cobb angle measurements. Each measurement is shown or hidden with its global visibility.
 function enableAnnotationDisplay(toolGroup) {
   setSRDisplayToolEnabled(toolGroup, true);
   setAngleDisplay3DEnabled(toolGroup, true);
@@ -185,7 +185,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         volumeTools.addTool(C3dTrackballRotateTool.toolName);
 
         // Annotations of the volume's Frame of Reference (display only): read-only DICOM-SR
-        // measurements, and Angle and Cobb angle measurements
+        // measurements, and Length, Angle and Cobb angle measurements
         addSRDisplayToolToGroup(volumeTools);
         addAngleDisplay3DToolToGroup(volumeTools, true);
         enableAnnotationDisplay(volumeTools);
