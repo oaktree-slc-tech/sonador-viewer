@@ -297,6 +297,8 @@ export const DCMSR_DISPLAY_COLOR_ROLES = {
   Border: displayAttributeCode('DisplayAttributes.Color.Border', 'Border color (CIELab)'),
   Value: displayAttributeCode('DisplayAttributes.Color.Value', 'Coded value color (CIELab)'),
   Meaning: displayAttributeCode('DisplayAttributes.Color.Meaning', 'Code meaning color (CIELab)'),
+  Line: displayAttributeCode('DisplayAttributes.Color.Line', 'Line color (CIELab)'),
+  Text: displayAttributeCode('DisplayAttributes.Color.Text', 'Text color (CIELab)'),
 };
 
 

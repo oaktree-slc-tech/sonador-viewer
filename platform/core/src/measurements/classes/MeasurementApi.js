@@ -118,6 +118,9 @@ import Enums from '../enums';
 import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
 import { isCarriedForward, isOutOfPlaneMeasurement } from '../../DICOMSR/utils/outOfPlane';
 import { clearSRDisplayAnnotations, setSRDisplayAnnotationVisible } from '../../DICOMSR/readOnly/srDisplayAnnotations';
+import {
+  SERIES_TAG_TOOL, getCustomLineTextColor, getLineTextColor, resolveDisplayColor, withLineTextColor,
+} from '../../displayAttributes';
 
 const configuration = {
   ...measurementApiDefaultConfig,
@@ -907,10 +910,10 @@ export default class MeasurementApi {
         const _measurements = _api.serviceMeasurements((m) => {
 
             // Retrieve measurements matching the current tool, included in the study instance refernces of the timepoint,
-            // and which are marked as isReadOnly=false and isLocked=false.
+            // and which are not yet saved (isReadOnly=false); a measurement the user locked is saved as well.
             const matchTool = m.toolName == tool.id;
-            const { isReadOnly, isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);            
-            return matchTool && !Boolean(isReadOnly) && !Boolean(isLocked) && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
+            const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
+            return matchTool && !Boolean(isReadOnly) && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
           }, options);
 
         // Add measurements to the 
@@ -919,8 +922,8 @@ export default class MeasurementApi {
         // Out-of-plane measurements of the tool (Cornerstone3D records in patient coordinates): the
         // pending ones, and the held ones no loaded series shares a Frame of Reference with
         const outOfPlane = this.measurementService.getMeasurements().filter((m) => {
-          const { isReadOnly, isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
-          const pending = !Boolean(isReadOnly) && !Boolean(isLocked);
+          const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
+          const pending = !Boolean(isReadOnly);
           return m.toolName == tool.id && isOutOfPlaneMeasurement(m) && (pending || isCarriedForward(m))
             && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
         });
@@ -1137,6 +1140,96 @@ export default class MeasurementApi {
     }
   }
 
+  _pendingServiceMeasurement(uid) {
+    // The service record of a measurement not yet saved, or undefined: a saved one is read-only
+    const measurement = uid && this.measurementService && this.measurementService.getMeasurement(uid);
+    if (!measurement || MeasurementApi._unpackMeasurementLifecycleAttrs(measurement).isReadOnly) {
+      return undefined;
+    }
+    return measurement;
+  }
+
+  toggleLockMeasurement(uid) {
+    // Lock or unlock a pending measurement (by its service uid): a locked one is drawn but cannot
+    // be moved or edited in the viewports, and stays pending (it is saved with the others)
+
+    const measurement = this._pendingServiceMeasurement(uid);
+    if (!measurement) {
+      return;
+    }
+    const isLocked = !MeasurementApi._unpackMeasurementLifecycleAttrs(measurement).isLocked;
+    this.measurementService.update(uid, {
+      ...measurement,
+      isLocked,
+      metadata: { ...(measurement.metadata || {}), isLocked },
+    }, true);
+    refreshCornerstoneViewports();
+  }
+
+  static measurementDisplayAttributes(measurement) {
+    // The display attributes of a measurement, wherever its representation carries them
+    const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(measurement);
+    return (measurement && measurement.displayAttributes) || measurementData.displayAttributes
+      || measurementMeta.displayAttributes;
+  }
+
+  static customLineTextColor(measurement) {
+    // The custom colors of a measurement, for the panel's indicator: null when it sets neither a
+    // line nor a text color, otherwise { line, text }: the color its line is drawn in, and its own
+    // text color or null (its text then follows its line)
+    if (!measurement) {
+      return null;
+    }
+    const tool = MeasurementApi._getToolType(measurement);
+    const carrier = { displayAttributes: MeasurementApi.measurementDisplayAttributes(measurement) };
+    const custom = getCustomLineTextColor(carrier, tool);
+    if (!custom.line && !custom.text) {
+      return null;
+    }
+    const line = getLineTextColor(carrier, tool).line || cornerstoneTools.toolColors.getToolColor();
+    return { line, text: custom.text };
+  }
+
+  measurementLineTextColor(uid, options = {}) {
+    // Stored line and text colors of a measurement (by its service uid): { line, text }, null
+    // where it stores none
+    // @input options.drawn (bool, default=false): the colors it is drawn in instead: where it
+    //   stores none, a Series Tag's border and meaning defaults, the tool color otherwise
+    const measurement = this.measurementService && this.measurementService.getMeasurement(uid);
+    const tool = measurement && MeasurementApi._getToolType(measurement);
+    const stored = measurement
+      ? getLineTextColor({ displayAttributes: MeasurementApi.measurementDisplayAttributes(measurement) }, tool)
+      : { line: null, text: null };
+    if (!options.drawn) {
+      return stored;
+    }
+    if (tool === SERIES_TAG_TOOL) {
+      const defaults = resolveDisplayColor(SERIES_TAG_TOOL);
+      return { line: stored.line || defaults.Border, text: stored.text || defaults.Meaning };
+    }
+    const toolColor = cornerstoneTools.toolColors.getToolColor();
+    return { line: stored.line || toolColor, text: stored.text || stored.line || toolColor };
+  }
+
+  setMeasurementLineTextColor(uid, part, hex) {
+    // Set ('line' | 'text', `#RRGGBB`) or clear (null) the line or text color of a pending
+    // measurement (by its service uid). The colors are display attributes, saved with it. Both
+    // sections carry them: a classic tool's edit returns them in `data`.
+
+    const measurement = this._pendingServiceMeasurement(uid);
+    if (!measurement) {
+      return;
+    }
+    const displayAttributes = withLineTextColor(MeasurementApi.measurementDisplayAttributes(measurement),
+      MeasurementApi._getToolType(measurement), part, hex);
+    this.measurementService.update(uid, {
+      ..._.omit(measurement, 'displayAttributes'),
+      metadata: { ...(measurement.metadata || {}), displayAttributes },
+      data: { ...(measurement.data || {}), displayAttributes },
+    }, true);
+    refreshCornerstoneViewports();
+  }
+
   setAllMeasurementsVisibility(visibility) {
     // Show or hide every measurement, in every view: those of the measurement service (which
     // holds the global state), the read-only representations only the API holds, and the
@@ -1320,7 +1413,7 @@ export default class MeasurementApi {
             serviceManaged: true,
             readOnly: Boolean(isReadOnly),
             locked: Boolean(isLocked || isReadOnly),
-            pending: !isLocked && !isReadOnly,
+            pending: !isReadOnly,
             outOfPlane: true,
           });
         });
@@ -1924,8 +2017,9 @@ export default class MeasurementApi {
     if (isReadOnly) {
       addedMeasurement.metadata.isReadOnly = isReadOnly;
     }
-    if (isLocked) {
-      addedMeasurement.isLocked = isLocked;
+    // Set either way: a measurement the user unlocks is no longer locked
+    if (!_.isNil(isLocked)) {
+      addedMeasurement.isLocked = Boolean(isLocked);
     }
 
     if (!emptyItem) {
@@ -2049,6 +2143,13 @@ export default class MeasurementApi {
       // Update tool data within the collection
       const measurement0 = collection[toolIndex];
       const updatedMeasurement = Object.assign(options.replace ? {} : measurement0, measurement);
+
+      // The lock is read from the top level first: keep it with the update's, which carries it in its
+      // metadata, so a measurement the user unlocks is not held locked by an earlier state
+      const { isLocked } = MeasurementApi._unpackMeasurementLifecycleAttrs(measurement);
+      if (!_.isNil(isLocked) && !_.isNil(updatedMeasurement.isLocked)) {
+        updatedMeasurement.isLocked = Boolean(isLocked);
+      }
       collection[toolIndex] = updatedMeasurement;
 
       // Notify (via measurement service) integrated components that a measurement representation was updated

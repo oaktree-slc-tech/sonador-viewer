@@ -57,7 +57,9 @@ it('passes the pending and the carried-forward out-of-plane measurements to the 
       carriedEvidence: { ...EVIDENCE, instances: [{ ...EVIDENCE.instances[0], StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.5002' }] },
     }),
     outOfPlane('locked', { isLocked: true, isReadOnly: true }),
-    { ...outOfPlane('other-study', { isLocked: true }, { carriedEvidence: EVIDENCE }), referenceStudyUID: '2.25.2001' },
+    { ...outOfPlane('other-study', { isLocked: true, isReadOnly: true }, { carriedEvidence: EVIDENCE }), referenceStudyUID: '2.25.2001' },
+    // Locked by the user, not yet saved: saved with the others
+    outOfPlane('user-locked', { isLocked: true, isReadOnly: false }),
   ].forEach(record => measurementService.measurements.set(record.uid, record));
 
   const api = {
@@ -70,5 +72,30 @@ it('passes the pending and the carried-forward out-of-plane measurements to the 
   await MeasurementApi.prototype.storeMeasurements.call(api, null, {});
 
   expect(store).toHaveBeenCalledTimes(1);
-  expect(store.mock.calls[0][0].allTools.map(m => m.uid)).toEqual(['pending', 'held', 'held-unsourced']);
+  expect(store.mock.calls[0][0].allTools.map(m => m.uid)).toEqual(['pending', 'held', 'held-unsourced', 'user-locked']);
+});
+
+it('passes a pending measurement the user locked to the store, and no saved one', async () => {
+  const store = jest.fn(() => Promise.resolve({}));
+  MeasurementApi.setConfiguration({
+    server: {},
+    dataExchange: { store },
+    measurementTools: [{ id: 'allTools', options: caseProgress, childTools: [{ id: 'Length', options: caseProgress }] }],
+  });
+  const records = [
+    { uid: 'pending', toolName: 'Length', referenceStudyUID: STUDY, isLocked: false, metadata: {} },
+    { uid: 'user-locked', toolName: 'Length', referenceStudyUID: STUDY, isLocked: true, metadata: { isLocked: true } },
+    { uid: 'saved', toolName: 'Length', referenceStudyUID: STUDY, isLocked: true, metadata: { isLocked: true, isReadOnly: true } },
+  ];
+  const measurementService = new MeasurementService();
+  measurementService.triggerApiEvent = () => {};
+  const api = {
+    measurementService,
+    timepointApi: { all: () => [{ timepointId: 't0', studyInstanceUIDs: [STUDY], PatientID: 'SYNTHETIC' }] },
+    _serviceManagedTool: () => ({ toolServiceManaged: true }),
+    serviceMeasurements: filter => records.filter(filter),
+  };
+  await MeasurementApi.prototype.storeMeasurements.call(api, null, {});
+
+  expect(store.mock.calls[0][0].allTools.map(m => m.uid)).toEqual(['pending', 'user-locked']);
 });

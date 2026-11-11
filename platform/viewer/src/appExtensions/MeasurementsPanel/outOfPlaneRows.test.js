@@ -17,6 +17,7 @@ jest.mock('@ohif/core', () => {
   const MeasurementApi = {
     Instance: { measurementService: { getMeasurements: () => [...mockRecords.values()], getMeasurement: uid => mockRecords.get(uid) } },
     _unpackMeasurementLifecycleAttrs: m => ({ isLocked: m.isLocked, isReadOnly: m.metadata.isReadOnly, isVisible: m.isVisible }),
+    customLineTextColor: () => null,
     trackingIdentifierOf: m => m.metadata.TrackingIdentifier,
   };
   const DicomMetadataStore = {
@@ -34,6 +35,7 @@ jest.mock('@ohif/core', () => {
   };
 });
 
+import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRows } from './outOfPlaneRows';
 
 const LENGTH_TOOL = { id: 'Length', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.length.toFixed(2)} mm` } } };
@@ -73,10 +75,14 @@ describe('the rows', () => {
 
   it('lists a pending one with the pending measurements and a saved one, locked, with the saved', () => {
     mockRecords.set('pending', record('pending', { description: 'Femoral neck' }));
-    mockRecords.set('saved', record('saved', { isLocked: true }));
+    mockRecords.set('saved', record('saved', { isLocked: true, metadata: { isReadOnly: true } }));
+    // Locked by the user: still pending, shown locked
+    mockRecords.set('locked', record('locked', { isLocked: true }));
     const { pending, saved } = rowsOf(MPR);
 
-    expect(pending.map(({ row, toolGroup }) => [row.measurementId, toolGroup])).toEqual([['pending', 'allTools']]);
+    expect(pending.map(({ row, toolGroup }) => [row.measurementId, toolGroup])).toEqual([['pending', 'allTools'], ['locked', 'allTools']]);
+    expect(pending[1].row).toMatchObject({ isLocked: true, isReadOnly: false, isPending: true });
+    expect(saved[0].row.isPending).toBe(false);
     expect(saved.map(({ row }) => [row.measurementId, row.isLocked])).toEqual([['saved', true]]);
     expect(pending[0].row).toMatchObject({
       toolType: 'Length', _measurementServiceId: 'pending', label: 'Femoral neck', isLocked: false,
@@ -155,10 +161,14 @@ describe('navigation', () => {
     const studyMetadataManager = { get: uid => (uid === '2.25.1' ? { findDisplaySet: query => [displaySet].find(query) } : undefined) };
     const commandsManager = { runCommand: jest.fn(async () => ({ panes: 3, drawn: true })) };
 
+    useLayoutButton.getState().setIsDisplayedLayoutButton(true);
+
     await expect(openOutOfPlaneInMpr({ measurementData: rowOf('a', CLASSIC), commandsManager, studyMetadataManager })).resolves.toBe('shown');
     const [name, target] = commandsManager.runCommand.mock.calls[0];
     expect(name).toBe('openMprAtWorldPoint');
     expect(target).toMatchObject({ displaySet, anyAngle: true });
+    // The layout button is hidden in the MPR view, as when the 2D MPR button opens it
+    expect(useLayoutButton.getState().isDisplayedLayoutButton).toBe(false);
   });
 
   it('does not navigate when the MPR view shows a series of another Frame of Reference', () => {

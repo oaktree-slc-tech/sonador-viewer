@@ -66,7 +66,9 @@ export default function ({ eventData, tool, toolGroupId, toolGroup }) {
   }
 
   // Ensure that lifecycle attributes are not lost during the update. Lifecycle attributes should be pulled from
-  // the measurement service and attached to the metadata section of attributes.
+  // the measurement service and attached to the metadata section of attributes. The service record is the
+  // authority for the lock and read-only state: the tool data may still hold an earlier state (a measurement
+  // the user unlocked), which would otherwise be written back to the record.
   if (toolServiceManaged) {
     const measurement0 = measurementApi.measurementService.getMeasurement(uid);
     if (measurement0) {
@@ -75,6 +77,10 @@ export default function ({ eventData, tool, toolGroupId, toolGroup }) {
       // Copy attributes to measurement
       if (!measurementData.metadata) measurementData.metadata = {};
       _.defaults(measurementData.metadata, _meta);
+      Object.assign(measurementData.metadata, _.omitBy(_.pick(_meta, 'isLocked', 'isReadOnly'), _.isNil));
+      if (!_.isNil(_meta.isLocked) && !_.isNil(measurementData.isLocked)) {
+        measurementData.isLocked = Boolean(_meta.isLocked);
+      }
     }
   }
 

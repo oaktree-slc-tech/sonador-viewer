@@ -16,6 +16,7 @@ import { displayAttributes } from '@ohif/core';
 import TOOL_NAMES from './constants/toolNames';
 import SCOORD_TYPES from './constants/scoordTypes';
 import id from './id';
+import { fillingTextIn } from './lineTextColor';
 
 
 /** Cornerstone 3rd party dev kit imports */
@@ -90,12 +91,12 @@ export default class DICOMSRDisplayTool extends BaseTool {
       const isVisible = _.isNil(visible) ? true : visible;
       if (!isVisible) continue;
 
-      // The measurement's stored display colour (its Border role), else the tool colour; the
-      // active measurement is highlighted either way
-      const color =
-        data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier
-          ? toolColors.getActiveColor()
-          : displayAttributes.getDisplayColor(data).Border || toolColors.getToolColor();
+      // The measurement's stored line colour, else the tool colour, and its stored text colour,
+      // else the line's; the active measurement is highlighted either way
+      const isActive = data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier;
+      const stored = displayAttributes.getLineTextColor(data, data.toolType);
+      const color = isActive ? toolColors.getActiveColor() : stored.line || toolColors.getToolColor();
+      const textColor = isActive ? undefined : stored.text;
       const lineWidth = 2;
       const options = {
         color,
@@ -180,7 +181,7 @@ export default class DICOMSRDisplayTool extends BaseTool {
       }
 
       if (data.handles.textBox.anchorPoints.length !== 0) {
-        draw(context, context => {
+        draw(context, context => fillingTextIn(context, textColor, () => {
           drawLinkedTextBox(
             context,
             element,
@@ -193,7 +194,7 @@ export default class DICOMSRDisplayTool extends BaseTool {
             0,
             true
           );
-        });
+        }));
       }
     }
 

@@ -184,9 +184,6 @@ export default function M3DViewerSidebarPanel({
       uiDialogService: UIDialogService,
       title: 'Select Model Color',
       value: { r, g, b, a: 1 },
-      centralize: true,
-      isDraggable: false,
-      showOverlay: true,
     });
 
     if (rgbaColor) {

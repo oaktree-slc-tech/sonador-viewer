@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '../../components/Button/Button';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '../../components/DropdownMenu';
 import { Icons } from '../../components/Icons/Icons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/Tooltip/Tooltip';
 import { cn } from '../../lib/utils';
 import { useTranslation } from 'react-i18next';
+import { DataRowAction, DataRowActions } from './DataRowActions';
 
 /**
  * DataRow is a complex UI component that displays a selectable, interactive row with hierarchical data.
@@ -139,7 +134,6 @@ const DataRowComponent = React.forwardRef<HTMLDivElement, DataRowProps>(
     ref
   ) => {
     const { t } = useTranslation('DataRow');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const isTitleLong = title?.length > 25;
 
     // Extract Status components from children
@@ -150,30 +144,45 @@ const DataRowComponent = React.forwardRef<HTMLDivElement, DataRowProps>(
         (child.type as React.ComponentType).displayName?.startsWith('DataRow.Status')
     );
 
-    const handleAction = (action: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      switch (action) {
-        case 'Rename':
-          onRename?.(e);
-          break;
-        case 'Copy':
-          onCopy?.(e);
-          break;
-        case 'Lock':
-          onToggleLocked?.(e);
-          break;
-        case 'Delete':
-          onDelete?.(e);
-          break;
-        case 'Color':
-          onColor?.(e);
-          break;
-      }
-    };
-
     // Action menu items render only when their handler is defined; with no handlers at all the
-    // dropdown trigger is replaced by the placeholder spacer (same as the disableEditing branch).
-    const hasActions = !!(onRename || onCopy || onDelete || onColor || onToggleLocked);
+    // menu keeps a spacer in place of its trigger (as with disableEditing)
+    const actions: DataRowAction[] = [
+      onRename && {
+        id: 'Rename',
+        label: t('Rename'),
+        icon: <Icons.Rename className="text-foreground" />,
+        onClick: onRename,
+        dataCY: 'Rename',
+      },
+      onCopy && {
+        id: 'Copy',
+        label: t('Duplicate'),
+        icon: <Icons.Copy className="text-foreground" />,
+        onClick: onCopy,
+        dataCY: 'Duplicate',
+      },
+      onDelete && {
+        id: 'Delete',
+        label: t('Delete'),
+        icon: <Icons.Delete className="text-foreground" />,
+        onClick: onDelete,
+        dataCY: 'Delete',
+      },
+      onColor && {
+        id: 'Color',
+        label: t('Change Color'),
+        icon: <Icons.ColorChange className="text-foreground" />,
+        onClick: onColor,
+        dataCY: 'Change Color',
+      },
+      onToggleLocked && {
+        id: 'Lock',
+        label: isLocked ? t('Unlock') : t('Lock'),
+        icon: <Icons.Lock className="text-foreground" />,
+        onClick: onToggleLocked,
+        dataCY: 'LockToggle',
+      },
+    ].filter(Boolean);
 
     const decodeHTML = (html: string) => {
       const txt = document.createElement('textarea');
@@ -341,91 +350,11 @@ const DataRowComponent = React.forwardRef<HTMLDivElement, DataRowProps>(
             {statusComponents}
 
             {/* Actions Dropdown Menu */}
-            {(disableEditing || !hasActions) && <div className="h-6 w-6"></div>}
-            {!disableEditing && hasActions && (
-              <DropdownMenu onOpenChange={open => setIsDropdownOpen(open)}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className={`h-6 w-6 transition-opacity ${
-                      isSelected || isDropdownOpen
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover:opacity-100'
-                    }`}
-                    aria-label="Actions"
-                    dataCY="actionsMenuTrigger"
-                    onClick={e => e.stopPropagation()} // Prevent row selection on button click
-                  >
-                    <Icons.More className="h-6 w-6" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  container={portalContainer}
-                  // this was causing issue for auto focus on input dialog
-                  onCloseAutoFocus={e => e.preventDefault()}
-                >
-                  <>
-                    {onRename && (
-                      <DropdownMenuItem onClick={e => handleAction('Rename', e)}>
-                        <Icons.Rename className="text-foreground" />
-                        <span
-                          className="pl-2"
-                          data-cy="Rename"
-                        >
-                          {t('Rename')}
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-                    {onCopy && (
-                      <DropdownMenuItem onClick={e => handleAction('Copy', e)}>
-                        <Icons.Copy className="text-foreground" />
-                        <span
-                          className="pl-2"
-                          data-cy="Duplicate"
-                        >
-                          {t('Duplicate')}
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-                    {onDelete && (
-                      <DropdownMenuItem onClick={e => handleAction('Delete', e)}>
-                        <Icons.Delete className="text-foreground" />
-                        <span
-                          className="pl-2"
-                          data-cy="Delete"
-                        >
-                          {t('Delete')}
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-                    {onColor && (
-                      <DropdownMenuItem onClick={e => handleAction('Color', e)}>
-                        <Icons.ColorChange className="text-foreground" />
-                        <span
-                          className="pl-2"
-                          data-cy="Change Color"
-                        >
-                          {t('Change Color')}
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-                    {onToggleLocked && (
-                      <DropdownMenuItem onClick={e => handleAction('Lock', e)}>
-                        <Icons.Lock className="text-foreground" />
-                        <span
-                          className="pl-2"
-                          data-cy="LockToggle"
-                        >
-                          {isLocked ? t('Unlock') : t('Lock')}
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <DataRowActions
+              actions={disableEditing ? [] : actions}
+              isSelected={isSelected}
+              portalContainer={portalContainer}
+            />
           </div>
         </div>
 

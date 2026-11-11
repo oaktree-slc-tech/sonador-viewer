@@ -40,7 +40,7 @@ import {
 } from './ToolButton';
 import { ToolSettings } from './OHIFToolSettings';
 import { LayoutSelector } from './LayoutSelector';
-export { DataRow } from './DataRow';
+export { DataRow, DataRowActions } from './DataRow';
 export { default as LabellingFlow } from './Labelling';
 
 

@@ -109,7 +109,9 @@ class AngleDisplay3DTool extends AnnotationTool {
         c3dToolsUtilities.drawing.getTextBoxCoordsCanvas(canvasCoordinates),
         canvasCoordinates,
         {},
-        { ...this.getLinkedTextBoxStyle(styleSpecifier, annotation), color },
+        // The text box style: the measurement's text color when it stores one (the tool's text
+        // color is the line color otherwise)
+        this.getLinkedTextBoxStyle(styleSpecifier, annotation),
       );
     });
 

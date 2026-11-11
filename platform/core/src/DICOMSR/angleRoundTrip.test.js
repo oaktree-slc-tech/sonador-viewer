@@ -1139,6 +1139,19 @@ describe('Length properties under the NUM item', () => {
     expect(state.annotation.data.displayAttributes.Color.Border).toBe('#FF8800');
   });
 
+  it("keeps a measurement's line and text colors through a save and a load", () => {
+    const color = { Line: '#FF8800', Text: '#00FF00' };
+    const dataset = readSR(write({
+      Length: [lengthTool({ displayAttributes: { Color: color } })],
+      Angle: [classicTool('Angle', [[0.5, 0.5], [10.5, 0.5], [10.5, 10.5]], { displayAttributes: { Color: color } })],
+      CobbAngle: [classicTool('CobbAngle', [[0.5, 0.5], [10.5, 0.5], [0.5, 10.5], [10.5, 20.5]], { displayAttributes: { Color: { Line: '#123456' } } })],
+    }).result);
+    const { byType } = hydrate(dataset);
+    expect(byType.Length[0].annotation.data.displayAttributes.Color).toEqual(color);
+    expect(byType.Angle[0].annotation.data.displayAttributes.Color).toEqual(color);
+    expect(byType.CobbAngle[0].annotation.data.displayAttributes.Color).toEqual({ Line: '#123456' });
+  });
+
   it('rewrites a legacy group-level Length under the NUM on a re-save', () => {
     // The legacy layout: the properties as group-level HAS CONCEPT MOD items, no display attributes
     const dataset = readSR(write({ Length: [lengthTool({ displayAttributes: undefined })] }).result);

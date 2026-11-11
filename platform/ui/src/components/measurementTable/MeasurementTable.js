@@ -116,6 +116,8 @@ const MeasurementTable = ({
   onDeleteClick,
   onEditDescriptionClick,
   onOpenInMprClick,
+  onToggleLockClick,
+  onLineTextColorClick,
   selectedMeasurementId,
   saveFunction,
   onSaveComplete,
@@ -329,6 +331,8 @@ const MeasurementTable = ({
           onDelete={onDeleteClick}
           onEditDescription={onEditDescriptionClick}
           onOpenInMpr={onOpenInMprClick}
+          onToggleLock={onToggleLockClick}
+          onLineTextColor={onLineTextColorClick}
           isSelected={isSelected}
           isActive={isActive}
         />
@@ -592,6 +596,10 @@ MeasurementTable.propTypes = {
   onDeleteClick: PropTypes.func,
   onEditDescriptionClick: PropTypes.func,
   onOpenInMprClick: PropTypes.func,
+  /** Lock or unlock a pending measurement: (event, measurementData) */
+  onToggleLockClick: PropTypes.func,
+  /** Choose the line or text color of a pending measurement: (event, measurementData, 'line' | 'text') */
+  onLineTextColorClick: PropTypes.func,
   saveFunction: PropTypes.func,
   onSaveComplete: PropTypes.func,
   eventTimeout: PropTypes.number,

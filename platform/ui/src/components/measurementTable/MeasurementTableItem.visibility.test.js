@@ -3,7 +3,7 @@
  */
 // A measurement row's controls are the Segmentations panel's: the ui-next Hide icon while the
 // measurement is shown and the Show icon while it is hidden (the toggle then stays in view), a
-// lock slot holding the ui-next Lock icon for a locked measurement, and a click toggling the
+// ui-next Lock icon after it for a locked measurement, and a click toggling the
 // measurement's visibility without selecting the row.
 
 import React, { act } from 'react';
@@ -21,6 +21,12 @@ jest.mock('@ohif/core', () => ({
 }), { virtual: true });
 jest.mock('@ohif/ui-next', () => ({
   Button: ({ children, size, variant, ...props }) => <button type="button" {...props}>{children}</button>,
+  // The row menu as its items, each a button
+  DataRowActions: ({ actions }) => (
+    <div data-row-actions={actions.length}>
+      {actions.map(action => <button key={action.id} type="button" data-cy={action.dataCY} onClick={action.onClick}>{action.label}</button>)}
+    </div>
+  ),
   Icons: {
     Hide: () => <span data-icon="hide" />,
     Show: () => <span data-icon="show" />,
@@ -86,12 +92,14 @@ it('shows the Show icon for a hidden measurement, kept in view', () => {
   expect(mockApi.toggleVisibilityMeasurement).toHaveBeenCalledWith('m1', true);
 });
 
-it('holds the ui-next Lock icon in the lock slot for a locked measurement, and an empty slot otherwise', () => {
-  render({ isVisible: true, isLocked: true });
-  expect(container.querySelector('.measurementLockSlot [data-icon="lock"]')).not.toBeNull();
+it('shows the ui-next Lock icon after the toggle for a locked measurement, and no lock otherwise', () => {
+  render({ isVisible: true, isLocked: true, isReadOnly: true });
+  const lock = container.querySelector('.measurementLock [data-icon="lock"]');
+  expect(lock).not.toBeNull();
   expect(container.querySelector('[data-legacy-icon="lock"]')).toBeNull();
+  // A saved measurement: the lock is the last control
+  expect(container.querySelector('.measurementStatus').lastElementChild).toBe(lock.parentElement);
 
-  render({ isVisible: true, isLocked: false });
-  expect(container.querySelector('.measurementLockSlot')).not.toBeNull();
-  expect(container.querySelector('.measurementLockSlot').children).toHaveLength(0);
+  render({ isVisible: true, isLocked: false, isReadOnly: true });
+  expect(container.querySelector('.measurementLock')).toBeNull();
 });

@@ -489,9 +489,6 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         uiDialogService: UIDialogService,
         title: 'Select Segment Color',
         value: rgbaColor0,
-        centralize: true,
-        isDraggable: false,
-        showOverlay: true,
       }).then(rgbaColor => {
         const color = [rgbaColor.r, rgbaColor.g, rgbaColor.b, rgbaColor.a * 255.0];
         segmentationService.setSegmentColor(viewportId, segmentationId, segmentIndex, color);

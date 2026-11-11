@@ -353,6 +353,34 @@ describe('a measurement read from a report or saved (read-only, locked)', () => 
 });
 
 
+describe('lock and colors set in the Measurements panel', () => {
+  it('locks and unlocks the annotation of a pending measurement the user locks', () => {
+    service.add(cobbAngle());
+    service.update('m-1', { ...service.getMeasurement('m-1'), isLocked: true, metadata: { ...cobbAngle().metadata, isLocked: true } });
+    expect(mockLocked.has(annotationUIDFor('m-1'))).toBe(true);
+    service.update('m-1', { ...service.getMeasurement('m-1'), isLocked: false, metadata: { ...cobbAngle().metadata, isLocked: false } });
+    expect(mockLocked.has(annotationUIDFor('m-1'))).toBe(false);
+  });
+
+  it("draws the annotation in the measurement's line and text colors, locked or not, and clears them", () => {
+    const uid = annotationUIDFor('m-1');
+    service.add(cobbAngle());
+    expect(mockStyles[uid]).toBeUndefined();
+
+    const displayAttributes = { Color: { Line: '#FF8800', Text: '#00FF00' } };
+    service.update('m-1', { ...cobbAngle(), data: { ...cobbAngle().data, displayAttributes } });
+    expect(mockStyles[uid]).toEqual({ color: '#FF8800', colorLocked: '#FF8800', textBoxColor: '#00FF00', textBoxColorLocked: '#00FF00' });
+
+    // A line color alone colors the text too
+    service.update('m-1', { ...cobbAngle(), metadata: { ...cobbAngle().metadata, displayAttributes: { Color: { Line: '#123456' } } } });
+    expect(mockStyles[uid]).toEqual({ color: '#123456', colorLocked: '#123456', textBoxColor: '#123456', textBoxColorLocked: '#123456' });
+
+    service.update('m-1', cobbAngle());
+    expect(mockStyles[uid]).toEqual({});
+  });
+});
+
+
 describe('visibility', () => {
   it('hides and shows the annotation of a measurement toggled in the Measurements panel', () => {
     service.add(cobbAngle());

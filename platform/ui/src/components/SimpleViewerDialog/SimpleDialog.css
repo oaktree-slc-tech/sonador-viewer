@@ -109,7 +109,8 @@
 }
 
 .simpleDialog .footer {
-  padding: 20px 20px 20px;
+  /* The header's and the body's 22px sides, so the buttons line up with the title */
+  padding: 20px 22px 20px;
   text-align: right;
 }
 

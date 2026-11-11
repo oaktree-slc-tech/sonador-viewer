@@ -44,6 +44,15 @@ jest.mock('@cornerstonejs/tools', () => {
   };
   const distance = (a, b) => Math.sqrt(a.reduce((sum, v, i) => sum + (v - b[i]) ** 2, 0));
   class CobbAngleTool extends StockTool {
+    constructor(...args) {
+      super(...args);
+      // As the stock tool: an instance property that reads all four points
+      this.distanceToLines = ({ points }) => {
+        const [p1, , p3] = points.map(point => [point[0], point[1]]);
+        return { distanceToPoint: Math.abs(p1[1]), distanceToPoint2: Math.abs(p3[1]), isNearFirstLine: false, isNearSecondLine: false };
+      };
+    }
+
     _calculateCachedStats(annotation) {
       const points = annotation.data.handles.points;
       const seg1 = [null, null];
@@ -237,5 +246,14 @@ describe('labels in the inspection view', () => {
     expect(labels).toHaveLength(1);
     expect(labels[0].annotation).toBe(nonZero);
     expect(degenerate.data.cachedStats['imageId:a'].angle).toBeNull();
+  });
+});
+
+describe('pointer tests of a Cobb angle', () => {
+  it('treat one without its four points (still being drawn) as not near, and measure a complete one', () => {
+    const tool = new ExchangeCobbAngleTool();
+    expect(tool.distanceToLines({ points: [[0, 0, 0], [10, 0, 0]] })).toMatchObject({ isNearFirstLine: false, distanceToPoint: Infinity });
+    expect(tool.distanceToLines({ points: [[0, 0, 0], [10, 0, 0], undefined, [5, 5, 0]] }).distanceToPoint).toBe(Infinity);
+    expect(tool.distanceToLines({ points: [[0, 2, 0], [10, 2, 0], [0, 5, 0], [5, 5, 0]] }).distanceToPoint).toBe(2);
   });
 });

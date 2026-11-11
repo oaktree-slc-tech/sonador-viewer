@@ -54,9 +54,11 @@
     max-width: calc(100% - 10px);
 
   // The row controls as the Segmentations panel's rows lay them out (ui-next DataRow at the panel's
-  // 0.3rem spacing): the visibility toggle and a lock slot, each 1.8rem, 0.3rem apart. As there,
-  // the toggle shows while the row is hovered or selected, or while the measurement is hidden; the
-  // lock is in the muted foreground colour
+  // 0.3rem spacing), packed to the right: the visibility toggle, the lock while locked, and the
+  // actions menu of a pending measurement, each 1.8rem, 0.3rem apart. A lock or a menu moves the
+  // toggle left, as in a segment row. As there, the toggle shows while the row is hovered or
+  // selected, or while the measurement is hidden, and the menu while the row is hovered or
+  // selected, or it is open; the lock is in the muted foreground colour.
   .measurementStatus
     display: flex
     flex: 0 0 auto
@@ -65,11 +67,22 @@
     align-self: flex-start
     // Centred on the first text line (1.5rem), as DataRow centres its icons on its label
     margin-top: calc((1.5rem - 1.8rem) / 2)
+    // The Segmentations panel's row spacing, so the ui-next h-6/w-6 sizes (the actions button and
+    // its icon) are 1.8rem, as there
+    --spacing: 0.3rem
 
     .annotationVisibilityToggle
       opacity: 0
 
-  .measurementLockSlot
+  .measurementActions
+    flex: 0 0 auto
+
+  .measurementControlSpacer
+    flex: 0 0 auto
+    width: 1.8rem
+    height: 1.8rem
+
+  .measurementLock
     display: inline-flex
     align-items: center
     justify-content: center
@@ -129,6 +142,32 @@
 
   .seriesTagMeaning
     margin-left: 10px;
+
+  // The custom color indicator before the value: the segment row's color dot (h-2 w-2 at the
+  // panel's 0.3rem spacing) and its gap to the text, centred on the value line by eye in the
+  // browser. With a text color, its left half is the line color and its right half the text color.
+  .measurementColorIndicator
+    display: inline-flex;
+    overflow: hidden;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    margin-left: 2px;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+    position: relative;
+    top: -2.25px;
+
+    .measurementColorIndicatorLine,
+    .measurementColorIndicatorText
+      flex: 1 1 0;
+      height: 100%;
+
+  // The value after the dot has no divider: the dot sets it apart, as on a segment row
+  .measurementColorIndicator + .measurementDisplayText
+    padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
 
   .itemIndex
     -webkit-box-sizing: initial;

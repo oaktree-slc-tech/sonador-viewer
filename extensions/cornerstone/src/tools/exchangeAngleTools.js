@@ -89,10 +89,23 @@ class ExchangeAngleTool extends AngleTool {
 }
 
 
+// Not near either line: what the pointer tests of a Cobb angle without its four points get
+const NOT_NEAR_LINES = Object.freeze({
+  distanceToPoint: Infinity, distanceToPoint2: Infinity, isNearFirstLine: false, isNearSecondLine: false,
+});
+
 class ExchangeCobbAngleTool extends CobbAngleTool {
   constructor(...args) {
     super(...args);
     withZeroLabels(this, () => ({ textBoxUID: 'cobbAngleText' }));
+
+    // The stock pointer tests (hover, selection) measure the distance to both lines and fail on a
+    // Cobb angle without its four points, such as one still being drawn (its first line only)
+    const distanceToLines = this.distanceToLines;
+    this.distanceToLines = (options) => {
+      const points = (options && options.points) || [];
+      return points.length >= 4 && points.slice(0, 4).every(Boolean) ? distanceToLines(options) : NOT_NEAR_LINES;
+    };
   }
 
   _calculateCachedStats(annotation, ...args) {
