@@ -14,32 +14,22 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/
 
 import styles from './DisplayAttributesDialog.module.scss';
 
-const { DISPLAY_COLOR_ROLES, SERIES_TAG_DEFAULT_COLOR, normalizeColor, normalizeHexColor, resolveDisplayColor } = displayAttributes;
+const { SERIES_TAG_COLOR_ROLES, SERIES_TAG_DEFAULT_COLOR, normalizeColor, normalizeHexColor, resolveDisplayColor } = displayAttributes;
 
 
-export const THEME_PALETTE = Object.freeze([
-  { name: 'Primary', hex: '#348CFD' },
-  { name: 'Highlight', hex: '#5ACCE6' },
-  { name: 'Info', hex: '#7BB2CE' },
-  { name: 'Success', hex: '#58BC82' },
-  { name: 'Warning', hex: '#FFD22A' },
-  { name: 'Alert', hex: '#DC3545' },
-  { name: 'White', hex: '#FFFFFF' },
-  { name: 'Black', hex: '#000000' },
-]);
+// The annotation palette's theme colors (shared with the measurement colors, @ohif/core)
+export const THEME_PALETTE = displayAttributes.ANNOTATION_THEME_COLORS;
 
 const ROLE_LABELS = { Background: 'Background', Border: 'Border', Value: 'Value Text', Meaning: 'Meaning Text' };
 
 
 export function paletteFor(defaults) {
-  // Built-in defaults, then site defaults that differ from them, then the remaining theme colors
-  const defaultSwatches = [
-    { name: 'Default Value', hex: SERIES_TAG_DEFAULT_COLOR.Value },
-    { name: 'Default Meaning', hex: SERIES_TAG_DEFAULT_COLOR.Meaning },
-    ...DISPLAY_COLOR_ROLES.filter(role => defaults[role] && defaults[role] !== SERIES_TAG_DEFAULT_COLOR[role])
-      .map(role => ({ name: `Site ${ROLE_LABELS[role]}`, hex: defaults[role] })),
-  ];
-  return _.uniqBy([...defaultSwatches, ...THEME_PALETTE], 'hex');
+  // The annotation palette (built-in defaults, then theme colors) with the site defaults that
+  // differ from the built-in ones after the built-in defaults
+  const builtInDefaults = displayAttributes.ANNOTATION_PALETTE.filter(swatch => !THEME_PALETTE.includes(swatch));
+  const siteSwatches = SERIES_TAG_COLOR_ROLES.filter(role => defaults[role] && defaults[role] !== SERIES_TAG_DEFAULT_COLOR[role])
+    .map(role => ({ name: `Site ${ROLE_LABELS[role]}`, hex: defaults[role] }));
+  return _.uniqBy([...builtInDefaults, ...siteSwatches, ...THEME_PALETTE], 'hex');
 }
 
 
@@ -106,7 +96,7 @@ function ColorRole({ role, value, effective, palette, onChange }) {
 
 
 ColorRole.propTypes = {
-  role: PropTypes.oneOf(DISPLAY_COLOR_ROLES).isRequired,
+  role: PropTypes.oneOf(SERIES_TAG_COLOR_ROLES).isRequired,
   value: PropTypes.string,
   effective: PropTypes.string,
   palette: PropTypes.arrayOf(PropTypes.shape({ name: PropTypes.string, hex: PropTypes.string })).isRequired,
@@ -143,7 +133,7 @@ export default function DisplayAttributesDialog({ isOpen, title, tool, color, pr
           </span>
         </div>
 
-        {DISPLAY_COLOR_ROLES.map(role => (
+        {SERIES_TAG_COLOR_ROLES.map(role => (
           <ColorRole key={role} role={role} value={draft[role]} effective={effectiveFor(role)}
             palette={palette} onChange={hex => setRole(role, hex)} />
         ))}

@@ -1,3 +1,29 @@
 .chrome-picker {
   background: #090c29 !important;
 }
+/* The palette above the picker, in the dialog body so it lines up with the title and the
+   picker: swatches as in the Series Tags display attributes editor. With the body's 10px top
+   padding it has 16px above and below. */
+.colorPickerPalette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 300px;
+  margin: 6px 0 16px;
+}
+
+.colorPickerSwatch {
+  all: unset;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid #60646D;
+  cursor: pointer;
+}
+
+.colorPickerSwatch:focus-visible,
+.colorPickerSwatch.isSelected {
+  outline: 2px solid #5ACCE6;
+  outline-offset: 1px;
+}

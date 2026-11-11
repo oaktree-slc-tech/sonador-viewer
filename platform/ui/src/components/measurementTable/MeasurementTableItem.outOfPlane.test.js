@@ -25,6 +25,12 @@ jest.mock('@ohif/core', () => ({
 }), { virtual: true });
 jest.mock('@ohif/ui-next', () => ({
   Button: ({ children, size, variant, ...props }) => <button type="button" {...props}>{children}</button>,
+  // The row menu as its items, each a button
+  DataRowActions: ({ actions }) => (
+    <div data-row-actions={actions.length}>
+      {actions.map(action => <button key={action.id} type="button" data-cy={action.dataCY} onClick={action.onClick}>{action.label}</button>)}
+    </div>
+  ),
   Icons: { Hide: () => null, Show: () => null, Lock: props => <span data-icon="lock" {...props} /> },
   // The note's card, rendered in place: its trigger marked, its content beside it
   HoverCard: ({ children }) => <div data-hover-card>{children}</div>,

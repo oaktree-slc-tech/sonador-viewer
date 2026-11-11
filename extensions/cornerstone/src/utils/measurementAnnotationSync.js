@@ -34,8 +34,10 @@
 //   MPR and 3D views only. It is edited on its drawing plane until it is saved, and locked after.
 //   On a volume loaded at reduced resolution, or a series without a Frame of Reference, the drawing
 //   stays in the session, dashed, with the reason.
-// * The annotation of a locked or read-only measurement (one read from a report, or saved) is
-//   locked: it is drawn, and edits made to it are not carried to the measurement.
+// * The annotation of a locked or read-only measurement (one read from a report, or saved, or one
+//   the user locked) is locked: it is drawn, and edits made to it are not carried to the
+//   measurement. The annotation is drawn in the measurement's stored line and text colors, locked
+//   or not; highlighted or selected, it keeps the tools' colors.
 // * A drawing is taken up after the event that completes it, so a drawing cancelled with Escape
 //   (the stock tools complete it, then the view removes it) is neither saved nor announced.
 // * The unsaved annotations follow the global annotation visibility (show all / hide all), as the
@@ -55,6 +57,7 @@ import {
 } from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
+import { getLineTextColor } from '@ohif/core/src/displayAttributes';
 
 import { HANDLE_NAMES as ANGLE_HANDLE_NAMES } from './measurementServiceMappings/Cornerstone/Angle';
 
@@ -165,6 +168,33 @@ function setLocked(annotationUID, locked) {
   if (c3dAnnotation.locking.isAnnotationLocked(annotationUID) !== locked) {
     c3dAnnotation.locking.setAnnotationLocked(annotationUID, locked);
   }
+}
+
+// The style last given to each annotation for its measurement's colors
+const lineTextStyles = new Map();
+
+function setLineTextStyle(annotation, measurement, { created = false } = {}) {
+  // The measurement's stored line and text colors as its annotation's style; true when it changed.
+  // A created annotation is given its style whatever was given before under its uid; one without
+  // colors is left with the tools' style.
+  const carrier = measurement.displayAttributes || (measurement.data && measurement.data.displayAttributes)
+    || (measurement.metadata && measurement.metadata.displayAttributes);
+  const { line, text } = getLineTextColor({ displayAttributes: carrier }, measurement.toolName);
+  const style = {
+    ...(annotation.data && annotation.data.unsaved ? UNSAVED_STYLE : {}),
+    ...(line ? { color: line, colorLocked: line } : {}),
+    ...(text ? { textBoxColor: text, textBoxColorLocked: text } : {}),
+  };
+  const { annotationUID } = annotation;
+  const unchanged = created
+    ? _.isEmpty(style) && !lineTextStyles.has(annotationUID)
+    : _.isEqual(lineTextStyles.get(annotationUID) || {}, style);
+  if (unchanged) {
+    return false;
+  }
+  lineTextStyles.set(annotationUID, style);
+  c3dAnnotation.config.style.setAnnotationStyles(annotationUID, style);
+  return true;
 }
 
 const samePoints = (a, b, tolerance = POINT_TOLERANCE) => !!a && !!b && a.length === b.length
@@ -304,6 +334,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       return false;
     }
     removing.add(annotationUID);
+    lineTextStyles.delete(annotationUID);
     try {
       setLocked(annotationUID, false);
       c3dAnnotation.visibility.setAnnotationVisibility(annotationUID, true);
@@ -339,6 +370,9 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       setLocked(annotationUID, locked);
       if (existing.isVisible !== visible) {
         setVisible(existing, visible);
+        render();
+      }
+      if (setLineTextStyle(existing, measurement)) {
         render();
       }
       // The same points (within tolerance) keep their handle array, which a tool may be dragging
@@ -379,6 +413,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     c3dAnnotation.state.addAnnotation(annotation, undefined);
     setLocked(annotationUID, locked);
     setVisible(annotation, visible);
+    setLineTextStyle(annotation, measurement, { created: true });
     render();
     return annotation;
   }
@@ -646,6 +681,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       if (existing.isVisible !== visible) {
         setVisible(existing, visible);
       }
+      setLineTextStyle(existing, measurement);
       if (!samePoints(existing.data.handles.points, points)) {
         existing.data.handles.points = points;
       }
@@ -677,6 +713,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     c3dAnnotation.state.addAnnotation(annotation, undefined);
     setLocked(annotationUID, locked);
     setVisible(annotation, visible);
+    setLineTextStyle(annotation, measurement, { created: true });
     render();
     return annotation;
   }

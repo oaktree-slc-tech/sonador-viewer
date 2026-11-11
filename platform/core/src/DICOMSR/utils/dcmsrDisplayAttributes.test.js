@@ -254,3 +254,34 @@ describe('saved finding colors', () => {
     expect(resolveFindingColor(SERIES_TAG_TOOL, annotation)).toEqual({ Background: background, Border: '#FFFFFF', Value: '#8AD0A8', Meaning: '#C0C7F8' });
   });
 });
+
+
+describe('measurement line and text colors', () => {
+  // A quantitative group: its properties are children of the NUM item
+  const lengthGroup = () => ({
+    RelationshipType: 'CONTAINS',
+    ValueType: 'CONTAINER',
+    ConceptNameCodeSequence: [{ CodeValue: '125007', CodingSchemeDesignator: 'DCM', CodeMeaning: 'Measurement Group' }],
+    ContinuityOfContent: 'SEPARATE',
+    ContentSequence: [{
+      RelationshipType: 'CONTAINS',
+      ValueType: 'NUM',
+      ConceptNameCodeSequence: [{ CodeValue: 'G-D7FE', CodingSchemeDesignator: 'SRT', CodeMeaning: 'Length' }],
+      MeasuredValueSequence: [{ NumericValue: 12.5, MeasurementUnitsCodeSequence: [{ CodeValue: 'mm', CodingSchemeDesignator: 'UCUM', CodeMeaning: 'mm' }] }],
+    }],
+  });
+
+  it('writes Line and Text under the NUM item and reads them back', () => {
+    const srItem = lengthGroup();
+    const color = { Line: '#FF8800', Text: '#00FF00' };
+    encodeDisplayAttributes({ data: { displayAttributes: { Color: color } } }, srItem, { propertyParent: 'num' });
+
+    const [num] = srItem.ContentSequence;
+    const [display] = num.ContentSequence;
+    const [colorContainer] = display.ContentSequence;
+    expect(colorContainer.ContentSequence.map(item => conceptOf(item).LongCodeValue)).toEqual(
+      ['Line', 'Text'].map(role => SonadorCodeValues.DCMSR_DISPLAY_COLOR_ROLES[role].value));
+    expect(parseDisplayAttributes(writeAndRead(srItem), {}, { path: 'displayAttributes', propertyParent: 'num' }))
+      .toEqual({ displayAttributes: { Color: color } });
+  });
+});

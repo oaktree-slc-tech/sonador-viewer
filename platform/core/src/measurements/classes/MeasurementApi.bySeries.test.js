@@ -118,13 +118,17 @@ describe('getMeasurementsBySeries', () => {
     });
     const withOutOfPlane = apiWith([
       outOfPlane('oop-1'),
-      outOfPlane('oop-2', { toolName: 'CobbAngle', isLocked: true, metadata: { isLocked: true } }),
+      // Saved: read-only and locked
+      outOfPlane('oop-2', { toolName: 'CobbAngle', isLocked: true, metadata: { isLocked: true, isReadOnly: true } }),
       outOfPlane('oop-3', { metadata: { isListed: false } }),
+      // Locked by the user: still pending
+      outOfPlane('oop-4', { isLocked: true, metadata: { isLocked: true } }),
     ], {});
     const entries = bySeries(withOutOfPlane).get('s1');
     expect(entries.map(entry => [entry.measurement.uid, entry.toolType, entry.pending, entry.locked, entry.outOfPlane])).toEqual([
       ['oop-1', 'Length', true, false, true],
       ['oop-2', 'CobbAngle', false, true, true],
+      ['oop-4', 'Length', true, true, true],
     ]);
     expect(entries[0]).toMatchObject({ seriesInstanceUID: 's1', studyInstanceUID: 't1', representation: undefined });
   });

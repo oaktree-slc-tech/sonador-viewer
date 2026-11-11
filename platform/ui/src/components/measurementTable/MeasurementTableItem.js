@@ -4,8 +4,8 @@ import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
 import {
-  Button, HoverCard, HoverCardContent, HoverCardPortal, HoverCardTrigger, Icons, Tooltip as HoverTooltip, TooltipContent,
-  TooltipProvider, TooltipTrigger,
+  Button, DataRowActions, HoverCard, HoverCardContent, HoverCardPortal, HoverCardTrigger, Icons, Tooltip as HoverTooltip,
+  TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@ohif/ui-next';
 
 import { OverlayTrigger } from '../overlayTrigger';
@@ -97,6 +97,8 @@ const MeasurementTableItem = ({
   onItemClick,
   onEditDescription,
   onOpenInMpr,
+  onToggleLock,
+  onLineTextColor,
   itemClass,
   tagBtnLabel = 'Location',
   tagBtnHint = 'Set anatomic location',
@@ -207,6 +209,33 @@ const MeasurementTableItem = ({
     onOpenInMpr(event, measurementData);
   };
 
+  // The actions menu of a pending measurement (the Segmentations panel's row menu): its line and
+  // text colors and its lock. A saved measurement, or one read from a report, is part of a stored
+  // set and cannot be changed, and a measurement of a tool that cannot be saved has no record they
+  // apply to: neither has a menu.
+  const rowActions = () => {
+    if (isReadOnly || !measurementData.isPending) {
+      return [];
+    }
+    const actions = [];
+    if (typeof onLineTextColor === 'function') {
+      actions.push(
+        { id: 'LineColor', label: t('Line Color'), icon: <Icons.ColorChange className="text-foreground" />,
+          onClick: event => onLineTextColor(event, measurementData, 'line'), dataCY: 'LineColor' },
+        { id: 'TextColor', label: t('Text Color'), icon: <Icons.ColorChange className="text-foreground" />,
+          onClick: event => onLineTextColor(event, measurementData, 'text'), dataCY: 'TextColor' },
+      );
+    }
+    if (typeof onToggleLock === 'function') {
+      actions.push({
+        id: 'Lock', label: measurementData.isLocked ? t('Unlock') : t('Lock'),
+        icon: <Icons.Lock className="text-foreground" />,
+        onClick: event => onToggleLock(event, measurementData), dataCY: 'LockToggle',
+      });
+    }
+    return actions;
+  };
+
   const getTableListItem = () => {
     // Retrieve the table list component
 
@@ -232,7 +261,7 @@ const MeasurementTableItem = ({
       <TableListItem
         key={measurementData.measurementId}
         itemKey={measurementData.measurementId}
-        itemClass={`measurementItem ${itemClass} ${hasWarningClass} ${outOfPlaneClass}`}
+        itemClass={`measurementItem group ${itemClass} ${hasWarningClass} ${outOfPlaneClass}`}
         itemIndex={itemIndex}
         itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
         itemMeta={outOfPlane ? <OutOfPlaneIcon /> : null}
@@ -243,8 +272,8 @@ const MeasurementTableItem = ({
         <div>
           <div className="measurementContent">
             <div className="displayTexts">{getDataDisplayText()}</div>
-            {/* The Segmentations panel's row controls (ui-next DataRow): the visibility toggle, then
-                a slot for the lock */}
+            {/* The Segmentations panel's row controls (ui-next DataRow), packed to the right: the
+                visibility toggle, the lock while locked, then the actions menu when there is one */}
             <div className="measurementStatus">
               <TooltipProvider delayDuration={500}>
                 <HoverTooltip>
@@ -265,9 +294,25 @@ const MeasurementTableItem = ({
                   </TooltipContent>
                 </HoverTooltip>
               </TooltipProvider>
-              <span className="measurementLockSlot">
-                {Boolean(measurementData.isLocked) && <Icons.Lock data-cy="measurement-locked" />}
-              </span>
+              {Boolean(measurementData.isLocked) && (
+                <span className="measurementLock"><Icons.Lock data-cy="measurement-locked" /></span>
+              )}
+              {rowActions().length > 0 && (
+                // The panel has no ui-next theme scope: the trigger is reset as the visibility toggle
+                // is, and the menu (portalled to the body) takes the Segmentations panel theme's
+                // popover surface, border and type
+                <DataRowActions
+                  actions={rowActions()}
+                  isSelected={isSelected}
+                  className="measurementActions appearance-none border-0 bg-transparent p-0"
+                  contentClassName="bg-[var(--ui-gray-darker)] border-[var(--ui-border-color)] font-[family-name:Inter,system-ui,sans-serif]"
+                />
+              )}
+              {/* Neither a lock nor a menu (a tool that cannot be saved): the toggle keeps the
+                  column of the all-annotations toggle, second from the right */}
+              {!measurementData.isLocked && rowActions().length === 0 && (
+                <span className="measurementControlSpacer" aria-hidden="true" />
+              )}
             </div>
           </div>
           {refMeta && (<div className="referenceMeta">
@@ -305,13 +350,23 @@ const MeasurementTableItem = ({
       );
     }
 
-    return measurementData.data.map((data, index) => {
+    // A measurement drawn in custom colors is marked as a segment row marks its color: its line
+    // color, or its line color and its text color side by side
+    const { customColor } = measurementData;
+    const colorIndicator = customColor && (
+      <span key="colorIndicator" className="measurementColorIndicator" data-cy="measurement-color-indicator">
+        <span className="measurementColorIndicatorLine" style={{ backgroundColor: customColor.line }} />
+        {customColor.text && <span className="measurementColorIndicatorText" style={{ backgroundColor: customColor.text }} />}
+      </span>
+    );
+
+    return [colorIndicator, ...measurementData.data.map((data, index) => {
       return (
         <div key={`displayText_${index}`} className="measurementDisplayText">
           {data.displayText ? data.displayText : '...'}
         </div>
       );
-    });
+    })];
   };
 
   const getWarningContent = () => {
@@ -397,6 +452,8 @@ MeasurementTableItem.propTypes = {
   onDelete: PropTypes.func,
   onEditDescription: PropTypes.func,
   onOpenInMpr: PropTypes.func,
+  onToggleLock: PropTypes.func,
+  onLineTextColor: PropTypes.func,
   itemClass: PropTypes.string,
   itemIndex: PropTypes.number,
   tagBtnLabel: PropTypes.string,

@@ -17,12 +17,14 @@ export default function setMultiPanelLayout(
       reject(new Error('viewportProps is supplied but its length is not equal to numViewports'));
     }
 
+    // The viewports show a copy of the display set: the caller's may be the study's own display
+    // set, and tagging that with the plugin would reopen this view whenever the series is shown again
+    const viewportDisplaySet = Object.assign(Object.create(Object.getPrototypeOf(displaySet)), displaySet, { plugin });
     const viewportSpecificData = {};
 
     for (let i = 0; i < numViewports; i++) {
       viewports.push({});
-      viewportSpecificData[i] = displaySet;
-      viewportSpecificData[i].plugin = plugin;
+      viewportSpecificData[i] = viewportDisplaySet;
     }
 
     const apis = [];

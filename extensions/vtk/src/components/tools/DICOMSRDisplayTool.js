@@ -10,6 +10,7 @@
 // Add to a tool group with `addSRDisplayToolToGroup`: the tool is enabled, never active, so it
 // takes no mouse input.
 
+import { getLineTextColor } from '@ohif/core/src/displayAttributes';
 import srDisplayAnnotations from '@ohif/core/src/DICOMSR/readOnly/srDisplayAnnotations';
 
 import {
@@ -141,11 +142,12 @@ class DICOMSRDisplayTool extends AnnotationTool {
 
       const isActive = !!activeTrackingUniqueIdentifier
         && data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier;
-      // The measurement's stored display colour (its Border role), else the tool style; the active
-      // measurement is highlighted either way
-      const storedColor = !isActive && data.displayColor && data.displayColor.Border;
+      // The measurement's stored line colour, else the tool style, and its stored text colour, else
+      // the line's; the active measurement is highlighted either way
+      const stored = isActive ? {} : getLineTextColor({ Color: data.displayColor || {} });
       const options = {
-        color: storedColor || this.getStyle(isActive ? 'colorSelected' : 'color', styleSpecifier, annotation),
+        color: stored.line || this.getStyle(isActive ? 'colorSelected' : 'color', styleSpecifier, annotation),
+        textColor: stored.text,
         lineWidth: this.getStyle('lineWidth', styleSpecifier, annotation),
         lineDash: this.configuration.lineDash ?? this.getStyle('lineDash', styleSpecifier, annotation),
       };
@@ -212,7 +214,7 @@ class DICOMSRDisplayTool extends AnnotationTool {
       textBoxPosition,
       canvasCoordinates,
       {},
-      { ...this.getLinkedTextBoxStyle(styleSpecifier, annotation), color: options.color },
+      { ...this.getLinkedTextBoxStyle(styleSpecifier, annotation), color: options.textColor || options.color },
     );
   }
 }

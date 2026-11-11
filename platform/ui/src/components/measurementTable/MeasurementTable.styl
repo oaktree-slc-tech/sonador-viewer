@@ -79,9 +79,10 @@
       display: flex
       flex-direction: column
 
-    // The search and all-annotations toggle row. The toggle is centred above the rows' toggles: a
-    // row ends 10px short of the list, after its lock slot (1.8rem) and the 0.3rem gap, and this
-    // toggle is 0.09rem wider. The vertical padding leaves equal visible gaps between the drawer
+    // The search and all-annotations toggle row. The toggle is centred above the rows' toggles,
+    // in the second column from the right as in the Segmentations panel: a row ends 10px short of
+    // the list, after one more control (1.8rem, its menu or its lock) and the 0.3rem gap, and this
+    // toggle is 0.09rem wider. A row with both a lock and a menu has its toggle a column further left. The vertical padding leaves equal visible gaps between the drawer
     // header's bottom edge and the row, and between the row and the first group header (whose 3px
     // top border is the panel background). The search box takes the rest of the row: its left
     // edge lines up with the group titles (14px), and 28px separates it from the toggle.

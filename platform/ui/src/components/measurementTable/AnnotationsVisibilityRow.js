@@ -62,7 +62,8 @@ function AnnotationsVisibilityRow({ measurementCollection, onToggleAllVisibility
     <div className="measurementTableVisibilityRow">
       {/* The box keeps its own text (InputFilter uncontrolled), so typing is not held up by the
           panel's re-render; the panel hears the text once typing pauses. The box starts from the
-          search in effect, so it shows that search again when the section is reopened */}
+          search in effect, so it shows that search again when the section is reopened. The clear
+          button shows only with text, so the empty box keeps no room for it beside the placeholder */}
       <InputFilter
         className="annotationsSearch text-muted-foreground"
         defaultValue={query}
@@ -73,7 +74,7 @@ function AnnotationsVisibilityRow({ measurementCollection, onToggleAllVisibility
         <InputFilter.Input
           placeholder={t('Search annotations')}
           aria-label={t('Search annotations')}
-          className="pl-9 pr-9"
+          className="pl-8 pr-9 placeholder-shown:pr-2"
           data-cy="annotations-search"
         />
         <InputFilter.ClearButton className="text-primary mr-0.5 p-0.5" />

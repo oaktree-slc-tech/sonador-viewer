@@ -15,6 +15,7 @@ import jumpToRowItem from './jumpToRowItem.js';
 import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigation.js';
 import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
+import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -230,6 +231,10 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       hasWarnings,
       isReadOnly: Boolean(isReadOnly),
       isLocked: Boolean(isLocked || isReadOnly),
+      // Saved with the others and edited through its service record (a tool without a service
+      // mapping, such as the rectangle, is neither)
+      isPending: Boolean(toolServiceManaged && uid) && !isReadOnly,
+      customColor: MeasurementApi.customLineTextColor(measurement),
       isDirty,
       isVisible: _.isNil(isVisible) ? true : isVisible,
       warningTitle,
@@ -357,15 +362,15 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
   // "Pending" measurements: those which can be persisted
   const pendingMeasurements = toolGroups.map((toolGroup) => initTableGroup(toolGroup, { groupIdPrefix: 'pending', groupNamePrefix: 'Pending ' }));
 
-  // Pending measurements are those managed by the service and are not readonly or locked
+  // Pending measurements are those managed by the service and not yet saved (read-only); a
+  // measurement the user locks stays pending
   toolgroups2tablegroups(pendingMeasurements, toolCollections, tools, timepoints, (tool, csMeasurementData) => {
 
     // Unpack measurement attributes, check if the tool is service managed and unlocked
     const { toolServiceManaged } = MeasurementApi.Instance._serviceManagedTool(tool.id);
-    const { isLocked, isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(csMeasurementData);
+    const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(csMeasurementData);
 
-    // Pending measurement groups are those managed by the MeasurementService and which are unlocked
-    return toolServiceManaged && Boolean(!isLocked) && Boolean(!isReadOnly);
+    return toolServiceManaged && !isReadOnly;
   });
 
   // Out-of-plane measurements: the saved ones with the saved measurements, the others pending
@@ -700,6 +705,34 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       // Open the MPR view at an out-of-plane measurement
       openOutOfPlaneInMpr({ measurementData, commandsManager, studyMetadataManager: OHIF.utils.studyMetadataManager })
         .catch(error => OHIF.log.error('[viewer:measurementTable] unable to open the MPR view at the measurement', error));
+    },
+
+    onToggleLockClick: (event, measurementData) => {
+      // Lock or unlock a pending measurement
+      MeasurementApi.Instance.toggleLockMeasurement(measurementData._measurementServiceId);
+    },
+
+    onLineTextColorClick: async (event, measurementData, part) => {
+      // Choose the line or text color of a pending measurement from the annotation palette or the
+      // picker, starting from the color it is drawn in; Default clears it
+      const uid = measurementData._measurementServiceId;
+      const uiDialogService = servicesManager && servicesManager.services.UIDialogService;
+      if (!uid || !uiDialogService) {
+        return;
+      }
+      const value = MeasurementApi.Instance.measurementLineTextColor(uid, { drawn: true })[part];
+      const picked = await callColorPickerDialog({
+        uiDialogService,
+        value,
+        title: part === 'line' ? 'Line Color' : 'Text Color',
+        palette: displayAttributes.ANNOTATION_PALETTE,
+        allowReset: true,
+      });
+      if (picked === null) {
+        MeasurementApi.Instance.setMeasurementLineTextColor(uid, part, null);
+      } else if (picked) {
+        MeasurementApi.Instance.setMeasurementLineTextColor(uid, part, OHIF.utils.color.rgb2hex(picked.r, picked.g, picked.b));
+      }
     },
 
     onDeleteClick: (event, measurementData) => {

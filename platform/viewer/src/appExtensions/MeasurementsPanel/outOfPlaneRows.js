@@ -14,6 +14,7 @@
 import _ from 'lodash';
 
 import OHIF, { DicomMetadataStore } from '@ohif/core';
+import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
 import { isMprActive } from './mprMeasurementNavigation.js';
 
@@ -57,6 +58,8 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
     location: metadata.location || measurement.location,
     isReadOnly: Boolean(isReadOnly),
     isLocked: Boolean(isLocked || isReadOnly),
+    isPending: !isReadOnly,
+    customColor: MeasurementApi.customLineTextColor(measurement),
     isDirty,
     isVisible: _.isNil(isVisible) ? true : isVisible,
     data: [{ displayText: displayFunction(measurement) || '...' }],
@@ -72,7 +75,7 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
   };
 }
 
-/** The panel rows of the out-of-plane measurements, pending (unlocked) and saved */
+/** The panel rows of the out-of-plane measurements, pending and saved (read-only) */
 function outOfPlaneRows(tools, { labelOf, viewports }) {
   const inClassicViewport = !isMprActive(viewports);
   const rows = { saved: [], pending: [] };
@@ -82,7 +85,7 @@ function outOfPlaneRows(tools, { labelOf, viewports }) {
       return;
     }
     const row = outOfPlaneTableItem(measurement, tool, { label: labelOf(measurement), inClassicViewport });
-    (row.isLocked ? rows.saved : rows.pending).push({ row, toolGroup: tool.toolGroup });
+    (row.isReadOnly ? rows.saved : rows.pending).push({ row, toolGroup: tool.toolGroup });
   });
   return rows;
 }
@@ -163,6 +166,8 @@ async function openOutOfPlaneInMpr({ measurementData, commandsManager, studyMeta
   if (!displaySet) {
     return 'unavailable';
   }
+  // As the toolbar's 2D MPR button does: the layout button is hidden until the MPR view is exited
+  useLayoutButton.getState().setIsDisplayedLayoutButton(false);
   const jump = await commandsManager.runCommand('openMprAtWorldPoint', { displaySet, ...target, anyAngle: true });
   return jump && jump.panes ? 'shown' : 'unavailable';
 }

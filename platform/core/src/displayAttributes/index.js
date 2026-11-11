@@ -1,7 +1,9 @@
 // Display attributes: properties which control how a resource is rendered in the viewer. The
-// shared element is the color-role contract (`Background`, `Border`, `Value`, `Meaning`, hexadecimal sRGB);
-// each source wraps it differently: a tag `Meta` document (`DisplayAttributes.Color`), the per-tool
-// site defaults (`<tool>.Color`), a finding's `displayAttributes.Color`, and the SR containers.
+// shared element is the color-role contract (hexadecimal sRGB): a Series Tag colors its box and
+// texts (`Background`, `Border`, `Value`, `Meaning`), a measurement its line and text (`Line`,
+// `Text`). Each source wraps it differently: a tag `Meta` document (`DisplayAttributes.Color`), the
+// per-tool site defaults (`<tool>.Color`), a finding's or measurement's `displayAttributes.Color`,
+// and the SR containers.
 // The servers validate their inputs; this module normalizes without rejecting, dropping unknown
 // roles and invalid colors.
 
@@ -11,12 +13,40 @@ const { Colors } = dcmjsData;
 
 export const DISPLAY_ATTRIBUTES = 'DisplayAttributes';
 export const DISPLAY_ATTRIBUTE_COLOR = 'Color';
-export const DISPLAY_COLOR_ROLES = Object.freeze(['Background', 'Border', 'Value', 'Meaning']);
+export const SERIES_TAG_COLOR_ROLES = Object.freeze(['Background', 'Border', 'Value', 'Meaning']);
+export const MEASUREMENT_COLOR_ROLES = Object.freeze(['Line', 'Text']);
+export const DISPLAY_COLOR_ROLES = Object.freeze([...SERIES_TAG_COLOR_ROLES, ...MEASUREMENT_COLOR_ROLES]);
 
 export const SERIES_TAG_TOOL = 'DICOMSRSeriesTagTool';
 
+// The roles that hold a tool's line and text colors: a Series Tag's border and meaning text, a
+// measurement's own line and text roles
+export const LINE_TEXT_ROLES = Object.freeze({
+  [SERIES_TAG_TOOL]: Object.freeze({ line: 'Border', text: 'Meaning' }),
+  measurement: Object.freeze({ line: 'Line', text: 'Text' }),
+});
+
 // Built-in display profile, used when the site defaults are unavailable
 export const SERIES_TAG_DEFAULT_COLOR = Object.freeze({ Background: null, Border: '#FFFFFF', Value: '#8AD0A8', Meaning: '#C0C7F8' });
+// The colors offered for annotations (Series Tags, findings and measurements): the Series Tag
+// defaults, then the theme colors, chosen to read well over images. Other resources (segments,
+// models) do not use it.
+export const ANNOTATION_THEME_COLORS = Object.freeze([
+  { name: 'Primary', hex: '#348CFD' },
+  { name: 'Highlight', hex: '#5ACCE6' },
+  { name: 'Info', hex: '#7BB2CE' },
+  { name: 'Success', hex: '#58BC82' },
+  { name: 'Warning', hex: '#FFD22A' },
+  { name: 'Alert', hex: '#DC3545' },
+  { name: 'White', hex: '#FFFFFF' },
+  { name: 'Black', hex: '#000000' },
+].map(Object.freeze));
+export const ANNOTATION_PALETTE = Object.freeze([
+  Object.freeze({ name: 'Series Tag Value', hex: SERIES_TAG_DEFAULT_COLOR.Value }),
+  Object.freeze({ name: 'Series Tag Meaning', hex: SERIES_TAG_DEFAULT_COLOR.Meaning }),
+  ...ANNOTATION_THEME_COLORS,
+]);
+
 export const BUILT_IN_DISPLAY_ATTRIBUTES = Object.freeze({
   [SERIES_TAG_TOOL]: Object.freeze({ [DISPLAY_ATTRIBUTE_COLOR]: SERIES_TAG_DEFAULT_COLOR }),
 });
@@ -70,6 +100,51 @@ export function getDisplayColor(carrier) {
 
   const displayAttributes = carrier[DISPLAY_ATTRIBUTES] || carrier.displayAttributes || carrier;
   return normalizeColor(displayAttributes && displayAttributes[DISPLAY_ATTRIBUTE_COLOR]);
+}
+
+export const lineTextRoles = tool => LINE_TEXT_ROLES[tool] || LINE_TEXT_ROLES.measurement;
+
+/**
+ * Stored line and text colors of a measurement, null where it stores none. A measurement's line
+ * falls back to `Border`, the role read-only measurements were drawn with before measurements had
+ * their own; its text falls back to its line. A Series Tag reads its border and meaning text only.
+ */
+export function getLineTextColor(carrier, tool) {
+  const color = getDisplayColor(carrier);
+  if (tool === SERIES_TAG_TOOL) {
+    return { line: color.Border || null, text: color.Meaning || null };
+  }
+  const line = color.Line || color.Border || null;
+  return { line, text: color.Text || line };
+}
+
+/**
+ * A measurement's own line and text colors (its `Line` and `Text` roles), null where it sets none.
+ * A Series Tag has none: its colors are its tag's.
+ */
+export function getCustomLineTextColor(carrier, tool) {
+  if (tool === SERIES_TAG_TOOL) {
+    return { line: null, text: null };
+  }
+  const color = getDisplayColor(carrier);
+  return { line: color.Line || null, text: color.Text || null };
+}
+
+/**
+ * `displayAttributes` with one role of a tool's line or text color set (`hex`) or cleared (null);
+ * the other roles are kept.
+ * @input part ('line' | 'text')
+ */
+export function withLineTextColor(displayAttributes, tool, part, hex) {
+  const role = lineTextRoles(tool)[part];
+  const color = { ...getDisplayColor({ displayAttributes }) };
+  const normalized = normalizeHexColor(hex);
+  if (normalized) {
+    color[role] = normalized;
+  } else {
+    delete color[role];
+  }
+  return { ...(displayAttributes || {}), [DISPLAY_ATTRIBUTE_COLOR]: color };
 }
 
 // Site defaults, keyed by tool name
@@ -136,7 +211,7 @@ export function resolveDisplayColor(tool = SERIES_TAG_TOOL, ...levels) {
   ];
 
   const resolved = {};
-  DISPLAY_COLOR_ROLES.forEach(role => {
+  SERIES_TAG_COLOR_ROLES.forEach(role => {
     const level = chain.find(color => color[role]);
     resolved[role] = level ? level[role] : null;
   });
@@ -197,13 +272,22 @@ const displayAttributes = {
   DISPLAY_ATTRIBUTES,
   DISPLAY_ATTRIBUTE_COLOR,
   DISPLAY_COLOR_ROLES,
+  SERIES_TAG_COLOR_ROLES,
+  MEASUREMENT_COLOR_ROLES,
+  LINE_TEXT_ROLES,
   SERIES_TAG_TOOL,
   SERIES_TAG_DEFAULT_COLOR,
+  ANNOTATION_THEME_COLORS,
+  ANNOTATION_PALETTE,
   BUILT_IN_DISPLAY_ATTRIBUTES,
   normalizeHexColor,
   isHexColor,
   normalizeColor,
   getDisplayColor,
+  lineTextRoles,
+  getLineTextColor,
+  getCustomLineTextColor,
+  withLineTextColor,
   setSiteDisplayAttributes,
   getSiteDisplayAttributes,
   subscribeSiteDisplayAttributes,

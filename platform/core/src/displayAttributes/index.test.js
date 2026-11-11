@@ -119,3 +119,51 @@ describe('DICOM CIELab conversion', () => {
     expect(Math.abs(b - 32896)).toBeLessThan(5);
   });
 });
+
+describe('line and text colors', () => {
+  const { getLineTextColor, withLineTextColor, lineTextRoles } = jest.requireActual('./index');
+
+  it("keeps a measurement's line and text in its own roles, and a Series Tag's in its border and meaning", () => {
+    expect(lineTextRoles('Length')).toEqual({ line: 'Line', text: 'Text' });
+    expect(lineTextRoles(SERIES_TAG_TOOL)).toEqual({ line: 'Border', text: 'Meaning' });
+
+    const length = withLineTextColor(undefined, 'Length', 'line', '#f80');
+    expect(length).toEqual({ Color: { Line: '#FF8800' } });
+    expect(withLineTextColor(length, 'Length', 'text', '#00ff00')).toEqual({ Color: { Line: '#FF8800', Text: '#00FF00' } });
+    expect(withLineTextColor(length, 'Length', 'line', null)).toEqual({ Color: {} });
+
+    const tag = { Color: { Background: '#112233', Value: '#FF0000' } };
+    expect(withLineTextColor(tag, SERIES_TAG_TOOL, 'text', '#ABCDEF'))
+      .toEqual({ Color: { Background: '#112233', Value: '#FF0000', Meaning: '#ABCDEF' } });
+  });
+
+  it('reads a line stored as Border, and a text that follows the line when none is stored', () => {
+    expect(getLineTextColor({ displayAttributes: { Color: { Line: '#FF8800', Text: '#00FF00' } } }, 'Length'))
+      .toEqual({ line: '#FF8800', text: '#00FF00' });
+    expect(getLineTextColor({ displayAttributes: { Color: { Border: '#FF8800' } } }, 'Angle'))
+      .toEqual({ line: '#FF8800', text: '#FF8800' });
+    expect(getLineTextColor({}, 'Length')).toEqual({ line: null, text: null });
+    expect(getLineTextColor({ displayAttributes: { Color: { Border: '#FFFFFF', Value: '#FF0000' } } }, SERIES_TAG_TOOL))
+      .toEqual({ line: '#FFFFFF', text: null });
+  });
+
+  it('does not add the measurement roles to the Series Tag profile', () => {
+    expect(Object.keys(resolveDisplayColor(SERIES_TAG_TOOL, { Line: '#FF0000' }))).toEqual(['Background', 'Border', 'Value', 'Meaning']);
+  });
+});
+
+describe('annotation palette', () => {
+  const { ANNOTATION_PALETTE, ANNOTATION_THEME_COLORS, getCustomLineTextColor } = jest.requireActual('./index');
+
+  it('offers the Series Tag defaults, then the theme colors', () => {
+    expect(ANNOTATION_PALETTE.map(swatch => swatch.hex)).toEqual(
+      ['#8AD0A8', '#C0C7F8', '#348CFD', '#5ACCE6', '#7BB2CE', '#58BC82', '#FFD22A', '#DC3545', '#FFFFFF', '#000000']);
+    expect(ANNOTATION_PALETTE.slice(2)).toEqual(ANNOTATION_THEME_COLORS);
+  });
+
+  it("reads a measurement's own line and text colors only", () => {
+    expect(getCustomLineTextColor({ displayAttributes: { Color: { Border: '#FFFFFF', Text: '#00FF00' } } }, 'Length'))
+      .toEqual({ line: null, text: '#00FF00' });
+    expect(getCustomLineTextColor({ displayAttributes: { Color: { Line: '#FF8800' } } }, SERIES_TAG_TOOL)).toEqual({ line: null, text: null });
+  });
+});

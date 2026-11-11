@@ -37,6 +37,7 @@ jest.mock('@ohif/core', () => {
       _id: measurement._id, uid: measurement.uid, measurementMeta: measurement.metadata || {}, measurementData: measurement,
     }),
     _unpackMeasurementLifecycleAttrs: measurement => ({ isLocked: measurement.isLocked, isReadOnly: measurement.isReadOnly }),
+    customLineTextColor: measurement => measurement.mockCustomColor || null,
   };
   return {
     __esModule: true,
@@ -89,21 +90,41 @@ it('leaves out a measurement drawn in the viewports only (one of an application 
 });
 
 it('numbers the rows in the order it lists them, saved then pending, out-of-plane measurements included', () => {
-  const outOfPlane = (uid, isLocked) => ({
-    uid, toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], length: 50, isLocked, FrameOfReferenceUID: '2.25.7001',
+  // Saved: read-only and locked; a pending one the user locked stays pending
+  const outOfPlane = (uid, isLocked, isReadOnly = isLocked) => ({
+    uid, toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], length: 50, isLocked, isReadOnly, FrameOfReferenceUID: '2.25.7001',
     metadata: { outOfPlane: true, views: ['sagittal'] },
   });
-  mockOutOfPlane.push(outOfPlane('oop-saved', true), outOfPlane('oop-pending', false));
+  mockOutOfPlane.push(outOfPlane('oop-saved', true), outOfPlane('oop-pending', false), outOfPlane('oop-locked', true, false));
   // Classic measurement numbers that are not sequential
   const groups = convertMeasurementsToTableData({
     CobbAngle: [drawn('CobbAngle', { isReadOnly: true, measurementNumber: 4 })],
-    Angle: [drawn('Angle', { measurementNumber: 9 })],
+    Angle: [drawn('Angle', { measurementNumber: 9 }), drawn('Angle', { measurementNumber: 10, isLocked: true, _id: 'Angle-2', uid: 'Angle-uid-2' })],
   }, timepoints);
   mockOutOfPlane.length = 0;
 
   expect(groups.map(group => [group.groupName, group.measurements.map(row => [row.measurementId, row.itemNumber])])).toEqual([
     ['Measurements', [['CobbAngle-1', 1], ['oop-saved', 2]]],
-    ['Pending Measurements', [['Angle-1', 3], ['oop-pending', 4]]],
+    ['Pending Measurements', [['Angle-1', 3], ['Angle-2', 4], ['oop-pending', 5], ['oop-locked', 6]]],
   ]);
 });
 
+
+it('marks as pending (the rows with an actions menu) the measurements not yet saved that have a service record', () => {
+  const groups = convertMeasurementsToTableData({
+    CobbAngle: [drawn('CobbAngle', { isReadOnly: true })],
+    Angle: [drawn('Angle'), drawn('Angle', { _id: 'Angle-2', uid: undefined, measurementNumber: 2 })],
+  }, timepoints);
+
+  expect(groups.map(group => group.measurements.map(row => [row.measurementId, row.isPending]))).toEqual([
+    [['CobbAngle-1', false]],
+    [['Angle-1', true], ['Angle-2', false]],
+  ]);
+});
+
+it("carries a measurement's custom colors to its row, for the indicator", () => {
+  const [group] = convertMeasurementsToTableData({
+    Angle: [drawn('Angle', { mockCustomColor: { line: '#FF8800', text: null } }), drawn('Angle', { _id: 'Angle-2', measurementNumber: 2 })],
+  }, timepoints);
+  expect(group.measurements.map(row => row.customColor)).toEqual([{ line: '#FF8800', text: null }, null]);
+});

@@ -106,3 +106,51 @@ describe("the arrow's text edit (double-click, touch press)", () => {
     expect(tool.doubleClickCallback(event(99))).toBe(false);
   });
 });
+
+describe('stored line and text colors', () => {
+  // A tool that draws every measurement of the image in one call, its line in the data's color and
+  // its text through the context
+  class DrawingTool {
+    renderToolData(evt) {
+      mockToolState.data.forEach((data) => {
+        evt.drawn.push({ id: data.id, line: data.color || 'tool' });
+        const context = evt.detail.canvasContext.canvas.getContext('2d');
+        context.fillStyle = data.color || 'tool';
+        context.fillText(data.id);
+      });
+    }
+  }
+  const ColorTool = lockable(DrawingTool);
+
+  const renderAll = (data) => {
+    mockToolState.data = data;
+    const texts = [];
+    const context = { fillStyle: null, fillText(id) { texts.push({ id, text: this.fillStyle }); } };
+    const evt = { currentTarget: 'element', drawn: [], detail: { canvasContext: { canvas: { getContext: () => context } } } };
+    new ColorTool().renderToolData(evt);
+    return { lines: evt.drawn, texts, context };
+  };
+
+  it('draws a measurement in its stored line and text colors, and the others as the tool does', () => {
+    const plain = { id: 'plain', handles: {} };
+    const colored = { id: 'colored', measurementData: { displayAttributes: { Color: { Line: '#FF8800', Text: '#00FF00' } } } };
+    const { lines, texts, context } = renderAll([plain, colored]);
+
+    expect(lines).toEqual([{ id: 'plain', line: 'tool' }, { id: 'colored', line: '#FF8800' }]);
+    expect(texts).toEqual([{ id: 'plain', text: 'tool' }, { id: 'colored', text: '#00FF00' }]);
+    // The data, the tool state and the context are left as they were
+    expect(colored).not.toHaveProperty('color');
+    expect(mockToolState.data).toEqual([plain, colored]);
+    expect(Object.prototype.hasOwnProperty.call(context, 'fillText')).toBe(true);
+    expect(context.fillText.name).toBe('fillText');
+  });
+
+  it('draws the text in the line color without a text color, and the active measurement in the active color', () => {
+    const lineOnly = { id: 'line', displayAttributes: { Color: { Line: '#FF8800' } } };
+    const active = { id: 'active', active: true, displayAttributes: { Color: { Line: '#FF8800', Text: '#00FF00' } } };
+    const { lines, texts } = renderAll([lineOnly, active]);
+
+    expect(lines).toEqual([{ id: 'line', line: '#FF8800' }, { id: 'active', line: 'tool' }]);
+    expect(texts).toEqual([{ id: 'line', text: '#FF8800' }, { id: 'active', text: 'tool' }]);
+  });
+});
