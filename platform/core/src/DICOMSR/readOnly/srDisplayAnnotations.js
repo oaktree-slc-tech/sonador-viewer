@@ -14,6 +14,7 @@ import { annotation as c3dAnnotation, utilities as c3dToolsUtilities } from '@co
 
 import log from '../../log';
 import TOOL_NAMES from '../constants/toolNames';
+import { getDisplayColor } from '../../displayAttributes';
 import { getRenderableData, inPlaneVectors } from './renderableData';
 
 export const TOOL_NAME = TOOL_NAMES.DICOM_SR_DISPLAY_C3D;
@@ -120,6 +121,8 @@ export function addSRDisplayAnnotation({
       TrackingUniqueIdentifier,
       TrackingIdentifier,
       labels,
+      // Stored display colours, by role (displayAttributes); empty for the default style
+      displayColor: getDisplayColor(measurement),
       renderableData,
       srPlane,
       referencedImageId: imageId,

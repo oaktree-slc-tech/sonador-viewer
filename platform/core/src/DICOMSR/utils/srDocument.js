@@ -2,23 +2,25 @@
 // the document class and root template, the equipment profile, the observation context, and the
 // parent a save is measured against.
 //
-// * A new document is Comprehensive 3D SR with root template `Sonador-SR.1500` (mapping resource
-//   `Sonador-SR`). A re-save keeps the parent's class and template: an Enhanced SR parent stays
-//   Enhanced SR, any other parent is written as Comprehensive 3D SR. The parent is the single SR
-//   hydrated for the study; several, or none, give a new document.
-// * An Enhanced SR save whose content Enhanced SR cannot hold (an SCOORD3D item, a CONTAINER under
-//   a CODE or NUM item) is written as Comprehensive 3D SR instead, with a warning.
+// * Every document the Viewer writes is Comprehensive 3D SR. A new document has root template
+//   `Sonador-SR.1500` (mapping resource `Sonador-SR`); a re-save keeps the parent's template. An
+//   Enhanced SR report is still read, and a new version of one is written as Comprehensive 3D SR.
+//   The parent is the single SR hydrated for the study; several, or none, give a new document.
 // * Equipment and the Device Observer are the Viewer's on every save; the Person Observer is the
 //   signed-in user, omitted when the session does not name one.
-// * isDisplayOnlyDocument classifies a document whose root concept is in the `Sonador-SR` scheme
-//   (an application document). The Cornerstone3D report reader does not hydrate its Angle and
-//   Cobb angle groups; other groups are not affected by the classification.
+// * documentKind classifies a document by its root concept name (enums SR_DOCUMENT_KIND): an
+//   exchange document, `(126000, DCM)`, or an application document, a root concept in the
+//   `Sonador-SR` scheme that also carries content the Viewer does not model. A save regenerates the
+//   whole document from tool state, so the Viewer never writes to an application document: its
+//   measurement groups are displayed, not hydrated (its Series Tags excepted, hydrated read-only),
+//   and it is never a save parent.
 
 import _ from 'lodash';
 
 import { data as dcmjsData } from 'dcmjs';
 
 import {
+  DCM,
   DCMR_SR_TEMPLATE,
   ObserverContextCodes,
   RELATIONSHIP_TYPE,
@@ -27,12 +29,12 @@ import {
   SONADOR_SR_TEMPLATE,
   SONADOR_VIEWER_MODEL_NAME,
   SR_DOCUMENT_CLASS,
+  SR_DOCUMENT_KIND,
 } from '../enums';
-import { asArray, codedConcept, conceptNameValue, firstItem } from './codedConcept';
+import log from '../../log';
+import { asArray, codeValueOf, codedConcept, conceptNameValue, firstItem } from './codedConcept';
 
 const { DicomMetaDictionary } = dcmjsData;
-
-const ENHANCED_SR_SOP_CLASS_UID = '1.2.840.10008.5.1.4.1.1.88.22';
 
 
 // Equipment
@@ -133,32 +135,29 @@ function applyRootContent(content, { template, personName, deviceObserverUID } =
 
 // Document kind
 
-function isDisplayOnlyDocument(dataset) {
-  // True for a document whose root concept name is coded in the Sonador-SR scheme
+const IMAGING_MEASUREMENT_REPORT = '126000';
+
+/** The kind of an SR document (SR_DOCUMENT_KIND), by its root concept name */
+function documentKind(dataset) {
   const rootConcept = firstItem(dataset && dataset.ConceptNameCodeSequence);
-  return !!rootConcept && rootConcept.CodingSchemeDesignator === SONADOR_SR;
+  if (!rootConcept) {
+    return SR_DOCUMENT_KIND.OTHER;
+  }
+  if (codeValueOf(rootConcept) === IMAGING_MEASUREMENT_REPORT && rootConcept.CodingSchemeDesignator === DCM) {
+    return SR_DOCUMENT_KIND.EXCHANGE;
+  }
+  return rootConcept.CodingSchemeDesignator === SONADOR_SR ? SR_DOCUMENT_KIND.APPLICATION : SR_DOCUMENT_KIND.OTHER;
 }
+
+/** Whether a document is an application document: displayed by the Viewer, never written to */
+const isApplicationDocument = dataset => documentKind(dataset) === SR_DOCUMENT_KIND.APPLICATION;
 
 
 // Document class
 
-function requiresComprehensive(contentItem, parent) {
-  // True when the content holds an SCOORD3D item or a CONTAINER under a CODE or NUM item, which an
-  // Enhanced SR document cannot hold (PS3.3 Table A.35.2-2)
-  if (!contentItem) {
-    return false;
-  }
-  if (contentItem.ValueType === 'SCOORD3D') {
-    return true;
-  }
-  if (contentItem.ValueType === 'CONTAINER' && parent && ['CODE', 'NUM'].includes(parent.ValueType)) {
-    return true;
-  }
-  return asArray(contentItem.ContentSequence).some(child => requiresComprehensive(child, contentItem));
-}
-
 function documentSettings(parent) {
-  // { documentClass, template } of a save made against `parent` (a registered report, or null)
+  // { documentClass, template } of a save made against `parent` (a registered report, or null):
+  // Comprehensive 3D SR, whatever the parent's class
   if (!parent) {
     return { documentClass: SR_DOCUMENT_CLASS.COMPREHENSIVE_3D, template: SONADOR_SR_TEMPLATE };
   }
@@ -166,10 +165,7 @@ function documentSettings(parent) {
     ? { TemplateIdentifier: parent.TemplateIdentifier, MappingResource: parent.MappingResource
         || (parent.TemplateIdentifier === DCMR_SR_TEMPLATE.TemplateIdentifier ? 'DCMR' : SONADOR_SR_TEMPLATE.MappingResource) }
     : SONADOR_SR_TEMPLATE;
-  const documentClass = parent.SOPClassUID === ENHANCED_SR_SOP_CLASS_UID
-    ? SR_DOCUMENT_CLASS.ENHANCED
-    : SR_DOCUMENT_CLASS.COMPREHENSIVE_3D;
-  return { documentClass, template };
+  return { documentClass: SR_DOCUMENT_CLASS.COMPREHENSIVE_3D, template };
 }
 
 
@@ -182,7 +178,13 @@ let session = 0;
 const currentSession = () => session;
 
 function registerHydratedReport(dataset, loadSession = session) {
+  // An application document is never a save parent: a save would regenerate it from tool state and
+  // drop the content the Viewer does not model
   if (!dataset || !dataset.SOPInstanceUID || !dataset.StudyInstanceUID || loadSession !== session) {
+    return;
+  }
+  if (isApplicationDocument(dataset)) {
+    log.info('[DICOM-SR:srDocument] application document, not a save parent', dataset.SOPInstanceUID);
     return;
   }
   const template = firstItem(dataset.ContentTemplateSequence) || {};
@@ -204,8 +206,20 @@ function saveParent(StudyInstanceUID) {
 
 function clearHydratedReports() {
   hydratedReports.clear();
+  applicationMeasurements.clear();
   session += 1;
 }
+
+
+// Measurements hydrated from an application document (its Series Tags), by tracking UID: shown
+// read-only and never written by a save, which would copy them into another document
+
+const applicationMeasurements = new Set();
+
+const markApplicationMeasurement = TrackingUniqueIdentifier =>
+  TrackingUniqueIdentifier && applicationMeasurements.add(TrackingUniqueIdentifier);
+const isApplicationMeasurement = TrackingUniqueIdentifier =>
+  !!TrackingUniqueIdentifier && applicationMeasurements.has(TrackingUniqueIdentifier);
 
 
 // Reports written by this Viewer and shown before the upload confirms they are stored. Their
@@ -226,13 +240,15 @@ export {
   currentSession,
   documentSettings,
   equipment,
-  isDisplayOnlyDocument,
+  documentKind,
+  isApplicationDocument,
+  isApplicationMeasurement,
+  markApplicationMeasurement,
   isUnconfirmedReport,
   markReportUnconfirmed,
   observerContextItems,
   personObserverName,
   registerHydratedReport,
-  requiresComprehensive,
   resolvePersonObserverName,
   saveParent,
   softwareVersion,

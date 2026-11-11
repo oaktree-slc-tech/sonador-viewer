@@ -135,6 +135,24 @@
     -moz-box-sizing: initial;
     box-sizing: initial;
 
+  // An out-of-plane measurement: the index cell in the panel's blue, a cube under the number, and
+  // a divider beside it
+  &.isOutOfPlane
+    .itemIndex
+      opacity: 1
+      background-color: #1d3a57;
+      color: #d5e6f6;
+      border-right: 2px solid #3f8fd0;
+
+    .outOfPlaneIcon
+      display: block;
+      margin: 6px auto 0;
+
+      svg
+        width: 20px;
+        height: 20px;
+        stroke: #9fd0f7;
+
   &.hasWarnings
     .itemIndex
       opacity: 1

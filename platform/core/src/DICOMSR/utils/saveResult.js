@@ -11,6 +11,7 @@ const ACTIONS = {
   incomplete: 'complete it, or delete it and draw it again',
   degenerate: 'move its endpoints apart so that each line has a length',
   uncalibrated: 'its image calibration is missing or invalid, so the angle cannot be measured in degrees; draw it on a calibrated image',
+  'frame-of-reference': 'its series has no Frame of Reference, so it cannot be saved in patient coordinates',
 };
 const DEFAULT_ACTION = 'check it and save again';
 

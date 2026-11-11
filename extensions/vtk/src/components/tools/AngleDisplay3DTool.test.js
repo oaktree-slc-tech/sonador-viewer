@@ -1,8 +1,8 @@
-// The angle display draws every visible Angle and Cobb angle annotation of a 3D viewport's Frame of
-// Reference, whatever the camera orientation, with the exchange value; it can be shown and hidden.
+// The display draws every visible Length, Angle and Cobb angle annotation of a 3D viewport's Frame of
+// Reference, whatever the camera orientation, with its value; it can be shown and hidden.
 // Cornerstone3D is stubbed: annotations come from an in-memory store and drawing calls are recorded.
 
-const mockAnnotations = { Angle: [], CobbAngle: [] };
+const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [] };
 const mockHidden = new Set();
 const mockDrawn = [];
 const mockRegisteredTools = {};
@@ -67,6 +67,8 @@ const render = () => {
 const textOf = uid => mockDrawn.filter(d => d.kind === 'textBox' && d.uid === uid).map(d => d.args[0]);
 
 afterEach(() => {
+  mockAnnotations.SonadorNonPlanarCobbAngle = [];
+  mockAnnotations.Length = [];
   mockAnnotations.Angle = [];
   mockAnnotations.CobbAngle = [];
   mockHidden.clear();
@@ -82,6 +84,49 @@ it('draws an Angle and a Cobb angle of the Frame of Reference in a view that is 
   expect(mockDrawn.filter(d => d.uid === 'c-1').map(d => d.kind)).toEqual(['line', 'line', 'handles', 'textBox']);
   expect(textOf('a-1')).toEqual([['90 °']]);
   expect(textOf('c-1')).toEqual([['135 °']]);
+});
+
+it('draws a Length, in-plane or out-of-plane, with its distance in mm', () => {
+  const length = (uid, points) => ({
+    annotationUID: uid, metadata: { toolName: 'Length', FrameOfReferenceUID: FOR, viewPlaneNormal: [1, 0, 0] },
+    data: { handles: { points } },
+  });
+  mockAnnotations.Length = [length('l-1', [[0, 0, 0], [3, 4, 0]]), length('l-2', [[12, 0, 0], [12, 30, -40]]), length('l-3', [[0, 0, 0]])];
+
+  expect(render()).toBe(true);
+  expect(mockDrawn.filter(d => d.uid === 'l-1').map(d => d.kind)).toEqual(['line', 'handles', 'textBox']);
+  expect(textOf('l-1')).toEqual([['5 mm']]);
+  expect(textOf('l-2')).toEqual([['50 mm']]);
+  // An incomplete Length is not drawn
+  expect(mockDrawn.filter(d => d.uid === 'l-3')).toEqual([]);
+});
+
+it("shows a Length's record value while its points are unchanged, and the new distance after an edit", () => {
+  const points = [[0, 0, 0], [30, 40, 0]];
+  const stored = () => ({
+    annotationUID: 'l-stored', metadata: { toolName: 'Length', FrameOfReferenceUID: FOR, viewPlaneNormal: [1, 0, 0] },
+    data: { handles: { points: points.map(p => p.slice()) }, recordValue: { value: 49.876, points } },
+  });
+  mockAnnotations.Length = [stored()];
+  render();
+  expect(textOf('l-stored')).toEqual([['49.88 mm']]);
+
+  const edited = stored();
+  edited.data.handles.points[1] = [60, 80, 0];
+  mockAnnotations.Length = [edited];
+  render();
+  expect(textOf('l-stored')).toEqual([['100 mm']]);
+});
+
+it('draws a Cobb angle whose lines lie in no common plane as its two lines, with its stored value', () => {
+  const skew = [[0, 0, 0], [10, 0, 0], [0, 10, 10], [0, 20, 10]];
+  mockAnnotations.SonadorNonPlanarCobbAngle = [{
+    annotationUID: 's-1', metadata: { toolName: 'SonadorNonPlanarCobbAngle', FrameOfReferenceUID: FOR },
+    data: { handles: { points: skew.map(p => p.slice()) }, recordValue: { value: 90, points: skew } },
+  }];
+  expect(render()).toBe(true);
+  expect(mockDrawn.filter(d => d.uid === 's-1').map(d => d.kind)).toEqual(['line', 'line', 'handles', 'textBox']);
+  expect(textOf('s-1')).toEqual([['90 °']]);
 });
 
 it('shows the classic record value while the points are unchanged, and 0 as a value', () => {

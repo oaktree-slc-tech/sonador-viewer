@@ -79,7 +79,9 @@ const Length = {
       textBox,
       isLocked,
       isVisible,
-      metadata,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js); the
+      // service accepts only its schema keys at the top level
+      metadata: data.displayAttributes ? { ...metadata, displayAttributes: data.displayAttributes } : metadata,
       // color,
       referenceSeriesUID: SeriesInstanceUID,
       referenceStudyUID: StudyInstanceUID,
@@ -89,8 +91,6 @@ const Length = {
       displaySetInstanceUID: displaySet.displaySetInstanceUID,
       label: data.label,
       displayText: displayText,
-      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js)
-      displayAttributes: data.displayAttributes,
       data: data.cachedStats,
       type: getValueTypeFromToolType(toolName),
       getReport,

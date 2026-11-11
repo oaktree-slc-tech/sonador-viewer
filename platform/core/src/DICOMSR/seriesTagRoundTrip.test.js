@@ -53,22 +53,29 @@ jest.mock('@cornerstonejs/adapters', () => {
     }
   }
 
-  // Stand-ins for the library angle adapters the Sonador set extends (angleRoundTrip.test.js
+  // Stand-ins for the library Length and angle adapters the Sonador set extends (angleRoundTrip.test.js
   // covers them with the real ones)
   class Angle extends BaseAdapter3D {}
   Angle.init('Angle');
   class CobbAngle extends BaseAdapter3D {}
   CobbAngle.init('CobbAngle');
+  class Length extends BaseAdapter3D {}
+  Length.init('Length');
 
   return {
     adaptersSR: {
-      Cornerstone: { MeasurementReport },
+      // The Length the Sonador writer extends; no Length is written here
+      Cornerstone: {
+        MeasurementReport,
+        Length: { TID300Representation: class { constructor(props) { this.props = props; } } },
+      },
       Cornerstone3D: {
         CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} },
         MeasurementReport: MeasurementReport3D,
         BaseAdapter3D,
         Angle,
         CobbAngle,
+        Length,
       },
     },
     // As in the pinned package
@@ -116,7 +123,6 @@ const LEGACY = path.join(FIXTURES, 'series-tag.legacy.dcm');
 const V1 = path.join(FIXTURES, 'series-tag.v1.dcm');
 const V1_ENHANCED = path.join(FIXTURES, 'series-tag.v1-enhanced.dcm');
 
-const ENHANCED_SR = '1.2.840.10008.5.1.4.1.1.88.22';
 const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
 
 const TOOL_TYPE = 'DICOMSRSeriesTagTool';
@@ -323,26 +329,18 @@ describe('re-saving the legacy fixture (Enhanced SR parent)', () => {
     return { tools, bytes: writeSR(legacy, tools, { document: reSaveOf(legacy), ...writeOptions }) };
   };
 
-  it('stays Enhanced SR with the parent template, per-finding properties flat under the Finding', () => {
-    const { bytes } = resave(() => {}, { synthetic: true });
-    if (process.env.UPDATE_SR_FIXTURES) {
-      fs.writeFileSync(V1_ENHANCED, bytes);
-    }
-    const dataset = readSR(bytes);
-    expect(dataset.SOPClassUID).toBe(ENHANCED_SR);
+  it('is written as Comprehensive 3D SR with the parent template, per-finding properties nested under the Finding', () => {
+    const dataset = readSR(resave(() => {}, { synthetic: true }).bytes);
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
     expect(templateOf(dataset)).toEqual({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
 
     measurementGroups(dataset).forEach(group => {
-      expect(layoutOf(group)).toBe('flat');
+      expect(layoutOf(group)).toBe('nested');
       extendedMetaOf(group).forEach(({ item }) => expect(item.RelationshipType).toBe('HAS PROPERTIES'));
-      colorItemsOf(group).forEach(item => {
-        expect(item.RelationshipType).toBe('HAS PROPERTIES');
-        expect(firstItem(item.ConceptNameCodeSequence).CodingSchemeVersion).toBe('0.3');
-      });
-      // Nothing is left at group level, and Enhanced SR holds no CONTAINER under the Finding
+      colorItemsOf(group).forEach(item => expect(firstItem(item.ConceptNameCodeSequence).CodingSchemeVersion).toBe('0.3'));
+      // Nothing is left at group level
       expect(asArray(group.ContentSequence).map(conceptNameValue))
         .toEqual(['112039', '112040', CODES.Finding]);
-      expect(asArray(findingOf(group).ContentSequence).some(item => item.ValueType === 'CONTAINER')).toBe(false);
     });
   });
 
@@ -405,21 +403,6 @@ describe('re-saving the legacy fixture (Enhanced SR parent)', () => {
     expect(meaning.length).toBeGreaterThan(64);
     expect(findingCodeOf(group).CodeMeaning).toBe(meaning);
     expect(readFindingCode(findingOf(group)).text).toBe(meaning);
-  });
-
-  it('is written as Comprehensive 3D SR, with a warning, when it holds content Enhanced SR cannot', () => {
-    // Series Tags in the flat form never need it; a CONTAINER under the Finding does
-    const upgrades = [];
-    const { bytes } = resave(() => {}, {
-      encoding: { layout: 'nested' },
-      onDocumentClassUpgrade: (from, to) => upgrades.push([from, to]),
-    });
-    const dataset = readSR(bytes);
-
-    expect(upgrades).toEqual([['EnhancedSR', 'Comprehensive3DSR']]);
-    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
-    expect(templateOf(dataset)).toEqual({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
-    measurementGroups(dataset).forEach(group => expect(layoutOf(group)).toBe('nested'));
   });
 });
 
@@ -605,6 +588,14 @@ describe('Cornerstone3D hydration', () => {
 
   it('hydrates the v1 fixture', () => {
     expectFindings(hydrateWithCornerstone3D(readSR(fs.readFileSync(V1))), ['0.2', '0.2']);
+  });
+
+  it('hydrates the Series Tags of an application document (Sonador-SR root title), read-only and locked', () => {
+    const dataset = readSR(fs.readFileSync(V1));
+    dataset.ConceptNameCodeSequence = [{ CodeValue: 'Clinical-Report', CodingSchemeDesignator: 'Sonador-SR', CodeMeaning: 'Clinical Report' }];
+    const hydrated = hydrateWithCornerstone3D(dataset);
+    expectFindings(hydrated, ['0.2', '0.2']);
+    hydrated.findings.forEach(f => expect(f.annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true }));
   });
 
   it('hydrates the Enhanced SR re-save (flat layout)', () => {

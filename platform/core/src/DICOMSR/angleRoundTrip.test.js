@@ -65,12 +65,13 @@ jest.mock('@cornerstonejs/adapters', () => {
   const load = file => jest.requireActual(`${adapters}/${file}`).default;
   return {
     adaptersSR: {
-      Cornerstone: { MeasurementReport: load('Cornerstone/MeasurementReport.js') },
+      Cornerstone: { MeasurementReport: load('Cornerstone/MeasurementReport.js'), Length: load('Cornerstone/Length.js') },
       Cornerstone3D: {
         MeasurementReport: load('Cornerstone3D/MeasurementReport.js'),
         BaseAdapter3D: load('Cornerstone3D/BaseAdapter3D.js'),
         Angle: load('Cornerstone3D/Angle.js'),
         CobbAngle: load('Cornerstone3D/CobbAngle.js'),
+        Length: load('Cornerstone3D/Length.js'),
         CodeScheme: load('Cornerstone3D/CodingScheme.js'),
       },
     },
@@ -113,6 +114,9 @@ import { propertyParentOf } from './utils/propertyParent';
 import { measurementVersion, omittedMeasurement, saveResultSummary } from './utils/saveResult';
 import { confirmReport, documentSettings, markReportUnconfirmed } from './utils/srDocument';
 import { SonadorCodeValues } from './enums';
+import { drawingPlaneOfView, formatDrawingPlane, navigationPlaneOf } from './utils/drawingPlane';
+import { carriedEvidenceOf, heldOutOfPlaneRecord, isCarriedForward, patientToolData } from './utils/outOfPlane';
+import { viewOfNormal } from './utils/measurementView';
 import { dicomLabToHex } from '../displayAttributes';
 
 const { DicomDict, DicomMessage, DicomMetaDictionary } = dcmjsData;
@@ -120,8 +124,11 @@ const { DicomDict, DicomMessage, DicomMetaDictionary } = dcmjsData;
 const FIXTURES = path.join(__dirname, '__fixtures__');
 const VIEWER_ANGLE = path.join(FIXTURES, 'sonador-viewer.angle-image.2026-1108.dcm');
 const VIEWER_COBB_ANGLE = path.join(FIXTURES, 'sonador-viewer.cobb-angle-image.2026-1108.dcm');
+// The Viewer-authored Length, its properties under the NUM item
+const VIEWER_LENGTH = path.join(FIXTURES, 'sonador-viewer.length-image.2026-1110.dcm');
 const IO_ANGLE = path.join(FIXTURES, 'sonador-io.angle.2026-1108.dcm');
 const IO_COBB_ANGLE = path.join(FIXTURES, 'sonador-io.cobb-angle.2026-1108.dcm');
+const IO_LENGTH = path.join(FIXTURES, 'sonador-io.length.2026-1108.dcm');
 
 const ENHANCED_SR = '1.2.840.10008.5.1.4.1.1.88.22';
 const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
@@ -201,10 +208,15 @@ beforeAll(() => {
 
 
 // Deterministic UIDs and dates, so a document can be written twice to the same bytes
+// The copy of dcmjs the adapters bundle mints the tracking UID of a Length
+const { DicomMetaDictionary: AdaptersDicomMetaDictionary } = jest.requireActual(
+  '../../../../node_modules/@cornerstonejs/adapters/node_modules/dcmjs').data;
+
 function deterministic(fn) {
   let counter = 900000;
   const spies = [
     jest.spyOn(DicomMetaDictionary, 'uid').mockImplementation(() => `2.25.${counter++}`),
+    jest.spyOn(AdaptersDicomMetaDictionary, 'uid').mockImplementation(() => `2.25.${counter++}`),
     jest.spyOn(DicomMetaDictionary, 'date').mockImplementation(() => '20261108'),
     jest.spyOn(DicomMetaDictionary, 'time').mockImplementation(() => '120000'),
     jest.spyOn(DicomMetaDictionary, 'dateTime').mockImplementation(() => '20261108120000'),
@@ -244,11 +256,17 @@ const numChildren = group => asArray(numOf(group).ContentSequence);
 const textValues = (items, code) => items.filter(item => conceptNameValue(item) === code).map(item => item.TextValue);
 
 
-function writeSR(toolsByType, { document, imageId = IMAGE.imageId, onMeasurementRefused, imagePlaneModule, instance, onEncoded } = {}) {
+function writeSR(toolsByType, {
+  document, imageId = IMAGE.imageId, onMeasurementRefused, imagePlaneModule, instance, onEncoded, toolState: givenToolState, patientSeries,
+  headers,
+} = {}) {
   // Write the tools through the Viewer writer, as a save does (parseMeasurementsData), and
   // serialise them as the stow does (handleStructuredReport). `imagePlaneModule` and `instance`
-  // replace the image's metadata.
-  const tools = _.flatten(_.values(toolsByType));
+  // replace the image's metadata. `toolState` (with `patientSeries`) replaces the tool state of
+  // `toolsByType` on `imageId`, for patient-domain measurements and several images.
+  const tools = givenToolState
+    ? _.flatMap(_.values(givenToolState), byType => _.flatMap(_.values(byType), ({ data }) => data))
+    : _.flatten(_.values(toolsByType));
   const { SOPInstanceUID, frame } = imageOf(imageId);
   const metadataProvider = {
     get: (type, id) => ({
@@ -261,9 +279,10 @@ function writeSR(toolsByType, { document, imageId = IMAGE.imageId, onMeasurement
   };
   expect(SOPInstanceUID).toBeDefined();
 
-  const toolState = { [imageId]: _.mapValues(toolsByType, data => ({ data })) };
+  const toolState = givenToolState || { [imageId]: _.mapValues(toolsByType, data => ({ data })) };
   const report = MeasurementReport.generateReport(toolState, metadataProvider, {
     document: document || { ...documentSettings(null), personName: 'Observer^Test' },
+    patientSeries,
     onMeasurementRefused,
     onContentItemCreate: (toolType, { _id }, tid300Measurement, srItem, encoding) => {
       const tool = tools.find(t => t._id === _id);
@@ -277,7 +296,7 @@ function writeSR(toolsByType, { document, imageId = IMAGE.imageId, onMeasurement
   });
 
   const dataset = _.extend(_.omit(report.dataset, '_meta', '_vrMap'),
-    _.pick(SYNTHETIC, 'PatientName', 'PatientID', 'StudyID', 'StudyInstanceUID'));
+    _.pick(SYNTHETIC, 'PatientName', 'PatientID', 'StudyID', 'StudyInstanceUID'), headers);
   const meta = {
     FileMetaInformationVersion: report.dataset._meta.FileMetaInformationVersion.Value,
     MediaStorageSOPClassUID: dataset.SOPClassUID,
@@ -314,7 +333,7 @@ function hydrate(dataset, images = [IMAGE], { imageIdsForToolState } = {}) {
   return { byType: result, warnings, infos };
 }
 
-const HANDLES = { Angle: ['start', 'middle', 'end'], CobbAngle: ['start', 'end', 'start2', 'end2'] };
+const HANDLES = { Angle: ['start', 'middle', 'end'], CobbAngle: ['start', 'end', 'start2', 'end2'], Length: ['start', 'end'] };
 
 function classicTool(toolType, imagePoints, extra = {}) {
   // A cornerstone-tools Angle / Cobb angle as the classic mapping hands it to the writer
@@ -340,7 +359,8 @@ function toClassicTool(toolType, state, index = 0) {
     description: state.description,
     displayAttributes: annotation.data.displayAttributes,
     metadata: _.pick(annotation.metadata,
-      'TrackingUniqueIdentifier', 'TrackingIdentifier', 'coordinateDomain', 'views', 'text', 'location', 'sourceGeometry'),
+      'TrackingUniqueIdentifier', 'TrackingIdentifier', 'coordinateDomain', 'views', 'text', 'location', 'sourceGeometry',
+      'sourceSeries', 'drawingPlane'),
   };
 }
 
@@ -462,7 +482,7 @@ describe('Viewer writer', () => {
       .toEqual(['112039', '112040', '285285000']);
   });
 
-  it('writes flat display attributes under the NUM item for an Enhanced SR parent, and stays Enhanced SR', () => {
+  it("writes a new version of an Enhanced SR report as Comprehensive 3D SR, display attributes nested under the NUM item", () => {
     const parent = { SOPClassUID: ENHANCED_SR, TemplateIdentifier: '1500', MappingResource: 'DCMR' };
     const { result: bytes } = write({ CobbAngle: [classicTool('CobbAngle', [[0, 0], [10, 0], [0, 10], [10, 20]])] }, {
       document: { ...documentSettings(parent), personName: 'Observer^Test' },
@@ -470,11 +490,9 @@ describe('Viewer writer', () => {
     const dataset = readSR(bytes);
     const items = numChildren(measurementGroups(dataset)[0]);
 
-    expect(dataset.SOPClassUID).toBe(ENHANCED_SR);
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
     expect(firstItem(dataset.ContentTemplateSequence)).toMatchObject({ TemplateIdentifier: '1500', MappingResource: 'DCMR' });
-    expect(items.some(item => item.ValueType === 'CONTAINER')).toBe(false);
-    expect(items.filter(item => ROLE_CODES.includes(conceptNameValue(item))).map(item => item.RelationshipType))
-      .toEqual(['HAS PROPERTIES', 'HAS PROPERTIES', 'HAS PROPERTIES']);
+    expect(items.some(item => item.ValueType === 'CONTAINER')).toBe(true);
   });
 
   it('mints a new SOP instance on every save', () => {
@@ -492,6 +510,7 @@ describe('Viewer-authored fixtures', () => {
     [VIEWER_COBB_ANGLE]: {
       CobbAngle: [classicTool('CobbAngle', [[0.5, 0.5], [10.5, 0.5], [0.5, 10.5], [10.5, 20.5]], { _id: 'cobb-angle-1' })],
     },
+    [VIEWER_LENGTH]: { Length: [classicTool('Length', [[0.5, 0.5], [10.5, 20.5]], { _id: 'length-1' })] },
   };
 
   Object.entries(FIXTURE_TOOLS).forEach(([fixture, tools]) => {
@@ -611,7 +630,7 @@ describe('Cornerstone3D hydration', () => {
     expect(warnings.some(message => /zero length/.test(message))).toBe(true);
   });
 
-  it('does not hydrate the angle groups of a document with a Sonador-SR root title', () => {
+  it('does not hydrate the measurement groups of an application document (Sonador-SR root title)', () => {
     const dataset = writeAndRead({
       Angle: [classicTool('Angle', [[10, 0], [0, 0], [0, 10]])],
       CobbAngle: [classicTool('CobbAngle', [[0, 0], [10, 0], [0, 10], [10, 20]])],
@@ -694,13 +713,15 @@ describe('Sonador IO documents', () => {
       fixture: IO_COBB_ANGLE, toolType: 'CobbAngle', value: 135,
       points: [[0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 20, 0]], description: 'cobb-angle measurement',
     },
+    { fixture: IO_LENGTH, toolType: 'Length', value: 5, points: [[0, 0, 0], [3, 4, 0]], description: 'length measurement' },
   ];
+  const storedValueOf = (toolType, state) => _.values(state.annotation.data.cachedStats)[0]?.[toolType === 'Length' ? 'length' : 'angle'];
 
   CASES.forEach(({ fixture, toolType, value, points, description }) => {
     const name = path.basename(fixture);
     const dataset = () => readSR(fs.readFileSync(fixture));
 
-    it(`${name} hydrates editable on the image of its Frame of Reference, with its properties`, () => {
+    it(`${name} hydrates on the image of its Frame of Reference, with its properties`, () => {
       const source = dataset();
       const [group] = measurementGroups(source);
       const { byType, warnings } = hydrate(source, [OTHER_FRAME_IMAGE, IMAGE]);
@@ -708,7 +729,7 @@ describe('Sonador IO documents', () => {
 
       expect(warnings.filter(message => /Unable to generate tool state/.test(message))).toEqual([]);
       expect(state.annotation.data.handles.points).toEqual(points);
-      expect(angleOf(state)).toBe(value);
+      expect(storedValueOf(toolType, state)).toBe(value);
       expect(state.sopInstanceUid).toBe(IMAGE.SOPInstanceUID);
       expect(state.annotation.metadata).toMatchObject({
         referencedImageId: IMAGE.imageId,
@@ -749,6 +770,21 @@ describe('Sonador IO documents', () => {
         expect(textValues(numChildren(group), code)).toEqual(textValues(numChildren(sourceGroup), code));
       });
     });
+  });
+
+  it('re-saves an edited Length in the patient domain, from the patient points of its handles', () => {
+    const source = readSR(fs.readFileSync(IO_LENGTH));
+    const { byType } = hydrate(source);
+    const tool = toClassicTool('Length', byType.Length[0]);
+    // The end moved from (3, 4, 0) to (6, 8, 0) on the image
+    const [x, y] = patientToImage(mockImagePlanes[tool.imageId], [6, 8, 0]);
+    tool.handles.end = { x, y };
+    const [group] = measurementGroups(readSR(quiet(() => writeSR({ Length: [tool] }, { document: reSaveOf(source) })).result));
+
+    expect(coordinatesOf(group)).toMatchObject({ ValueType: 'SCOORD3D', ReferencedFrameOfReferenceUID: SYNTHETIC.FrameOfReferenceUID });
+    expect(pointsOf(group)).toEqual([[0, 0, 0], [6, 8, 0]]);
+    expect(valueOf(group)).toBeCloseTo(10, 6);
+    expect(trackingUIDOf(group)).toBe(trackingUIDOf(measurementGroups(source)[0]));
   });
 });
 
@@ -1072,3 +1108,697 @@ describe('a Cobb angle whose second line was not drawn', () => {
     expect(measurementGroups(dataset)).toHaveLength(1);
   });
 });
+
+
+describe('Length properties under the NUM item', () => {
+  const write = (toolsByType, options) => quiet(() => deterministic(() => writeSR(toolsByType, options)));
+  const lengthTool = extra => classicTool('Length', [[0.5, 0.5], [10.5, 0.5]], extra);
+  const groupItems = group => asArray(group.ContentSequence).map(item => [item.ValueType, conceptNameValue(item)]);
+  const propertyItems = items => items.filter(item => item.RelationshipType === 'HAS PROPERTIES')
+    .map(item => [item.ValueType, conceptNameValue(item), item.TextValue || item.UID]);
+
+  it('writes description, text, location and the display container as HAS PROPERTIES children of the NUM', () => {
+    const [group] = measurementGroups(readSR(write({ Length: [lengthTool()] }).result));
+
+    expect(trackingIdentifierOf(group)).toBe('cornerstoneTools@^4.0.0:Length');
+    expect(groupItems(group)).toEqual([['TEXT', '112039'], ['UIDREF', '112040'], ['NUM', '410668003']]);
+    expect(propertyItems(numChildren(group))).toEqual([
+      ['TEXT', 'Sonador-Measurement.Description', 'Hip abduction'],
+      ['TEXT', 'Sonador-Measurement.Text', 'Synthetic'],
+      ['TEXT', 'Sonador-Measurement.Location', 'Synthetic location'],
+      ['CONTAINER', 'Sonador-DisplayAttributes', undefined],
+    ]);
+  });
+
+  it('reads them back from under the NUM on the hydration path, locked as read from a stored report', () => {
+    const dataset = readSR(write({ Length: [lengthTool()] }).result);
+    const [state] = hydrate(dataset).byType.Length;
+    expect(state.description).toBe('Hip abduction');
+    expect(state.annotation.metadata).toMatchObject({ text: 'Synthetic', location: 'Synthetic location' });
+    expect(state.annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true, coordinateDomain: 'image' });
+    expect(state.annotation.data.displayAttributes.Color.Border).toBe('#FF8800');
+  });
+
+  it('rewrites a legacy group-level Length under the NUM on a re-save', () => {
+    // The legacy layout: the properties as group-level HAS CONCEPT MOD items, no display attributes
+    const dataset = readSR(write({ Length: [lengthTool({ displayAttributes: undefined })] }).result);
+    const [group] = measurementGroups(dataset);
+    const num = numOf(group);
+    const properties = asArray(num.ContentSequence).filter(item => item.RelationshipType === 'HAS PROPERTIES');
+    num.ContentSequence = asArray(num.ContentSequence).filter(item => !properties.includes(item));
+    group.ContentSequence = [...asArray(group.ContentSequence), ...properties.map(item => ({ ...item, RelationshipType: 'HAS CONCEPT MOD' }))];
+
+    const [state] = hydrate(dataset).byType.Length;
+    expect(state.description).toBe('Hip abduction');
+    const resaved = readSR(write({ Length: [toClassicTool('Length', state)] }, { document: reSaveOf(dataset) }).result);
+    const [resavedGroup] = measurementGroups(resaved);
+
+    expect(groupItems(resavedGroup)).toEqual([['TEXT', '112039'], ['UIDREF', '112040'], ['NUM', '410668003']]);
+    expect(propertyItems(numChildren(resavedGroup)).map(([, code]) => code)).toEqual([
+      'Sonador-Measurement.Description', 'Sonador-Measurement.Text', 'Sonador-Measurement.Location',
+    ]);
+  });
+
+  it('reads and carries the source series and the drawing plane of a patient-domain measurement through a re-save', () => {
+    const dataset = readSR(write({
+      Length: [lengthTool({ metadata: { sourceSeries: '2.25.4040', drawingPlane: '0,1,0,0,0,-1' } })],
+    }).result);
+    expect(propertyItems(numChildren(measurementGroups(dataset)[0])).filter(([type]) => type !== 'CONTAINER').slice(3)).toEqual([
+      ['UIDREF', 'Sonador-Measurement.Source-Series', '2.25.4040'],
+      ['TEXT', 'Sonador-Measurement.Drawing-Plane', '0,1,0,0,0,-1'],
+    ]);
+
+    const [state] = hydrate(dataset).byType.Length;
+    expect(state.annotation.metadata).toMatchObject({ sourceSeries: '2.25.4040', drawingPlane: '0,1,0,0,0,-1' });
+    const resaved = readSR(write({ Length: [toClassicTool('Length', state)] }, { document: reSaveOf(dataset) }).result);
+    expect(propertyItems(numChildren(measurementGroups(resaved)[0])).filter(([type]) => type !== 'CONTAINER').slice(3)).toEqual([
+      ['UIDREF', 'Sonador-Measurement.Source-Series', '2.25.4040'],
+      ['TEXT', 'Sonador-Measurement.Drawing-Plane', '0,1,0,0,0,-1'],
+    ]);
+  });
+});
+
+
+describe('synthetic document fixtures (generated by __fixtures__/scripts)', () => {
+  const fixture = name => readSR(fs.readFileSync(path.join(FIXTURES, name)));
+  // The slice at z = 9 of the synthetic CT series: Pixel Spacing 0.8 mm between rows, 1.2 mm between
+  // columns, slices 3 mm apart
+  const ct = fixture('synthetic-ct/ct-04.dcm');
+  const CT_IMAGE_ID = 'synthetic-ct:04';
+  mockImagePlanes[CT_IMAGE_ID] = {
+    imagePositionPatient: ct.ImagePositionPatient.map(Number), rowCosines: ct.ImageOrientationPatient.slice(0, 3).map(Number),
+    columnCosines: ct.ImageOrientationPatient.slice(3).map(Number), rowPixelSpacing: Number(ct.PixelSpacing[0]),
+    columnPixelSpacing: Number(ct.PixelSpacing[1]), frameOfReferenceUID: ct.FrameOfReferenceUID,
+  };
+  // The slice at z = 18, which the exchange document's measurements lie on
+  const ctExchange = fixture('synthetic-ct/ct-07.dcm');
+  const CT_EXCHANGE_IMAGE_ID = 'synthetic-ct:07';
+  mockImagePlanes[CT_EXCHANGE_IMAGE_ID] = { ...mockImagePlanes[CT_IMAGE_ID], imagePositionPatient: ctExchange.ImagePositionPatient.map(Number) };
+  const CT = [
+    { SOPInstanceUID: ct.SOPInstanceUID, imageId: CT_IMAGE_ID },
+    { SOPInstanceUID: ctExchange.SOPInstanceUID, imageId: CT_EXCHANGE_IMAGE_ID },
+  ];
+
+  it('is a CT series with unequal row and column spacing and slices more than 2 mm apart', () => {
+    const slices = _.range(1, 13).map(n => fixture(`synthetic-ct/ct-${String(n).padStart(2, '0')}.dcm`));
+    expect(ct.PixelSpacing.map(Number)).toEqual([0.8, 1.2]);
+    const z = slices.map(slice => Number(slice.ImagePositionPatient[2]));
+    expect(_.uniq(_.zip(z.slice(1), z.slice(0, -1)).map(([b, a]) => b - a))).toEqual([3]);
+    expect(_.uniq(slices.map(slice => slice.FrameOfReferenceUID))).toEqual([ct.FrameOfReferenceUID]);
+    expect(ct.PatientID).toBe('SYNTHETIC-PHANTOM');
+  });
+
+  it('hydrates the exchange document locked, with properties from under the NUM', () => {
+    const { byType } = hydrate(fixture('sonador-io.exchange-document.dcm'), CT);
+    expect(Object.keys(byType)).toEqual(['Length', 'Angle', 'CobbAngle']);
+
+    const [length] = byType.Length;
+    expect(length.annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true });
+    expect(byType.Angle[0].annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true });
+    expect(byType.CobbAngle[0].annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true });
+
+    Object.entries({ Length: 'Length', Angle: 'Angle', CobbAngle: 'Cobb angle' }).forEach(([tool, name]) => {
+      const [state] = byType[tool];
+      expect(state.description).toBe(`${name} (synthetic)`);
+      expect(state.annotation.metadata).toMatchObject({ text: 'Synthetic', location: 'Synthetic location', views: ['axial'] });
+      expect(state.annotation.data.displayAttributes.Color.Border).toBe('#FF8800');
+    });
+
+    // In the patient domain, placed on the image whose plane holds both ends (the slice at z = 18),
+    // with the points as written and the stored value
+    expect(length.sopInstanceUid).toBe(ctExchange.SOPInstanceUID);
+    expect(length.annotation.metadata).toMatchObject({
+      FrameOfReferenceUID: '2.25.316170003', referencedImageId: CT_EXCHANGE_IMAGE_ID, coordinateDomain: 'patient',
+      sourceGeometry: { valueType: 'SCOORD3D', graphicData: [-20, -10, 18, 20, 5, 18], FrameOfReferenceUID: '2.25.316170003' },
+    });
+    expect(length.annotation.data.handles.points).toEqual([[-20, -10, 18], [20, 5, 18]]);
+    expect(length.annotation.data.cachedStats[`imageId:${CT_EXCHANGE_IMAGE_ID}`].length).toBeCloseTo(Math.hypot(40, 15), 6);
+    expect(byType.Angle[0].sopInstanceUid).toBe(ctExchange.SOPInstanceUID);
+    expect(byType.CobbAngle[0].sopInstanceUid).toBe(ctExchange.SOPInstanceUID);
+  });
+
+  it('hydrates only the Series Tag of the application document, and names the groups it does not hydrate', () => {
+    const { byType, infos } = hydrate(fixture('sonador-io.application-document.dcm'), CT);
+    expect(Object.keys(byType)).toEqual(['DICOMSRSeriesTagTool']);
+    expect(byType.DICOMSRSeriesTagTool[0].annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true });
+    expect(infos.map(([message]) => message.replace(/.*application document, /, ''))).toEqual([
+      'Length group not hydrated trackingUID=2.25.31617051',
+      'Angle group not hydrated trackingUID=2.25.31617052',
+      'CobbAngle group not hydrated trackingUID=2.25.31617053',
+      'Length group not hydrated trackingUID=2.25.31617054',
+    ]);
+  });
+
+  it('reads the properties of the Python-written Length, Angle and Cobb angle fixtures from under the NUM', () => {
+    ['length', 'angle', 'cobb-angle'].forEach((topic) => {
+      const dataset = fixture(`sonador-io.${topic}.2026-1108.dcm`);
+      const states = _.flatten(_.values(hydrate(dataset, IMAGES).byType));
+      const [state] = states.length ? states : [null];
+      const [group] = measurementGroups(dataset);
+      const expectations = { description: `${topic} measurement`, text: 'Synthetic', location: 'Synthetic location', views: ['coronal'] };
+      const measurement = {};
+      parseExtendedMeta(group, measurement, { propertyParent: 'num', textPath: 'text', locationPath: 'location', viewsPath: 'views' });
+      expect(_.pick(measurement, 'description', 'text', 'location', 'views')).toEqual(expectations);
+      if (state) {
+        expect(state.description).toBe(expectations.description);
+      }
+    });
+  });
+});
+
+
+describe('out-of-plane measurements, written in the patient domain', () => {
+  const SOURCE_SERIES = SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES.value;
+  const DRAWING_PLANE = SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE.value;
+  // Two series of the study sharing the Frame of Reference
+  const SERIES_A = {
+    StudyInstanceUID: SYNTHETIC.StudyInstanceUID, SeriesInstanceUID: '2.25.2001',
+    instances: [1, 2, 3].map(n => ({ SOPClassUID: CT_IMAGE, SOPInstanceUID: `2.25.2001.${n}` })),
+  };
+  const SERIES_B = {
+    StudyInstanceUID: SYNTHETIC.StudyInstanceUID, SeriesInstanceUID: '2.25.2002',
+    instances: [1, 2].map(n => ({ SOPClassUID: CT_IMAGE, SOPInstanceUID: `2.25.2002.${n}` })),
+  };
+  const outOfPlane = (uid, toolType, patientPoints, series, extra = {}) => ({
+    uid, _id: uid, toolType, patientPoints, FrameOfReferenceUID: SYNTHETIC.FrameOfReferenceUID,
+    description: `${toolType} (out of plane)`,
+    metadata: { outOfPlane: true, sourceSeries: series.SeriesInstanceUID, drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'] },
+    ...extra,
+  });
+  // A sagittal plane at x = 12: Length, Angle (90 degrees) and Cobb angle (90 degrees)
+  const LENGTH = outOfPlane('oop-length', 'Length', [[12, 0, 0], [12, 30, -40]], SERIES_A);
+  const ANGLE = outOfPlane('oop-angle', 'Angle', [[12, 10, 0], [12, 0, 0], [12, 0, -10]], SERIES_A);
+  const COBB = outOfPlane('oop-cobb', 'CobbAngle', [[12, 0, 0], [12, 10, 0], [12, 0, -10], [12, 0, -20]], SERIES_A);
+  const evidenceOf = dataset => asArray(dataset.CurrentRequestedProcedureEvidenceSequence).flatMap(study =>
+    asArray(study.ReferencedSeriesSequence).flatMap(series => asArray(series.ReferencedSOPSequence)
+      .map(sop => [study.StudyInstanceUID, series.SeriesInstanceUID, sop.ReferencedSOPInstanceUID])));
+  const libraryImages = dataset => asArray(child(child(dataset, '111028'), '126200')?.ContentSequence);
+  const uidOf = (items, code) => items.filter(item => conceptNameValue(item) === code).map(item => item.UID);
+  const write = (toolState, patientSeries) => readSR(quiet(() => deterministic(() => writeSR({}, { toolState, patientSeries }))).result);
+
+  it('writes a report holding only out-of-plane measurements: SCOORD3D, no image, the source series as evidence', () => {
+    const dataset = write({ 'patient:2.25.2001': { Length: { data: [LENGTH] }, Angle: { data: [ANGLE] }, CobbAngle: { data: [COBB] } } },
+      { 'patient:2.25.2001': SERIES_A });
+    const groups = measurementGroups(dataset);
+
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
+    expect(groups.map(trackingIdentifierOf)).toEqual(['Length', 'Angle', 'CobbAngle'].map(tool => `cornerstoneTools@^4.0.0:${tool}`));
+    groups.forEach((group) => {
+      const coordinates = coordinatesOf(group);
+      expect(coordinates).toMatchObject({ ValueType: 'SCOORD3D', GraphicType: 'POLYLINE', RelationshipType: 'INFERRED FROM',
+        ReferencedFrameOfReferenceUID: SYNTHETIC.FrameOfReferenceUID });
+      expect(asArray(coordinates.ContentSequence)).toEqual([]);
+      const items = numChildren(group);
+      expect(uidOf(items, SOURCE_SERIES)).toEqual(['2.25.2001']);
+      expect(textValues(items, DRAWING_PLANE)).toEqual(['0,1,0,0,0,-1']);
+      expect(textValues(items, VIEW)).toEqual(['sagittal']);
+    });
+
+    // The points as held, known patient coordinates; the values from them
+    expect(pointsOf(groups[0])).toEqual([[12, 0, 0], [12, 30, -40]]);
+    expect(valueOf(groups[0])).toBeCloseTo(50, 6);
+    expect(pointsOf(groups[1])).toEqual([[12, 10, 0], [12, 0, 0], [12, 0, 0], [12, 0, -10]]);
+    expect(valueOf(groups[1])).toBeCloseTo(90, 6);
+    expect(pointsOf(groups[2])).toEqual(COBB.patientPoints);
+    expect(valueOf(groups[2])).toBeCloseTo(90, 6);
+
+    // No image library entry; the evidence lists every instance of the source series
+    expect(libraryImages(dataset)).toEqual([]);
+    expect(evidenceOf(dataset)).toEqual(SERIES_A.instances.map(i => [SYNTHETIC.StudyInstanceUID, '2.25.2001', i.SOPInstanceUID]));
+  });
+
+  it('writes a mixed report: each measurement with its own series, the evidence listing every series', () => {
+    const inPlane = classicTool('Length', [[0.5, 0.5], [10.5, 20.5]], { _id: 'in-plane-length' });
+    const onB = outOfPlane('oop-length-b', 'Length', [[0, 5, 5], [0, 25, 5]], SERIES_B,
+      { metadata: { outOfPlane: true, sourceSeries: '2.25.2002', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'] } });
+    const dataset = write({
+      [IMAGE.imageId]: { Length: { data: [inPlane] } },
+      'patient:2.25.2001': { Length: { data: [LENGTH] } },
+      'patient:2.25.2002': { Length: { data: [onB] } },
+    }, { 'patient:2.25.2001': SERIES_A, 'patient:2.25.2002': SERIES_B });
+    const groups = measurementGroups(dataset);
+
+    expect(groups.map(group => coordinatesOf(group).ValueType)).toEqual(['SCOORD', 'SCOORD3D', 'SCOORD3D']);
+    expect(groups.map(group => uidOf(numChildren(group), SOURCE_SERIES))).toEqual([[], ['2.25.2001'], ['2.25.2002']]);
+    // Drawing-Plane only for the out-of-plane measurements
+    expect(groups.map(group => textValues(numChildren(group), DRAWING_PLANE).length)).toEqual([0, 1, 1]);
+    expect(_.uniq(evidenceOf(dataset).map(([, series]) => series))).toEqual([SYNTHETIC.SeriesInstanceUID, '2.25.2001', '2.25.2002']);
+    expect(libraryImages(dataset).map(item => firstItem(item.ReferencedSOPSequence).ReferencedSOPInstanceUID)).toEqual([IMAGE.SOPInstanceUID]);
+  });
+
+  it('keeps the tracking identity of an out-of-plane measurement on a re-save', () => {
+    const saved = { ...LENGTH, TrackingUniqueIdentifier: '2.25.880', TrackingIdentifier: 'Cornerstone3DTools@^0.1.0:Length' };
+    const [group] = measurementGroups(write({ 'patient:2.25.2001': { Length: { data: [saved] } } }, { 'patient:2.25.2001': SERIES_A }));
+    expect(trackingUIDOf(group)).toBe('2.25.880');
+    expect(trackingIdentifierOf(group)).toBe('Cornerstone3DTools@^0.1.0:Length');
+  });
+
+  it('refuses one without a Frame of Reference or with the wrong number of points, and writes the others', () => {
+    const refused = [];
+    const noFrame = { ...LENGTH, uid: 'no-frame', _id: 'no-frame', FrameOfReferenceUID: undefined };
+    const short = { ...ANGLE, uid: 'short', _id: 'short', patientPoints: ANGLE.patientPoints.slice(0, 2) };
+    const { result } = quiet(() => writeSR({}, {
+      toolState: { 'patient:2.25.2001': { Length: { data: [noFrame, LENGTH] }, Angle: { data: [short] } } },
+      patientSeries: { 'patient:2.25.2001': SERIES_A },
+      onMeasurementRefused: (toolType, tool, error) => refused.push([tool._id, error.code]),
+    }));
+    expect(refused).toEqual([['no-frame', 'frame-of-reference'], ['short', 'incomplete']]);
+    expect(measurementGroups(readSR(result))).toHaveLength(1);
+  });
+});
+
+
+describe('reloading a patient-domain measurement, by its Drawing-Plane', () => {
+  const SERIES = {
+    StudyInstanceUID: SYNTHETIC.StudyInstanceUID, SeriesInstanceUID: SYNTHETIC.SeriesInstanceUID,
+    instances: [{ SOPClassUID: CT_IMAGE, SOPInstanceUID: IMAGE.SOPInstanceUID }],
+  };
+  // A Length in the sagittal plane x = 5 whose two ends both lie on the axial image at z = 0
+  const onTheImage = (drawingPlane, extra = {}) => ({
+    uid: 'reload-1', _id: 'reload-1', toolType: 'Length', patientPoints: [[5, 2, 0], [5, 20, 0]],
+    FrameOfReferenceUID: SYNTHETIC.FrameOfReferenceUID,
+    metadata: { outOfPlane: true, sourceSeries: SYNTHETIC.SeriesInstanceUID, drawingPlane, views: ['sagittal'] },
+    ...extra,
+  });
+  const saved = tool => readSR(quiet(() => writeSR({}, {
+    toolState: { [`patient:${SYNTHETIC.SeriesInstanceUID}`]: { [tool.toolType]: { data: [tool] } } },
+    patientSeries: { [`patient:${SYNTHETIC.SeriesInstanceUID}`]: SERIES },
+  })).result);
+
+  it('keeps one with a valid Drawing-Plane out-of-plane, although an image holds its points', () => {
+    const { byType, warnings } = hydrate(saved(onTheImage('0,1,0,0,0,-1')));
+    const [state] = byType.Length;
+    expect(state.sopInstanceUid).toBeUndefined();
+    expect(state.annotation.metadata).toMatchObject({
+      outOfPlane: true, coordinateDomain: 'patient', drawingPlane: '0,1,0,0,0,-1', sourceSeries: SYNTHETIC.SeriesInstanceUID,
+      views: ['sagittal'], isLocked: true,
+    });
+    expect(state.annotation.metadata.referencedImageId).toBeUndefined();
+    expect(state.annotation.data.handles.points).toEqual([[5, 2, 0], [5, 20, 0]]);
+    expect(warnings.filter(message => /Drawing-Plane/.test(message))).toEqual([]);
+  });
+
+  it('logs a malformed Drawing-Plane with the tracking UID, treats it as absent, and keeps its text', () => {
+    ['0,1,0,0,0', '0,1.5,0,0,0,-1'].forEach((text) => {
+      const { byType, warnings } = hydrate(saved(onTheImage(text, { TrackingUniqueIdentifier: '2.25.7700' })));
+      const [state] = byType.Length;
+      expect(warnings.filter(message => /malformed Drawing-Plane/.test(message))).toEqual([
+        expect.stringMatching(new RegExp(`"${text.replace(/\./g, '\\.')}" .*trackingUID=2\\.25\\.7700$`)),
+      ]);
+      // Absent: placed on the image that holds both ends, the text carried for a re-save
+      expect(state.sopInstanceUid).toBe(IMAGE.SOPInstanceUID);
+      expect(state.annotation.metadata.outOfPlane).toBeUndefined();
+      expect(state.annotation.metadata.drawingPlane).toBe(text);
+    });
+  });
+
+  it('places one without a Drawing-Plane on the image that holds it, and holds one that no image holds', () => {
+    const placed = hydrate(saved(onTheImage(undefined))).byType.Length[0];
+    expect(placed.sopInstanceUid).toBe(IMAGE.SOPInstanceUID);
+
+    const between = onTheImage(undefined, { patientPoints: [[5, 2, 7], [5, 20, 7]] });
+    const held = hydrate(saved(between)).byType.Length[0];
+    expect(held.sopInstanceUid).toBeUndefined();
+    expect(held.annotation.metadata.sourceGeometry).toMatchObject({ valueType: 'SCOORD3D', graphicData: [5, 2, 7, 5, 20, 7] });
+  });
+});
+
+
+describe('acceptance: out-of-plane measurements on the synthetic axial series', () => {
+  // The synthetic CT: 64 x 48, Pixel Spacing 0.8 mm (rows) and 1.2 mm (columns), slices 3 mm apart at z = 0 to 33
+  const read = name => readSR(fs.readFileSync(path.join(FIXTURES, name)));
+  const slices = _.range(1, 13).map(n => read(`synthetic-ct/ct-${String(n).padStart(2, '0')}.dcm`));
+  const CT = slices.map((slice, index) => ({ SOPInstanceUID: slice.SOPInstanceUID, imageId: `synthetic-ct-axial:${index + 1}` }));
+  slices.forEach((slice, index) => {
+    mockImagePlanes[CT[index].imageId] = {
+      imagePositionPatient: slice.ImagePositionPatient.map(Number), rowCosines: slice.ImageOrientationPatient.slice(0, 3).map(Number),
+      columnCosines: slice.ImageOrientationPatient.slice(3).map(Number), rowPixelSpacing: Number(slice.PixelSpacing[0]),
+      columnPixelSpacing: Number(slice.PixelSpacing[1]), frameOfReferenceUID: slice.FrameOfReferenceUID,
+    };
+  });
+  IMAGES.push(...CT);
+  const [first] = slices;
+  const FOR = first.FrameOfReferenceUID;
+  const SERIES_KEY = `patient:${first.SeriesInstanceUID}`;
+  const SERIES = {
+    StudyInstanceUID: first.StudyInstanceUID, SeriesInstanceUID: first.SeriesInstanceUID,
+    instances: slices.map(slice => ({ SOPClassUID: slice.SOPClassUID, SOPInstanceUID: slice.SOPInstanceUID })),
+  };
+  const HEADERS = { PatientName: [{ Alphabetic: 'Synthetic^Phantom' }], PatientID: 'SYNTHETIC-PHANTOM', StudyID: '1', StudyInstanceUID: first.StudyInstanceUID };
+  const SOURCE_SERIES = SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES.value;
+  const DRAWING_PLANE = SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE.value;
+  const uidOf = (items, code) => items.filter(item => conceptNameValue(item) === code).map(item => item.UID);
+
+  // The Inspector's cameras: sagittal (normal +x, up +z), and turned 45 degrees between sagittal and axial
+  const SAGITTAL = { viewPlaneNormal: [1, 0, 0], viewUp: [0, 0, 1] };
+  const OBLIQUE = { viewPlaneNormal: [Math.SQRT1_2, 0, Math.SQRT1_2], viewUp: [0, 1, 0] };
+  // The record a drawing becomes (cornerstone measurementAnnotationSync), as the writer receives it
+  const drawn = (uid, toolType, patientPoints, { viewPlaneNormal, viewUp }, extra = {}) => ({
+    uid, _id: uid, toolType, patientPoints, FrameOfReferenceUID: FOR,
+    metadata: {
+      outOfPlane: true, sourceSeries: SERIES.SeriesInstanceUID,
+      drawingPlane: formatDrawingPlane(drawingPlaneOfView(viewPlaneNormal, viewUp)), views: [viewOfNormal(viewPlaneNormal)],
+      ...extra,
+    },
+  });
+  const MEASUREMENTS = {
+    Length: [
+      drawn('acc-length', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL),
+      // On the oblique plane x + z = 15
+      drawn('acc-oblique', 'Length', [[-10, 0, 25], [10, 5, 5]], OBLIQUE),
+    ],
+    Angle: [drawn('acc-angle', 'Angle', [[6, 10, 9.5], [6, 0, 9.5], [6, 0, 20]], SAGITTAL)],
+    CobbAngle: [drawn('acc-cobb', 'CobbAngle', [[6, -15, 3], [6, -5, 3], [6, -15, 10], [6, -15, 22]], SAGITTAL)],
+  };
+  const write = (byType, options = {}) => quiet(() => deterministic(() => writeSR({}, {
+    toolState: { [SERIES_KEY]: _.mapValues(byType, data => ({ data })) }, patientSeries: { [SERIES_KEY]: SERIES }, headers: HEADERS, ...options,
+  }))).result;
+  const VIEWER_OUT_OF_PLANE = path.join(FIXTURES, 'sonador-viewer.out-of-plane.2026-1110.dcm');
+
+  it('writes the drawings of a sagittal and an oblique Inspector with View, Source-Series and Drawing-Plane', () => {
+    const bytes = write(MEASUREMENTS);
+    if (process.env.UPDATE_SR_FIXTURES) {
+      fs.writeFileSync(VIEWER_OUT_OF_PLANE, bytes);
+    }
+    // The Viewer-authored out-of-plane fixture the Sonador IO client reads
+    expect(bytes.equals(fs.readFileSync(VIEWER_OUT_OF_PLANE))).toBe(true);
+
+    const dataset = readSR(bytes);
+    const groups = measurementGroups(dataset);
+    expect(dataset.SOPClassUID).toBe(COMPREHENSIVE_3D_SR);
+    expect(groups.map(group => [
+      trackingIdentifierOf(group).split(':')[1],
+      textValues(numChildren(group), VIEW),
+      uidOf(numChildren(group), SOURCE_SERIES),
+      textValues(numChildren(group), DRAWING_PLANE),
+    ])).toEqual([
+      ['Length', ['sagittal'], [SERIES.SeriesInstanceUID], ['0,1,0,0,0,-1']],
+      ['Length', ['oblique'], [SERIES.SeriesInstanceUID], ['0.707107,0,-0.707107,0,-1,0']],
+      ['Angle', ['sagittal'], [SERIES.SeriesInstanceUID], ['0,1,0,0,0,-1']],
+      ['CobbAngle', ['sagittal'], [SERIES.SeriesInstanceUID], ['0,1,0,0,0,-1']],
+    ]);
+
+    // The patient coordinates drawn, unchanged, with their values
+    expect(groups.map(pointsOf)).toEqual([
+      [[6, -10, 4], [6, 8, 25]], [[-10, 0, 25], [10, 5, 5]],
+      [[6, 10, 9.5], [6, 0, 9.5], [6, 0, 9.5], [6, 0, 20]], [[6, -15, 3], [6, -5, 3], [6, -15, 10], [6, -15, 22]],
+    ]);
+    expect(groups.map(valueOf).map(value => _.round(value, 6)))
+      .toEqual([_.round(Math.hypot(18, 21), 6), _.round(Math.hypot(20, 5, 20), 6), 90, 90]);
+    groups.forEach(group => expect(coordinatesOf(group)).toMatchObject({ ValueType: 'SCOORD3D', ReferencedFrameOfReferenceUID: FOR }));
+    expect(_.uniq(asArray(dataset.CurrentRequestedProcedureEvidenceSequence)
+      .map(study => firstItem(study.ReferencedSeriesSequence).SeriesInstanceUID))).toEqual([SERIES.SeriesInstanceUID]);
+    expect(asArray(dataset.CurrentRequestedProcedureEvidenceSequence)).toHaveLength(12);
+  });
+
+  it('reloads each as a locked out-of-plane measurement, found again on the plane it was drawn on', () => {
+    const { byType } = hydrate(read('sonador-viewer.out-of-plane.2026-1110.dcm'), CT);
+    const states = [...byType.Length, ...byType.Angle, ...byType.CobbAngle];
+    expect(states).toHaveLength(4);
+    states.forEach((state) => {
+      expect(state.sopInstanceUid).toBeUndefined();
+      expect(state.annotation.metadata).toMatchObject({ outOfPlane: true, isLocked: true, sourceSeries: SERIES.SeriesInstanceUID });
+    });
+    expect(states.map(state => state.annotation.metadata.views)).toEqual([['sagittal'], ['oblique'], ['sagittal'], ['sagittal']]);
+    // Navigation turns a pane onto the drawing plane: the normal of each view
+    const normals = states.map(state => navigationPlaneOf(state.annotation.data.handles.points, state.annotation.metadata.drawingPlane));
+    normals.forEach(plane => expect(plane.kind).toBe('drawing-plane'));
+    const along = (normal, expected) => expect(Math.abs(normal.reduce((sum, v, i) => sum + v * expected[i], 0))).toBeCloseTo(1, 6);
+    along(normals[0].normal, [1, 0, 0]);
+    along(normals[1].normal, OBLIQUE.viewPlaneNormal);
+  });
+
+  it('writes an in-plane drawing on the image at its known patient coordinates despite the unequal spacing', () => {
+    // On the slice at z = 9: image (15.8333, 12) and (49.1667, 30.75) are patient (-20, -10, 9) and (20, 5, 9)
+    const [x0, y0] = patientToImage(mockImagePlanes[CT[3].imageId], [-20, -10, 9]);
+    const [x1, y1] = patientToImage(mockImagePlanes[CT[3].imageId], [20, 5, 9]);
+    [x0, y0, x1, y1].forEach((value, i) => expect(value).toBeCloseTo([15.833333, 12, 49.166667, 30.75][i], 5));
+    const tool = classicTool('Length', [[x0, y0], [x1, y1]], { _id: 'in-plane', length: Math.hypot(40, 15) });
+    const dataset = readSR(quiet(() => writeSR({ Length: [tool] }, { imageId: CT[3].imageId })).result);
+    const [group] = measurementGroups(dataset);
+    expect(coordinatesOf(group).ValueType).toBe('SCOORD');
+
+    // Hydrated at the same patient points the read-only display places it at (SCOORD holds 32-bit
+    // floats: within 1e-4 mm)
+    const [state] = hydrate(dataset, [CT[3]]).byType.Length;
+    state.annotation.data.handles.points.forEach((point, i) =>
+      point.forEach((value, axis) => expect(value).toBeCloseTo([[-20, -10, 9], [20, 5, 9]][i][axis], 4)));
+  });
+
+  it('loads an Angle of 180 degrees and a skew Cobb angle with their stored points, and finds the plane they navigate by', () => {
+    const straight = drawn('acc-straight', 'Angle', [[-10, 0, 10.5], [0, 0, 10.5], [10, 0, 10.5]], SAGITTAL, { drawingPlane: undefined });
+    const skew = drawn('acc-skew', 'CobbAngle', [[0, 0, 0], [10, 0, 0], [0, 10, 10], [0, 20, 10]], SAGITTAL, { drawingPlane: undefined });
+    const dataset = readSR(write({ Angle: [straight], CobbAngle: [skew] }));
+    const [angleGroup, cobbGroup] = measurementGroups(dataset);
+    expect(valueOf(angleGroup)).toBeCloseTo(180, 6);
+    expect(valueOf(cobbGroup)).toBeCloseTo(90, 6);
+
+    const { byType } = hydrate(dataset, CT);
+    const [angle] = byType.Angle;
+    const [cobb] = byType.CobbAngle;
+    expect(angle.sopInstanceUid).toBeUndefined();
+    expect(cobb.sopInstanceUid).toBeUndefined();
+    expect(cobb.annotation.metadata.sourceGeometry.graphicData).toEqual([0, 0, 0, 10, 0, 0, 0, 10, 10, 0, 20, 10]);
+    expect(navigationPlaneOf(angle.annotation.data.handles.points)).toMatchObject({ kind: 'collinear', view: 'axial' });
+    expect(navigationPlaneOf(cobb.annotation.data.handles.points)).toMatchObject({ kind: 'none' });
+  });
+
+  it('writes a measurement of a Frame of Reference no loaded series shares, and a malformed Drawing-Plane, unchanged', () => {
+    const elsewhere = { ...drawn('acc-elsewhere', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL), FrameOfReferenceUID: '2.25.99999' };
+    const malformed = drawn('acc-malformed', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL, { drawingPlane: '0,1,0,0,0' });
+    const dataset = readSR(write({ Length: [elsewhere, malformed] }));
+    const [elsewhereGroup, malformedGroup] = measurementGroups(dataset);
+    expect(coordinatesOf(elsewhereGroup).ReferencedFrameOfReferenceUID).toBe('2.25.99999');
+    expect(textValues(numChildren(malformedGroup), DRAWING_PLANE)).toEqual(['0,1,0,0,0']);
+
+    const { byType, warnings } = hydrate(dataset, CT);
+    expect(byType.Length.map(state => state.sopInstanceUid)).toEqual([undefined, undefined]);
+    expect(warnings.filter(message => /malformed Drawing-Plane "0,1,0,0,0"/.test(message))).toHaveLength(1);
+    expect(byType.Length[1].annotation.metadata.drawingPlane).toBe('0,1,0,0,0');
+  });
+
+  const REQUESTED = 'CurrentRequestedProcedureEvidenceSequence';
+  const tagged = ({ StudyInstanceUID, SeriesInstanceUID, instances }, evidenceContainer = REQUESTED) =>
+    instances.map(instance => ({ StudyInstanceUID, SeriesInstanceUID, evidenceContainer, ...instance }));
+  const evidenceInstancesOf = dataset => _.sortBy(asArray(dataset.CurrentRequestedProcedureEvidenceSequence).flatMap(study =>
+    asArray(study.ReferencedSeriesSequence).flatMap(series => asArray(series.ReferencedSOPSequence)
+      .map(item => [series.SeriesInstanceUID, item.ReferencedSOPInstanceUID]))), pair => pair[1]);
+  const trackingUIDsOf = group => asArray(group.ContentSequence).filter(item => conceptNameValue(item) === '112040').map(item => item.UID);
+
+  it('writes again, on a re-save, a held measurement without a Source-Series whose report lists two unloaded series', () => {
+    // Another system's report: no Source-Series, evidence of two series, neither loaded
+    const ELSEWHERE = '2.25.99999';
+    const OTHER = {
+      StudyInstanceUID: SERIES.StudyInstanceUID, SeriesInstanceUID: '2.25.8001',
+      instances: [1, 2].map(n => ({ SOPClassUID: SERIES.instances[0].SOPClassUID, SOPInstanceUID: `2.25.8001.${n}` })),
+    };
+    const BOTH = { ...SERIES, instances: [...tagged(SERIES), ...tagged(OTHER)] };
+    const stored = { ...drawn('acc-unsourced', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL), FrameOfReferenceUID: ELSEWHERE };
+    stored.metadata = _.omit(stored.metadata, 'sourceSeries');
+    const report = readSR(write({ Length: [stored] }, { patientSeries: { [SERIES_KEY]: BOTH } }));
+    expect(uidOf(numChildren(measurementGroups(report)[0]), SOURCE_SERIES)).toEqual([]);
+    expect(_.uniq(evidenceInstancesOf(report).map(([series]) => series)).sort()).toEqual(['2.25.8001', SERIES.SeriesInstanceUID].sort());
+
+    const { byType } = hydrate(report, CT);
+    const [state] = byType.Length;
+    const { TrackingUniqueIdentifier } = state.annotation.metadata;
+    const held = { ...heldOutOfPlaneRecord('Length', state, report.StudyInstanceUID), uid: 'held-2' };
+    held.metadata.carriedEvidence = carriedEvidenceOf(report, held);
+    expect(held.metadata.sourceSeries).toBeUndefined();
+    expect(isCarriedForward(held)).toBe(true);
+    expect(_.sortBy(held.metadata.carriedEvidence.instances, 'SOPInstanceUID')).toEqual(_.sortBy(BOTH.instances, 'SOPInstanceUID'));
+
+    // Keyed by itself, as parseMeasurementsData keys a held measurement without a Source-Series
+    const key = 'patient:held-2';
+    const resaved = readSR(quiet(() => deterministic(() => writeSR({}, {
+      toolState: { [key]: { Length: { data: [patientToolData(held)] } } },
+      patientSeries: { [key]: held.metadata.carriedEvidence }, headers: HEADERS,
+    }))).result);
+    const [group] = measurementGroups(resaved);
+    expect(trackingUIDsOf(group)).toEqual([TrackingUniqueIdentifier]);
+    expect(pointsOf(group)).toEqual([[6, -10, 4], [6, 8, 25]]);
+    expect(_.round(valueOf(group), 6)).toBe(_.round(Math.hypot(18, 21), 6));
+    expect(coordinatesOf(group)).toMatchObject({ ValueType: 'SCOORD3D', ReferencedFrameOfReferenceUID: ELSEWHERE });
+    expect([
+      textValues(numChildren(group), VIEW), uidOf(numChildren(group), SOURCE_SERIES), textValues(numChildren(group), DRAWING_PLANE),
+    ]).toEqual([['sagittal'], [], ['0,1,0,0,0,-1']]);
+    // Every instance of both series, each under its own series
+    expect(evidenceInstancesOf(resaved)).toEqual(evidenceInstancesOf(report));
+    expect(evidenceInstancesOf(resaved)).toHaveLength(SERIES.instances.length + 2);
+  });
+
+  describe('writes again, as the only measurement of the new report, a held measurement whose report lists its evidence', () => {
+    const ELSEWHERE = '2.25.99999';
+    const OTHER = 'PertinentOtherEvidenceSequence';
+    // References of an evidence container, as [study, series, SOP instance], sorted by SOP instance
+    const referencesOf = (dataset, container) => _.sortBy(asArray(dataset[container]).flatMap(study =>
+      asArray(study.ReferencedSeriesSequence).flatMap(series => asArray(series.ReferencedSOPSequence)
+        .map(item => [study.StudyInstanceUID, series.SeriesInstanceUID, item.ReferencedSOPInstanceUID]))), reference => reference[2]);
+    const instancesOf = series => _.sortBy(series.instances.map(instance => [series.StudyInstanceUID, series.SeriesInstanceUID, instance.SOPInstanceUID]), r => r[2]);
+    const [FIRST, REST] = [{ ...SERIES, instances: SERIES.instances.slice(0, 4) }, { ...SERIES, instances: SERIES.instances.slice(4) }];
+
+    // The stored report, its evidence moved between the containers as another system wrote it
+    const storedReport = (arrange) => {
+      const stored = { ...drawn('acc-evidence', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL), FrameOfReferenceUID: ELSEWHERE };
+      stored.metadata = _.omit(stored.metadata, 'sourceSeries');
+      const report = readSR(write({ Length: [stored] }));
+      arrange(report);
+      return report;
+    };
+    const resave = (report) => {
+      const [state] = hydrate(report, CT).byType.Length;
+      const held = { ...heldOutOfPlaneRecord('Length', state, report.StudyInstanceUID), uid: 'held-evidence' };
+      held.metadata.carriedEvidence = carriedEvidenceOf(report, held);
+      expect(isCarriedForward(held)).toBe(true);
+      const key = `patient:${held.uid}`;
+      const resaved = readSR(quiet(() => deterministic(() => writeSR({}, {
+        toolState: { [key]: { Length: { data: [patientToolData(held)] } } },
+        patientSeries: { [key]: held.metadata.carriedEvidence }, headers: HEADERS,
+      }))).result);
+      const groups = measurementGroups(resaved);
+      expect(groups).toHaveLength(1);
+      expect(trackingUIDsOf(groups[0])).toEqual([state.annotation.metadata.TrackingUniqueIdentifier]);
+      expect(pointsOf(groups[0])).toEqual([[6, -10, 4], [6, 8, 25]]);
+      expect(_.round(valueOf(groups[0]), 6)).toBe(_.round(Math.hypot(18, 21), 6));
+      expect(coordinatesOf(groups[0])).toMatchObject({ ValueType: 'SCOORD3D', ReferencedFrameOfReferenceUID: ELSEWHERE });
+      expect(uidOf(numChildren(groups[0]), SOURCE_SERIES)).toEqual([]);
+      expect(coordinatesOf(groups[0]).ContentSequence).toBeUndefined();
+      // Read again, it is held again with the same evidence
+      const [again] = hydrate(resaved, CT).byType.Length;
+      expect(again.annotation.metadata.TrackingUniqueIdentifier).toBe(state.annotation.metadata.TrackingUniqueIdentifier);
+      const heldAgain = heldOutOfPlaneRecord('Length', again, resaved.StudyInstanceUID);
+      expect(_.sortBy(carriedEvidenceOf(resaved, heldAgain).instances, 'SOPInstanceUID'))
+        .toEqual(_.sortBy(held.metadata.carriedEvidence.instances, 'SOPInstanceUID'));
+      return resaved;
+    };
+
+    it('in the Current Requested Procedure Evidence Sequence only', () => {
+      const resaved = resave(storedReport(() => {}));
+      expect(referencesOf(resaved, REQUESTED)).toEqual(instancesOf(SERIES));
+      expect(resaved).not.toHaveProperty(OTHER);
+    });
+
+    it('in the Pertinent Other Evidence Sequence only', () => {
+      const resaved = resave(storedReport((report) => {
+        report[OTHER] = report[REQUESTED];
+        delete report[REQUESTED];
+      }));
+      expect(referencesOf(resaved, OTHER)).toEqual(instancesOf(SERIES));
+      // A375 is Type 1C: absent, not empty
+      expect(resaved).not.toHaveProperty(REQUESTED);
+    });
+
+    it('in both, each reference in the container it was read from', () => {
+      const resaved = resave(storedReport((report) => {
+        const all = asArray(report[REQUESTED]);
+        const inFirst = item => FIRST.instances.some(instance => instance.SOPInstanceUID === firstItem(firstItem(item.ReferencedSeriesSequence).ReferencedSOPSequence).ReferencedSOPInstanceUID);
+        report[REQUESTED] = all.filter(inFirst);
+        report[OTHER] = all.filter(item => !inFirst(item));
+      }));
+      expect(referencesOf(resaved, REQUESTED)).toEqual(instancesOf(FIRST));
+      expect(referencesOf(resaved, OTHER)).toEqual(instancesOf(REST));
+    });
+
+    it('in neither: written again with no evidence of its own', () => {
+      const resaved = resave(storedReport((report) => {
+        delete report[REQUESTED];
+      }));
+      expect(resaved).not.toHaveProperty(REQUESTED);
+      expect(resaved).not.toHaveProperty(OTHER);
+    });
+  });
+
+  it('writes again two held measurements of one Source-Series with the union of their evidence, in either order', () => {
+    const ELSEWHERE = '2.25.99999';
+    const [one, two] = [0, 1].map((n) => {
+      // Each report lists one instance of the series
+      const evidence = { ...SERIES, instances: [SERIES.instances[n]] };
+      const stored = { ...drawn(`acc-same-${n}`, 'Length', [[6, -10, 4 + n], [6, 8, 25]], SAGITTAL), FrameOfReferenceUID: ELSEWHERE };
+      const report = readSR(write({ Length: [stored] }, { patientSeries: { [SERIES_KEY]: evidence } }));
+      const [state] = hydrate(report, CT).byType.Length;
+      const held = { ...heldOutOfPlaneRecord('Length', state, report.StudyInstanceUID), uid: `held-same-${n}` };
+      held.metadata.carriedEvidence = carriedEvidenceOf(report, held);
+      expect(held.metadata.sourceSeries).toBe(SERIES.SeriesInstanceUID);
+      return held;
+    });
+    [[one, two], [two, one]].forEach((order) => {
+      // Keyed each by itself, as parseMeasurementsData keys a held measurement
+      const resaved = readSR(quiet(() => deterministic(() => writeSR({}, {
+        toolState: _.fromPairs(order.map(held => [`patient:${held.uid}`, { Length: { data: [patientToolData(held)] } }])),
+        patientSeries: _.fromPairs(order.map(held => [`patient:${held.uid}`, held.metadata.carriedEvidence])), headers: HEADERS,
+      }))).result);
+      const groups = measurementGroups(resaved);
+      expect(groups.map(trackingUIDsOf)).toEqual(order.map(held => [held.metadata.TrackingUniqueIdentifier]));
+      expect(groups.map(pointsOf)).toEqual(order.map(held => held.points));
+      expect(evidenceInstancesOf(resaved)).toEqual(_.sortBy(SERIES.instances.slice(0, 2).map(instance => [SERIES.SeriesInstanceUID, instance.SOPInstanceUID]), pair => pair[1]));
+    });
+  });
+
+  it('writes again, on a re-save, a held measurement of a Frame of Reference no loaded series shares', () => {
+    // A confirmed report of the Viewer, read in a session where its series is not loaded
+    const ELSEWHERE = '2.25.99999';
+    const stored = { ...drawn('acc-held', 'Length', [[6, -10, 4], [6, 8, 25]], SAGITTAL), FrameOfReferenceUID: ELSEWHERE };
+    const report = readSR(write({ Length: [stored] }));
+    const { byType } = hydrate(report, CT);
+    const [state] = byType.Length;
+    const TrackingUniqueIdentifier = state.annotation.metadata.TrackingUniqueIdentifier;
+    expect(TrackingUniqueIdentifier).toBeTruthy();
+
+    const held = heldOutOfPlaneRecord('Length', state, report.StudyInstanceUID);
+    held.metadata.carriedEvidence = carriedEvidenceOf(report, held);
+    held.uid = 'held-1';
+    expect(held.metadata).toMatchObject({ isLocked: true });
+    expect(isCarriedForward(held)).toBe(true);
+    expect(held.metadata.carriedEvidence).toEqual({ ...SERIES, instances: tagged(SERIES) });
+
+    // The save writes it with the evidence it was read with (parseMeasurementsData: patientSeries)
+    const resaved = readSR(write({ Length: [patientToolData(held)] }, { patientSeries: { [SERIES_KEY]: held.metadata.carriedEvidence } }));
+    const [group] = measurementGroups(resaved);
+    expect(trackingUIDsOf(group)).toEqual([TrackingUniqueIdentifier]);
+    expect(pointsOf(group)).toEqual([[6, -10, 4], [6, 8, 25]]);
+    expect(_.round(valueOf(group), 6)).toBe(_.round(Math.hypot(18, 21), 6));
+    expect(coordinatesOf(group)).toMatchObject({ ValueType: 'SCOORD3D', ReferencedFrameOfReferenceUID: ELSEWHERE });
+    expect([
+      textValues(numChildren(group), VIEW), uidOf(numChildren(group), SOURCE_SERIES), textValues(numChildren(group), DRAWING_PLANE),
+    ]).toEqual([['sagittal'], [SERIES.SeriesInstanceUID], ['0,1,0,0,0,-1']]);
+    expect(evidenceInstancesOf(resaved)).toEqual(evidenceInstancesOf(report));
+    expect(evidenceInstancesOf(resaved)).toHaveLength(SERIES.instances.length);
+  });
+
+  it('writes back the value a measurement was read with while its points are unchanged, and a new one after an edit', () => {
+    // Values another system stored, not those of the points: kept, not recomputed
+    const STORED = { Length: 49.876, Angle: 89.876, CobbAngle: 89.876 };
+    const dataset = readSR(write(_.pick(MEASUREMENTS, ['Angle', 'CobbAngle']), {}));
+    const withLength = readSR(write({ Length: [MEASUREMENTS.Length[0]] }));
+    [...measurementGroups(dataset), ...measurementGroups(withLength)].forEach((group) => {
+      const toolType = trackingIdentifierOf(group).split(':')[1];
+      firstItem(numOf(group).MeasuredValueSequence).NumericValue = STORED[toolType];
+    });
+
+    const held = [dataset, withLength].flatMap((report) => {
+      const { byType } = hydrate(report, CT);
+      return _.flatMap(byType, (states, toolType) => states.map(state => heldOutOfPlaneRecord(toolType, state, report.StudyInstanceUID)));
+    });
+    expect(held.map(record => record.toolName)).toEqual(['Angle', 'CobbAngle', 'Length']);
+
+    const rewrite = tools => measurementGroups(readSR(quiet(() => writeSR({}, {
+      toolState: { [SERIES_KEY]: _.mapValues(_.groupBy(tools, 'toolType'), data => ({ data })) },
+      patientSeries: { [SERIES_KEY]: SERIES },
+    })).result));
+
+    // Unchanged: the stored value and the stored points
+    const unchanged = rewrite(held.map((record, i) => patientToolData({ ...record, uid: `held-${i}` })));
+    expect(unchanged.map(valueOf)).toEqual([STORED.Angle, STORED.CobbAngle, STORED.Length]);
+    expect(pointsOf(unchanged[0])).toEqual([[6, 10, 9.5], [6, 0, 9.5], [6, 0, 9.5], [6, 0, 20]]);
+
+    // Edited (a point moved): computed from the new points
+    const edited = rewrite(held.map((record, i) => {
+      const tool = patientToolData({ ...record, uid: `edited-${i}` });
+      tool.patientPoints = tool.patientPoints.map((point, j) => (j === tool.patientPoints.length - 1 ? [point[0], point[1], point[2] + 10] : point));
+      return tool;
+    }));
+    expect(edited.map(valueOf).map(value => _.round(value, 3))).not.toEqual([STORED.Angle, STORED.CobbAngle, STORED.Length]);
+    expect(_.round(valueOf(edited[2]), 6)).toBe(_.round(Math.hypot(18, 31), 6));
+  });
+});
+

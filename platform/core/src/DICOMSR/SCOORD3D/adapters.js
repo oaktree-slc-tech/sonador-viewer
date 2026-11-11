@@ -26,6 +26,7 @@ const { CORNERSTONE_TOOLS_SR_TAG, CORNERSTONE_3D_TAG } = SREnums;
 const {
 	DICOMReferencedSOPInstanceFinding: TID300DICOMReferencedSOPInstanceFinding,
 	CobbAngleMeasurement: TID300CobbAngleMeasurement,
+	LengthMeasurement: TID300LengthMeasurement,
 } = TID300;
 const { MeasurementReport: LibraryLegacyMeasurementReport } = c3dAdaptersSR.Cornerstone;
 
@@ -99,6 +100,8 @@ CornerstoneLegacyMeasurementReport.registerTool(DICOMSRSeriesTagTool);
 //   `imageToPatient`), which needs the image's plane and pixel spacing; an image without spacing
 //   that declares square pixels is measured in pixels. Without either, no value is written.
 
+const LENGTH = 'Length';
+
 const ANGLE_HANDLES = {
 	[ANGLE_TOOL_NAMES.ANGLE]: ['start', 'middle', 'end'],
 	[ANGLE_TOOL_NAMES.COBB_ANGLE]: ['start', 'end', 'start2', 'end2'],
@@ -109,7 +112,9 @@ const TRACKING_IDENTIFIER_PREFIXES = [CORNERSTONE_TOOLS_SR_TAG, CORNERSTONE_3D_T
 const UNCHANGED_TOLERANCE = 1e-3;
 
 // Reasons a tool is not written; parseMeasurementsData turns them into the save result
-const REFUSAL = Object.freeze({ INCOMPLETE: 'incomplete', DEGENERATE: 'degenerate', UNCALIBRATED: 'uncalibrated' });
+const REFUSAL = Object.freeze({
+	INCOMPLETE: 'incomplete', DEGENERATE: 'degenerate', UNCALIBRATED: 'uncalibrated', FRAME_OF_REFERENCE: 'frame-of-reference',
+});
 const refusal = (code, message) => Object.assign(new Error(message), { code });
 
 function metadataOf(metadataProvider, type, imageId) {
@@ -125,13 +130,17 @@ function sourcePoints(source) {
 	return _.chunk(Array.from(source.graphicData || [], Number), size).filter(point => point.length === size);
 }
 
+// The handle points of a tool, from the points it is encoded with
+const handlePointsOfTool = (toolType, points) => (toolType === LENGTH ? points : handlePointsOf(toolType, points));
+const ENCODED_POINTS = { Length: 2, Angle: 4, CobbAngle: 4 };
+
 function isUnchanged(toolType, source, imagePoints, { module, SOPInstanceUID, frameNumber }) {
 	// True when the tool still has the handles, and sits on the image, it was hydrated with
 	if (!source || !_.isFinite(source.value)) {
 		return false;
 	}
 	const points = sourcePoints(source);
-	if (points.length !== 4) {
+	if (points.length !== ENCODED_POINTS[toolType]) {
 		return false;
 	}
 
@@ -144,13 +153,13 @@ function isUnchanged(toolType, source, imagePoints, { module, SOPInstanceUID, fr
 				|| points.some(point => Math.abs(distanceFromImagePlane(module, point)) > DEFAULT_PLANE_TOLERANCE)) {
 			return false;
 		}
-		expected = handlePointsOf(toolType, points).map(point => patientToImage(module, point));
+		expected = handlePointsOfTool(toolType, points).map(point => patientToImage(module, point));
 	} else {
 		if (source.ReferencedSOPInstanceUID !== SOPInstanceUID
 				|| Number(source.ReferencedFrameNumber || 1) !== Number(frameNumber || 1)) {
 			return false;
 		}
-		expected = handlePointsOf(toolType, points);
+		expected = handlePointsOfTool(toolType, points);
 	}
 	return expected.length === imagePoints.length && expected.every((point, i) =>
 		Math.abs(point[0] - imagePoints[i][0]) <= UNCHANGED_TOLERANCE && Math.abs(point[1] - imagePoints[i][1]) <= UNCHANGED_TOLERANCE);
@@ -166,11 +175,64 @@ function distanceFromImagePlane(module, point) {
 
 const asScoord = points => points.map(([x, y, z]) => (_.isNil(z) ? { x, y } : { x, y, z }));
 
+// The handle count of each tool, and the patient points of an out-of-plane measurement
+// (utils/outOfPlane.js), which has no image: they are written as they are held, with the value they
+// were read with while unchanged
+const HANDLE_COUNTS = { Length: 2, Angle: 3, CobbAngle: 4 };
+
+// The points and value an out-of-plane measurement was read with, while its handle points and Frame
+// of Reference are still those (an edit computes a new value); undefined otherwise
+function storedPatientGeometry(toolType, tool) {
+	const source = tool.sourceGeometry || (tool.metadata && tool.metadata.sourceGeometry);
+	if (!source || source.valueType !== 'SCOORD3D' || !_.isFinite(source.value)
+			|| source.FrameOfReferenceUID !== tool.FrameOfReferenceUID) {
+		return undefined;
+	}
+	const points = sourcePoints(source);
+	if (points.length !== ENCODED_POINTS[toolType]) {
+		return undefined;
+	}
+	const handlePoints = handlePointsOfTool(toolType, points);
+	const same = handlePoints.length === tool.patientPoints.length && handlePoints.every((point, i) =>
+		point.every((value, axis) => Math.abs(value - tool.patientPoints[i][axis]) <= UNCHANGED_PATIENT_TOLERANCE));
+	return same ? { points, value: source.value } : undefined;
+}
+
+// Patient points closer than this (mm) are unchanged
+const UNCHANGED_PATIENT_TOLERANCE = 1e-6;
+
+function outOfPlanePoints(toolType, tool) {
+	const points = tool.patientPoints;
+	if (points.length !== HANDLE_COUNTS[toolType] || points.some(point => point.length !== 3 || !point.every(_.isFinite))) {
+		throw refusal(REFUSAL.INCOMPLETE, `${toolType} is incomplete: ${HANDLE_COUNTS[toolType]} patient points are required`);
+	}
+	if (!tool.FrameOfReferenceUID) {
+		throw refusal(REFUSAL.FRAME_OF_REFERENCE, `${toolType} has no Frame of Reference`);
+	}
+	return points;
+}
+
 function angleToolArguments(toolType, tool, context) {
 	// TID 300 arguments of an Angle / Cobb angle tool. `context` is { imageId, metadataProvider } of
 	// the image the tool was drawn on. A measurement read in the patient domain is written back in
 	// it; any other is written in the image domain. Throws an error with a REFUSAL `code` when the
 	// tool cannot be written.
+	if (tool.patientPoints) {
+		const patientPoints = outOfPlanePoints(toolType, tool);
+		const stored = storedPatientGeometry(toolType, tool);
+		if (stored) {
+			return angleArguments(toolType, tool, {
+				points: stored.points, rAngle: stored.value, use3DSpatialCoordinates: true, FrameOfReferenceUID: tool.FrameOfReferenceUID,
+			});
+		}
+		const rAngle = encodedAngle(encodedPoints(toolType, patientPoints));
+		if (!_.isFinite(rAngle)) {
+			throw refusal(REFUSAL.DEGENERATE, `${toolType} has a zero-length line`);
+		}
+		return angleArguments(toolType, tool, {
+			points: encodedPoints(toolType, patientPoints), rAngle, use3DSpatialCoordinates: true, FrameOfReferenceUID: tool.FrameOfReferenceUID,
+		});
+	}
 	const { imageId, metadataProvider } = context || {};
 	const meta = tool.metadata || {};
 	const handles = tool.handles || {};
@@ -218,8 +280,13 @@ function angleToolArguments(toolType, tool, context) {
 		points = encodedPoints(toolType, use3DSpatialCoordinates ? patientPoints : imagePoints);
 	}
 
+	return angleArguments(toolType, tool, { points, rAngle, use3DSpatialCoordinates, FrameOfReferenceUID });
+}
+
+function angleArguments(toolType, tool, { points, rAngle, use3DSpatialCoordinates, FrameOfReferenceUID }) {
 	// The identifier read from the SR (either accepted prefix) is kept; new measurements get the
 	// cornerstoneTools form
+	const meta = tool.metadata || {};
 	const readIdentifier = tool.TrackingIdentifier || meta.TrackingIdentifier;
 	const trackingIdentifierTextValue = isAngleTrackingIdentifier(toolType, readIdentifier)
 		? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, toolType].join(':');
@@ -231,6 +298,76 @@ function angleToolArguments(toolType, tool, context) {
 		use3DSpatialCoordinates,
 		ReferencedFrameOfReferenceUID: use3DSpatialCoordinates ? FrameOfReferenceUID : undefined,
 		trackingIdentifierTextValue,
+		trackingUniqueIdentifier: tool.TrackingUniqueIdentifier || meta.TrackingUniqueIdentifier,
+		finding: tool.finding,
+		findingSites: tool.findingSites || [],
+	};
+}
+
+// Length (cornerstone-tools `Length`: start, end). A measurement read in the patient domain is
+// written back in it: with the points and value it was read with while it is unchanged, otherwise
+// with the patient points of its handles and their distance. Any other is written in the image
+// domain, as the Cornerstone adapter writes it.
+
+function lengthToolArguments(tool, context) {
+	if (tool.patientPoints) {
+		const points = outOfPlanePoints(LENGTH, tool);
+		const stored = storedPatientGeometry(LENGTH, tool);
+		if (stored) {
+			return lengthArguments(tool, {
+				points: stored.points, distance: stored.value, use3DSpatialCoordinates: true, FrameOfReferenceUID: tool.FrameOfReferenceUID,
+			});
+		}
+		const [a, b] = points;
+		return lengthArguments(tool, {
+			points, distance: Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]),
+			use3DSpatialCoordinates: true, FrameOfReferenceUID: tool.FrameOfReferenceUID,
+		});
+	}
+	const { imageId, metadataProvider } = context || {};
+	const meta = tool.metadata || {};
+	const handles = tool.handles || {};
+	if (['start', 'end'].some(name => !handles[name] || !_.isFinite(handles[name].x) || !_.isFinite(handles[name].y))) {
+		throw refusal(REFUSAL.INCOMPLETE, 'Length is incomplete: handles start, end are required');
+	}
+	const imagePoints = [[handles.start.x, handles.start.y], [handles.end.x, handles.end.y]];
+
+	const module = metadataOf(metadataProvider, 'imagePlaneModule', imageId);
+	const sopCommon = metadataOf(metadataProvider, 'sopCommonModule', imageId) || {};
+	const frameNumber = metadataOf(metadataProvider, 'frameNumber', imageId);
+	const source = tool.sourceGeometry || meta.sourceGeometry;
+	const domain = (source && source.valueType === 'SCOORD3D') ? 'patient' : (tool.coordinateDomain || meta.coordinateDomain);
+
+	let points, distance, use3DSpatialCoordinates = false, FrameOfReferenceUID;
+	if (isUnchanged(LENGTH, source, imagePoints, { module, SOPInstanceUID: sopCommon.sopInstanceUID, frameNumber })) {
+		points = sourcePoints(source);
+		distance = source.value;
+		use3DSpatialCoordinates = source.valueType === 'SCOORD3D';
+		FrameOfReferenceUID = source.FrameOfReferenceUID;
+	} else if (domain === 'patient' && isPlane(module) && module.frameOfReferenceUID) {
+		points = imagePoints.map(point => imageToPatient(module, point));
+		const [a, b] = points;
+		distance = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+		use3DSpatialCoordinates = true;
+		FrameOfReferenceUID = module.frameOfReferenceUID;
+	} else {
+		points = imagePoints;
+		distance = tool.length;
+	}
+	return lengthArguments(tool, { points, distance, use3DSpatialCoordinates, FrameOfReferenceUID });
+}
+
+function lengthArguments(tool, { points, distance, use3DSpatialCoordinates, FrameOfReferenceUID }) {
+	const meta = tool.metadata || {};
+	const readIdentifier = tool.TrackingIdentifier || meta.TrackingIdentifier;
+	const [point1, point2] = asScoord(points);
+	return {
+		point1, point2,
+		distance,
+		use3DSpatialCoordinates,
+		ReferencedFrameOfReferenceUID: use3DSpatialCoordinates ? FrameOfReferenceUID : undefined,
+		trackingIdentifierTextValue: isAngleTrackingIdentifier(LENGTH, readIdentifier)
+			? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, LENGTH].join(':'),
 		trackingUniqueIdentifier: tool.TrackingUniqueIdentifier || meta.TrackingUniqueIdentifier,
 		finding: tool.finding,
 		findingSites: tool.findingSites || [],
@@ -283,14 +420,34 @@ CornerstoneLegacyMeasurementReport.registerTool(Angle);
 CornerstoneLegacyMeasurementReport.registerTool(CobbAngle);
 
 
+const { Length: LibraryLegacyLength } = c3dAdaptersSR.Cornerstone;
+
+class Length {
+	static getMeasurementData(MeasurementGroup) {
+		return LibraryLegacyLength.getMeasurementData(MeasurementGroup);
+	}
+
+	static getTID300RepresentationArguments(tool, context) {
+		return lengthToolArguments(tool, context);
+	}
+}
+Length.toolType = LENGTH;
+Length.utilityToolType = LENGTH;
+Length.TID300Representation = TID300LengthMeasurement;
+Length.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAngleTrackingIdentifier(LENGTH, TrackingIdentifier);
+
+CornerstoneLegacyMeasurementReport.registerTool(Length);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 	DICOMSRSeriesTagTool,
 	Angle,
 	CobbAngle,
+	Length,
 });
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, angleToolArguments, Angle, CobbAngle, REFUSAL, }
+export { sonadorAdaptersSR, angleToolArguments, lengthToolArguments, Angle, CobbAngle, Length, REFUSAL, }

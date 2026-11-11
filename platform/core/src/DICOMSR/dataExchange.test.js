@@ -111,3 +111,31 @@ describe('the measurements a stored report holds', () => {
     expect(mockService.update).not.toHaveBeenCalled();
   });
 });
+
+
+describe('an out-of-plane measurement', () => {
+  const { measurementVersion } = jest.requireActual('./utils/saveResult');
+  const record = {
+    uid: 'oop-uid', toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], FrameOfReferenceUID: '2.25.7001', length: 50,
+    isLocked: false, metadata: { outOfPlane: true, sourceSeries: '2.25.2', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'] },
+  };
+
+  beforeEach(() => {
+    mockService.update.mockClear();
+    mockService.getMeasurement.mockReset().mockImplementation(uid => (uid === 'oop-uid' ? record : undefined));
+  });
+
+  it('stays pending and editable when the store fails, and a retry saves and locks it', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockStow.mockRejectedValueOnce(new Error('503'));
+    await expect(storeMeasurements(measurementData, undefined, server)).rejects.toThrow('Error while saving the measurements.');
+    expect(mockService.update).not.toHaveBeenCalled();
+    expect(record.isLocked).toBe(false);
+
+    mockStow.mockResolvedValueOnce({ omitted: [], saved: 1, written: [measurementVersion(record, undefined, mockSession.value)], uploaded: true });
+    await expect(storeMeasurements(measurementData, undefined, server)).resolves.toMatchObject({ type: 'success' });
+    const [uid, locked] = mockService.update.mock.calls[0];
+    expect(uid).toBe('oop-uid');
+    expect(locked).toMatchObject({ isLocked: true, points: record.points, metadata: { outOfPlane: true, isLocked: true, isReadOnly: true } });
+  });
+});

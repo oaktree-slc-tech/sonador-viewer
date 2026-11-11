@@ -150,7 +150,7 @@ describe('SR display set load', () => {
     const DicomMetadataStore = require('../../services/DicomMetadataStore').default;
     const instance = {
       StudyInstanceUID: 'study', SeriesInstanceUID: 'sr', SOPInstanceUID: 'srsop', SOPClassUID: '3',
-      ConceptNameCodeSequence: { CodeValue: '126000' },
+      ConceptNameCodeSequence: { CodeValue: '126000', CodingSchemeDesignator: 'DCM' },
       ContentSequence: [{
         ConceptNameCodeSequence: { CodeValue: '126010' },
         ContentSequence: sops.map((sop, i) => ({
@@ -187,7 +187,7 @@ describe('SR display set load', () => {
     // whose finding references the image through an array-shaped content sequence
     const instance = {
       StudyInstanceUID: 'study', SeriesInstanceUID: 'sr', SOPInstanceUID: 'srsop', SOPClassUID: '3',
-      ConceptNameCodeSequence: { CodeValue: '126000' },
+      ConceptNameCodeSequence: { CodeValue: '126000', CodingSchemeDesignator: 'DCM' },
       ContentSequence: [{
         ConceptNameCodeSequence: { CodeValue: '126010' },
         ContentSequence: [

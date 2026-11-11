@@ -354,11 +354,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       });
     },
 
-    jumpToMprWorldPoint: ({ worldPoint, viewPlaneNormal, renderId = vtkEnums.MPR.VTK_MPRSLICE_RENDER_ID }) => {
+    jumpToMprWorldPoint: ({ worldPoint, viewPlaneNormal, anyAngle = false, renderId = vtkEnums.MPR.VTK_MPRSLICE_RENDER_ID }) => {
       // Bring a world point into view in every pane of the MPR view (utils/jumpToWorldPoint.js).
       // With the normal of the measurement's plane, the pane closest to that plane is first turned
       // onto it, so the measurement is drawn there. A measurement whose plane is more than
-      // ALIGN_LIMIT_DEGREES from every pane cannot be drawn in any: the panes are left as they are.
+      // ALIGN_LIMIT_DEGREES from every pane cannot be drawn in any: the panes are left as they are;
+      // with `anyAngle` (an out-of-plane measurement) the closest pane turns onto it whatever the angle.
       // Returns { panes, drawn, limitDegrees }: the number of panes, and whether a pane is parallel
       // to the measurement's plane (true without a normal).
 
@@ -368,7 +369,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       if (viewPlaneNormal && panes.length) {
         const closest = panes.reduce((best, viewport) =>
           (planeAlignment(viewport, viewPlaneNormal) > planeAlignment(best, viewPlaneNormal) ? viewport : best));
-        alignToPlane(closest, viewPlaneNormal);
+        alignToPlane(closest, viewPlaneNormal, { anyAngle });
         if (planeAlignment(closest, viewPlaneNormal) < DRAWN_ALIGNMENT) {
           return { ...result, drawn: false };
         }
@@ -378,6 +379,27 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         renderEngine.render();
       }
       return result;
+    },
+
+    openMprAtWorldPoint: async ({ displaySet, worldPoint, viewPlaneNormal, anyAngle = false, timeout = 15000 }) => {
+      // Open the MPR view of a display set and, once its panes show the volume, navigate to a world
+      // point as jumpToMprWorldPoint does. Resolves its result, or undefined when the panes did not
+      // appear in time.
+      await setMPRLayout(displaySet, [{}, {}, {}], 1, 3);
+      const ready = () => {
+        const engine = c3dGetRenderingEngine(vtkEnums.MPR.VTK_MPRSLICE_RENDER_ID);
+        const panes = engine ? engine.getViewports() : [];
+        return panes.length > 0 && panes.every(viewport => typeof viewport.getActors !== 'function' || viewport.getActors().length > 0);
+      };
+      const started = Date.now();
+      while (!ready()) {
+        if (Date.now() - started > timeout) {
+          console.warn('[vtk:commands:openMprAtWorldPoint] the MPR panes did not open in time');
+          return undefined;
+        }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      return actions.jumpToMprWorldPoint({ worldPoint, viewPlaneNormal, anyAngle });
     },
 
     mpr2d: async ({ viewports }) => {
@@ -612,6 +634,12 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     jumpToMprWorldPoint: {
       commandFn: actions.jumpToMprWorldPoint,
       options: {},
+    },
+    // Run from the Measurements panel while the classic viewport is active, as mpr2d is
+    openMprAtWorldPoint: {
+      commandFn: actions.openMprAtWorldPoint,
+      options: {},
+      context: 'VIEWER',
     },
     mpr2d: {
       commandFn: actions.mpr2d,

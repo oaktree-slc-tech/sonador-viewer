@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
-import { Button, Icons, Tooltip as HoverTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ohif/ui-next';
+import {
+  Button, HoverCard, HoverCardContent, HoverCardPortal, HoverCardTrigger, Icons, Tooltip as HoverTooltip, TooltipContent,
+  TooltipProvider, TooltipTrigger,
+} from '@ohif/ui-next';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableListItem } from '../tableList';
@@ -60,6 +63,30 @@ const seriesTagBand = seriesTagDisplay => {
 };
 
 
+// An out-of-plane measurement is marked in its index cell: a cube under the number
+const OutOfPlaneIcon = () => (
+  <span className="outOfPlaneIcon">
+    <svg role="img" aria-label="3D measurement" viewBox="0 0 24 24" fill="none" strokeWidth="1.7" strokeLinejoin="round">
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />
+      <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
+    </svg>
+  </span>
+);
+
+
+/**
+ * Where an out-of-plane measurement is shown: the view it was drawn in when it records one (nothing
+ * is inferred without it); points in no common plane are drawn in the 3D views only, and the MPR
+ * view is centred on them.
+ */
+const outOfPlaneNoteText = (outOfPlane, t) => {
+  if (outOfPlane.planar === false) {
+    return t('Its points lie in no common plane: shown in the 3D views only. Selecting it in an MPR view of its frame of reference centres the panes on it.');
+  }
+  const view = outOfPlane.viewName;
+  return view ? t('Drawn on {{view}} plane, shown in the MPR and 3D views.', { view }) : t('Shown in the MPR and 3D views.');
+};
+
 const MeasurementTableItem = ({
   // Render measurement data and actions
 
@@ -69,6 +96,7 @@ const MeasurementTableItem = ({
   onRelabel,
   onItemClick,
   onEditDescription,
+  onOpenInMpr,
   itemClass,
   tagBtnLabel = 'Location',
   tagBtnHint = 'Set anatomic location',
@@ -88,6 +116,9 @@ const MeasurementTableItem = ({
   // Series Tags describe a whole series: their meta line shows the series, not the image
   const isSeriesTag = Boolean(measurementData.seriesTagDisplay);
 
+  // An out-of-plane measurement (on no image) shows its view in place of the image
+  const { outOfPlane } = measurementData;
+
   // Measurement reference metadata, recomputed when the reference or the series metadata changes
   const { refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID } = measurementData;
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -102,12 +133,13 @@ const MeasurementTableItem = ({
       StudyInstanceUID: refStudyInstanceUID, SeriesInstanceUID: refSeriesInstanceUID, SOPInstanceUID: refSOPInstanceUID,
     });
 
-    // A measurement's line includes its image, so it needs the instance; a Series Tag needs only its series
-    if (!identifiers || (!isSeriesTag && identifiers.InstanceNumber === undefined)) {
+    // A measurement's line includes its image, so it needs the instance; a Series Tag and an
+    // out-of-plane measurement need only their series
+    if (!identifiers || (!isSeriesTag && !outOfPlane && identifiers.InstanceNumber === undefined)) {
       return null;
     }
     return identifiers;
-  }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, metadataVersion]);
+  }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, outOfPlane, metadataVersion]);
 
   const getActionButton = (btnLabel, onClickCallback, hint) => {
     const button = (
@@ -167,10 +199,19 @@ const MeasurementTableItem = ({
     onItemClick(event, measurementData);
   };
 
+  const onOpenInMprClick = (event) => {
+    // Open the MPR view at an out-of-plane measurement
+
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenInMpr(event, measurementData);
+  };
+
   const getTableListItem = () => {
     // Retrieve the table list component
 
     const hasWarningClass = measurementData.hasWarnings && !isReadOnly ? 'hasWarnings' : '';
+    const outOfPlaneClass = outOfPlane ? 'isOutOfPlane' : '';
 
     const actionButtons = [];
 
@@ -191,9 +232,12 @@ const MeasurementTableItem = ({
       <TableListItem
         key={measurementData.measurementId}
         itemKey={measurementData.measurementId}
-        itemClass={`measurementItem ${itemClass} ${hasWarningClass}`}
+        itemClass={`measurementItem ${itemClass} ${hasWarningClass} ${outOfPlaneClass}`}
         itemIndex={itemIndex}
         itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
+        itemMeta={outOfPlane ? <OutOfPlaneIcon /> : null}
+        itemIndexProps={outOfPlane ? { tabIndex: 0 } : undefined}
+        renderItemIndex={outOfPlane ? renderOutOfPlaneNote : undefined}
         onItemClick={handleItemClick}
       >
         <div>
@@ -228,8 +272,11 @@ const MeasurementTableItem = ({
           </div>
           {refMeta && (<div className="referenceMeta">
             <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
-            {!isSeriesTag && (
+            {!isSeriesTag && !outOfPlane && (
               <span className="refItem refImgNum"><span className="refLabel">I:</span><span className="refValue">{refMeta.InstanceNumber}</span></span>
+            )}
+            {outOfPlane && outOfPlane.view && (
+              <span className="refItem refView"><span className="refLabel">View:</span><span className="refValue">{outOfPlane.view}</span></span>
             )}
             <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
           </div>)}
@@ -285,6 +332,41 @@ const MeasurementTableItem = ({
 
   const { warningTitle = '', hasWarnings } = measurementData;
 
+  const getOutOfPlaneNote = () => {
+    // The note of an out-of-plane measurement, in the form of the warning note: the plane it was
+    // drawn on, in the classic viewport the action that opens it in the MPR, then its view and series
+    if (!outOfPlane.frameOfReferenceLoaded) {
+      return <div className="warningContent">{t("No loaded series shares this measurement's frame of reference.")}</div>;
+    }
+    const series = refMeta && [refMeta.SeriesNumber, refMeta.SeriesDescription].filter(value => value !== undefined && value !== '').join(' ');
+    return (
+      <div className="warningContent">
+        <p>{outOfPlaneNoteText(outOfPlane, t)}</p>
+        {outOfPlane.inClassicViewport && typeof onOpenInMpr === 'function' && (
+          <div className="outOfPlaneNoteLink"><a href="#" className="outOfPlaneOpenMpr" onClick={onOpenInMprClick}>{t('Open in MPR')}</a></div>
+        )}
+        {outOfPlane.view && <div className="outOfPlaneNoteItem"><span className="refLabel">{t('View')}:</span> {outOfPlane.view}</div>}
+        {series && <div className="outOfPlaneNoteItem"><span className="refLabel">{t('Series')}:</span> {series}</div>}
+      </div>
+    );
+  };
+
+  // The note opens on the index cell only (hover or keyboard focus), and stays open while the
+  // pointer is on it, so its action can be reached. The card only places the warning note.
+  const renderOutOfPlaneNote = indexCell => (
+    <HoverCard openDelay={150} closeDelay={150}>
+      <HoverCardTrigger asChild>{indexCell}</HoverCardTrigger>
+      <HoverCardPortal>
+        <HoverCardContent side="left" align="center" sideOffset={0} className="outOfPlaneNoteCard" data-cy="out-of-plane-note">
+          <Tooltip placement="left" className="in tooltip-warning tooltip-outOfPlane" id="tooltip-left">
+            <div className="warningTitle">{t('3D measurement')}</div>
+            {getOutOfPlaneNote()}
+          </Tooltip>
+        </HoverCardContent>
+      </HoverCardPortal>
+    </HoverCard>
+  );
+
   return (
     <>
       {hasWarnings && !isReadOnly ? (
@@ -314,6 +396,7 @@ MeasurementTableItem.propTypes = {
   onRelabel: PropTypes.func,
   onDelete: PropTypes.func,
   onEditDescription: PropTypes.func,
+  onOpenInMpr: PropTypes.func,
   itemClass: PropTypes.string,
   itemIndex: PropTypes.number,
   tagBtnLabel: PropTypes.string,

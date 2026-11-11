@@ -9,6 +9,8 @@
 // draws an annotation only in a viewport whose plane is parallel to it, so the pane closest to the
 // measurement's plane is first turned onto that plane (alignToPlane).
 
+import { VIEW_ALIGN_LIMIT_DEGREES } from '@ohif/core/src/DICOMSR/utils/viewAlignment';
+
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
@@ -16,8 +18,9 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = a => Math.sqrt(dot(a, a));
 const unit = a => scale(a, 1 / norm(a));
 
-// A pane is turned onto a measurement's plane when their normals are within this angle
-const ALIGN_LIMIT_DEGREES = 15;
+// A pane is turned onto a measurement's plane when their normals are within this angle, the limit
+// that also names a measurement's view (Sonador-Measurement.View)
+const ALIGN_LIMIT_DEGREES = VIEW_ALIGN_LIMIT_DEGREES;
 const ALIGN_LIMIT = Math.cos((ALIGN_LIMIT_DEGREES * Math.PI) / 180);
 // Normals this close are parallel already
 const PARALLEL = 1 - 1e-9;
@@ -40,13 +43,16 @@ function planeAlignment(viewport, normal) {
 /**
  * Turn a viewport onto the plane with the given normal, keeping its side of the plane (the sign
  * of its normal), its focal point, its distance, and its screen up as near as the plane allows.
- * Turns nothing when the planes are parallel already or more than ALIGN_LIMIT_DEGREES apart.
+ * Turns nothing when the planes are parallel already or, unless `anyAngle`, more than
+ * ALIGN_LIMIT_DEGREES apart.
  *
+ * @param {object} [options]
+ * @param {boolean} [options.anyAngle] - turn onto a plane at any angle (an out-of-plane measurement)
  * @returns {boolean} whether the viewport turned
  */
-function alignToPlane(viewport, normal) {
+function alignToPlane(viewport, normal, { anyAngle = false } = {}) {
   const alignment = planeAlignment(viewport, normal);
-  if (alignment >= PARALLEL || alignment < ALIGN_LIMIT) {
+  if (alignment >= PARALLEL || (!anyAngle && alignment < ALIGN_LIMIT)) {
     return false;
   }
   const { focalPoint, position, viewPlaneNormal, viewUp } = viewport.getCamera();

@@ -3,6 +3,7 @@ import dcmjs from 'dcmjs';
 import OHIF, { MODULE_TYPES, utils } from '@ohif/core';
 import loadSegmentation from './loadSegmentation';
 import getSourceDisplaySet from './getSourceDisplaySet';
+import parseSeg from './utils/parseSegWithAdapter';
 
 
 const { DicomLoaderService } = OHIF.utils;
@@ -103,7 +104,7 @@ export default function getSopClassHandlerModule({ servicesManager }) {
           referencedDisplaySet.SeriesInstanceUID
         );
 
-        const results = await _parseSeg(segArrayBuffer, imageIds, segDisplaySet.tolerance);
+        const results = await parseSeg(segArrayBuffer, imageIds, segDisplaySet.tolerance, { dataset });
         if (results === undefined) {
           return;
         }
@@ -157,23 +158,6 @@ export default function getSopClassHandlerModule({ servicesManager }) {
       return segDisplaySet;
     },
   };
-}
-
-function _parseSeg(
-  arrayBuffer,
-  imageIds,
-  tolerance = 1e-2,
-  skipOverlapping = false,
-  cornerstoneToolsVersion = 4
-) {
-  return dcmjs.adapters.Cornerstone.Segmentation.generateToolState(
-    imageIds,
-    arrayBuffer,
-    cornerstone.metaData,
-    skipOverlapping,
-    tolerance,
-    cornerstoneToolsVersion
-  );
 }
 
 function _getImageIdsForDisplaySet(

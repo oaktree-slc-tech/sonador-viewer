@@ -80,4 +80,15 @@ describe('turning a pane onto an oblique measurement plane', () => {
     expect(alignToPlane(axial, OBLIQUE_SAGITTAL)).toBe(false);
     expect(axial.camera.viewPlaneNormal).toEqual([0, 0, 1]);
   });
+
+  it('turns onto a plane at any angle for an out-of-plane measurement', () => {
+    // An oblique plane 45 degrees between axial and sagittal
+    const oblique = unitOf([1, 0, 1]);
+    const axial = pane();
+    axial.camera.position = [0, 0, 500];
+    axial.camera.viewUp = [0, -1, 0];
+    expect(alignToPlane(axial, oblique, { anyAngle: true })).toBe(true);
+    expect(planeAlignment(axial, oblique)).toBeCloseTo(1, 9);
+    expect(Math.hypot(...axial.camera.position)).toBeCloseTo(500, 6);
+  });
 });

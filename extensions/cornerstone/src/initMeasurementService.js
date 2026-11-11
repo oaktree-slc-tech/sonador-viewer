@@ -190,6 +190,7 @@ const connectToolsToMeasurementService = (measurementService, displaySetService,
   registerExchangeAngleTools();
   connectMeasurementAnnotationSync(measurementService, csToolsLegacyVer4MeasurementSource, {
     notify: notification => OHIF.uiNotificationService && OHIF.uiNotificationService.show(notification),
+    outOfPlaneSource: c3dToolsMeasurementSource,
   });
 
   // Watch for measurements initialized by Cornerstone 3D to allow for Cornerstone Legacy/Class versions

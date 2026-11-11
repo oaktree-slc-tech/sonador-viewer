@@ -613,6 +613,9 @@ class Cornerstone3DBaseView extends Component {
 
     if (component.renderEngine) {
 
+      // The viewports going with this view leave their tool groups first
+      component._releaseViewportTools(engineCleanup !== false);
+
       if (engineCleanup !== false) {
 
         // Destroy render engine
@@ -647,6 +650,50 @@ class Cornerstone3DBaseView extends Component {
     }
 
     console.log('[Cornerstone3DBaseView-componentWillUnmount] cleanup complete');
+  }
+
+  _releaseViewportTools(wholeEngine) {
+    // Withdraw this view's viewport (every viewport of its rendering engine, when the engine is
+    // destroyed with it) from its tool group. The crosshairs tool draws the reference lines of
+    // every viewport its group holds, looking each one up on the rendering engine: a viewport gone
+    // from the engine but still in the group fails the next annotation render of the panes that
+    // remain. Its crosshairs annotation stays: the crosshairs tool expects one for every element
+    // it is active on, and draws only those of the viewports its group holds.
+
+    const component = this;
+    const engine = component.renderEngine;
+    const renderingEngineId = engine && engine.id;
+    // A view with several viewports (the segmentation editor's tabs) names none on its own: its
+    // engine's viewports are its own
+    let ownViewportIds;
+    try {
+      ownViewportIds = [component.getViewportId()];
+    } catch (error) {
+      ownViewportIds = [];
+    }
+    let viewportIds = ownViewportIds;
+    if (wholeEngine && engine && typeof engine.getViewports === 'function') {
+      // A shared engine may already be destroyed by another view's teardown, and then throws: it
+      // has no viewports left (the public engine delegates to an implementation that holds the
+      // destroyed state, so it is not read here)
+      try {
+        viewportIds = _.uniq([...ownViewportIds, ...engine.getViewports().map(viewport => viewport.id)]);
+      } catch (error) {
+        viewportIds = ownViewportIds;
+      }
+    }
+
+    viewportIds.forEach((viewportId) => {
+      try {
+        const toolGroup = typeof C3dToolGroupManager.getToolGroupForViewport === 'function'
+          && C3dToolGroupManager.getToolGroupForViewport(viewportId, renderingEngineId);
+        if (toolGroup) {
+          toolGroup.removeViewports(renderingEngineId, viewportId);
+        }
+      } catch (error) {
+        console.warn('[Cornerstone3DBaseView-componentWillUnmount] unable to remove a viewport from its tool group', viewportId, error);
+      }
+    });
   }
 
   releaseImageVolume() {

@@ -141,8 +141,11 @@ class DICOMSRDisplayTool extends AnnotationTool {
 
       const isActive = !!activeTrackingUniqueIdentifier
         && data.TrackingUniqueIdentifier === activeTrackingUniqueIdentifier;
+      // The measurement's stored display colour (its Border role), else the tool style; the active
+      // measurement is highlighted either way
+      const storedColor = !isActive && data.displayColor && data.displayColor.Border;
       const options = {
-        color: this.getStyle(isActive ? 'colorSelected' : 'color', styleSpecifier, annotation),
+        color: storedColor || this.getStyle(isActive ? 'colorSelected' : 'color', styleSpecifier, annotation),
         lineWidth: this.getStyle('lineWidth', styleSpecifier, annotation),
         lineDash: this.configuration.lineDash ?? this.getStyle('lineDash', styleSpecifier, annotation),
       };

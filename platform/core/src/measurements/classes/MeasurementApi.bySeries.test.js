@@ -75,6 +75,8 @@ describe('getMeasurementsBySeries', () => {
       DICOMSRDisplayTool: [
         { _id: 'ro-1', toolType: 'DICOMSRDisplayTool', isReadOnly: true, SeriesInstanceUID: 's2', TrackingIdentifier: 'cornerstoneTools@^4.0.0:Length' },
         { _id: 'ro-2', toolType: 'DICOMSRDisplayTool', isReadOnly: true },
+        // An application document's measurement: drawn in the viewports only, not listed
+        { _id: 'ro-3', toolType: 'DICOMSRDisplayTool', isReadOnly: true, isListed: false, SeriesInstanceUID: 's2' },
       ],
     }
   );
@@ -97,6 +99,7 @@ describe('getMeasurementsBySeries', () => {
       serviceManaged: false, readOnly: true, pending: false,
     });
     expect(bySeries(api).get(null).map(entry => entry.representation._id)).toEqual(['ro-2']);
+    expect(bySeries(api).get('s2').map(entry => entry.representation._id)).toEqual(['ro-1']);
   });
 
   it('gives one series, or the measurements without a series', () => {
@@ -107,4 +110,23 @@ describe('getMeasurementsBySeries', () => {
     expect(forSeries(undefined).map(entry => entry.representation._id)).toEqual(['ro-2']);
     expect(forSeries('nope')).toEqual([]);
   });
+
+  it('lists an out-of-plane measurement under its source series, as one, pending until saved', () => {
+    const outOfPlane = (uid, extra = {}) => ({
+      uid, toolName: 'Length', referenceStudyUID: 't1', referenceSeriesUID: 's9', isLocked: false,
+      ...extra, metadata: { outOfPlane: true, sourceSeries: 's1', ...(extra.metadata || {}) },
+    });
+    const withOutOfPlane = apiWith([
+      outOfPlane('oop-1'),
+      outOfPlane('oop-2', { toolName: 'CobbAngle', isLocked: true, metadata: { isLocked: true } }),
+      outOfPlane('oop-3', { metadata: { isListed: false } }),
+    ], {});
+    const entries = bySeries(withOutOfPlane).get('s1');
+    expect(entries.map(entry => [entry.measurement.uid, entry.toolType, entry.pending, entry.locked, entry.outOfPlane])).toEqual([
+      ['oop-1', 'Length', true, false, true],
+      ['oop-2', 'CobbAngle', false, true, true],
+    ]);
+    expect(entries[0]).toMatchObject({ seriesInstanceUID: 's1', studyInstanceUID: 't1', representation: undefined });
+  });
 });
+

@@ -3,7 +3,8 @@
 // that holds them, and patient content in no image plane goes to the Cornerstone3D viewports only.
 
 jest.mock('@cornerstonejs/core', () => ({ metaData: { get: () => undefined } }), { virtual: true });
-jest.mock('../../log', () => ({ __esModule: true, default: { info: () => {}, warn: () => {}, error: () => {} } }));
+const mockInfo = jest.fn();
+jest.mock('../../log', () => ({ __esModule: true, default: { info: (...args) => mockInfo(...args), warn: () => {}, error: () => {} } }));
 
 const mockHydrated = new Set();
 const mockApi = {
@@ -15,15 +16,17 @@ jest.mock('../../measurements/classes/MeasurementApi', () => ({
 }));
 
 const mockPlaced = [];
+const mockListed = new Map();
 const mockFailing = new Set();
 jest.mock('../SCOORD3D/utils/addMeasurement', () => ({
   __esModule: true,
-  default: (measurement, imageId, instance, displaySetInstanceUID) => {
+  default: (measurement, imageId, instance, displaySetInstanceUID, options = {}) => {
     if (mockFailing.has(measurement.TrackingUniqueIdentifier)) {
       throw new Error('measurement not added');
     }
     measurement.loaded = true;
     mockPlaced.push({ uid: measurement.TrackingUniqueIdentifier, imageId, SOPInstanceUID: instance.SOPInstanceUID, displaySetInstanceUID });
+    mockListed.set(measurement.TrackingUniqueIdentifier, options.listed !== false);
   },
 }));
 
@@ -84,6 +87,8 @@ const finding = {
 };
 
 beforeEach(() => {
+  mockInfo.mockClear();
+  mockListed.clear();
   mockHydrated.clear();
   mockPlaced.length = 0;
   mockPatientOnly.length = 0;
@@ -174,3 +179,71 @@ describe('Frame of Reference', () => {
     expect(summary).toEqual({ placed: 0, patientOnly: 1, skipped: 0 });
   });
 });
+
+
+describe('an application document', () => {
+  const tracked = (tool, measurement) => ({ ...measurement, TrackingIdentifier: `cornerstoneTools@^4.0.0:${tool}` });
+  const foreign = {
+    TrackingUniqueIdentifier: '2.25.600', TrackingIdentifier: 'Planner landmark',
+    coords: [{ ValueType: 'SCOORD3D', GraphicType: 'POINT', GraphicData: [2, 0, 0], ReferencedFrameOfReferenceSequence: '2.25.1' }],
+  };
+  const patientCircle = tracked('CircleROI', {
+    TrackingUniqueIdentifier: '2.25.601',
+    coords: [{ ValueType: 'SCOORD3D', GraphicType: 'CIRCLE', GraphicData: [2, 0, 0, 2, 5, 0], ReferencedFrameOfReferenceSequence: '2.25.1' }],
+  });
+  const application = measurements => ({ SOPInstanceUID: '2.25.900', isApplicationDocument: true, measurements, referencedDisplaySets: [] });
+
+  it('draws only groups with a Cornerstone tracking identifier and a graphic type the read-only layer draws', () => {
+    const summary = addReadOnlyMeasurements({
+      srDisplaySets: [application([
+        tracked('Angle', angleOnImage), { ...tracked('Length', lengthInSagittalPlane()), TrackingIdentifier: 'Cornerstone3DTools@^0.1.0:Length' },
+        tracked('Length', lengthAcrossPlanes), foreign, patientCircle,
+      ])],
+      imageDisplaySets: [imageDisplaySet()], imageIds,
+    });
+
+    expect(mockPlaced.map(p => p.uid)).toEqual(['2.25.500', '2.25.502']);
+    expect(mockPatientOnly).toEqual(['2.25.503']);
+    expect(summary).toEqual({ placed: 2, patientOnly: 1, skipped: 0 });
+  });
+
+  it('draws its measurements in the viewports without listing them in the Measurements panel', () => {
+    addReadOnlyMeasurements({ srDisplaySets: [application([tracked('Angle', angleOnImage)])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(mockListed.get('2.25.500')).toBe(false);
+
+    // An exchange document's read-only measurements are listed, as before
+    addReadOnlyMeasurements({ srDisplaySets: [{ measurements: [{ ...angleOnImage, TrackingUniqueIdentifier: '2.25.510' }], referencedDisplaySets: [] }],
+      imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(mockListed.get('2.25.510')).toBe(true);
+  });
+
+  it('names the groups drawn and the groups ignored in one log line per document', () => {
+    addReadOnlyMeasurements({ srDisplaySets: [application([tracked('Angle', angleOnImage), foreign, patientCircle])],
+      imageDisplaySets: [imageDisplaySet()], imageIds });
+    const lines = mockInfo.mock.calls.filter(([message]) => /application document 2\.25\.900/.test(message));
+    expect(lines).toHaveLength(1);
+    const [, drawn, , ignored] = lines[0];
+    expect(drawn).toEqual(['cornerstoneTools@^4.0.0:Angle 2.25.500']);
+    expect(ignored).toEqual([
+      'Planner landmark 2.25.600: not a Cornerstone tracking identifier',
+      'cornerstoneTools@^4.0.0:CircleROI 2.25.601: SCOORD3D CIRCLE is not drawn',
+    ]);
+  });
+
+  it('labels a measurement with its description when it has one, else with its value', () => {
+    const described = { ...tracked('Angle', angleOnImage), description: 'Tibial slope' };
+    addReadOnlyMeasurements({ srDisplaySets: [application([described])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(described.labels).toEqual([{ label: 'Tibial slope', value: '' }]);
+
+    const plain = { ...tracked('Angle', angleOnImage), TrackingUniqueIdentifier: '2.25.520' };
+    addReadOnlyMeasurements({ srDisplaySets: [application([plain])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(plain.labels).toEqual([{ label: 'Angle', value: '45 deg' }]);
+  });
+
+  it('leaves an exchange document unfiltered', () => {
+    const summary = addReadOnlyMeasurements({ srDisplaySets: [{ measurements: [foreign], referencedDisplaySets: [] }],
+      imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(summary.placed + summary.patientOnly).toBe(1);
+  });
+});
+

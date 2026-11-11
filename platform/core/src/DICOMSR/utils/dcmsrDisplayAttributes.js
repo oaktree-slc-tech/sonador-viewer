@@ -92,17 +92,18 @@ function parseDisplayAttributes(srItem, annotation, options) {
   options = options || {};
   _.defaults(options, { path: 'annotation.data.displayAttributes' });
 
-  // Nested or flat under the property parent (the NUM item first, for the NUM parent), then under
-  // the Finding, or the group-level container (legacy)
+  // Nested or flat under the property parent: for the NUM parent of a group with a NUM, the first
+  // NUM that carries colours (a Finding's colours belong to the Finding); otherwise the Finding. Then
+  // the group-level container (legacy).
   const groupItems = asArray(_.isArray(srItem) ? srItem : srItem && srItem.ContentSequence);
   const group = { ContentSequence: groupItems };
   const finding = findingItemOf(group);
   const hasColours = items => !!findContentItem(items, DCMSR_DISPLAY_ATTRIBUTES)
     || DISPLAY_COLOR_ROLES.some(role => findContentItem(items, DCMSR_DISPLAY_COLOR_ROLES[role]));
-  const numItems = options.propertyParent === PROPERTY_PARENT.NUM
-    ? asArray((numItemsOf(group).find(num => hasColours(asArray(num.ContentSequence))) || {}).ContentSequence)
-    : [];
-  const parentItems = numItems.length ? numItems : asArray(finding && finding.ContentSequence);
+  const nums = options.propertyParent === PROPERTY_PARENT.NUM ? numItemsOf(group) : [];
+  const parentItems = nums.length
+    ? asArray((nums.find(num => hasColours(asArray(num.ContentSequence))) || {}).ContentSequence)
+    : asArray(finding && finding.ContentSequence);
   const displayContainer = findContentItem(parentItems, DCMSR_DISPLAY_ATTRIBUTES)
     || findContentItem(groupItems, DCMSR_DISPLAY_ATTRIBUTES);
   const colorContainer = displayContainer && findContentItem(displayContainer.ContentSequence, DCMSR_DISPLAY_COLOR);

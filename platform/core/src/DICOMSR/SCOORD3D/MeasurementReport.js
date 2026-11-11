@@ -6,15 +6,17 @@
 import _ from 'lodash';
 
 import { adaptersSR as c3dAdaptersSR } from '@cornerstonejs/adapters';
-import { normalizers, data as dcmjsData, utilities, derivations, sr } from "dcmjs";
+import { normalizers, data as dcmjsData, utilities, sr } from "dcmjs";
 
 import { DISPLAY_LAYOUT, SONADOR_MANUFACTURER, SR_DOCUMENT_CLASS } from '../enums';
 import TID1500MeasurementReport from '../utils/TID1500';
-import { applyRootContent, equipment, requiresComprehensive } from '../utils/srDocument';
+import { applyRootContent, equipment } from '../utils/srDocument';
+import { isPatientKey, PERTINENT_OTHER_EVIDENCE } from '../utils/outOfPlane';
 
 const { TID1500, addAccessors } = utilities;
-const { StructuredReport } = derivations;
 const { Comprehensive3DSR } = sr.documents;
+
+const asArray = value => (Array.isArray(value) ? value : (value ? [value] : []));
 const { Normalizer } = normalizers;
 
 const { TID1501MeasurementGroup } = TID1500;
@@ -42,7 +44,7 @@ function getTID300ContentItem(tool, ReferencedSOPSequence, adapterClass, context
 }
 
 
-function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, onMeasurementRefused) {
+function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, onMeasurementRefused, evidenceReference) {
   // Retreive measurement data from the tool type. A tool the adapter refuses to encode is left
   // out of the report and passed to `onMeasurementRefused(toolType, tool, error)`.
 
@@ -66,7 +68,7 @@ function getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context,
         }
         return null;
       }
-      _.defaults(tid300.props, { cornerstoneToolType: toolType });
+      _.defaults(tid300.props, { cornerstoneToolType: toolType, evidenceReference });
       
       return tid300;
   }).filter(Boolean);
@@ -97,58 +99,65 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
     //
     // @input options (object):
     //   - headers (object): SeriesNumber / SeriesDescription and other dataset headers
-    //   - document (object): { documentClass, template, personName } of the save (srDocument.js);
-    //     defaults to a new Comprehensive 3D SR document with the Sonador root template
+    //   - document (object): { template, personName } of the save (srDocument.js); defaults to a
+    //     new document with the Sonador root template. The document is Comprehensive 3D SR.
     //   - onContentItemCreate (function): called per encoded measurement group with
     //     (toolType, { uid, _id }, tid300Measurement, srItem, { documentClass, layout })
-    //   - onDocumentClassUpgrade (function): called with (from, to) when an Enhanced SR save holds
-    //     content Enhanced SR cannot, and is written as Comprehensive 3D SR instead
     //   - onMeasurementRefused (function): called with (toolType, tool, error) for a tool the
     //     adapter cannot encode (an incomplete or degenerate angle); the tool is left out
+    //   - patientSeries (object): by patient tool state key (utils/outOfPlane.js), the series its
+    //     patient-domain measurements were drawn on: { StudyInstanceUID, SeriesInstanceUID,
+    //     instances: [{ SOPClassUID, SOPInstanceUID }] }, listed in the evidence; an instance that
+    //     names its own StudyInstanceUID and SeriesInstanceUID is listed under them
     // @returns { dataset, documentClass }
     options = options || {};
     const document = options.document || {};
 
-    let documentClass = document.documentClass || SR_DOCUMENT_CLASS.COMPREHENSIVE_3D;
-    let built = this._buildContent(toolState, metadataProvider, options, documentClass);
-    if (documentClass === SR_DOCUMENT_CLASS.ENHANCED && requiresComprehensive(built.contentItem)) {
-      if (_.isFunction(options.onDocumentClassUpgrade)) {
-        options.onDocumentClassUpgrade(documentClass, SR_DOCUMENT_CLASS.COMPREHENSIVE_3D);
-      }
-      documentClass = SR_DOCUMENT_CLASS.COMPREHENSIVE_3D;
-      built = this._buildContent(toolState, metadataProvider, options, documentClass);
-    }
-
-    const { contentItem, derivationSourceDataset, evidence } = built;
+    // Every document the Viewer writes is Comprehensive 3D SR; Enhanced SR is read only
+    const documentClass = SR_DOCUMENT_CLASS.COMPREHENSIVE_3D;
+    const { contentItem, derivationSourceDataset, evidence, pertinentOther } = this._buildContent(
+      toolState, metadataProvider, options, documentClass);
     applyRootContent(contentItem, _.pick(document, 'template', 'personName'));
 
+    // Patient and study attributes come from the first evidence item. The report content already
+    // carries CurrentRequestedProcedureEvidenceSequence, so dcmjs's PertinentOtherEvidenceSequence
+    // (written when no requested procedures are given) is dropped.
     const headers = options.headers || {};
-    let dataset;
-    if (documentClass === SR_DOCUMENT_CLASS.ENHANCED) {
+    // dcmjs builds only its Pertinent Other Evidence Sequence from `evidence` (dropped below) and
+    // requires at least one item: a report of carried measurements whose report listed no
+    // requested-procedure evidence gives it the report's study alone.
+    const document3D = new Comprehensive3DSR({
+      evidence: evidence.length ? evidence : [{ StudyInstanceUID: derivationSourceDataset.StudyInstanceUID }],
+      content: contentItem,
+      seriesInstanceUID: dcmjsDicomMetaDictionary.uid(),
+      seriesNumber: headers.SeriesNumber || '99',
+      seriesDescription: headers.SeriesDescription || 'Research Derived series',
+      sopInstanceUID: dcmjsDicomMetaDictionary.uid(),
+      instanceNumber: 1,
+      manufacturer: SONADOR_MANUFACTURER,
+      isComplete: true,
+    });
+    const dataset = Object.assign({}, document3D);
+    delete dataset.PertinentOtherEvidenceSequence;
+    // Type 1C: present only with at least one item
+    if (!asArray(dataset.CurrentRequestedProcedureEvidenceSequence).length) {
+      delete dataset.CurrentRequestedProcedureEvidenceSequence;
+    }
 
-      // Enhanced SR: the dcmjs derivation
-      const report = new StructuredReport([
-        { ...derivationSourceDataset, _meta: fileMeta(), _vrMap: { PixelData: "OW" } }]);
-      dataset = Object.assign(report.dataset, contentItem);
-    } else {
-
-      // Comprehensive 3D SR. Patient and study attributes come from the first evidence item, as
-      // the derivation takes them from its source dataset. The report content already carries
-      // CurrentRequestedProcedureEvidenceSequence, so dcmjs's PertinentOtherEvidenceSequence
-      // (written when no requested procedures are given) is dropped.
-      const document3D = new Comprehensive3DSR({
-        evidence,
-        content: contentItem,
-        seriesInstanceUID: dcmjsDicomMetaDictionary.uid(),
-        seriesNumber: headers.SeriesNumber || '99',
-        seriesDescription: headers.SeriesDescription || 'Research Derived series',
-        sopInstanceUID: dcmjsDicomMetaDictionary.uid(),
-        instanceNumber: 1,
-        manufacturer: SONADOR_MANUFACTURER,
-        isComplete: true,
-      });
-      dataset = Object.assign({}, document3D);
-      delete dataset.PertinentOtherEvidenceSequence;
+    // The references a carried measurement was read from the report's Pertinent Other Evidence
+    // with stay there, unless the requested-procedure evidence already lists the instance
+    const requested = new Set(asArray(dataset.CurrentRequestedProcedureEvidenceSequence).flatMap(study =>
+      asArray(study.ReferencedSeriesSequence).flatMap(series => asArray(series.ReferencedSOPSequence)
+        .map(item => item.ReferencedSOPInstanceUID))));
+    const pertinent = _.uniqBy(pertinentOther.filter(item => !requested.has(item.SOPInstanceUID)), 'SOPInstanceUID');
+    if (pertinent.length) {
+      dataset.PertinentOtherEvidenceSequence = pertinent.map(item => ({
+        StudyInstanceUID: item.StudyInstanceUID,
+        ReferencedSeriesSequence: {
+          SeriesInstanceUID: item.SeriesInstanceUID,
+          ReferencedSOPSequence: { ReferencedSOPClassUID: item.SOPClassUID, ReferencedSOPInstanceUID: item.SOPInstanceUID },
+        },
+      }));
     }
 
     Object.assign(dataset, equipment());
@@ -159,31 +168,73 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
 
   static _buildContent(toolState, metadataProvider, options, documentClass) {
     // The TID 1500 content of the tool state, with the measurement group callbacks applied in the
-    // layout of `documentClass`. Returns { contentItem, derivationSourceDataset, evidence }.
+    // layout of `documentClass`. Returns { contentItem, derivationSourceDataset, evidence,
+    // pertinentOther } (the carried references written to the Pertinent Other Evidence Sequence).
 
     let allMeasurementGroups = [];
     const evidence = [];
+    const pertinentOther = [];
     const firstImageId = Object.keys(toolState)[0];
     if (!firstImageId) {
       throw new Error("No measurements provided.");
     }
 
-    // NOTE: We are getting the Series and Study UIDs from the first imageId of the toolState
-    // which means that if the toolState is for multiple series, the report will have the incorrect
-    // SeriesInstanceUIDs
-    const generalSeriesModule = metadataProvider.get("generalSeriesModule", firstImageId);
+    // The report's study and series references come from the first image, or the first series of
+    // patient-domain measurements; each measurement's evidence names its own series
+    const patientSeries = options.patientSeries || {};
+    const seriesOfKey = key => patientSeries[key] || {};
+    const generalSeriesModule = isPatientKey(firstImageId)
+      ? { studyInstanceUID: seriesOfKey(firstImageId).StudyInstanceUID, seriesInstanceUID: seriesOfKey(firstImageId).SeriesInstanceUID }
+      : metadataProvider.get("generalSeriesModule", firstImageId);
     const { studyInstanceUID, seriesInstanceUID } = generalSeriesModule;
     const derivationSourceDataset = {
       StudyInstanceUID: studyInstanceUID,
       SeriesInstanceUID: seriesInstanceUID
     };
+    const evidenced = new Set();
+    const addEvidence = (item) => {
+      if (!evidenced.has(item.SOPInstanceUID)) {
+        evidenced.add(item.SOPInstanceUID);
+        evidence.push(item);
+      }
+    };
 
     // Loop through each image in the toolData
     Object.keys(toolState).forEach(imageId => {
+      const toolData = toolState[imageId];
+      if (isPatientKey(imageId)) {
+        // Patient-domain measurements: no image is referenced; the evidence lists their series
+        const series = seriesOfKey(imageId);
+        const [pertinent, requested] = _.partition(series.instances || [],
+          instance => instance.evidenceContainer === PERTINENT_OTHER_EVIDENCE);
+        const reference = {
+          StudyInstanceUID: series.StudyInstanceUID || studyInstanceUID,
+          SeriesInstanceUID: series.SeriesInstanceUID,
+          instances: requested,
+        };
+        pertinent.forEach(instance => pertinentOther.push({
+          ...instance,
+          StudyInstanceUID: instance.StudyInstanceUID || reference.StudyInstanceUID,
+          SeriesInstanceUID: instance.SeriesInstanceUID || reference.SeriesInstanceUID,
+        }));
+        reference.instances.forEach(instance => addEvidence({
+          StudyInstanceUID: instance.StudyInstanceUID || reference.StudyInstanceUID,
+          SeriesInstanceUID: instance.SeriesInstanceUID || reference.SeriesInstanceUID,
+          SOPClassUID: instance.SOPClassUID, SOPInstanceUID: instance.SOPInstanceUID,
+        }));
+        const context = { metadataProvider };
+        Object.keys(toolData).forEach(toolType => {
+          const group = getMeasurementGroup(toolType, toolData, undefined, context, options.onMeasurementRefused, reference);
+          if (group) {
+            allMeasurementGroups.push(group);
+          }
+        });
+        return;
+      }
+
       const sopCommonModule = metadataProvider.get("sopCommonModule", imageId);
       const frameNumber = metadataProvider.get("frameNumber", imageId);
       const imageSeriesModule = metadataProvider.get("generalSeriesModule", imageId) || generalSeriesModule;
-      const toolData = toolState[imageId];
       const toolTypes = Object.keys(toolData);
 
       const ReferencedSOPSequence = {
@@ -195,17 +246,19 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
         ReferencedSOPSequence.ReferencedFrameNumber = frameNumber;
       }
 
-      evidence.push({
+      const imageSeriesUID = imageSeriesModule.seriesInstanceUID || seriesInstanceUID;
+      addEvidence({
         ...derivationSourceDataset,
-        SeriesInstanceUID: imageSeriesModule.seriesInstanceUID || seriesInstanceUID,
+        SeriesInstanceUID: imageSeriesUID,
         SOPClassUID: sopCommonModule.sopClassUID,
         SOPInstanceUID: sopCommonModule.sopInstanceUID,
       });
 
       // Loop through each tool type for the image
       const context = { imageId, metadataProvider };
+      const reference = { StudyInstanceUID: studyInstanceUID, SeriesInstanceUID: imageSeriesUID };
       toolTypes.forEach(toolType => {
-        const group = getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, options.onMeasurementRefused);
+        const group = getMeasurementGroup(toolType, toolData, ReferencedSOPSequence, context, options.onMeasurementRefused, reference);
         if (group) {
           allMeasurementGroups.push(group);
         }
@@ -248,7 +301,7 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
       }
     }));
 
-    return { contentItem, derivationSourceDataset, evidence };
+    return { contentItem, derivationSourceDataset, evidence, pertinentOther };
   }
 };
 

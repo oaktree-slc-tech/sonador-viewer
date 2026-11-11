@@ -325,6 +325,31 @@
   &.in
     opacity 1
 
+  // The note of an out-of-plane measurement: its text, the action that opens it in the MPR, then its
+  // view and series
+  &.tooltip-outOfPlane .tooltip-inner .warningContent
+    text-align: left
+    padding: 10px 15px
+
+    p
+      margin: 0 0 6px
+
+    .outOfPlaneNoteItem .refLabel
+      font-weight: 900
+
+    // A link: text only, set apart from the message above and the view and series below
+    .outOfPlaneNoteLink
+      padding: 6px 0
+      margin: 0 0 6px
+
+    .outOfPlaneOpenMpr
+      color: var(--active-color)
+      text-decoration: underline
+      cursor: pointer
+
+      &:hover
+        color: var(--text-primary-color)
+
   .tooltip-inner
     padding: 0
 
@@ -351,3 +376,18 @@
 
         li
           padding-right: 10px
+
+
+// The card that places the note of an out-of-plane measurement beside its index cell: it adds no
+// box of its own (the class is doubled to outrank HoverCardContent's single-class utilities); the
+// note inside it is the warning tooltip, in the flow of the card
+.outOfPlaneNoteCard.outOfPlaneNoteCard
+  width: auto
+  padding: 0
+  border: 0
+  border-radius: 0
+  box-shadow: none
+  background-color: transparent
+
+  .tooltip
+    position: relative

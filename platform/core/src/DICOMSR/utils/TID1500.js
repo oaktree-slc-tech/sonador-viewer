@@ -57,49 +57,61 @@ export default class SonadorTID1500MeasurementReport extends csTID1500Measuremen
 
       const parsedSOPInstances = [];
 
-      // For each measurement that is referenced, add a link to the
-      // Image Library Group and the Current Requested Procedure Evidence
-      // with the proper ReferencedSOPSequence
+      // For each measurement that is referenced, add a link to the Image Library Group and the
+      // Current Requested Procedure Evidence with the proper ReferencedSOPSequence, under the
+      // measurement's own series (`evidenceReference`). A patient-domain measurement references no
+      // image: the instances of its series are listed in the evidence, and none in the library.
+      const addEvidence = (StudyInstanceUID, SeriesInstanceUID, ReferencedSOPSequence) => {
+        const { ReferencedSOPInstanceUID } = ReferencedSOPSequence;
+        if (parsedSOPInstances.includes(ReferencedSOPInstanceUID)) {
+          return false;
+        }
+        /**
+         * Note: the VM of the ReferencedSeriesSequence and ReferencedSOPSequence are 1, so
+         * it is correct that we have a full `CurrentRequestedProcedureEvidenceSequence`
+         * item per `SOPInstanceUID`.
+         */
+        CurrentRequestedProcedureEvidenceSequence.push({
+          StudyInstanceUID,
+          ReferencedSeriesSequence: { SeriesInstanceUID, ReferencedSOPSequence },
+        });
+        parsedSOPInstances.push(ReferencedSOPInstanceUID);
+        return true;
+      };
+
       TID1501MeasurementGroups.forEach(measurementGroup => {
         measurementGroup.TID300Measurements.forEach(measurement => {
-          const { ReferencedSOPInstanceUID } = measurement.ReferencedSOPSequence;
+          const reference = measurement.props && measurement.props.evidenceReference;
 
-          if (!parsedSOPInstances.includes(ReferencedSOPInstanceUID)) {
+          if (!measurement.ReferencedSOPSequence) {
+            ((reference && reference.instances) || []).forEach(instance => addEvidence(
+              instance.StudyInstanceUID || reference.StudyInstanceUID, instance.SeriesInstanceUID || reference.SeriesInstanceUID,
+              { ReferencedSOPClassUID: instance.SOPClassUID, ReferencedSOPInstanceUID: instance.SOPInstanceUID }));
+            return;
+          }
+
+          const { ReferencedSOPInstanceUID } = measurement.ReferencedSOPSequence;
+          let derivationSourceDataset;
+          if (reference && reference.SeriesInstanceUID) {
+            derivationSourceDataset = reference;
+          } else if (derivationSourceDatasets.length === 1) {
+            // If there is only one derivationSourceDataset, use it.
+            derivationSourceDataset = derivationSourceDatasets[0];
+          } else {
+            const SeriesInstanceUID = sopInstanceUIDsToSeriesInstanceUIDMap[ ReferencedSOPInstanceUID ];
+            derivationSourceDataset = derivationSourceDatasets.find(
+              dsd => dsd.SeriesInstanceUID === SeriesInstanceUID
+            );
+          }
+
+          const isNew = addEvidence(derivationSourceDataset.StudyInstanceUID, derivationSourceDataset.SeriesInstanceUID,
+            measurement.ReferencedSOPSequence);
+          if (isNew) {
             ImageLibraryContentSequence.push({
               RelationshipType: "CONTAINS",
               ValueType: "IMAGE",
               ReferencedSOPSequence: measurement.ReferencedSOPSequence
             });
-
-            let derivationSourceDataset;
-
-            if (derivationSourceDatasets.length === 1) {
-                
-              // If there is only one derivationSourceDataset, use it.
-              derivationSourceDataset = derivationSourceDatasets[0];
-              
-            } else {
-              const SeriesInstanceUID = sopInstanceUIDsToSeriesInstanceUIDMap[ ReferencedSOPInstanceUID ];
-
-              derivationSourceDataset = derivationSourceDatasets.find(
-                dsd => dsd.SeriesInstanceUID === SeriesInstanceUID
-              );
-            }
-
-            /**
-             * Note: the VM of the ReferencedSeriesSequence and ReferencedSOPSequence are 1, so
-             * it is correct that we have a full `CurrentRequestedProcedureEvidenceSequence`
-             * item per `SOPInstanceUID`.
-             */
-            CurrentRequestedProcedureEvidenceSequence.push({
-              StudyInstanceUID: derivationSourceDataset.StudyInstanceUID,
-              ReferencedSeriesSequence: {
-                SeriesInstanceUID: derivationSourceDataset.SeriesInstanceUID,
-                ReferencedSOPSequence: measurement.ReferencedSOPSequence
-              }
-            });
-
-            parsedSOPInstances.push(ReferencedSOPInstanceUID);
           }
         });
       });

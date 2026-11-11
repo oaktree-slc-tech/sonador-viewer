@@ -13,6 +13,7 @@ import { MeasurementTable } from '@ohif/ui';
 import { commandsManager } from '../../App';
 import jumpToRowItem from './jumpToRowItem.js';
 import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigation.js';
+import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
@@ -288,6 +289,11 @@ function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, 
       // Retrieve Cornerstone tools version of the data
       const csMeasurementData = measurementNumberList[0];
 
+      // A measurement drawn in the viewports only (one of an application document) is not listed
+      if (csMeasurementData && csMeasurementData.isListed === false) {
+        return;
+      }
+
       // Create table measurement instance and add to the collection
       if (filter(tool, csMeasurementData)) {
 
@@ -314,12 +320,14 @@ function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, 
 }
 
 
-export function convertMeasurementsToTableData(toolCollections, timepoints) {
+export function convertMeasurementsToTableData(toolCollections, timepoints, options = {}) {
   /**
   * Take measurements from MeasurementAPI structure and convert into a measurementTable structure.
   *
   * @param {Object} toolCollections - The list of all measurement grouped by groupTool and toolName
   * @param {Array} timepoints - The list of available timepoints
+  * @param {Object} options - { viewports }: the viewports state, for the rows of out-of-plane
+  *   measurements (outOfPlaneRows.js), which the classic viewport does not draw
   * @returns
   */
 
@@ -359,11 +367,31 @@ export function convertMeasurementsToTableData(toolCollections, timepoints) {
     // Pending measurement groups are those managed by the MeasurementService and which are unlocked
     return toolServiceManaged && Boolean(!isLocked) && Boolean(!isReadOnly);
   });
-  
-  return [
+
+  // Out-of-plane measurements: the saved ones with the saved measurements, the others pending
+  const outOfPlane = outOfPlaneRows(tools, { labelOf: measurement => getMeasurementText(measurement), viewports: options.viewports });
+  const addRows = (groups, rows) => rows.forEach(({ row, toolGroup }) => {
+    const group = groups.find(candidate => candidate.toolGroupId === toolGroup);
+    if (group) {
+      group.measurements.push(row);
+    }
+  });
+  addRows(tableMeasurements, outOfPlane.saved);
+  addRows(pendingMeasurements, outOfPlane.pending);
+
+  const groups = [
     ..._.filter(tableMeasurements, (g) => g.measurements.length > 0), 
     ..._.filter(pendingMeasurements,(g) => g.measurements.length > 0)
   ];
+
+  // Rows are numbered in the order the panel lists them, saved then pending, whatever their source
+  // (the measurement numbers of the classic records are not sequential across sources)
+  let itemNumber = 0;
+  groups.forEach(group => group.measurements.forEach((row) => {
+    itemNumber += 1;
+    row.itemNumber = itemNumber;
+  }));
+  return groups;
 }
 
 
@@ -460,7 +488,7 @@ const mapStateToProps = (state, ownProps) => {
   return {
     server: activeServer,
     timepoints: convertTimepointsToTableData(timepoints),
-    measurementCollection: convertMeasurementsToTableData(measurements, timepoints),
+    measurementCollection: convertMeasurementsToTableData(measurements, timepoints, { viewports: state.viewports }),
     timepointManager: state.timepointManager,
     viewports: state.viewports,
     saveFunction,
@@ -470,6 +498,10 @@ const mapStateToProps = (state, ownProps) => {
 
 /** The measurement API record of a panel row, by its tool type and measurement id */
 function measurementRecord(measurementData) {
+  // An out-of-plane measurement is labelled on its measurement-service record
+  if (measurementData.outOfPlane) {
+    return outOfPlaneRecordOf(measurementData);
+  }
   const toolType = MeasurementApi._getToolType(measurementData);
   const { measurementId } = measurementData;
   const tool = (MeasurementApi.Instance.tools[toolType] || []).find(measurement => measurement._id === measurementId);
@@ -558,6 +590,13 @@ const mapDispatchToProps = (dispatch, ownProps) => {
           }
         });
       };
+
+      // An out-of-plane measurement is shown in the MPR view only; from the classic viewport its row
+      // offers to open it
+      if (measurementData.outOfPlane) {
+        navigateToOutOfPlane({ measurementData, viewportsState, commandsManager });
+        return;
+      }
 
       const jumpInStack = (viewports, timepointManager) => {
         const actionData = jumpToRowItem(measurementData, viewports, timepointManager, dispatch, options);
@@ -657,9 +696,21 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       propsFromDispatch.dispatchEditDescription(event, measurementData, viewportsState);
     },
     
+    onOpenInMprClick: (event, measurementData) => {
+      // Open the MPR view at an out-of-plane measurement
+      openOutOfPlaneInMpr({ measurementData, commandsManager, studyMetadataManager: OHIF.utils.studyMetadataManager })
+        .catch(error => OHIF.log.error('[viewer:measurementTable] unable to open the MPR view at the measurement', error));
+    },
+
     onDeleteClick: (event, measurementData) => {
       // Remove the measurement
       const { MeasurementHandlers } = OHIF.measurements;
+
+      // An out-of-plane measurement is its measurement-service record (its annotation follows)
+      if (measurementData.outOfPlane) {
+        MeasurementApi.Instance.measurementService.remove(measurementData._measurementServiceId);
+        return;
+      }
 
       // Retrieve measurement tool type, tool ID (_id), and 
       const toolType = MeasurementApi._getToolType(measurementData);

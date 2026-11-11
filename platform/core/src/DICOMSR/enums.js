@@ -191,8 +191,9 @@ export const DCMSR_MEASUREMENT_LOCATION = {
   schemeVersion: SONADOR_SCHEME_VERSION_03,
 }
 
-// * `view` (TEXT, one item per view): the view a measurement was created in (`coronal`, `sagittal`,
-//    `axial`, `3d`). Descriptive only, never a visibility rule; values are kept as read.
+// * `view` (TEXT, one item per view): the view a measurement was created in (MEASUREMENT_VIEWS).
+//    Descriptive only, a label used to navigate to a measurement, never a rule for whether it is
+//    drawn; values are kept as read, unknown ones included.
 
 export const MEASUREMENT_VIEW = `${SONADOR_MANUFACTURER}-Measurement.View`;
 export const MEASUREMENT_VIEW_MEANING = 'View a measurement was created in. Descriptive measurement attribute.';
@@ -200,6 +201,75 @@ export const DCMSR_MEASUREMENT_VIEW = {
   value: MEASUREMENT_VIEW,
   schemeDesignator: DCMSR_SONADOR_SR.value,
   meaning: MEASUREMENT_VIEW_MEANING,
+  schemeVersion: SONADOR_SCHEME_VERSION_03,
+}
+
+// View values (Sonador-SR 0.3), the same registry as the Sonador IO client's: each value is a string
+// constant, which is also its code value and the text written into the document (the encoding
+// stays TEXT; the codes are the formal registry and are not written as CODE items). The meanings
+// are interface text, used wherever the Viewer names a view.
+export const MEASUREMENT_VIEW_AXIAL = 'axial';
+export const MEASUREMENT_VIEW_SAGITTAL = 'sagittal';
+export const MEASUREMENT_VIEW_CORONAL = 'coronal';
+export const MEASUREMENT_VIEW_OBLIQUE = 'oblique';
+export const MEASUREMENT_VIEW_3D = '3d';
+
+const measurementViewCode = (value, meaning) => Object.freeze({
+  value, schemeDesignator: DCMSR_SONADOR_SR.value, meaning, schemeVersion: SONADOR_SCHEME_VERSION_03,
+});
+
+export const DCMSR_MEASUREMENT_VIEW_AXIAL = measurementViewCode(
+  MEASUREMENT_VIEW_AXIAL, 'Axial view. Cross-sections, dividing head from feet.');
+export const DCMSR_MEASUREMENT_VIEW_SAGITTAL = measurementViewCode(
+  MEASUREMENT_VIEW_SAGITTAL, 'Sagittal view. Side-on slices, dividing left from right.');
+export const DCMSR_MEASUREMENT_VIEW_CORONAL = measurementViewCode(
+  MEASUREMENT_VIEW_CORONAL, 'Coronal view. Front-on slices, dividing front from back.');
+export const DCMSR_MEASUREMENT_VIEW_OBLIQUE = measurementViewCode(
+  MEASUREMENT_VIEW_OBLIQUE, 'Oblique view. A slice tilted away from the standard views.');
+export const DCMSR_MEASUREMENT_VIEW_3D = measurementViewCode(
+  MEASUREMENT_VIEW_3D, '3D view. The whole volume, seen from any direction.');
+
+export const MEASUREMENT_VIEWS = Object.freeze([
+  MEASUREMENT_VIEW_AXIAL, MEASUREMENT_VIEW_SAGITTAL, MEASUREMENT_VIEW_CORONAL, MEASUREMENT_VIEW_OBLIQUE, MEASUREMENT_VIEW_3D,
+]);
+export const MEASUREMENT_VIEW_CODES = Object.freeze({
+  [MEASUREMENT_VIEW_AXIAL]: DCMSR_MEASUREMENT_VIEW_AXIAL,
+  [MEASUREMENT_VIEW_SAGITTAL]: DCMSR_MEASUREMENT_VIEW_SAGITTAL,
+  [MEASUREMENT_VIEW_CORONAL]: DCMSR_MEASUREMENT_VIEW_CORONAL,
+  [MEASUREMENT_VIEW_OBLIQUE]: DCMSR_MEASUREMENT_VIEW_OBLIQUE,
+  [MEASUREMENT_VIEW_3D]: DCMSR_MEASUREMENT_VIEW_3D,
+});
+
+// * `source-series` (UIDREF, under the NUM item of a patient-domain measurement): the imaging
+//    series the measurement was made on, which its Frame of Reference does not name. Descriptive
+//    only, never a rule for where it is drawn; absent on image-domain measurements.
+export const MEASUREMENT_SOURCE_SERIES = `${SONADOR_MANUFACTURER}-Measurement.Source-Series`;
+export const DCMSR_MEASUREMENT_SOURCE_SERIES = {
+  value: MEASUREMENT_SOURCE_SERIES,
+  schemeDesignator: DCMSR_SONADOR_SR.value,
+  meaning: 'Imaging series a patient-domain measurement was made on',
+  schemeVersion: SONADOR_SCHEME_VERSION_03,
+}
+
+// * `drawing-plane` (TEXT, under the NUM item of an out-of-plane measurement): the orientation of
+//    the view the measurement was drawn in, six comma-separated direction cosines in the layout of
+//    Image Orientation (Patient), width direction then height direction (utils/drawingPlane.js).
+export const MEASUREMENT_DRAWING_PLANE = `${SONADOR_MANUFACTURER}-Measurement.Drawing-Plane`;
+export const DCMSR_MEASUREMENT_DRAWING_PLANE = {
+  value: MEASUREMENT_DRAWING_PLANE,
+  schemeDesignator: DCMSR_SONADOR_SR.value,
+  meaning: 'Orientation of the view a measurement was drawn in',
+  schemeVersion: SONADOR_SCHEME_VERSION_03,
+}
+
+// * `construction-points` (SCOORD / SCOORD3D POLYLINE of three points, under a circle's NUM):
+//    auxiliary data the primary geometry does not need. Not drawn, never read as Cornerstone3D
+//    control points; kept with its NUM.
+export const MEASUREMENT_CONSTRUCTION_POINTS = `${SONADOR_MANUFACTURER}-Measurement.ConstructionPoints`;
+export const DCMSR_MEASUREMENT_CONSTRUCTION_POINTS = {
+  value: MEASUREMENT_CONSTRUCTION_POINTS,
+  schemeDesignator: DCMSR_SONADOR_SR.value,
+  meaning: 'Points a circle was constructed from',
   schemeVersion: SONADOR_SCHEME_VERSION_03,
 }
 
@@ -250,6 +320,9 @@ export const SonadorCodeValues = {
   DCMSR_MEASUREMENT_TEXT,
   DCMSR_MEASUREMENT_LOCATION,
   DCMSR_MEASUREMENT_VIEW,
+  DCMSR_MEASUREMENT_SOURCE_SERIES,
+  DCMSR_MEASUREMENT_DRAWING_PLANE,
+  DCMSR_MEASUREMENT_CONSTRUCTION_POINTS,
   DCMSR_DISPLAY_ATTRIBUTES,
   DCMSR_DISPLAY_COLOR,
   DCMSR_DISPLAY_COLOR_ROLES,
@@ -270,6 +343,13 @@ export const RelationshipType = RELATIONSHIP_TYPE;
 // Document class and root template of a Viewer save (the Series-Tag exchange profile with Sonador
 // IO). New documents are Comprehensive 3D SR with the Sonador root template; a re-save keeps the
 // parent's class and template.
+// Kind of SR document, by its root concept name (code value and coding scheme designator):
+// `(126000, DCM, "Imaging Measurement Report")` is an exchange document, which the Viewer hydrates,
+// edits and saves; a root concept in the Sonador-SR scheme is an application document, which also
+// carries content the Viewer does not model. Any other root concept holds no measurements for the
+// Viewer.
+export const SR_DOCUMENT_KIND = Object.freeze({ EXCHANGE: 'exchange', APPLICATION: 'application', OTHER: 'other' });
+
 export const SR_DOCUMENT_CLASS = {
   COMPREHENSIVE_3D: 'Comprehensive3DSR',
   ENHANCED: 'EnhancedSR',
@@ -345,6 +425,9 @@ const Enums = {
   SCOORDTypes,
 
   SR_DOCUMENT_CLASS,
+  SR_DOCUMENT_KIND,
+  MEASUREMENT_VIEWS,
+  MEASUREMENT_VIEW_CODES,
   DISPLAY_LAYOUT,
   PROPERTY_PARENT,
   SONADOR_SR_TEMPLATE,

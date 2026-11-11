@@ -37,7 +37,7 @@ jest.mock('@cornerstonejs/core', () => ({
       }
       return imageId === 'wadors:image' && {
       imagePositionPatient: [0, 0, 0], rowCosines: [1, 0, 0], columnCosines: [0, 1, 0],
-      rowPixelSpacing: 1, columnPixelSpacing: 1, frameOfReferenceUID: '2.25.7001',
+      rowPixelSpacing: 1, columnPixelSpacing: 1, frameOfReferenceUID: '2.25.7001', rows: 40, columns: 30,
       };
     },
   },
@@ -70,11 +70,20 @@ jest.mock('@cornerstonejs/tools', () => ({
   },
   utilities: { triggerAnnotationRenderForViewportIds: ids => mockRender(ids) },
 }), { virtual: true });
+// The DICOMSR enums the out-of-plane modules read
+jest.mock('@cornerstonejs/adapters', () => ({
+  adaptersSR: { Cornerstone3D: { CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} } } },
+}), { virtual: true });
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: {
     log: { warn: () => {}, info: () => {}, debug: () => {} },
-    DICOMSR: { angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry') },
+    DICOMSR: {
+      angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
+      outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
+      drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
+      measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
+    },
     utils: { dataProc: { firstDefinedValue: (...values) => values.find(value => value !== undefined) }, guid: () => 'guid-1' },
     measurements: {
       Enums: {},
@@ -96,6 +105,10 @@ jest.mock('@ohif/core', () => ({
 
 import { annotationUIDFor, connectMeasurementAnnotationSync } from './measurementAnnotationSync';
 
+// The tools end a drag on mouse up; the window receives it after them
+global.window = new EventTarget();
+const endDrag = () => window.dispatchEvent(new Event('mouseup'));
+
 const classicSource = { name: 'CornerstoneTools', version: '4' };
 const c3dSource = { name: 'Cornerstone3DTools-Sonador', version: '0.1' };
 
@@ -103,7 +116,10 @@ function fakeMeasurementService() {
   const handlers = {};
   const measurements = new Map();
   const service = {
-    EVENTS: { MEASUREMENT_ADDED: 'added', MEASUREMENT_UPDATED: 'updated', MEASUREMENT_REMOVED: 'removed', MEASUREMENTS_CLEARED: 'cleared' },
+    EVENTS: {
+      MEASUREMENT_ADDED: 'added', MEASUREMENT_UPDATED: 'updated', MEASUREMENT_REMOVED: 'removed', MEASUREMENTS_CLEARED: 'cleared',
+      RAW_MEASUREMENT_ADDED: 'raw-added',
+    },
     subscribe: (name, fn) => {
       (handlers[name] = handlers[name] || []).push(fn);
       return { unsubscribe: () => { handlers[name] = handlers[name].filter(h => h !== fn); } };
@@ -119,6 +135,12 @@ function fakeMeasurementService() {
       service.publish('updated', { source: measurement.source, measurement });
     }),
     _broadcastEvent: (name, payload) => service.publish(name, payload),
+    addRawMeasurement: jest.fn((source, annotationType, data, toMeasurementSchema) => {
+      const measurement = { ...toMeasurementSchema(data), source, uid: data.id };
+      measurements.set(measurement.uid, measurement);
+      service.publish('raw-added', { source, measurement });
+      return measurement.uid;
+    }),
     remove: jest.fn(uid => {
       measurements.delete(uid);
       service.publish('removed', { source: classicSource, measurement: uid });
@@ -191,6 +213,15 @@ it('moves the annotation when the classic measurement is edited', () => {
 
   expect(mirror().data.handles.points[3]).toEqual([0, 20, 0]);
   expect(mockAnnotations.size).toBe(1);
+});
+
+it("carries a Length's record value (its stored length) with the points it belongs to", () => {
+  service.add({
+    uid: 'len-1', toolName: 'Length', source: classicSource, referencedImageId: 'wadors:image', FrameOfReferenceUID: '2.25.7001',
+    points: [{ x: 0.5, y: 0.5 }, { x: 30.5, y: 40.5 }], length: 49.876,
+    data: { length: 49.876, handles: { start: { x: 0.5, y: 0.5 }, end: { x: 30.5, y: 40.5 }, textBox: {} } }, metadata: {},
+  });
+  expect(mirror('len-1').data.recordValue).toEqual({ value: 49.876, points: [[0, 0, 0], [30, 40, 0]] });
 });
 
 it('carries the record value with the points it belongs to', () => {
@@ -360,7 +391,8 @@ describe('Length', () => {
     const annotation = mirror('l-1');
     expect(annotation.metadata.toolName).toBe('Length');
     expect(annotation.data.handles.points).toEqual([[0, 0, 0], [10, 0, 0]]);
-    expect(annotation.data.recordValue).toBeUndefined();
+    // Its length belongs to these points (the 3D display shows it while they match)
+    expect(annotation.data.recordValue).toEqual({ value: 10, points: [[0, 0, 0], [10, 0, 0]] });
 
     annotation.data.handles.points[1] = [0, 20, 0];
     mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
@@ -646,3 +678,278 @@ describe('arrow annotations', () => {
     expect(measurement.data.handles.start).toMatchObject({ x: 0.5, y: 0.5 });
   });
 });
+
+
+describe('a measurement on an image, edited in a Cornerstone3D view', () => {
+  const drag = (index, point) => {
+    const annotation = mirror();
+    annotation.data.handles.points[index] = point;
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation, changeType: 'HandlesUpdated' } });
+    return annotation;
+  };
+  const end2Of = () => service.getMeasurement('m-1').data.handles.end2;
+
+  it('keeps a handle dragged off the image plane on the plane, in the array the tool drags, without a warning', () => {
+    const notify = jest.fn();
+    disconnect();
+    disconnect = connectMeasurementAnnotationSync(service, classicSource, { notify });
+    service.add(cobbAngle());
+    const points = mirror().data.handles.points;
+
+    drag(3, [12, 20, 3]);
+    expect(mirror().data.handles.points).toBe(points);
+    expect(points[3]).toEqual([12, 20, 0]);
+    expect(end2Of()).toEqual({ x: 12.5, y: 20.5 });
+    endDrag();
+    expect(points[3]).toEqual([12, 20, 0]);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('returns a handle dragged outside the rows and columns to where it was before the drag, unclipped', () => {
+    service.add(cobbAngle());
+    drag(3, [10, 55, 0]);
+    // While outside, the measurement keeps its points
+    expect(service.update).not.toHaveBeenCalled();
+    expect(mirror().data.handles.points[3]).toEqual([10, 55, 0]);
+
+    endDrag();
+    expect(mirror().data.handles.points[3]).toEqual([10, 20, 0]);
+    expect(end2Of()).toEqual({ x: 10.5, y: 20.5 });
+    expect(mirror().invalidated).toBe(true);
+  });
+
+  it('returns it to before the drag, not to the last point inside the image', () => {
+    service.add(cobbAngle());
+    drag(3, [5, 25, 0]);
+    expect(end2Of()).toEqual({ x: 5.5, y: 25.5 });
+    drag(3, [5, -4, 0]);
+    endDrag();
+
+    expect(mirror().data.handles.points[3]).toEqual([10, 20, 0]);
+    expect(end2Of()).toEqual({ x: 10.5, y: 20.5 });
+    expect(service.getMeasurement('m-1').data.rAngle).toBeCloseTo(135, 6);
+  });
+
+  it('keeps a drag that ends inside the image, and starts the next drag from there', () => {
+    service.add(cobbAngle());
+    drag(3, [10, 60, 0]);
+    drag(3, [8, 30, 0]);
+    endDrag();
+    expect(mirror().data.handles.points[3]).toEqual([8, 30, 0]);
+    expect(end2Of()).toEqual({ x: 8.5, y: 30.5 });
+
+    drag(3, [40, 30, 0]);
+    endDrag();
+    expect(mirror().data.handles.points[3]).toEqual([8, 30, 0]);
+  });
+
+  it('applies to a whole measurement moved outside the image', () => {
+    service.add(cobbAngle());
+    const annotation = mirror();
+    annotation.data.handles.points.forEach((point) => { point[0] -= 15; });
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation, changeType: 'HandlesUpdated' } });
+    endDrag();
+    expect(mirror().data.handles.points).toEqual([[0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 20, 0]]);
+  });
+
+  it('leaves the annotation of a locked measurement alone', () => {
+    service.add({ ...cobbAngle(), metadata: { isLocked: true } });
+    drag(3, [10, 55, 2]);
+    endDrag();
+    expect(mirror().data.handles.points[3]).toEqual([10, 55, 2]);
+    expect(service.update).not.toHaveBeenCalled();
+  });
+
+  it('stops listening for the end of a drag once disconnected', () => {
+    service.add(cobbAngle());
+    drag(3, [10, 55, 0]);
+    disconnect();
+    endDrag();
+    expect(mirror().data.handles.points[3]).toEqual([10, 55, 0]);
+    disconnect = () => {};
+  });
+});
+
+
+describe('a measurement drawn in the 3D Inspector', () => {
+  const { registerDrawingVolume } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane');
+  const outOfPlaneSource = { name: 'Cornerstone3DTools-Sonador', version: '0.1' };
+  const SERIES = { StudyInstanceUID: '2.25.1001', SeriesInstanceUID: '2.25.1002', FrameOfReferenceUID: '2.25.7001' };
+  const notified = [];
+  const unregister = [];
+  beforeEach(() => {
+    disconnect();
+    notified.length = 0;
+    Object.keys(mockStyles).forEach(key => delete mockStyles[key]);
+    mockClassic.toAnnotationSchema.mockReset();
+    mockClassic.annotationToMeasurement.mockReset();
+    unregister.push(registerDrawingVolume('volume::inspection', SERIES));
+    unregister.push(registerDrawingVolume('volume::inspection#decimated', { ...SERIES, reducedResolution: true }));
+    unregister.push(registerDrawingVolume('volume-without-frame::inspection', { ...SERIES, FrameOfReferenceUID: undefined }));
+    disconnect = connectMeasurementAnnotationSync(service, classicSource, { notify: message => notified.push(message), outOfPlaneSource });
+  });
+  afterEach(() => unregister.splice(0).forEach(fn => fn()));
+
+  // A sagittal Inspector view (Cornerstone3D camera: normal +x, up +z) of the axial image
+  const SAGITTAL = { viewPlaneNormal: [1, 0, 0], viewUp: [0, 0, 1] };
+  const AXIAL = { viewPlaneNormal: [0, 0, -1], viewUp: [0, -1, 0] };
+  let count = 0;
+  const drawn = async (toolName, points, { volumeId = 'volume::inspection', view = SAGITTAL, referencedImageId = null, frame = '2.25.7001' } = {}) => {
+    count += 1;
+    const annotation = {
+      annotationUID: `native-${toolName}-${count}`,
+      metadata: { toolName, FrameOfReferenceUID: frame, referencedImageId, volumeId, ...view },
+      data: { label: '', handles: { points }, cachedStats: {} },
+    };
+    mockAnnotations.set(annotation.annotationUID, annotation);
+    mockListeners.ANNOTATION_COMPLETED({ detail: { annotation } });
+    await flush();
+    return annotation;
+  };
+  const records = () => [...service.measurements.values()];
+
+  it('off the acquired plane becomes a pending out-of-plane measurement with its source series, Drawing-Plane and View', async () => {
+    const annotation = await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
+
+    expect(service.addRawMeasurement).toHaveBeenCalledTimes(1);
+    expect(service.addRawMeasurement.mock.calls[0][0]).toBe(outOfPlaneSource);
+    const [record] = records();
+    expect(record).toMatchObject({
+      toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], FrameOfReferenceUID: '2.25.7001',
+      referenceStudyUID: '2.25.1001', referenceSeriesUID: '2.25.1002', isLocked: false, unit: 'mm',
+      metadata: { outOfPlane: true, sourceSeries: '2.25.1002', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'], isReadOnly: false },
+    });
+    expect(record.length).toBeCloseTo(50, 9);
+    expect(record.source).toBe(outOfPlaneSource);
+
+    // Not a classic measurement; the drawing gives way to the record's annotation, editable
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    expect(mockAnnotations.has(annotation.annotationUID)).toBe(false);
+    expect(mirror(record.uid)).toMatchObject({ isLocked: false, metadata: { toolName: 'Length', FrameOfReferenceUID: '2.25.7001' } });
+    expect(mirror(record.uid).data.handles.points).toEqual([[12, 0, 0], [12, 30, -40]]);
+    expect(Math.abs(mirror(record.uid).metadata.viewPlaneNormal[0])).toBeCloseTo(1, 9);
+    expect(mockStyles[annotationUIDFor(record.uid)]).toBeUndefined();
+  });
+
+  it('is announced once a session as shown in the MPR and 3D views only', async () => {
+    await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
+    await drawn('CobbAngle', [[12, 0, 0], [12, 10, 0], [12, 0, -10], [12, 0, -20]]);
+    expect(notified).toEqual([{
+      title: '3D measurement', type: 'info',
+      message: 'This measurement is pending: it is saved with the other measurements when you save them. '
+        + 'It is shown in the MPR and 3D views only.',
+    }]);
+    const cobb = records().find(record => record.toolName === 'CobbAngle');
+    expect(cobb.value).toBeCloseTo(90, 9);
+    expect(cobb.data.rAngle).toBeCloseTo(90, 9);
+
+    service.publish('cleared', {});
+    await drawn('Angle', [[12, 10, 0], [12, 0, 0], [12, 0, -10]]);
+    expect(notified).toHaveLength(2);
+  });
+
+  it('on the acquired plane with a point outside the rows and columns is out-of-plane, its points unchanged', async () => {
+    await drawn('Length', [[2, 3, 0], [45, 3, 0]], { view: AXIAL, referencedImageId: 'wadors:image' });
+    // The notice says it is pending, and claims neither a save nor a plane off the acquisition
+    expect(notified.map(n => n.message)).toEqual(['This measurement is pending: it is saved with the other measurements '
+      + 'when you save them. It is shown in the MPR and 3D views only.']);
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    const [record] = records();
+    expect(record.points).toEqual([[2, 3, 0], [45, 3, 0]]);
+    expect(record.metadata).toMatchObject({ drawingPlane: '1,0,0,0,1,0', views: ['axial'] });
+  });
+
+  it('on the acquired plane and inside the image is saved as before, in the image domain', async () => {
+    mockClassic.toAnnotationSchema.mockImplementation(measurement => ({ measurement }));
+    mockClassic.annotationToMeasurement.mockImplementation(() => undefined);
+    await drawn('Length', [[2, 3, 0], [12, 3, 0]], { view: AXIAL, referencedImageId: 'wadors:image' });
+    expect(mockClassic.toAnnotationSchema).toHaveBeenCalledTimes(1);
+    expect(service.addRawMeasurement).not.toHaveBeenCalled();
+  });
+
+  it('on a volume at reduced resolution stays dashed in the session, in-plane or not', async () => {
+    const offPlane = await drawn('Length', [[12, 0, 0], [12, 30, -40]], { volumeId: 'volume::inspection#decimated' });
+    const inPlane = await drawn('Angle', [[10, 0, 0], [0, 0, 0], [0, 10, 0]],
+      { volumeId: 'volume::inspection#decimated', view: AXIAL, referencedImageId: 'wadors:image' });
+    expect(service.addRawMeasurement).not.toHaveBeenCalled();
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    [offPlane, inPlane].forEach(annotation => expect(mockStyles[annotation.annotationUID]).toEqual({ lineDash: '4,4' }));
+    expect(notified.map(n => n.message)).toEqual([
+      "This series is shown at reduced resolution, so the Length cannot be saved from this view. It stays in this session's 3D views and is not saved.",
+      "This series is shown at reduced resolution, so the Angle cannot be saved from this view. It stays in this session's 3D views and is not saved.",
+    ]);
+  });
+
+  it('on a series without a Frame of Reference stays dashed, with the reason', async () => {
+    const annotation = await drawn('Length', [[12, 0, 0], [12, 30, -40]], { volumeId: 'volume-without-frame::inspection', frame: null });
+    expect(service.addRawMeasurement).not.toHaveBeenCalled();
+    expect(annotation.data.unsaved).toBe(true);
+    expect(notified[0].message).toBe('This series has no Frame of Reference, so a Length drawn off its acquired images cannot be saved. '
+      + "It stays in this session's 3D views and is not saved.");
+  });
+
+  it('in an MPR pane (no drawing volume) stays dashed, as before', async () => {
+    await drawn('Length', [[12, 0, 0], [12, 30, -40]], { volumeId: 'mpr-volume' });
+    expect(service.addRawMeasurement).not.toHaveBeenCalled();
+    expect(notified[0].title).toBe('Measurement not saved');
+  });
+
+  it('is edited on its drawing plane while pending, its value following; locked once saved', async () => {
+    await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
+    const [{ uid }] = records();
+    const annotation = mirror(uid);
+    const points = annotation.data.handles.points;
+    points[1] = [15, 30, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation, changeType: 'HandlesUpdated' } });
+
+    expect(points[1]).toEqual([12, 30, 0]);
+    expect(service.getMeasurement(uid).points).toEqual([[12, 0, 0], [12, 30, 0]]);
+    expect(service.getMeasurement(uid).length).toBeCloseTo(30, 9);
+    expect(service.getMeasurement(uid).metadata.drawingPlane).toBe('0,1,0,0,0,-1');
+
+    // Saved: locked, and its annotation with it
+    service.update(uid, { ...service.getMeasurement(uid), isLocked: true, metadata: { ...service.getMeasurement(uid).metadata, isLocked: true } });
+    expect(mockLocked.has(annotationUIDFor(uid))).toBe(true);
+    const calls = service.update.mock.calls.length;
+    mirror(uid).data.handles.points[1] = [12, 40, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation: mirror(uid), changeType: 'HandlesUpdated' } });
+    expect(service.update.mock.calls.length).toBe(calls);
+  });
+
+  it('keeps the drawing, editable and marked unsaved, when the record is not accepted or adding it fails', async () => {
+    const outcomes = [() => undefined, () => { throw new Error('rejected'); }];
+    for (const outcome of outcomes) {
+      service.addRawMeasurement.mockImplementationOnce(outcome);
+      notified.length = 0;
+      const annotation = await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
+      expect(mockAnnotations.get(annotation.annotationUID)).toBe(annotation);
+      expect(annotation.data.unsaved).toBe(true);
+      expect(mockLocked.has(annotation.annotationUID)).toBe(false);
+      expect(mockStyles[annotation.annotationUID]).toEqual({ lineDash: '4,4' });
+      expect(notified.map(n => n.title)).toEqual(['Measurement not saved']);
+    }
+    expect(records()).toEqual([]);
+  });
+
+  it('keeps a Cobb angle whose lines lie in no common plane for the 3D display only, its points as stored', () => {
+    const skew = [[0, 0, 0], [10, 0, 0], [0, 10, 10], [0, 20, 10]];
+    service.addRawMeasurement(outOfPlaneSource, 'CobbAngle', { id: 'skew-1' }, () => ({
+      toolName: 'CobbAngle', points: skew, FrameOfReferenceUID: '2.25.7001', isLocked: true, data: { rAngle: 90 },
+      metadata: { outOfPlane: true, isLocked: true, isReadOnly: true, views: [] },
+    }));
+    const annotation = mirror('skew-1');
+    expect(annotation.metadata.toolName).toBe('SonadorNonPlanarCobbAngle');
+    expect(annotation.metadata.viewPlaneNormal).toBeUndefined();
+    expect(annotation.data.handles.points).toEqual(skew);
+    expect(annotation.data.recordValue).toEqual({ value: 90, points: skew });
+    expect(mockLocked.has(annotationUIDFor('skew-1'))).toBe(true);
+  });
+
+  it('is removed with its annotation, either way', async () => {
+    await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
+    const [{ uid }] = records();
+    mockAnnotations.get(annotationUIDFor(uid)) && jest.requireMock('@cornerstonejs/tools').annotation.state.removeAnnotation(annotationUIDFor(uid));
+    expect(service.remove).toHaveBeenCalledWith(uid);
+  });
+});
+

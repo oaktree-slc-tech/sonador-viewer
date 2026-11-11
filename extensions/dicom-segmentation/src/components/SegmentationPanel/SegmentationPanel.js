@@ -36,6 +36,7 @@ import { BrushColorSelector, BrushRadius, SegmentItem } from '../index';
 import SegmentationSettings from '../SegmentationSettings/SegmentationSettings';
 
 import SonadorMprSegmentationPanel from './SonadorMprSegmentationPanel';
+import { activateSegment, findSegmentHolder, getSegmentJumpIndex } from './segmentActivation';
 
 import './SegmentationPanel.css';
 
@@ -172,8 +173,8 @@ const SegmentationPanel = ({
   };
 
   const getActiveLabelMaps2D = () => {
-    const { labelmaps2D } = getActiveLabelMaps3D();
-    return labelmaps2D;
+    const labelmap3D = getActiveLabelMaps3D();
+    return labelmap3D ? labelmap3D.labelmaps2D : [];
   };
 
   const getCurrentDisplaySet = () => {
@@ -210,50 +211,22 @@ const SegmentationPanel = ({
   };
 
   const setActiveSegment = (segmentIndex, segmentationId) => {
-    // Set the active segment
+    // Set the active segment, on the labelmap layer that holds it. When segmentationId is provided
+    // (displaySetInstanceUID), the search is restricted to that displaySet so that equal segment
+    // numbers in different SEGs do not select each other's layers.
 
-    const activeSegmentIndex = getActiveSegmentIndex();
-    const activeViewport = getActiveViewport();
+    const { StudyInstanceUID } = getActiveViewport();
+    const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
+    const holder = findSegmentHolder(studyMetadata.getDisplaySets(), segmentIndex, segmentationId);
 
-    if (segmentIndex === activeSegmentIndex) {
-      log.info(`${activeSegmentIndex} is already the active segment`);
+    const { changed } = activateSegment(getBrushStackState(), segmentIndex, holder);
+    if (!changed) {
+      log.info(`${segmentIndex} is already the active segment`);
       return;
     }
 
-    const labelmap3D = getActiveLabelMaps3D();
-    labelmap3D.activeSegmentIndex = segmentIndex;
-
-    /**
-     * Activates the correct label map if clicked segment
-     * does not belong to the active labelmap.
-     *
-     * When segmentationId is provided (displaySetInstanceUID), restrict the
-     * search to that specific displaySet so that overlapping segment indices
-     * across different SEGs do not corrupt the active labelmap selection.
-     */
-    const { StudyInstanceUID } = activeViewport;
-    const studyMetadata = studyMetadataManager.get(StudyInstanceUID);
-    const allDisplaySets = studyMetadata.getDisplaySets();
-    let selectedSegmentation;
-    let newLabelmapIndex = getActiveLabelMapIndex();
-    allDisplaySets.forEach((displaySet) => {
-      if (segmentationId && displaySet.displaySetInstanceUID !== segmentationId) {
-        return;
-      }
-      if (displaySet.labelmapSegments) {
-        Object.keys(displaySet.labelmapSegments).forEach((labelmapIndex) => {
-          if (displaySet.labelmapSegments[labelmapIndex].includes(segmentIndex)) {
-            newLabelmapIndex = labelmapIndex;
-            selectedSegmentation = displaySet.hasOverlapping === true ? displaySet.originLabelMapIndex : labelmapIndex;
-          }
-        });
-      }
-    });
-
-    const brushStackState = getBrushStackState();
-    brushStackState.activeLabelmapIndex = newLabelmapIndex;
-    if (selectedSegmentation) {
-      setState((state) => ({ ...state, selectedSegmentation }));
+    if (holder) {
+      setState((state) => ({ ...state, selectedSegmentation: holder.selectedSegmentation }));
     }
 
     // The active segment was written straight into the legacy module; tell anything rendering the
@@ -481,18 +454,11 @@ const SegmentationPanel = ({
       setState((state) => ({ ...state, selectedSegment: segmentNumber }));
     }
 
-    const validIndexList = [];
-    getActiveLabelMaps2D().forEach((labelMap2D, index) => {
-      if (labelMap2D.segmentsOnLabelmap.includes(segmentNumber)) {
-        validIndexList.push(index);
-      }
-    });
-
-    const avg = (array) => array.reduce((a, b) => a + b) / array.length;
-    const average = avg(validIndexList);
-    const closest = validIndexList.reduce((prev, curr) => {
-      return Math.abs(curr - average) < Math.abs(prev - average) ? curr : prev;
-    });
+    // A segment no slice of the active layer holds (e.g. empty) is selected without a jump.
+    const closest = getSegmentJumpIndex(getActiveLabelMaps2D(), segmentNumber);
+    if (closest === undefined) {
+      return;
+    }
 
     if (isCornerstone()) {
       const element = getEnabledElement();

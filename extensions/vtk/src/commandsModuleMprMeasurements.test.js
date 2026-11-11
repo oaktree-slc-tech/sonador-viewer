@@ -149,3 +149,39 @@ it.each([20, 35])('leaves the panes as they are, and reports the measurement not
   panes.forEach((viewport, i) => expect(viewport.camera).toEqual(before[i]));
   expect(mockRender).not.toHaveBeenCalled();
 });
+
+
+describe('opening the MPR at a measurement', () => {
+  const setMPRLayout = () => require('./utils/setMPRLayout.js').default;
+  const mprPanes = () => [0, 1, 2].map(() => {
+    const viewport = pane();
+    viewport.camera = { focalPoint: [0, 0, 0], position: [0, 0, -100], viewPlaneNormal: [0, 0, 1], viewUp: [0, -1, 0] };
+    viewport.getCamera = () => ({ ...viewport.camera });
+    viewport.setCamera = camera => Object.assign(viewport.camera, camera);
+    viewport.getActors = () => [{}];
+    viewport.worldToCanvas = () => [10, 10];
+    viewport.canvas = { clientWidth: 100, clientHeight: 100 };
+    return viewport;
+  });
+
+  it('is found from the classic viewport (the VIEWER context), as the 2D MPR command is', () => {
+    expect(actions.openMprAtWorldPoint.context).toBe('VIEWER');
+    expect(actions.mpr2d.context).toBe('VIEWER');
+  });
+
+  it("lays out the MPR of the measurement's display set, then navigates once the panes show the volume", async () => {
+    const displaySet = { displaySetInstanceUID: 'ds-1' };
+    setMPRLayout().mockImplementation(async () => {
+      // The panes appear after the layout
+      setTimeout(() => mockPanes.push(...mprPanes()), 0);
+    });
+    const result = await actions.openMprAtWorldPoint.commandFn({
+      displaySet, worldPoint: [5, 5, 30], viewPlaneNormal: [1, 0, 0], anyAngle: true,
+    });
+    expect(setMPRLayout()).toHaveBeenCalledWith(displaySet, [{}, {}, {}], 1, 3);
+    expect(result).toMatchObject({ panes: 3, drawn: true });
+    // The pane nearest the plane turned onto it
+    expect(mockPanes.some(viewport => Math.abs(viewport.camera.viewPlaneNormal[0]) > 0.999)).toBe(true);
+  });
+});
+
