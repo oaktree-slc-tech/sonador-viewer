@@ -1063,6 +1063,13 @@ describe('circles', () => {
     expect(measurement.metadata.TrackingUniqueIdentifier).toBe('2.25.8200');
   });
 
+  it('draw nothing for an update whose measurement carries no uid', () => {
+    const { uid, ...withoutUid } = circle();
+    service.publish('updated', { source: classicSource, measurement: withoutUid });
+    expect(mockAnnotations.size).toBe(0);
+    expect(mockAnnotations.has(annotationUIDFor(undefined))).toBe(false);
+  });
+
   it('move their annotation when the classic circle is edited', () => {
     service.add(circle());
     const edited = circle();

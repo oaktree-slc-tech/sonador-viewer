@@ -543,7 +543,11 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
   }
 
   function onMeasurementChanged({ source, measurement }) {
-    if (measurement && outOfPlane().isOutOfPlaneMeasurement(measurement)) {
+    // An annotation belongs to a measurement by its uid: without one there is nothing to follow
+    if (!measurement || !measurement.uid) {
+      return;
+    }
+    if (outOfPlane().isOutOfPlaneMeasurement(measurement)) {
       upsertOutOfPlaneAnnotation(measurement);
     } else if (measurement && isSynchronised(measurement.toolName) && isClassic(source || measurement.source)) {
       upsertAnnotation(measurement);

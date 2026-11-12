@@ -23,7 +23,7 @@ export default function handleSingleMeasurementRemoved({ eventData, tool, toolGr
 
   // Unpack measurement data
   const _id = measurementData._id;
-  const uid = measurementData.uid || measurementData._measurementServiceUid;
+  const uid = measurementData.uid || measurementData._measurementServiceId;
 
   const measurementApi = MeasurementApi.Instance;
   if (!measurementApi) {
