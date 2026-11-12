@@ -60,9 +60,9 @@ export default function jumpToRowItem(
   for (let i = 0; i < numViewportsToUpdate; i++) {
     const { timepointId } = timepoints[i];
 
-    const dataAtThisTimepoint = measurementsForToolGroup.find((entry) => {      
-      return entry.timepointId === timepointId && entry.measurementNumber === measurementNumber;
-    });
+    // The row's own measurement: by its _id, else (a row without one) by its number
+    const dataAtThisTimepoint = measurementsForToolGroup.find(entry => entry.timepointId === timepointId
+      && (measurement.measurementId ? entry._id === measurement.measurementId : entry.measurementNumber === measurementNumber));
 
     // Unable to retrieve an entry for the timepoint, move to next measurement in queue
     if (!dataAtThisTimepoint) {

@@ -1692,8 +1692,9 @@ export default class MeasurementApi {
       return;
     }
 
-    const filter = (tool) =>
-      tool._id !== measurementData._id && tool.measurementNumber === measurementData.measurementNumber;
+    // Group pointers name their representation by toolItemId, representations by _id
+    const { _id } = MeasurementApi._unpackMeasurementData(measurementData);
+    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber === measurementNumber;
 
     return configuration.measurementTools
       .filter((toolGroup) => toolGroup.id !== 'temp')
@@ -1724,7 +1725,7 @@ export default class MeasurementApi {
     const { measurementMeta, measurementData, _id } = MeasurementApi._unpackMeasurementData(measurement);
     const measurementNumber = measurementData.measurementNumber || measurementMeta.measurementNumber || measurement.measurementNumber;
 
-    const filter = (tool) => tool._id !== _id && tool.measurementNumber >= measurementNumber;
+    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber >= measurementNumber;
 
     configuration.measurementTools
       .filter((toolGroup) => toolGroup.id !== 'temp')
@@ -1732,9 +1733,59 @@ export default class MeasurementApi {
         this.updateNumbering(this.toolGroups[toolGroup.id], filter, 'measurementNumber', increment);
 
         toolGroup.childTools.forEach((tool) => {
+          const renumbered = (this.tools[tool.id] || []).filter(filter);
           this.updateNumbering(this.tools[tool.id], filter, 'measurementNumber', increment);
+          renumbered.forEach(representation => this._setServiceMeasurementNumber(representation));
         });
       });
+  }
+
+  _setServiceMeasurementNumber(representation) {
+    // The service record of a representation takes the representation's measurement number. The
+    // record is changed in place, without an update event: the number is the API's, and an update
+    // would rebuild the representation from the record.
+    const { uid } = MeasurementApi._unpackMeasurementData(representation);
+    const record = (uid && this.measurementService.getMeasurement(uid))
+      || (representation._id && this.getServiceMeasurementByCornerstoneId(representation._id));
+    if (record && record.metadata && record.metadata.measurementNumber !== representation.measurementNumber) {
+      record.metadata = { ...record.metadata, measurementNumber: representation.measurementNumber };
+    }
+  }
+
+  /**
+   * Measurement numbers name the rows of the Measurements panel and must be unique in a timepoint.
+   * Any representation that shares its number with an earlier one (tool by tool, in each tool's
+   * collection order) is given the next free number, with its group pointers and service record,
+   * and the repair is logged. Returns the ids of the renumbered representations.
+   */
+  repairMeasurementNumbers() {
+    const repaired = [];
+    const groups = configuration.measurementTools.filter((toolGroup) => toolGroup.id !== 'temp');
+    const representations = _.flatMap(groups, toolGroup => _.flatMap(toolGroup.childTools,
+      tool => (this.tools[tool.id] || []).map(representation => ({ representation, toolType: tool.id }))));
+    const pointers = _.flatMap(groups, toolGroup => this.toolGroups[toolGroup.id] || []);
+
+    _.each(_.groupBy(representations, ({ representation }) => representation.timepointId), (inTimepoint) => {
+      const seen = new Set();
+      let next = _.max(inTimepoint.map(({ representation }) => Number(representation.measurementNumber) || 0)) || 0;
+      inTimepoint.forEach(({ representation, toolType }) => {
+        const number = representation.measurementNumber;
+        if (_.isNil(number) || !seen.has(number)) {
+          seen.add(number);
+          return;
+        }
+        next += 1;
+        log.warn('[measurementAPI:repairMeasurementNumbers] measurement number '+number+' was held twice; '
+          + 'toolType='+toolType+' _id='+representation._id+' is renumbered '+next);
+        representation.measurementNumber = next;
+        seen.add(next);
+        pointers.filter(pointer => pointer.toolItemId === representation._id)
+          .forEach((pointer) => { pointer.measurementNumber = next; });
+        this._setServiceMeasurementNumber(representation);
+        repaired.push(representation._id);
+      });
+    });
+    return repaired;
   }
 
   _addOrUpdateServiceMeasurement(measurement, options) {
@@ -1869,6 +1920,9 @@ export default class MeasurementApi {
       return;
     }
 
+    // A representation already held is updated in place: it keeps its number and its group pointer
+    const existing = _id ? collection.find((t) => t._id === _id) : undefined;
+
     // Get the related measurement by the measurement number and use its location if defined
     const relatedMeasurement = collection.find(
       (t) => t.measurementNumber === measurementNumber && t.toolType ===  MeasurementApi._getToolType(measurement));
@@ -1931,19 +1985,22 @@ export default class MeasurementApi {
     // Set the timepointId attribute to measurement to make it easier to filter measurements by timepoint
     measurement.timepointId = timepoint.timepointId;
 
+    if (existing && !_.isNil(existing.measurementNumber)) {
+
+      // The API owns the number: one carried by the representation's data is not applied
+      measurement.measurementNumber = existing.measurementNumber;
+
     // Check if the measurement data is just added by a Cornerstone tool and is still empty
-    if (emptyItem) {
+    } else if (emptyItem) {
       
       // Set relevant initial data and measurement number to the measurement
       measurement.measurementNumber = emptyItem.measurementNumber;
 
-      groupCollection.filter((groupTool) => groupTool.timepointId === timepoint.timepointId)
-        .forEach((groupTool) => {
-          groupTool.toolId = tool.id;
-          groupTool.toolItemId = _id;
-          groupTool.createdAt = measurement.createdAt;
-          groupTool.measurementNumber = measurement.measurementNumber;
-        });
+      // Only the placeholder takes the measurement: the timepoint's other pointers keep theirs
+      emptyItem.toolId = toolType;
+      emptyItem.toolItemId = measurement._id;
+      emptyItem.createdAt = measurement.createdAt;
+      emptyItem.measurementNumber = measurement.measurementNumber;
     
     } else {
       
@@ -1960,7 +2017,7 @@ export default class MeasurementApi {
     };
 
     // Find the matched measurement from other timepoints
-    const found = this.getPreviousMeasurement(measurement);
+    const found = existing ? undefined : this.getPreviousMeasurement(measurement);
 
     // Check if a previous related meausurement was found on other timepoints
     if (found) {
@@ -1986,7 +2043,7 @@ export default class MeasurementApi {
       if (description) {
         updateObject.description = description;
       }
-    } else if (this.hasDuplicateMeasurementNumber(measurement)) {
+    } else if (!existing && this.hasDuplicateMeasurementNumber(measurement)) {
 
       // Update measurementNumber for the measurements with masurementNumber greater or equal than
       // measurementNumber of the added measurement (except the added one)
@@ -2042,7 +2099,7 @@ export default class MeasurementApi {
       addedMeasurement.isLocked = Boolean(isLocked);
     }
 
-    if (!emptyItem) {
+    if (!emptyItem && !groupCollection.some((pointer) => pointer.toolItemId === addedMeasurement._id)) {
 
       // Create pointer record in the group collection for the measurement.
       groupCollection.push({
@@ -2054,9 +2111,11 @@ export default class MeasurementApi {
         measurementNumber: addedMeasurement.measurementNumber,
       });
 
-    } else {
+    } else if (emptyItem) {
       log.warn('[measurementAPI:addMeasurementRepresentation] empty item, no entry added to group collection', emptyItem);
     }
+
+    this.repairMeasurementNumbers();
 
     // Let others know that the measurements are updated
     this.onMeasurementsUpdated();
@@ -2166,9 +2225,20 @@ export default class MeasurementApi {
         return;
       }
 
-      // Update tool data within the collection
+      // Update tool data within the collection. The measurement number is the API's: one the update
+      // carries (rebuilt from the service record) is not applied.
       const measurement0 = collection[toolIndex];
+      const measurementNumber = measurement0.measurementNumber;
       const updatedMeasurement = Object.assign(options.replace ? {} : measurement0, measurement);
+      if (!_.isNil(measurementNumber)) {
+        updatedMeasurement.measurementNumber = measurementNumber;
+        if (updatedMeasurement.metadata) {
+          updatedMeasurement.metadata = { ...updatedMeasurement.metadata, measurementNumber };
+        }
+        if (updatedMeasurement.measurementData) {
+          updatedMeasurement.measurementData = { ...updatedMeasurement.measurementData, measurementNumber };
+        }
+      }
 
       // The lock is read from the top level first: keep it with the update's, which carries it in its
       // metadata, so a measurement the user unlocks is not held locked by an earlier state
@@ -2271,6 +2341,7 @@ export default class MeasurementApi {
       //  Decrease measurementNumber of all measurements with measurementNumber greater than measurementNumber of the deleted measurement by 1
       this.updateMeasurementNumberForAllMeasurements(measurement, -1);
     }
+    this.repairMeasurementNumbers();
 
     // Synchronize the new tool data
     this.syncMeasurementsAndToolData();
@@ -2507,6 +2578,12 @@ export default class MeasurementApi {
           MeasurementApi.purgeCornerstoneToolData(toolType, imageId, _m);
         }
       }
+    });
+
+    // The group pointers go with the representations: a pointer left behind would number the
+    // measurements added after the clear
+    _.each(this.toolGroups, (groupCollection) => {
+      groupCollection.splice(0, groupCollection.length);
     });
 
     // Synchronize tool state

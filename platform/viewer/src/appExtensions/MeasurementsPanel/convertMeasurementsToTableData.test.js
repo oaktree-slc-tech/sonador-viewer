@@ -110,6 +110,20 @@ it('numbers the rows in the order it lists them, saved then pending, out-of-plan
 });
 
 
+it('gives each measurement its own row, even two that share a measurement number, in the order of their numbers', () => {
+  const groups = convertMeasurementsToTableData({
+    Length: [
+      drawn('Length', { _id: 'Length-3', uid: 'Length-uid-3', measurementNumber: 3, length: 30 }),
+      drawn('Length', { _id: 'Length-1', uid: 'Length-uid-1', measurementNumber: 2, length: 10 }),
+      drawn('Length', { _id: 'Length-2', uid: 'Length-uid-2', measurementNumber: 2, length: 20 }),
+    ],
+  }, timepoints);
+  const [pending] = groups;
+  expect(pending.measurements.map(row => row.measurementId)).toEqual(['Length-1', 'Length-2', 'Length-3']);
+  // Each row shows its own measurement's value only
+  pending.measurements.forEach(row => expect(row.data).toHaveLength(1));
+});
+
 it('marks as pending (the rows with an actions menu) the measurements not yet saved that have a service record', () => {
   const groups = convertMeasurementsToTableData({
     CobbAngle: [drawn('CobbAngle', { isReadOnly: true })],

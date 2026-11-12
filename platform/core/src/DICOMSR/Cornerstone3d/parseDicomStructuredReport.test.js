@@ -331,6 +331,56 @@ describe('read-only display', () => {
 });
 
 
+describe('a measurement that cannot be mapped', () => {
+  const MAP_ERROR = "Failed to map: Cannot read properties of undefined (reading 'displaySetInstanceUID')";
+  const tags = (key, entries) => {
+    mockToolStates[key] = {
+      DICOMSRSeriesTagTool: entries.map(([name, sopInstanceUid = '2.25.900']) => ({
+        sopInstanceUid, TrackingUniqueIdentifier: `${key}.${name}`, annotation: { data: { value: name }, metadata: {} },
+      })),
+    };
+    return key;
+  };
+  const parseNotified = async (key) => {
+    const error = jest.fn();
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await parseDicomStructuredReport(key, [], { servicesManager: { services: {
+      ...external.servicesManager.services, LoggerService: { error },
+    } } });
+    return error;
+  };
+
+  it('is left out with a notification giving the count left out and the count imported; the others are imported', async () => {
+    const key = tags(report('2.25.65', ENHANCED_SR, '1500'), [['first'], ['second'], ['third']]);
+    mockImport.mockImplementationOnce(() => { throw new Error(MAP_ERROR); });
+    const error = await parseNotified(key);
+
+    expect(mockImport).toHaveBeenCalledTimes(3);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toMatchObject({ title: 'Measurements could not be read from a report', notify: true });
+    expect(error.mock.calls[0][0].message).toMatch(
+      /^1 measurement of report .* could not be read: DICOMSRSeriesTagTool \(1\)\. 2 other measurements of the report were imported\.$/);
+    // The report still hydrated: it is the save parent
+    expect(saveParent(STUDY)).toMatchObject({ SOPInstanceUID: '2.25.65' });
+  });
+
+  it('says that none was imported when every one fails, and does not count one skipped for a missing image', async () => {
+    mockImport.mockImplementation(() => { throw new Error(MAP_ERROR); });
+    try {
+      const all = await parseNotified(tags(report('2.25.66', ENHANCED_SR, '1500'), [['first'], ['second']]));
+      expect(all.mock.calls[0][0].message).toMatch(
+        /^2 measurements of report .* could not be read: DICOMSRSeriesTagTool \(2\)\. No measurement of the report was imported\.$/);
+
+      // One fails to map, one has no loaded image (skipped before mapping): neither is imported
+      const withSkip = await parseNotified(tags(report('2.25.67', ENHANCED_SR, '1500'), [['first'], ['second', '2.25.999']]));
+      expect(withSkip.mock.calls[0][0].message).toMatch(
+        /^1 measurement of report .* could not be read: DICOMSRSeriesTagTool \(1\)\. No measurement of the report was imported\.$/);
+    } finally {
+      mockImport.mockImplementation(() => 'measurement-uid');
+    }
+  });
+});
+
 describe('multiframe references', () => {
   it('hands the reader the image id of every frame and imports an angle on the frame it references', async () => {
     const key = report('2.25.60', COMPREHENSIVE_3D_SR, 'Sonador-SR.1500');
