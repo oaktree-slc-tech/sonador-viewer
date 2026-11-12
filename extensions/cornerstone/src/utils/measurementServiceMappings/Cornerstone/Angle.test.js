@@ -245,4 +245,20 @@ describe('classic -> service measurement', () => {
     expect(rebuilt.measurementData).toMatchObject({ rAngle: 120, TrackingUniqueIdentifier: '2.25.8100' });
     expect(rebuilt.measurementData.handles.end2).toMatchObject({ x: 20.5, y: 20.5 });
   });
+
+  it("carries a Cobb angle's viewport label values both ways, and has its label redrawn when they change", () => {
+    const record = { ...hydratedCobbAngle, metadata: { ...hydratedCobbAngle.metadata, viewportValues: ['angle', 'arc1'] } };
+    const { annotation } = bridge(CobbAngle, record);
+    expect(annotation.viewportValues).toEqual(['angle', 'arc1']);
+    expect(annotation).toHaveProperty('value', undefined);
+
+    const measurement = CobbAngle.toMeasurement(measurementService, annotation);
+    expect(measurement.metadata.viewportValues).toEqual(['angle', 'arc1']);
+    expect(measurement.data.viewportValues).toEqual(['angle', 'arc1']);
+    expect(Object.keys(measurement).filter(key => !SCHEMA_KEYS.includes(key))).toEqual([]);
+
+    // An Angle has none
+    expect(bridge(Angle, { ...record, toolName: 'Angle', points: [[10, 0, 0], [0, 0, 0], [0, 10, 0]] }).annotation)
+      .not.toHaveProperty('viewportValues');
+  });
 });

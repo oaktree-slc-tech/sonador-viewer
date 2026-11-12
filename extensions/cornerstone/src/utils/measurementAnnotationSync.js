@@ -42,6 +42,10 @@
 //   (the stock tools complete it, then the view removes it) is neither saved nor announced.
 // * The unsaved annotations follow the global annotation visibility (show all / hide all), as the
 //   measurements do: they are registered with the measurement API as a visibility source.
+// * An annotation carries the values its measurement's viewport label shows (`viewportValues`,
+//   chosen from the measurement's detail card in the Annotations panel). A circle's pixel
+//   statistics computed in a Cornerstone3D view (mean, standard deviation, maximum) are kept with
+//   its measurement, for the detail card.
 //
 // Patient points map to image points as DICOM defines them (DICOMSR angleGeometry), as hydration
 // and the writer do.
@@ -285,6 +289,14 @@ function valueOf(toolName, patientPoints) {
  * A measurement's value with the points it belongs to: an angle's (degrees) or a Length's (mm) as
  * { value, points }, a circle's as { values: { radius, area, perimeter }, points }
  */
+/** The values a measurement's viewport label shows, when it chose them */
+const viewportValuesOf = measurement => [measurement.metadata, measurement.data]
+  .map(section => section && section.viewportValues).find(Array.isArray);
+
+// A circle's pixel statistics, which a Cornerstone3D view computes and the record keeps, with the
+// modality of the pixels measured (it names the quantity in a report when no image does)
+const CIRCLE_STAT_KEYS = ['mean', 'stdDev', 'max', 'modalityUnit', 'statisticsModality'];
+
 function recordValueOf(measurement, points) {
   const data = measurement.data || {};
   if (isCircleTool(measurement.toolName)) {
@@ -404,9 +416,12 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       const moved = !samePoints(existing.data.handles.points, points) || existing.metadata.referencedImageId !== imageId;
       const current = moved ? points : existing.data.handles.points;
       const value = recordValue && { ...recordValue, points: _.cloneDeep(current) };
-      if (!moved && _.isEqual(existing.data.recordValue, value) && existing.data.label === label) {
+      const viewportValues = viewportValuesOf(measurement);
+      if (!moved && _.isEqual(existing.data.recordValue, value) && existing.data.label === label
+          && _.isEqual(existing.data.viewportValues, viewportValues)) {
         return existing;
       }
+      existing.data.viewportValues = viewportValues && [...viewportValues];
       existing.data.handles.points = current;
       existing.data.recordValue = value;
       existing.data.label = label;
@@ -433,6 +448,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
         handles: { points, activeHandleIndex: null, textBox: { hasMoved: false } },
         cachedStats: {},
         recordValue,
+        viewportValues: viewportValuesOf(measurement),
       },
     };
     c3dAnnotation.state.addAnnotation(annotation, undefined);
@@ -729,6 +745,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       }
       existing.data.label = label;
       existing.data.recordValue = recordValue && { ...recordValue, points: _.cloneDeep(existing.data.handles.points) };
+      existing.data.viewportValues = viewportValuesOf(measurement);
       existing.invalidated = true;
       render();
       return existing;
@@ -751,6 +768,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
         handles: { points, activeHandleIndex: null, textBox: { hasMoved: false } },
         cachedStats: {},
         recordValue,
+        viewportValues: viewportValuesOf(measurement),
       },
     };
     c3dAnnotation.state.addAnnotation(annotation, undefined);
@@ -790,13 +808,55 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     }, true);
   }
 
+  function keepCircleStats(measurementUID, measurement, annotation) {
+    // A circle's pixel statistics computed in a Cornerstone3D view, kept with its measurement while
+    // its annotation is at the record's points: those of the image it is on, else of the first view
+    // that has them. A locked (saved or read) circle keeps the statistics it has, and takes those
+    // computed only when it has none. True when the record changed.
+    const cachedStats = (annotation.data && annotation.data.cachedStats) || {};
+    const imageId = annotation.metadata && annotation.metadata.referencedImageId;
+    const stats = (imageId && cachedStats[`imageId:${imageId}`])
+      || Object.values(cachedStats).find(candidate => candidate && _.isFinite(candidate.mean));
+    if (!stats || !_.isFinite(stats.mean)) {
+      return false;
+    }
+    const recorded = (measurement.data && measurement.data.cachedStats) || {};
+    const { recordValue, handles } = annotation.data;
+    if (!recordValue || !handles || !samePoints(recordValue.points, handles.points)) {
+      return false;
+    }
+    if (isLockedMeasurement(measurement) && ['mean', 'stdDev', 'max'].some(key => _.isFinite(recorded[key]))) {
+      return false;
+    }
+    const statisticsModality = stats.statisticsModality || stats.Modality;
+    const kept = { ..._.pick(stats, CIRCLE_STAT_KEYS), ...(statisticsModality ? { statisticsModality } : {}) };
+    if (CIRCLE_STAT_KEYS.every(key => recorded[key] === kept[key])) {
+      return false;
+    }
+    measurementService.update(measurementUID, {
+      ...measurement, data: { ...measurement.data, cachedStats: { ...recorded, ...kept } },
+    }, true);
+    return true;
+  }
+
   function onAnnotationModified(event) {
     const annotation = event.detail && event.detail.annotation;
     const measurementUID = measurementUIDOf(annotation && annotation.annotationUID);
     const measurement = measurementUID && measurementService.getMeasurement(measurementUID);
-    if (!measurement || isLockedMeasurement(measurement)) {
+    if (!measurement) {
       return;
     }
+    // A locked measurement's geometry is not edited; a circle's statistics follow its geometry
+    if (!isLockedMeasurement(measurement)) {
+      editMeasurement(measurementUID, measurement, annotation);
+    }
+    const current = measurementService.getMeasurement(measurementUID);
+    if (current && isCircleTool(current.toolName)) {
+      keepCircleStats(measurementUID, current, annotation);
+    }
+  }
+
+  function editMeasurement(measurementUID, measurement, annotation) {
     if (outOfPlane().isOutOfPlaneMeasurement(measurement)) {
       updateOutOfPlaneMeasurement(measurementUID, measurement, annotation);
       return;

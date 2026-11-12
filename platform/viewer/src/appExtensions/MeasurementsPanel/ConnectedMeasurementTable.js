@@ -16,7 +16,7 @@ import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigat
 import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
-import { circleDetailItems, circleDisplayValues } from '@ohif/core/src/measurements/tools/circleDisplay';
+import measurementDetailSource from './measurementDetailSource.js';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -236,8 +236,9 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       // mapping, such as the rectangle, is neither)
       isPending: Boolean(toolServiceManaged && uid) && !isReadOnly,
       customColor: MeasurementApi.customLineTextColor(measurement),
-      // A circle's area, perimeter and radius, for its detail line
-      circleDetail: toolType === 'CircleRoi' ? circleDetailItems(circleDisplayValues(measurement)) : undefined,
+      // The measurement and its image's calibration, from which the row builds the measurement's
+      // detail (its value, the reference line's +N and the detail card)
+      detailSource: measurementDetailSource(measurement),
       isDirty,
       isVisible: _.isNil(isVisible) ? true : isVisible,
       warningTitle,
@@ -713,6 +714,11 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
     onToggleLockClick: (event, measurementData) => {
       // Lock or unlock a pending measurement
       MeasurementApi.Instance.toggleLockMeasurement(measurementData._measurementServiceId);
+    },
+
+    onViewportValuesChangeClick: (measurementData, keys) => {
+      // The values a pending measurement's viewport label shows, chosen from its detail card
+      MeasurementApi.Instance.setMeasurementViewportValues(measurementData._measurementServiceId, keys);
     },
 
     onLineTextColorClick: async (event, measurementData, part) => {

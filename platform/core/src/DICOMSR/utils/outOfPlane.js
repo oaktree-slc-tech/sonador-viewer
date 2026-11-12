@@ -16,6 +16,8 @@
 // A drawing becomes one only in a view whose volume is registered as a drawing volume (the 3D
 // Inspector), which names the series it shows.
 
+import { circleStatisticsOf } from './circleGeometry';
+
 // The circle's records carry its Cornerstone3D name (circleGeometry.js); the writer knows it too
 const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI'];
 
@@ -35,10 +37,15 @@ function isOutOfPlaneMeasurement(measurement) {
     && !!(measurement.metadata && measurement.metadata.outOfPlane);
 }
 
-/** The writer's tool data of an out-of-plane record: its patient points in handle order */
+/**
+ * The writer's tool data of an out-of-plane record: its patient points in handle order, and a
+ * circle's pixel statistics (the record's `cachedStats`, or its statistics by target)
+ */
 function patientToolData(measurement) {
   const metadata = measurement.metadata || {};
+  const data = measurement.data || {};
   return {
+    statistics: circleStatisticsOf(data.cachedStats, ...Object.values(data).filter(value => value && typeof value === 'object')),
     uid: measurement.uid,
     _id: measurement.uid,
     toolType: measurement.toolName,

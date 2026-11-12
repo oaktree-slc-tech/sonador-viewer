@@ -170,3 +170,30 @@ describe('MeasurementApi.customLineTextColor (the panel indicator)', () => {
     expect(custom({ Text: '#00FF00' })).toEqual({ line: 'rgb(255, 255, 0)', text: '#00FF00' });
   });
 });
+
+
+describe('MeasurementApi.setMeasurementViewportValues', () => {
+  it("sets the values a pending measurement's viewport label shows, in both sections, at least one", () => {
+    const service = serviceWith({ uid: 'c', toolName: 'CircleRoi', metadata: { toolName: 'CircleRoi' }, data: { cachedStats: { radius: 5 } } });
+    const updated = updatesOf(service);
+    const api = apiWith(service);
+
+    api.setMeasurementViewportValues('c', ['radius', 'mean', 'mean']);
+    expect(service.getMeasurement('c').metadata.viewportValues).toEqual(['radius', 'mean']);
+    expect(service.getMeasurement('c').data).toEqual({ cachedStats: { radius: 5 }, viewportValues: ['radius', 'mean'] });
+    expect(updated).toEqual([['c', true]]);
+
+    // None is refused
+    api.setMeasurementViewportValues('c', []);
+    expect(service.getMeasurement('c').metadata.viewportValues).toEqual(['radius', 'mean']);
+    expect(updated).toHaveLength(1);
+  });
+
+  it('leaves a saved measurement alone', () => {
+    const service = serviceWith({ uid: 's', toolName: 'CircleRoi', metadata: { isReadOnly: true } });
+    const updated = updatesOf(service);
+    apiWith(service).setMeasurementViewportValues('s', ['radius']);
+    expect(service.getMeasurement('s').metadata.viewportValues).toBeUndefined();
+    expect(updated).toEqual([]);
+  });
+});

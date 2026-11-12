@@ -874,6 +874,35 @@ describe('a measurement drawn in the 3D Inspector', () => {
     expect(mirror(record.uid).metadata.toolName).toBe('CircleROI');
   });
 
+  it('keeps the modality of the statistics a circle drawn on an MR volume computes, through an edit, to the report writer', async () => {
+    const { patientToolData } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane');
+    const { circleStatisticItems, circleStatisticNumItems } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry');
+    await drawn('CircleROI', [[12, 0, 0], [12, 3, -4]]);
+    const [{ uid }] = records();
+    const annotation = mirror(uid);
+    // As Cornerstone3D computes them on a volume: by target, with the image's Modality
+    const computed = () => ({ Modality: 'MR', mean: 812.5, stdDev: 40.25, max: 990, min: 3, modalityUnit: '', radius: 5 });
+    annotation.data.cachedStats = { 'volumeId:volume::inspection': computed() };
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    const stats = { mean: 812.5, stdDev: 40.25, max: 990, modalityUnit: '', statisticsModality: 'MR' };
+    expect(service.getMeasurement(uid).data.cachedStats).toMatchObject(stats);
+
+    // Its edge dragged: the values follow the points, and the statistics stay
+    annotation.data.handles.points = [[12, 0, 0], [12, 6, -8]];
+    annotation.data.cachedStats = { 'volumeId:volume::inspection': { ...computed(), mean: 800 } };
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    const record = service.getMeasurement(uid);
+    expect(record.data.cachedStats.radius).toBeCloseTo(10, 9);
+    expect(record.data.cachedStats).toMatchObject({ ...stats, mean: 800 });
+
+    // The writer input of the record, its statistic NUMs, and those NUMs read back
+    const { statistics } = patientToolData(record);
+    expect(statistics).toEqual({ ...stats, mean: 800 });
+    const items = circleStatisticItems(statistics, undefined, () => ({ RelationshipType: 'INFERRED FROM', ValueType: 'SCOORD3D' }));
+    expect(items.map(item => item.ConceptNameCodeSequence.CodeValue)).toEqual(['110852', '110852', '110852']);
+    expect(circleStatisticNumItems(items)).toEqual({ ...stats, mean: 800 });
+  });
+
   it('is announced once a session as shown in the MPR and 3D views only', async () => {
     await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
     await drawn('CobbAngle', [[12, 0, 0], [12, 10, 0], [12, 0, -10], [12, 0, -20]]);
@@ -1061,6 +1090,85 @@ describe('circles', () => {
     expect(measurement.data.cachedStats.radius).toBeCloseTo(10, 9);
     expect(measurement.data.cachedStats.area).toBeCloseTo(100 * Math.PI, 9);
     expect(measurement.metadata.TrackingUniqueIdentifier).toBe('2.25.8200');
+  });
+
+  it('carry the values the measurement shows in its viewport label to their annotation, and follow a change', () => {
+    service.add(circle());
+    expect(mirror('circle-1').data.viewportValues).toBeUndefined();
+
+    const chosen = circle();
+    chosen.metadata.viewportValues = ['diameter', 'mean'];
+    service.publish('updated', { source: classicSource, measurement: chosen });
+    expect(mirror('circle-1').data.viewportValues).toEqual(['diameter', 'mean']);
+    expect(mirror('circle-1').invalidated).toBe(true);
+  });
+
+  it("keep the pixel statistics a Cornerstone3D view computes with their measurement, once", () => {
+    service.add(circle());
+    const annotation = mirror('circle-1');
+    annotation.data.cachedStats = {
+      'imageId:wadors:image': { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI, mean: 40, stdDev: 2, max: 50, min: 1, modalityUnit: 'HU' },
+    };
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+
+    expect(service.update).toHaveBeenCalledTimes(1);
+    const [uid, measurement, notYetUpdatedAtSource] = service.update.mock.calls[0];
+    expect([uid, notYetUpdatedAtSource]).toEqual(['circle-1', true]);
+    expect(measurement.data.cachedStats).toEqual({
+      radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI, mean: 40, stdDev: 2, max: 50, modalityUnit: 'HU',
+    });
+
+    // The same statistics again: no update
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    expect(service.update).toHaveBeenCalledTimes(1);
+  });
+
+  const lockedCircle = (stored = {}, metadata = { isLocked: true }) => {
+    const measurement = circle();
+    measurement.data.cachedStats = { ...measurement.data.cachedStats, ...stored };
+    measurement.metadata = { ...measurement.metadata, ...metadata };
+    return measurement;
+  };
+  const computedOn = annotation => {
+    annotation.data.cachedStats = {
+      'volumeId:volume::mpr': { Modality: 'CT', radius: 5, mean: 40, stdDev: 2, max: 50, modalityUnit: 'HU' },
+    };
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+  };
+
+  it('give a locked circle without statistics those an MPR view computes, without changing its geometry', () => {
+    [['locked-pending', { isLocked: true }], ['read-only', { isLocked: true, isReadOnly: true }]].forEach(([name, metadata]) => {
+      service.update.mockClear();
+      const measurement = { ...lockedCircle({}, metadata), uid: name };
+      service.add(measurement);
+      const before = JSON.parse(JSON.stringify(service.getMeasurement(name)));
+      computedOn(mirror(name));
+
+      expect(service.update).toHaveBeenCalledTimes(1);
+      const updated = service.getMeasurement(name);
+      expect(updated.data.cachedStats).toEqual({
+        radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI, mean: 40, stdDev: 2, max: 50, modalityUnit: 'HU', statisticsModality: 'CT',
+      });
+      const { data, ...rest } = JSON.parse(JSON.stringify(updated));
+      const { data: beforeData, ...beforeRest } = before;
+      expect(rest).toEqual(beforeRest);
+      expect(data.handles).toEqual(beforeData.handles);
+      expect(mirror(name).data.handles.points).toEqual([[0, 0, 0], [3, 4, 0]]);
+    });
+  });
+
+  it('keep the stored statistics of a locked circle, and take none while its annotation is not at the record', () => {
+    service.add({ ...lockedCircle({ mean: 33, modalityUnit: 'HU' }, { isLocked: true, isReadOnly: true }), uid: 'stored' });
+    computedOn(mirror('stored'));
+    expect(service.update).not.toHaveBeenCalled();
+    expect(service.getMeasurement('stored').data.cachedStats.mean).toBe(33);
+
+    // Without statistics, but its handles moved: neither statistics nor geometry change
+    service.add({ ...lockedCircle(), uid: 'moved' });
+    const annotation = mirror('moved');
+    annotation.data.handles.points[1] = [6, 8, 0];
+    computedOn(annotation);
+    expect(service.update).not.toHaveBeenCalled();
   });
 
   it('draw nothing for an update whose measurement carries no uid', () => {

@@ -159,24 +159,46 @@
         margin: 0
 
       // A series sub-group (Group by series): a second-level header under its group, indented and
-      // a step smaller, with the group's own +/- control
+      // a step smaller, led by the series number as the rows write it (S:), with the group's own
+      // +/- control. Hover and focus take the row index cell's surface: the group header's is too
+      // close to the heading's own to show.
       .measurementSeriesHeader
         appearance: none
         display: flex
         align-items: center
+        column-gap: 8px
         width: 100%
-        min-height: 32px
+        height: 32px
         margin: 1px 0 0
-        padding: 4px 0 4px 24px
+        padding: 0 0 0 24px
         border: 0
         background-color: var(--ui-gray-darker)
         color: var(--text-primary-color)
         font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif
-        font-size: 14px
+        font-size: 13px
         font-weight: 400
         line-height: 20px
         text-align: left
         cursor: pointer
+        transition: background-color 0.15s ease
+
+        &:hover, &:focus-visible
+          background-color: var(--ui-gray)
+
+        &:focus-visible
+          outline: none
+          box-shadow: inset 0 0 0 1px var(--ui-border-color-active)
+
+        .measurementSeriesNumber
+          flex: 0 0 auto
+          font-size: 12px
+          color: var(--text-secondary-color)
+
+          .refLabel
+            font-size: 10px
+            font-weight: 900
+            color: var(--active-color)
+            margin-right: 3px
 
         .measurementSeriesTitle
           flex: 1 1 auto
@@ -186,8 +208,10 @@
           white-space: nowrap
 
         .measurementSeriesCount
+          flex: 0 0 auto
           color: var(--ui-sky-blue)
-          padding: 0 12px 0 8px
+          font-variant-numeric: tabular-nums
+          padding: 0 4px 0 0
 
       .measurementSeriesHeader[data-state="open"] .measurementGroupExpand,
       .measurementSeriesHeader[data-state="closed"] .measurementGroupCollapse
@@ -281,46 +305,138 @@
         position: relative
         top: 2px
 
-// The series hover card's annotation types: the type in the card's text, its count in the
-// panel's count colour; "Pending" after a pending type in the active colour, lighter, so it reads
-// apart from the type. The card is rendered outside the panel, so the rules are not nested. The
-// cells set their own border and padding over the page's global table cell rules.
-.seriesAnnotationTypes
-  border-collapse: collapse
-  margin-bottom: 16px
+// The series hover card (portalled to the body, so not nested): the hover-card shell
+// (.annotationHoverCard, MeasurementTableItem.styl) at 256px, with the detail card's header, section
+// and chip patterns. The class is doubled to outrank TooltipContent's utilities.
+.seriesCard.seriesCard
+  width: 256px
+  max-width: none
+  overflow: hidden
+  // Undoes TooltipContent's text-sm; the detail card (a popover) has no such size to undo
+  font-size: 14px
+  line-height: normal
 
-  td
-    border: 0
-    padding: 2px 12px 2px 0
+  .seriesCardHeader
+    display: flex
+    align-items: center
+    gap: 10px
+    padding: 12px 14px 8px
 
-  td:last-child
-    padding-right: 0
+  .seriesCardTile
+    display: flex
+    align-items: center
+    justify-content: center
+    flex: 0 0 auto
+    width: 36px
+    height: 36px
+    border-radius: 8px
+    background-color: #1d3a57
+    color: #9fd0f7
+
+    svg
+      width: 20px
+      height: 20px
+
+  .seriesCardTitle
+    flex: 1 1 auto
+    min-width: 0
+
+  .seriesCardName
+    font-size: 15px
+    font-weight: 600
+    line-height: 20px
+    color: var(--text-primary-color)
+    overflow-wrap: anywhere
+
+  .seriesCardSub
+    margin-top: 1px
+    font-size: 12px
+    line-height: 16px
+    color: var(--text-secondary-color)
+
+  .seriesCardChip
+    align-self: flex-start
+    flex: 0 0 auto
+    // Level with the name's first line rather than the header's top edge
+    margin-top: 2px
+    font-size: 10.5px
+    font-weight: 700
+    line-height: 16px
+    padding: 1px 7px
+    border-radius: 9px
+    border: 1px solid var(--ui-border-color)
+    color: var(--text-primary-color)
+    font-variant-numeric: tabular-nums
+
+  // The whole description, however long: the card grows with it. The same space above the text
+  // (with the header's 8px) as below it, to the divider.
+  .seriesCardDescription
+    padding: 2px 14px 10px
+    font-size: 12.5px
+    line-height: 17px
+    color: var(--text-primary-color)
+    overflow-wrap: anywhere
+
+  .seriesCardSection
+    border-top: 1px solid var(--ui-gray)
+    padding: 9px 14px 10px
+
+  .seriesCardSectionHeader
+    margin-bottom: 5px
+    font-size: 10px
+    font-weight: 800
+    letter-spacing: 0.07em
+    text-transform: uppercase
+    color: var(--text-secondary-color)
+
+  .seriesCardType
+    display: grid
+    grid-template-columns: 20px minmax(0, 1fr) auto
+    align-items: center
+    column-gap: 8px
+    min-height: 25px
+    font-size: 13px
+
+  .seriesCardTypeIcon
+    display: inline-flex
+    align-items: center
+    color: #9fd0f7
+
+  .seriesCardTypeName
+    display: flex
+    flex-wrap: wrap
+    align-items: center
+    gap: 6px
+    min-width: 0
+    color: var(--text-primary-color)
+
+  .seriesCardTypeCount
+    font-weight: 600
     color: var(--ui-sky-blue)
+    font-variant-numeric: tabular-nums
 
-  .seriesAnnotationPending
-    margin-left: 16px
-    color: var(--active-color)
-    font-weight: 300
+  // 3D and Pending after the type's name
+  .seriesCardMark
+    font-size: 10px
+    font-weight: 700
+    line-height: 15px
+    padding: 0 6px
+    border-radius: 8px
+    border: 1px solid var(--ui-border-color)
+    color: var(--text-primary-color)
 
-// The series thumbnail's instance-count glyph (Thumbnail.styl .image-frames .icon): two stacked
-// squares. The series hover card is rendered outside the panel, so the rule is not nested.
-.seriesFramesGlyph
-  position: relative
-  display: inline-block
-  width: 11px
-  height: 11px
-  margin-left: 4px
-  background-color: #678696
+    &.isPending
+      background-color: #1d3a57
+      border-color: #3f8fd0
+      color: #9fd0f7
 
-  &:after
-    content: ''
-    position: absolute
-    left: -4px
-    top: -4px
-    width: 11px
-    height: 11px
-    background-color: var(--active-color)
-    box-shadow: 1px 1px rgba(0, 0, 0, .115)
+  .seriesCardNote
+    padding: 7px 9px
+    border-radius: 6px
+    background-color: #1d3a57
+    color: #9fd0f7
+    font-size: 12px
+    line-height: 17px
 
 .tooltip-warning
   &.in

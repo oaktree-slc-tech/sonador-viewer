@@ -21,7 +21,7 @@ import {
 } from '../utils/angleGeometry';
 import { DEFAULT_PLANE_TOLERANCE } from '../readOnly/planeGeometry';
 import {
-	CIRCLE_TOOL_NAMES, CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleOfGeometry, circleRadius, circleValues, ellipseOfCircle,
+	CIRCLE_TOOL_NAMES, CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleOfGeometry, circleRadius, circleStatisticsOf, circleValues, ellipseOfCircle,
 } from '../utils/circleGeometry';
 import { drawingPlaneOf } from '../utils/drawingPlane';
 
@@ -454,7 +454,9 @@ CornerstoneLegacyMeasurementReport.registerTool(Length);
 // * patient domain (a measurement read in it, or an out-of-plane measurement, which holds patient
 //   points): an ELLIPSE whose second diameter follows the normal of the plane it lies in (the image
 //   plane, or the out-of-plane measurement's Drawing-Plane; without one it is refused).
-// A radius below MIN_RADIUS is refused.
+// A radius below MIN_RADIUS is refused. The pixel statistics are written with the circle: those it
+// was read with while it is unchanged, else those the tool holds; the image's modality names their
+// quantity (a patient-domain circle has none, so its statistics' unit does).
 
 const samePoint = (a, b, tolerance) => !!a && !!b && a.length === b.length
 	&& a.every((value, i) => Math.abs(value - b[i]) <= tolerance);
@@ -469,14 +471,19 @@ function storedCircleOf(source) {
 	return circle && !circle.legacy ? { circle, points, values: source.values } : undefined;
 }
 
-function storedCircleArguments(tool, stored, { use3DSpatialCoordinates, FrameOfReferenceUID }) {
+const toolStatistics = tool => circleStatisticsOf(tool.cachedStats, tool.statistics);
+
+function storedCircleArguments(tool, stored, { use3DSpatialCoordinates, FrameOfReferenceUID, modality }) {
 	// The arguments of an unchanged hydrated circle, its geometry and values as read; a degenerate one
 	// (kept with a warning on read) is refused as a drawn one is
 	const radii = [stored.values.radius, use3DSpatialCoordinates ? stored.circle.radius : stored.values.radius];
 	if (!radii.every(radius => radius >= MIN_RADIUS)) {
 		throw refusal(REFUSAL.DEGENERATE, `Circle radius is below ${MIN_RADIUS} mm`);
 	}
-	return circleArguments(tool, { points: stored.points, values: stored.values, use3DSpatialCoordinates, FrameOfReferenceUID });
+	return circleArguments(tool, {
+		points: stored.points, values: stored.values, use3DSpatialCoordinates, FrameOfReferenceUID,
+		statistics: circleStatisticsOf(stored.values) || toolStatistics(tool), modality,
+	});
 }
 
 const circleTrackingIdentifier = (tool) => {
@@ -486,11 +493,13 @@ const circleTrackingIdentifier = (tool) => {
 		? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, CIRCLE_TRACKING_TOOL].join(':');
 };
 
-function circleArguments(tool, { points, values, use3DSpatialCoordinates, FrameOfReferenceUID }) {
+function circleArguments(tool, { points, values, use3DSpatialCoordinates, FrameOfReferenceUID, statistics, modality }) {
 	const meta = tool.metadata || {};
 	return {
 		points,
 		values,
+		statistics,
+		modality,
 		use3DSpatialCoordinates,
 		ReferencedFrameOfReferenceUID: use3DSpatialCoordinates ? FrameOfReferenceUID : undefined,
 		trackingIdentifierTextValue: circleTrackingIdentifier(tool),
@@ -500,7 +509,7 @@ function circleArguments(tool, { points, values, use3DSpatialCoordinates, FrameO
 	};
 }
 
-function patientCircleArguments(tool, center, edge, normal, FrameOfReferenceUID) {
+function patientCircleArguments(tool, center, edge, normal, FrameOfReferenceUID, modality) {
 	// The ELLIPSE of a circle of patient points in the plane of `normal`, with the values of its radius
 	if (!normal) {
 		throw refusal(REFUSAL.PLANE, 'Circle has no plane: its Drawing-Plane is missing or not valid');
@@ -510,7 +519,9 @@ function patientCircleArguments(tool, center, edge, normal, FrameOfReferenceUID)
 		throw refusal(REFUSAL.DEGENERATE, `Circle radius is below ${MIN_RADIUS} mm`);
 	}
 	const radius = circleRadius(points[0], points[1]) / 2;
-	return circleArguments(tool, { points, values: circleValues(radius), use3DSpatialCoordinates: true, FrameOfReferenceUID });
+	return circleArguments(tool, {
+		points, values: circleValues(radius), use3DSpatialCoordinates: true, FrameOfReferenceUID, statistics: toolStatistics(tool), modality,
+	});
 }
 
 const imagePlaneNormal = (module) => {
@@ -550,6 +561,7 @@ function circleToolArguments(tool, context) {
 	}
 	const imagePoints = [[handles.start.x, handles.start.y], [handles.end.x, handles.end.y]];
 	const module = metadataOf(metadataProvider, 'imagePlaneModule', imageId);
+	const { modality } = metadataOf(metadataProvider, 'generalSeriesModule', imageId) || {};
 	const sopCommon = metadataOf(metadataProvider, 'sopCommonModule', imageId) || {};
 	const frameNumber = metadataOf(metadataProvider, 'frameNumber', imageId);
 
@@ -568,7 +580,7 @@ function circleToolArguments(tool, context) {
 				samePoint(patientToImage(module, point), imagePoints[i], UNCHANGED_TOLERANCE));
 		if (onImage || onPlane) {
 			return storedCircleArguments(tool, stored, {
-				use3DSpatialCoordinates: source.valueType === 'SCOORD3D', FrameOfReferenceUID: source.FrameOfReferenceUID,
+				use3DSpatialCoordinates: source.valueType === 'SCOORD3D', FrameOfReferenceUID: source.FrameOfReferenceUID, modality,
 			});
 		}
 	}
@@ -583,9 +595,11 @@ function circleToolArguments(tool, context) {
 	}
 	const domain = (source && source.valueType === 'SCOORD3D') ? 'patient' : (tool.coordinateDomain || meta.coordinateDomain);
 	if (domain === 'patient' && module.frameOfReferenceUID) {
-		return patientCircleArguments(tool, center, edge, imagePlaneNormal(module), module.frameOfReferenceUID);
+		return patientCircleArguments(tool, center, edge, imagePlaneNormal(module), module.frameOfReferenceUID, modality);
 	}
-	return circleArguments(tool, { points: imagePoints, values: circleValues(radius), use3DSpatialCoordinates: false });
+	return circleArguments(tool, {
+		points: imagePoints, values: circleValues(radius), use3DSpatialCoordinates: false, statistics: toolStatistics(tool), modality,
+	});
 }
 
 function circleMeasurementData(MeasurementGroup) {

@@ -151,7 +151,7 @@ jest.mock('@ohif/core', () => ({
 }), { virtual: true });
 
 import {
-  ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools,
+  cobbTextLines, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools,
 } from './exchangeAngleTools';
 import { CobbAngleTool } from '@cornerstonejs/tools';
 
@@ -290,7 +290,7 @@ describe('pointer tests of a Cobb angle', () => {
 describe('circle', () => {
   const circleAnnotation = (points, recordValue) => ({ data: { handles: { points }, cachedStats: { 'imageId:a': {}, 'volumeId:b': {} }, recordValue } });
 
-  it('replaces the stock statistics with the radius between the world points, the area and perimeter, and no intensity', () => {
+  it('replaces the stock geometry with the radius between the world points, the area and perimeter, and keeps the pixel values but the minimum', () => {
     const annotation = circleAnnotation([[0, 0, 0], [3, 4, 0]]);
     new ExchangeCircleROITool()._calculateCachedStats(annotation);
     // The stock pass still runs (its handle checks and modified events)
@@ -299,7 +299,8 @@ describe('circle', () => {
       expect(stats).toMatchObject({ radius: 5, radiusUnit: 'mm', areaUnit: 'mm\u00B2', isEmptyArea: false });
       expect(stats.area).toBeCloseTo(25 * Math.PI, 10);
       expect(stats.perimeter).toBeCloseTo(10 * Math.PI, 10);
-      ['mean', 'stdDev', 'max', 'min'].forEach(key => expect(stats).not.toHaveProperty(key));
+      expect(stats).toMatchObject({ mean: 40, stdDev: 3, max: 50 });
+      expect(stats).not.toHaveProperty('min');
       expect(stats.statsArray.map(stat => stat.name)).toEqual(['area', 'radius', 'circumference']);
     });
   });
@@ -321,7 +322,10 @@ describe('circle', () => {
     const tool = new ExchangeCircleROITool();
     const annotation = circleAnnotation([[0, 0, 0], [3, 4, 0]]);
     tool._calculateCachedStats(annotation);
-    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5 mm', 'Area: 78.54 mm\u00B2']);
+    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5.00 mm', 'Area: 78.54 mm\u00B2']);
+    // The values the measurement chose for the viewport label
+    annotation.data.viewportValues = ['diameter', 'mean'];
+    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Diameter: 10.00 mm', 'Mean: 40.00']);
     // A configured label is kept
     expect(new ExchangeCircleROITool({ configuration: { getTextLines: () => ['own'] } }).configuration.getTextLines()).toEqual(['own']);
   });
@@ -334,7 +338,7 @@ describe('circle', () => {
       tool._calculateCachedStats(annotation);
       expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ radius: 5, radiusUnit: 'px', areaUnit: 'px\u00B2' });
       expect(annotation.data.cachedStats['imageId:a'].statsArray.map(stat => stat.unit)).toEqual(['px\u00B2', 'px', 'px']);
-      expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5 px', 'Area: 78.54 px\u00B2']);
+      expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5.00 px', 'Area: 78.54 px\u00B2']);
     } finally {
       mockCircleUnit = 'mm';
     }
@@ -344,5 +348,17 @@ describe('circle', () => {
     mockAddTool.mockClear();
     registerExchangeAngleTools();
     expect(mockAddTool.mock.calls.map(([tool]) => tool)).toContain(ExchangeCircleROITool);
+  });
+});
+
+
+describe('Cobb angle label', () => {
+  it('shows the angle as the stock tool does, and the arcs when the measurement chose them', () => {
+    // Line 1 along x, line 2 at 45 degrees, the midpoints joined along y
+    const data = { handles: { points: [[0, 0, 0], [10, 0, 0], [0, 20, 0], [10, 30, 0]] }, cachedStats: { 'imageId:a': { angle: 45 } } };
+    expect(cobbTextLines(data, 'imageId:a')).toEqual(['45 \u00B0']);
+    data.viewportValues = ['angle', 'arc1', 'arc2'];
+    expect(cobbTextLines(data, 'imageId:a')).toEqual(['Cobb angle: 45.00\u00B0', 'Arc 1: 90.00\u00B0', 'Arc 2: 135.00\u00B0']);
+    expect(cobbTextLines({ ...data, cachedStats: {} }, 'imageId:a')).toEqual([]);
   });
 });

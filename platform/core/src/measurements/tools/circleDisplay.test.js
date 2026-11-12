@@ -28,7 +28,7 @@ describe('circle measurements-table text', () => {
 
   it('lists the area, perimeter and radius for the detail line, without intensity statistics', () => {
     const values = circleDisplayValues({ cachedStats: { ...VALUES, mean: 40, stdDev: 2 } });
-    expect(values).toEqual({ ...VALUES, unit: 'mm' });
+    expect(values).toEqual({ ...VALUES, unit: 'mm', stats: { mean: 40, stdDev: 2 } });
     expect(circleDetailItems(values)).toEqual([
       { label: 'Area', value: '452.39 mm²' },
       { label: 'Perimeter', value: '75.40 mm' },

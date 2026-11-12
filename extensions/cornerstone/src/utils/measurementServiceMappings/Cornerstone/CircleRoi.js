@@ -2,7 +2,9 @@
 // handles `start`, the center, and `end`, a point on the circumference, and its values (radius,
 // area, perimeter, DICOMSR circleGeometry.js) as `cachedStats`; the measurement carries the two
 // points in that order and the values in `data.cachedStats`. The values keep their unit: pixels on
-// an image without calibration, millimetres otherwise. A measurement hydrated from DICOM-SR
+// an image without calibration, millimetres otherwise. The pixel statistics the tools compute (mean,
+// standard deviation, maximum and their unit) travel with them, and so does the measurement's
+// choice of the values its viewport label shows (`viewportValues`). A measurement hydrated from DICOM-SR
 // (a Cornerstone3D `CircleROI` with world points) also carries its tracking identity, coordinate
 // domain and source geometry, which the SR writer reuses, and keeps its stored values while its
 // handles are unchanged.
@@ -36,7 +38,12 @@ const TEXT_BOX = {
   hasBoundingBox: true,
 };
 
-const VALUE_KEYS = ['radius', 'area', 'perimeter'];
+const VALUE_KEYS = ['radius', 'area', 'perimeter', 'mean', 'stdDev', 'max', 'modalityUnit'];
+
+/** The values a measurement shows in its viewport label, from the first section that has them */
+const viewportValuesOf = (...sections) => sections
+  .flatMap(section => (section ? [section.viewportValues, section.metadata && section.metadata.viewportValues] : []))
+  .find(Array.isArray);
 
 const toHandle = point => (_.isArray(point) ? { x: point[0], y: point[1] } : { x: point.x, y: point.y });
 
@@ -103,7 +110,10 @@ const CircleRoi = {
     const attributes = srAttributes(measurementMeta, measurementData, measurement);
 
     // cornerstone-tools reads the handles and the values at the top of its tool data
-    const toolFields = cachedStats ? { handles, cachedStats } : { handles };
+    const viewportValues = viewportValuesOf(measurementMeta, measurementData, measurement);
+    const toolFields = {
+      handles, ...(cachedStats ? { cachedStats } : {}), ...(viewportValues ? { viewportValues: [...viewportValues] } : {}),
+    };
     _.extend(annotationData, toolFields, attributes);
     _.extend(annotation.metadata, attributes);
     _.extend(annotation, toolFields);
@@ -131,6 +141,11 @@ const CircleRoi = {
     }
     measurement.type = measurementService.VALUE_TYPES.CIRCLE;
     measurement.unit = OHIF.DICOMSR.circleGeometry.circleUnit(measurement.data.cachedStats);
+    const viewportValues = viewportValuesOf(...live);
+    if (viewportValues) {
+      measurement.data.viewportValues = [...viewportValues];
+      measurement.metadata.viewportValues = [...viewportValues];
+    }
     const annotation = csToolsAnnotation.measurementData || csToolsAnnotation;
     _.extend(measurement.metadata, srAttributes(measurement.metadata, annotation, csToolsAnnotation.metadata));
 

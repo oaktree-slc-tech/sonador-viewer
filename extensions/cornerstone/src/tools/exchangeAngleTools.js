@@ -13,8 +13,13 @@
 //
 // The circle tool shows the exchange values (DICOMSR circleGeometry): the radius between its two
 // world points in millimetres, the perimeter 2 pi r and the area pi r^2, or a mirrored record's
-// stored values while its points are unchanged. Its label shows the radius and the area; the stock
-// tool's intensity statistics are dropped.
+// stored values while its points are unchanged. The stock tool's pixel statistics (mean, standard
+// deviation, maximum, in the unit of the image) are kept for the detail card; its minimum is dropped.
+//
+// The circle's and the Cobb angle's labels show the values the measurement chose for the viewport
+// (`data.viewportValues`, set from its detail card), else the tool's default (the circle's radius
+// and area, the Cobb angle's angle), formatted as the Annotations panel formats them
+// (measurements/tools/measurementDetail.js `viewportLabelLines`).
 //
 // They keep the stock tool names and are registered before any view registers the stock tools,
 // so every tool group that adds `Length`, `Angle`, `CobbAngle` or `CircleROI` gets them.
@@ -26,6 +31,7 @@ import {
 } from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
+import { viewportLabelLines } from '@ohif/core/src/measurements/tools/measurementDetail';
 
 /** The exchange value of an annotation (DICOMSR angleGeometry `annotationAngle`) */
 const exchangeValue = (toolName, annotation) => OHIF.DICOMSR.angleGeometry.annotationAngle(toolName, annotation.data);
@@ -101,9 +107,27 @@ const NOT_NEAR_LINES = Object.freeze({
   distanceToPoint: Infinity, distanceToPoint2: Infinity, isNearFirstLine: false, isNearSecondLine: false,
 });
 
+/** The Cobb angle's label: the values its measurement shows, from its exchange angle and its points */
+function cobbTextLines(data, targetId) {
+  const stats = (data && data.cachedStats && data.cachedStats[targetId]) || {};
+  if (!Number.isFinite(stats.angle)) {
+    return [];
+  }
+  // The angle alone reads as the stock label does
+  if (!Array.isArray(data.viewportValues) || !data.viewportValues.some(key => key !== 'angle')) {
+    return [`${c3dToolsUtilities.roundNumber(stats.angle)} \u00B0`];
+  }
+  return viewportLabelLines('CobbAngle', {
+    rAngle: stats.angle, points: (data.handles && data.handles.points) || [], viewportValues: data.viewportValues,
+  });
+}
+
 class ExchangeCobbAngleTool extends CobbAngleTool {
-  constructor(...args) {
-    super(...args);
+  constructor(toolProps = {}, ...args) {
+    super(toolProps, ...args);
+    if (!(toolProps.configuration && toolProps.configuration.getTextLines)) {
+      this.configuration.getTextLines = cobbTextLines;
+    }
     withZeroLabels(this, () => ({ textBoxUID: 'cobbAngleText' }));
 
     // The stock pointer tests (hover, selection) measure the distance to both lines and fail on a
@@ -150,7 +174,8 @@ class ExchangeLengthTool extends LengthTool {
 }
 
 
-const INTENSITY_STATS = ['mean', 'max', 'min', 'stdDev', 'pointsInShape', 'modalityUnit'];
+// Stock statistics the circle does not show
+const DROPPED_STATS = ['min', 'pointsInShape'];
 
 /** Give a circle annotation's statistics, for every view, its exchange values */
 function applyCircleValues(annotation) {
@@ -161,7 +186,7 @@ function applyCircleValues(annotation) {
     const unit = OHIF.DICOMSR.circleGeometry.circleUnit(cachedStats[targetId]);
     const areaUnit = `${unit}\u00B2`;
     cachedStats[targetId] = {
-      ..._.omit(cachedStats[targetId], INTENSITY_STATS),
+      ..._.omit(cachedStats[targetId], DROPPED_STATS),
       ...values,
       radiusUnit: unit,
       areaUnit,
@@ -175,15 +200,13 @@ function applyCircleValues(annotation) {
   });
 }
 
-/** The circle's label: its radius and its area */
+/** The circle's label: the values its measurement shows (by default its radius and its area) */
 function circleTextLines(data, targetId) {
   const stats = (data && data.cachedStats && data.cachedStats[targetId]) || {};
   if (!Number.isFinite(stats.radius)) {
     return [];
   }
-  const round = value => c3dToolsUtilities.roundNumber(value);
-  const unit = OHIF.DICOMSR.circleGeometry.circleUnit(stats);
-  return [`Radius: ${round(stats.radius)} ${unit}`, `Area: ${round(stats.area)} ${unit}\u00B2`];
+  return viewportLabelLines('CircleROI', { cachedStats: stats, viewportValues: data.viewportValues });
 }
 
 class ExchangeCircleROITool extends CircleROITool {
@@ -216,6 +239,6 @@ function registerExchangeAngleTools() {
 
 export default registerExchangeAngleTools;
 export {
-  applyCircleValues, circleTextLines, exchangeValue, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool,
+  applyCircleValues, circleTextLines, cobbTextLines, exchangeValue, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool,
   ExchangeLengthTool, registerExchangeAngleTools,
 };

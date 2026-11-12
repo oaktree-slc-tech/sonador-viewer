@@ -195,20 +195,22 @@ function seriesEntries(bySeries, key) {
  * A series' annotation types for its hover card, from its MeasurementApi entries (every group:
  * Measurements, Findings and their Pending groups): one line per type and count, the saved ones
  * first, then the pending ones, each most frequent first. Out-of-plane measurements are a type of
- * their own ("3D Length").
+ * their own, flagged `outOfPlane` (the card marks them 3D); `toolType` gives the line its icon.
  *
- * @returns {object[]} { name, pending, count }
+ * @returns {object[]} { name, toolType, outOfPlane, pending, count }
  */
 function seriesAnnotationTypes(entries) {
   const counts = new Map();
   (entries || []).forEach(({ toolType, pending, outOfPlane }) => {
-    const name = `${outOfPlane ? '3D ' : ''}${toolTypeName(toolType)}`;
-    const id = `${pending ? 1 : 0}:${name}`;
-    const line = counts.get(id) || { name, pending: Boolean(pending), count: 0 };
+    const name = toolTypeName(toolType);
+    const id = `${pending ? 1 : 0}:${outOfPlane ? 1 : 0}:${name}`;
+    const line = counts.get(id)
+      || { name, toolType, outOfPlane: Boolean(outOfPlane), pending: Boolean(pending), count: 0 };
     line.count += 1;
     counts.set(id, line);
   });
-  return [...counts.values()].sort((a, b) => (a.pending - b.pending) || (b.count - a.count) || a.name.localeCompare(b.name));
+  return [...counts.values()].sort((a, b) => (a.pending - b.pending) || (b.count - a.count)
+    || a.name.localeCompare(b.name) || (a.outOfPlane - b.outOfPlane));
 }
 
 /**

@@ -4,9 +4,10 @@ import PropTypes from 'prop-types';
 
 import OHIF from '@ohif/core';
 import {
-  Button, DataRowActions, HoverCard, HoverCardContent, HoverCardPortal, HoverCardTrigger, Icons, Tooltip as HoverTooltip,
-  TooltipContent, TooltipProvider, TooltipTrigger,
+  Button, DataRowActions, HoverCard, HoverCardContent, HoverCardPortal, HoverCardTrigger, Icons, Popover, PopoverAnchor,
+  PopoverContent, PopoverPortal, Tooltip as HoverTooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@ohif/ui-next';
+import measurementDetail, { toolDisplayName, toolIcon } from '@ohif/core/src/measurements/tools/measurementDetail';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableListItem } from '../tableList';
@@ -14,6 +15,7 @@ import { Tooltip } from '../tooltip';
 
 import { Icon } from './../../elements/Icon';
 
+import { MeasurementDetailCard } from './MeasurementDetailCard';
 import { subscribeSeriesMetadata } from './metadataEventConcerns';
 import './MeasurementTableItem.styl';
 import './VisibilityToggle.styl';
@@ -87,6 +89,186 @@ const outOfPlaneNoteText = (outOfPlane, t) => {
   return view ? t('Drawn on {{view}} plane, shown in the MPR and 3D views.', { view }) : t('Shown in the MPR and 3D views.');
 };
 
+// The detail card opens after the pointer rests on the row's value or reference line, and closes a
+// moment after it leaves them and the card
+const CARD_OPEN_DELAY = 300;
+const CARD_CLOSE_DELAY = 150;
+// A focus this soon after a pointer press on the tool icon is that press's, not the keyboard's
+const POINTER_FOCUS_WINDOW = 1000;
+
+const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]';
+/** The elements of `root` that sequential keyboard navigation reaches, in document order */
+const tabbablesIn = root => [...root.querySelectorAll(TABBABLE)]
+  .filter(node => node.tabIndex >= 0 && !node.closest('[aria-hidden="true"], [hidden], [inert]'));
+
+
+/**
+ * The detail card's open state and the handlers that drive it: mouse hover on the trigger parts
+ * (the tool icon, the value, the reference line) and on the card; focus, Enter / Space and Escape
+ * on the tool icon; and a tap on the tool icon (touch, pen). One state for all parts, so moving
+ * between them keeps the card open.
+ *
+ * The card is portalled, so its place in the tab order is set here: Tab on the icon of an open card
+ * moves into the card, Shift+Tab from its first control returns to the icon, and Tab from its last
+ * control continues after the icon. Escape in the card closes it and returns focus to the icon.
+ */
+function useDetailCard(enabled) {
+  const [open, setOpen] = useState(false);
+  const timers = useRef({});
+  const press = useRef(null);
+  const quietFocus = useRef(false);
+  const iconRef = useRef(null);
+  const cardRef = useRef(null);
+  // Focus moving into the card (its toggles) keeps it open
+  const intoCard = event => Boolean(cardRef.current && event.relatedTarget && cardRef.current.contains(event.relatedTarget));
+  const pressed = () => press.current && Date.now() - press.current.at < POINTER_FOCUS_WINDOW ? press.current.type : null;
+
+  const clear = () => {
+    clearTimeout(timers.current.open);
+    clearTimeout(timers.current.close);
+  };
+  useEffect(() => clear, []);
+  useEffect(() => {
+    if (!enabled) {
+      clear();
+      setOpen(false);
+    }
+  }, [enabled]);
+
+  const show = () => {
+    clear();
+    setOpen(true);
+  };
+  const hide = () => {
+    clear();
+    setOpen(false);
+  };
+  const scheduleOpen = () => {
+    clearTimeout(timers.current.close);
+    timers.current.open = setTimeout(() => setOpen(true), CARD_OPEN_DELAY);
+  };
+  const scheduleClose = () => {
+    clearTimeout(timers.current.open);
+    timers.current.close = setTimeout(() => setOpen(false), CARD_CLOSE_DELAY);
+  };
+  // Focus returned to the icon by the card does not open it again
+  const focusIcon = () => {
+    if (iconRef.current) {
+      quietFocus.current = true;
+      iconRef.current.focus();
+      quietFocus.current = false;
+    }
+  };
+  const focusAfterIcon = () => {
+    const icon = iconRef.current;
+    const card = cardRef.current;
+    const order = icon ? tabbablesIn(icon.ownerDocument).filter(node => !(card && card.contains(node))) : [];
+    const next = order[order.indexOf(icon) + 1];
+    if (next) {
+      next.focus();
+    } else if (icon) {
+      icon.blur();
+    }
+  };
+
+  if (!enabled) {
+    return { open: false, hoverProps: {}, iconProps: {}, cardProps: {}, setOpen: () => {} };
+  }
+
+  const isMouse = event => event.pointerType === 'mouse';
+  const isTap = type => type === 'touch' || type === 'pen';
+  const hoverProps = {
+    onPointerEnter: event => isMouse(event) && scheduleOpen(),
+    onPointerLeave: event => isMouse(event) && scheduleClose(),
+  };
+  const iconProps = {
+    ref: iconRef,
+    tabIndex: 0,
+    'aria-haspopup': 'dialog',
+    'aria-expanded': open,
+    // The focus of a tap is left to the tap's click, which toggles the card once
+    onFocus: () => {
+      if (!quietFocus.current && !isTap(pressed())) {
+        show();
+      }
+    },
+    onBlur: event => !intoCard(event) && scheduleClose(),
+    onKeyDown: (event) => {
+      if (event.key === 'Escape') {
+        hide();
+      } else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (open) {
+          hide();
+        } else {
+          show();
+        }
+      } else if (event.key === 'Tab' && !event.shiftKey && open && cardRef.current) {
+        const [first] = tabbablesIn(cardRef.current);
+        if (first) {
+          event.preventDefault();
+          clear();
+          first.focus();
+        }
+      }
+    },
+    onPointerDown: (event) => {
+      press.current = { type: event.pointerType, at: Date.now() };
+    },
+    // A tap on the icon opens the card, a second tap closes it; the click still selects the row
+    onClick: () => {
+      if (isTap(pressed())) {
+        press.current = null;
+        setOpen(value => !value);
+      }
+    },
+  };
+  const cardProps = {
+    ref: cardRef,
+    onFocus: clear,
+    onBlur: event => !intoCard(event) && event.relatedTarget !== iconRef.current && scheduleClose(),
+    onPointerEnter: event => isMouse(event) && clear(),
+    onPointerLeave: event => isMouse(event) && scheduleClose(),
+    onKeyDown: (event) => {
+      if (event.key !== 'Tab' || !cardRef.current) {
+        return;
+      }
+      const controls = tabbablesIn(cardRef.current);
+      const edge = event.shiftKey ? controls[0] : controls[controls.length - 1];
+      if (event.target !== edge) {
+        return;
+      }
+      event.preventDefault();
+      if (event.shiftKey) {
+        focusIcon();
+      } else {
+        hide();
+        focusAfterIcon();
+      }
+    },
+    onEscapeKeyDown: () => {
+      const inCard = cardRef.current && cardRef.current.contains(cardRef.current.ownerDocument.activeElement);
+      hide();
+      if (inCard) {
+        focusIcon();
+      }
+    },
+    // A tap outside closes it; a tap on the icon toggles it itself
+    onInteractOutside: (event) => {
+      if (iconRef.current && iconRef.current.contains(event.target)) {
+        event.preventDefault();
+        return;
+      }
+      hide();
+    },
+    // Opening on hover or focus leaves focus where it is
+    onOpenAutoFocus: event => event.preventDefault(),
+    onCloseAutoFocus: event => event.preventDefault(),
+  };
+  return { open, hoverProps, iconProps, cardProps, setOpen };
+}
+
+
 const MeasurementTableItem = ({
   // Render measurement data and actions
 
@@ -99,6 +281,8 @@ const MeasurementTableItem = ({
   onOpenInMpr,
   onToggleLock,
   onLineTextColor,
+  onViewportValuesChange,
+  regionLeadValue,
   itemClass,
   tagBtnLabel = 'Location',
   tagBtnHint = 'Set anatomic location',
@@ -142,6 +326,24 @@ const MeasurementTableItem = ({
     }
     return identifiers;
   }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, outOfPlane, metadataVersion]);
+
+  // The measurement's detail (core measurements/tools/measurementDetail): the value line, the
+  // reference line's +N and the detail card. A Series Tag has its tool icon and no card.
+  const { toolType, detailSource } = measurementData;
+  const detail = useMemo(() => {
+    if (!detailSource || isSeriesTag) {
+      return undefined;
+    }
+    return measurementDetail(toolType, detailSource.measurement, {
+      ...detailSource.context, modality: refMeta ? refMeta.Modality : undefined, regionLeadValue,
+    });
+  }, [toolType, detailSource, isSeriesTag, refMeta, regionLeadValue]);
+  const icon = toolIcon(isSeriesTag ? 'DICOMSRSeriesTagTool' : toolType);
+  const extraCount = detail && detail.primary ? detail.extraCount : 0;
+
+  // The card is suppressed on a row whose warning note covers it
+  const cardEnabled = Boolean(detail) && !(measurementData.hasWarnings && !isReadOnly);
+  const card = useDetailCard(cardEnabled);
 
   const getActionButton = (btnLabel, onClickCallback, hint) => {
     const button = (
@@ -257,7 +459,7 @@ const MeasurementTableItem = ({
       actionButtons.push(deleteButton);
     }
       
-    return (
+    const tableListItem = (
       <TableListItem
         key={measurementData.measurementId}
         itemKey={measurementData.measurementId}
@@ -271,7 +473,7 @@ const MeasurementTableItem = ({
       >
         <div>
           <div className="measurementContent">
-            <div className="displayTexts">{getDataDisplayText()}</div>
+            <div className="displayTexts" {...card.hoverProps}>{getDataDisplayText()}</div>
             {/* The Segmentations panel's row controls (ui-next DataRow), packed to the right: the
                 visibility toggle, the lock while locked, then the actions menu when there is one */}
             <div className="measurementStatus">
@@ -315,7 +517,7 @@ const MeasurementTableItem = ({
               )}
             </div>
           </div>
-          {refMeta && (<div className="referenceMeta">
+          {refMeta && (<div className="referenceMeta" {...card.hoverProps}>
             <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
             {!isSeriesTag && !outOfPlane && (
               <span className="refItem refImgNum"><span className="refLabel">I:</span><span className="refValue">{refMeta.InstanceNumber}</span></span>
@@ -324,11 +526,9 @@ const MeasurementTableItem = ({
               <span className="refItem refView"><span className="refLabel">View:</span><span className="refValue">{outOfPlane.view}</span></span>
             )}
             <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
-            {(measurementData.circleDetail || []).map(({ label, value }) => (
-              <span key={label} className="refItem refCircleValue" data-cy={`measurement-circle-${label.toLowerCase()}`}>
-                <span className="refLabel">{t(label)}:</span><span className="refValue">{value}</span>
-              </span>
-            ))}
+            {extraCount > 0 && (
+              <span className="refMore" aria-hidden="true" data-cy="measurement-detail-count">+{extraCount}</span>
+            )}
           </div>)}
           {measurementData && Boolean((measurementData.label || '').replace('...', '')) && (
             <TruncatedLabel text={t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })} />
@@ -336,6 +536,89 @@ const MeasurementTableItem = ({
           {isSelected && measurementData.isVisible && !Boolean(isReadOnly) && <div className="rowActions">{actionButtons}</div>}
         </div>
       </TableListItem>
+    );
+
+    if (!cardEnabled) {
+      return tableListItem;
+    }
+    return (
+      <Popover open={card.open} onOpenChange={card.setOpen}>
+        <PopoverAnchor asChild>
+          <div className="measurementDetailAnchor">{tableListItem}</div>
+        </PopoverAnchor>
+        <PopoverPortal>
+          <PopoverContent
+            side="left"
+            align="start"
+            sideOffset={8}
+            collisionPadding={8}
+            avoidCollisions
+            className="annotationHoverCard measurementDetailCard"
+            {...card.cardProps}
+          >
+            {getDetailCard()}
+          </PopoverContent>
+        </PopoverPortal>
+      </Popover>
+    );
+  };
+
+  const getDetailCard = () => {
+    // The detail card's content: the row's measurement in full
+    const series = refMeta && [refMeta.SeriesNumber, refMeta.SeriesDescription].filter(value => value !== undefined && value !== '').join(' \u00B7 ');
+    const study = DicomMetadataStore && refSeriesInstanceUID
+      ? DicomMetadataStore.getSeries(refStudyInstanceUID, refSeriesInstanceUID) : undefined;
+    // The image is named by its Instance Number, which is not its position in the series: the
+    // series' image count goes with the series
+    const instanceCount = study && study.instances ? study.instances.length : undefined;
+    const seriesLine = [series, instanceCount ? t('{{count}} images', { count: instanceCount }) : '']
+      .filter(Boolean).join(' \u00B7 ');
+    const image = refMeta && refMeta.InstanceNumber !== undefined ? String(refMeta.InstanceNumber) : undefined;
+    const reference = refMeta ? {
+      series: seriesLine, image, view: outOfPlane ? outOfPlane.view : undefined, modality: refMeta.Modality,
+    } : undefined;
+    const { customColor } = measurementData;
+    return (
+      <MeasurementDetailCard
+        detail={detail}
+        rowNumber={itemIndex}
+        isPending={Boolean(measurementData.isPending)}
+        isSaved={Boolean(isReadOnly)}
+        editable={Boolean(detail.viewportToggles && measurementData.isPending && !isReadOnly && detail.primary)}
+        disabled={!measurementData.isVisible}
+        reference={reference}
+        outOfPlaneNote={outOfPlane && outOfPlane.frameOfReferenceLoaded !== false ? outOfPlaneNoteText(outOfPlane, t) : undefined}
+        meta={{ location: measurementData.location, description: measurementData.description }}
+        appearance={customColor ? { line: customColor.line, text: customColor.text } : undefined}
+        onViewportValuesChange={keys => onViewportValuesChange && onViewportValuesChange(measurementData, keys)}
+      />
+    );
+  };
+
+  const toolIconElement = () => {
+    // The icon of the tool that drew the measurement, as on its toolbar button; with a detail card,
+    // it opens the card (focus, or a tap)
+    if (!icon) {
+      return null;
+    }
+    const name = isSeriesTag ? t('Series Tag') : t(toolDisplayName(toolType) || toolType || '');
+    // The reference line's +N, which is hidden from assistive technology, describes the icon
+    const countId = refMeta && extraCount > 0 ? `measurement-detail-count-${measurementData.measurementId}` : undefined;
+    return (
+      <span
+        key="toolIcon"
+        className="measurementToolIcon"
+        role={cardEnabled ? 'button' : 'img'}
+        aria-label={name}
+        aria-describedby={countId}
+        data-cy="measurement-tool-icon"
+        {...card.iconProps}
+      >
+        <Icon name={icon} width="18px" height="18px" aria-hidden="true" />
+        {countId && (
+          <span id={countId} className="visuallyHidden">{t('{{count}} more values', { count: extraCount })}</span>
+        )}
+      </span>
     );
   };
 
@@ -346,7 +629,8 @@ const MeasurementTableItem = ({
     if (seriesTagDisplay && seriesTagDisplay.value) {
       const { color, value, meaning } = seriesTagDisplay;
       return (
-        <div className="measurementDisplayText">
+        <div className={`measurementDisplayText ${icon ? 'hasToolIcon' : ''}`}>
+          {toolIconElement()}
           <span style={color.Value ? { color: color.Value } : undefined}>{value}</span>
           {meaning && (
             <span className="seriesTagMeaning" style={color.Meaning ? { color: color.Meaning } : undefined}>{meaning}</span>
@@ -365,10 +649,12 @@ const MeasurementTableItem = ({
       </span>
     );
 
-    return [colorIndicator, ...measurementData.data.map((data, index) => {
+    return [toolIconElement(), colorIndicator, ...measurementData.data.map((data, index) => {
+      // The value from the measurement's detail (the region tools' lead value), else the tool's own
+      const text = index === 0 && detail && detail.primary ? detail.primary.text : data.displayText;
       return (
         <div key={`displayText_${index}`} className="measurementDisplayText">
-          {data.displayText ? data.displayText : '...'}
+          {text || '...'}
         </div>
       );
     })];
@@ -459,6 +745,10 @@ MeasurementTableItem.propTypes = {
   onOpenInMpr: PropTypes.func,
   onToggleLock: PropTypes.func,
   onLineTextColor: PropTypes.func,
+  /** Set the values a pending measurement's viewport label shows: (measurementData, keys) */
+  onViewportValuesChange: PropTypes.func,
+  /** The region tools' lead value ('area' or 'mean') */
+  regionLeadValue: PropTypes.string,
   itemClass: PropTypes.string,
   itemIndex: PropTypes.number,
   tagBtnLabel: PropTypes.string,

@@ -108,8 +108,8 @@ import { metaData as c3dMetaData } from '@cornerstonejs/core';
 import { asArray, conceptNameValue, firstItem } from './utils/codedConcept';
 import { patientToImage } from './utils/angleGeometry';
 import {
-  annotationCircle, circleOfEllipse, circleOutline, circlePlanePoints, circleValues, classicToolName, cornerstone3DToolName,
-  ellipseOfCircle,
+  annotationCircle, circleOfEllipse, circleOutline, circlePlanePoints, circleStatisticItems, circleValues, classicToolName,
+  cornerstone3DToolName, ellipseOfCircle, UNKNOWN_QUANTITY,
 } from './utils/circleGeometry';
 import { encodeDisplayAttributes, parseDisplayAttributes } from './utils/dcmsrDisplayAttributes';
 import { encodeExtendedMeta, parseExtendedMeta } from './utils/dcmsrExtendedMeta';
@@ -386,6 +386,21 @@ const expectValues = (values, radius, digits = 6) => {
   expect(values.perimeter).toBeCloseTo(2 * Math.PI * radius, digits);
 };
 const expectPoint = (point, expected, digits = 5) => expected.forEach((value, i) => expect(point[i]).toBeCloseTo(value, digits));
+/** A naturalized SR dataset as Part 10 bytes */
+function datasetBytes(dataset) {
+  const meta = {
+    FileMetaInformationVersion: new Uint8Array([0, 1]).buffer,
+    MediaStorageSOPClassUID: dataset.SOPClassUID,
+    MediaStorageSOPInstanceUID: dataset.SOPInstanceUID,
+    TransferSyntaxUID: '1.2.840.10008.1.2.1',
+    ImplementationClassUID: '2.25.900001',
+    ImplementationVersionName: 'dcmjs-0.0',
+  };
+  const dicomDict = new DicomDict(DicomMetaDictionary.denaturalizeDataset(meta));
+  dicomDict.dict = DicomMetaDictionary.denaturalizeDataset(_.omit(dataset, '_meta', '_vrMap'));
+  return Buffer.from(dicomDict.write());
+}
+
 const write = (toolsByType, options) => quiet(() => deterministic(() => writeSR(toolsByType, options)));
 
 
@@ -723,6 +738,204 @@ describe('stored and recomputed values on a re-save', () => {
 });
 
 
+describe('pixel statistics (Mean, Standard Deviation, Maximum)', () => {
+  const CT_SERIES = { studyInstanceUID: SYNTHETIC.StudyInstanceUID, seriesInstanceUID: SYNTHETIC.SeriesInstanceUID, modality: 'CT' };
+  const MR_SERIES = { ...CT_SERIES, modality: 'MR' };
+  const CT_STATS = { mean: 41.25, stdDev: 7.5, max: 120, modalityUnit: 'HU' };
+  const circleWith = (cachedStats, extra = {}) => classicTool(CIRCLE, [[20.5, 20.5], [25.5, 20.5]], { _id: 'circle-1', cachedStats, ...extra });
+
+  // A statistic NUM: [quantity code, quantity scheme, unit, modifier concept, derivation code, value]
+  const statisticsOf = group => numsOf(group).slice(3).map((num) => {
+    const concept = firstItem(num.ConceptNameCodeSequence);
+    const measured = firstItem(num.MeasuredValueSequence);
+    const modifier = asArray(num.ContentSequence).find(item => item.RelationshipType === 'HAS CONCEPT MOD');
+    return [concept.CodeValue, concept.CodingSchemeDesignator, firstItem(measured.MeasurementUnitsCodeSequence).CodeValue,
+      firstItem(modifier.ConceptNameCodeSequence).CodeValue, firstItem(modifier.ConceptCodeSequence).CodeValue, Number(measured.NumericValue)];
+  });
+
+  it('writes them after the Radius on a CT image: Attenuation Coefficient in HU, a Derivation modifier, over the geometry', () => {
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [circleWith(CT_STATS)] }, { series: CT_SERIES }).result));
+    expect(numsOf(group).slice(0, 3).map(num => firstItem(num.ConceptNameCodeSequence).CodeMeaning)).toEqual(['Area', 'Perimeter', 'Radius']);
+    expect(statisticsOf(group)).toEqual([
+      ['112031', 'DCM', "[hnsf'U]", '121401', '373098007', 41.25],
+      ['112031', 'DCM', "[hnsf'U]", '121401', '386136009', 7.5],
+      ['112031', 'DCM', "[hnsf'U]", '121401', '56851009', 120],
+    ]);
+    numsOf(group).slice(3).forEach((num) => {
+      expect(geometryOf(num)).toMatchObject({ ValueType: 'SCOORD', GraphicType: 'CIRCLE' });
+      expect(pointsOfItem(geometryOf(num))).toEqual([[20.5, 20.5], [25.5, 20.5]]);
+    });
+  });
+
+  it('names MR pixels MR signal intensity, with no units', () => {
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [circleWith({ mean: 812.5, modalityUnit: '' })] }, { series: MR_SERIES }).result));
+    expect(statisticsOf(group)).toEqual([['110852', 'DCM', '1', '121401', '373098007', 812.5]]);
+  });
+
+  it('writes no statistic it does not have, none that is not a number, and none of an unknown quantity', () => {
+    const only = (stats, series) => statisticsOf(measurementGroups(readSR(write({ [CIRCLE]: [circleWith(stats)] }, { series }).result))[0]);
+    expect(only({ mean: 41.25, stdDev: NaN, max: undefined, modalityUnit: 'HU' }, CT_SERIES).map(line => line[4])).toEqual(['373098007']);
+    expect(only(undefined, CT_SERIES)).toEqual([]);
+    expect(only({ mean: Infinity, stdDev: null, modalityUnit: 'HU' }, CT_SERIES)).toEqual([]);
+    // An ultrasound image, and PET pixels not scaled to SUV, have no quantity the circle writes
+    expect(only({ mean: 12, modalityUnit: '' }, { ...CT_SERIES, modality: 'US' })).toEqual([]);
+    expect(only({ mean: 12, modalityUnit: 'raw' }, { ...CT_SERIES, modality: 'PT' })).toEqual([]);
+  });
+
+  it('hydrates them with their unit, and keeps them through an unchanged re-save', () => {
+    const dataset = readSR(write({ [CIRCLE]: [circleWith(CT_STATS)] }, { series: CT_SERIES }).result);
+    const [state] = hydrate(dataset).byType.CircleROI;
+    expect(statsOf(state)).toMatchObject({ mean: 41.25, stdDev: 7.5, max: 120, modalityUnit: 'HU' });
+
+    // The tool holds no statistics of its own: those read are written back, as read
+    const tool = toClassicTool(CIRCLE, state);
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [tool] }, { document: reSaveOf(dataset), series: CT_SERIES }).result));
+    expect(statisticsOf(group)).toEqual(statisticsOf(measurementGroups(dataset)[0]));
+  });
+
+  it('writes the statistics the tool holds after a handle moved', () => {
+    const dataset = readSR(write({ [CIRCLE]: [circleWith(CT_STATS)] }, { series: CT_SERIES }).result);
+    const [state] = hydrate(dataset).byType.CircleROI;
+    const tool = { ...toClassicTool(CIRCLE, state), cachedStats: { mean: 52, stdDev: 9, max: 140, modalityUnit: 'HU' } };
+    tool.handles.end = { x: 28.5, y: 20.5 };
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [tool] }, { document: reSaveOf(dataset), series: CT_SERIES }).result));
+    expect(statisticsOf(group).map(line => line[5])).toEqual([52, 9, 140]);
+  });
+
+  it('reads the stock Cornerstone3D form: a NUM named by the statistic itself', () => {
+    const dataset = readSR(write({ [CIRCLE]: [circleWith(undefined)] }, { series: CT_SERIES }).result);
+    const [group] = measurementGroups(dataset);
+    const [area] = numsOf(group);
+    group.ContentSequence = [...asArray(group.ContentSequence), {
+      RelationshipType: 'CONTAINS', ValueType: 'NUM',
+      ConceptNameCodeSequence: [{ CodeValue: '373098007', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Mean' }],
+      MeasuredValueSequence: [{ NumericValue: 33.5, MeasurementUnitsCodeSequence: [{ CodeValue: "[hnsf'U]", CodingSchemeDesignator: 'UCUM' }] }],
+      ContentSequence: [geometryOf(area)],
+    }];
+    const [state] = hydrate(dataset).byType.CircleROI;
+    expect(statsOf(state)).toMatchObject({ mean: 33.5, modalityUnit: 'HU' });
+    expect(statsOf(state).stdDev).toBeUndefined();
+  });
+
+  // A circle written without statistics, with these NUMs added to its group
+  const withNums = (...nums) => {
+    const dataset = readSR(write({ [CIRCLE]: [circleWith(undefined)] }, { series: CT_SERIES }).result);
+    const [group] = measurementGroups(dataset);
+    const [area] = numsOf(group);
+    group.ContentSequence = [...asArray(group.ContentSequence), ...nums.map(num => ({ ...num, ContentSequence: [...num.ContentSequence, geometryOf(area)] }))];
+    return dataset;
+  };
+  const code = (CodeValue, CodingSchemeDesignator, CodeMeaning = CodeValue) => [{ CodeValue, CodingSchemeDesignator, CodeMeaning }];
+  const derived = (quantity, unit, statistic, value, statisticScheme = 'SCT') => ({
+    RelationshipType: 'CONTAINS', ValueType: 'NUM', ConceptNameCodeSequence: code(...quantity),
+    MeasuredValueSequence: [{ NumericValue: value, MeasurementUnitsCodeSequence: code(unit, 'UCUM') }],
+    ContentSequence: [{ RelationshipType: 'HAS CONCEPT MOD', ValueType: 'CODE', ConceptNameCodeSequence: code('121401', 'DCM', 'Derivation'),
+      ConceptCodeSequence: code(statistic, statisticScheme) }],
+  });
+  const stock = (statistic, meaning, unit, value, scheme = 'SCT', unitScheme = 'UCUM') => ({
+    RelationshipType: 'CONTAINS', ValueType: 'NUM', ConceptNameCodeSequence: code(statistic, scheme, meaning),
+    MeasuredValueSequence: [{ NumericValue: value, MeasurementUnitsCodeSequence: code(unit, unitScheme) }],
+    ContentSequence: [],
+  });
+  const ATTENUATION = ['112031', 'DCM', 'Attenuation Coefficient'];
+  const MR_SIGNAL = ['110852', 'DCM', 'MR signal intensity'];
+  // The statistics a dataset hydrates with, and those an unchanged re-save of it on a CT image writes
+  const readAndReSave = (dataset) => {
+    const [state] = hydrate(dataset).byType.CircleROI;
+    const tool = toClassicTool(CIRCLE, state);
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [tool] }, { document: reSaveOf(dataset), series: CT_SERIES }).result));
+    return { read: _.pick(statsOf(state), ['mean', 'stdDev', 'max', 'modalityUnit', 'statisticsModality']), written: statisticsOf(group) };
+  };
+
+  it('reads none of statistics of different quantities, and so writes none back as another quantity', () => {
+    const mixed = withNums(derived(ATTENUATION, "[hnsf'U]", '373098007', 40), derived(MR_SIGNAL, '1', '56851009', 800));
+    expect(readAndReSave(mixed)).toEqual({ read: {}, written: [] });
+
+    // A stock Mean in HU beside a derived MR maximum is also two quantities
+    const stockMixed = withNums(stock('373098007', 'Mean', "[hnsf'U]", 40), derived(MR_SIGNAL, '1', '56851009', 800));
+    expect(readAndReSave(stockMixed)).toEqual({ read: {}, written: [] });
+
+    // One quantity throughout reads, and writes back as that quantity
+    const consistent = withNums(derived(MR_SIGNAL, '1', '373098007', 700), derived(MR_SIGNAL, '1', '56851009', 800));
+    expect(readAndReSave(consistent)).toEqual({
+      read: { mean: 700, max: 800, modalityUnit: '', statisticsModality: 'MR' },
+      written: [['110852', 'DCM', '1', '121401', '373098007', 700], ['110852', 'DCM', '1', '121401', '56851009', 800]],
+    });
+  });
+
+  it('matches the statistic codes with their coding scheme', () => {
+    // The SNOMED code values under a private scheme are not the statistics
+    expect(readAndReSave(withNums(derived(ATTENUATION, "[hnsf'U]", '373098007', 40, '99OTHER')))).toEqual({ read: {}, written: [] });
+    expect(readAndReSave(withNums(stock('373098007', 'Mean', "[hnsf'U]", 40, '99OTHER')))).toEqual({ read: {}, written: [] });
+    // Nor is a quantity code under another scheme, or a unit that is not UCUM
+    expect(readAndReSave(withNums(derived(['112031', '99OTHER', 'Attenuation Coefficient'], "[hnsf'U]", '373098007', 40))))
+      .toEqual({ read: {}, written: [] });
+    expect(readAndReSave(withNums(stock('373098007', 'Mean', 'HU', 40, 'SCT', '99OTHER')))).toEqual({ read: {}, written: [] });
+    // SRT has its own codes (Mean R-00317, Standard Deviation R-10047, Maximum G-A437); the SCT
+    // values under SRT are not them
+    expect(readAndReSave(withNums(derived(ATTENUATION, "[hnsf'U]", '373098007', 40, 'SRT')))).toEqual({ read: {}, written: [] });
+    expect(readAndReSave(withNums(derived(ATTENUATION, "[hnsf'U]", 'R-00317', 40, 'SRT'),
+      stock('R-10047', 'Standard Deviation', "[hnsf'U]", 4, 'SRT'), stock('G-A437', 'Maximum', 'HU', 90, 'SRT')))).toEqual({
+      read: { mean: 40, stdDev: 4, max: 90, modalityUnit: 'HU', statisticsModality: 'CT' },
+      written: [
+        ['112031', 'DCM', "[hnsf'U]", '121401', '373098007', 40],
+        ['112031', 'DCM', "[hnsf'U]", '121401', '386136009', 4],
+        ['112031', 'DCM', "[hnsf'U]", '121401', '56851009', 90],
+      ],
+    });
+  });
+
+  it('shows stock statistics without units, or in a unit of no known quantity, and never writes them as the image\'s quantity', () => {
+    // A stock Mean of 40 with no units ('1') on a CT image: read for display, not written back as HU
+    const unitless = withNums(stock('373098007', 'Mean', '1', 40));
+    expect(readAndReSave(unitless)).toEqual({ read: { mean: 40, modalityUnit: '', statisticsModality: UNKNOWN_QUANTITY }, written: [] });
+    expect(readAndReSave(withNums(stock('373098007', 'Mean', 'raw', 40))))
+      .toEqual({ read: { mean: 40, modalityUnit: 'raw', statisticsModality: UNKNOWN_QUANTITY }, written: [] });
+
+    // The binary round trip: the imported report as bytes, read, hydrated and written again as bytes
+    const imported = readSR(datasetBytes(unitless));
+    const [importedState] = hydrate(imported).byType.CircleROI;
+    expect(statsOf(importedState)).toMatchObject({ mean: 40, modalityUnit: '' });
+    const bytes = write({ [CIRCLE]: [toClassicTool(CIRCLE, importedState)] }, { document: reSaveOf(imported), series: CT_SERIES }).result;
+    expect(statisticsOf(measurementGroups(readSR(bytes))[0])).toEqual([]);
+
+    // Explicit MR signal intensity is written as MR signal intensity on any image, and newly computed
+    // CT statistics as CT
+    const mr = withNums(derived(MR_SIGNAL, '1', '373098007', 700));
+    expect(readAndReSave(mr).written).toEqual([['110852', 'DCM', '1', '121401', '373098007', 700]]);
+    const computed = statisticsOf(measurementGroups(readSR(write({ [CIRCLE]: [circleWith(CT_STATS)] }, { series: CT_SERIES }).result))[0]);
+    expect(computed.map(line => line[0])).toEqual(['112031', '112031', '112031']);
+  });
+
+  it('writes SUV as SUVbw only when it is body weight SUV, and reads no other SUV normalization', () => {
+    const PT_SERIES = { ...CT_SERIES, modality: 'PT' };
+    const only = (stats, series) => statisticsOf(measurementGroups(readSR(write({ [CIRCLE]: [circleWith(stats)] }, { series }).result))[0]);
+    expect(only({ mean: 3.5, modalityUnit: 'SUV' }, PT_SERIES)).toEqual([['126401', 'DCM', 'g/ml{SUVbw}', '121401', '373098007', 3.5]]);
+    expect(only({ mean: 3.5, modalityUnit: 'SUVbw' }, PT_SERIES).map(line => line[0])).toEqual(['126401']);
+    ['SUVlbm', 'SUVbsa', 'SUVibw'].forEach((modalityUnit) => {
+      expect(only({ mean: 3.5, modalityUnit }, PT_SERIES)).toEqual([]);
+    });
+    // An HU or SUV statistic on an image of another modality names no quantity
+    expect(only({ mean: 3.5, modalityUnit: 'SUV' }, MR_SERIES)).toEqual([]);
+    expect(only({ mean: 41, modalityUnit: 'HU' }, MR_SERIES)).toEqual([]);
+
+    // Read: a stock lean-body-mass SUV is not read (so not re-written as SUVbw); a body weight one is
+    expect(readAndReSave(withNums(stock('373098007', 'Mean', 'g/ml{SUVlbm}', 2.5)))).toEqual({ read: {}, written: [] });
+    expect(readAndReSave(withNums(stock('373098007', 'Mean', 'g/ml{SUVbw}', 2.5)))).toEqual({
+      read: { mean: 2.5, modalityUnit: 'SUV', statisticsModality: 'PT' },
+      written: [['126401', 'DCM', 'g/ml{SUVbw}', '121401', '373098007', 2.5]],
+    });
+  });
+
+  it('keeps the quantity a statistic was read with when no image names it (an out-of-plane MR circle)', () => {
+    const geometry = () => ({ RelationshipType: 'INFERRED FROM' });
+    const [item] = circleStatisticItems({ mean: 812.5, modalityUnit: '', statisticsModality: 'MR' }, undefined, geometry);
+    expect(firstItem(item.ConceptNameCodeSequence).CodeValue).toBe('110852');
+    expect(circleStatisticItems({ mean: 812.5, modalityUnit: '' }, undefined, geometry)).toEqual([]);
+  });
+});
+
+
 describe('Viewer-authored fixtures on the synthetic axial series', () => {
   // The synthetic CT: 64 x 48, Pixel Spacing 0.8 mm (rows) and 1.2 mm (columns), slices 3 mm apart at z = 0 to 33
   const slices = _.range(1, 13).map(n => fixture(`synthetic-ct/ct-${String(n).padStart(2, '0')}.dcm`));
@@ -840,6 +1053,33 @@ describe('Viewer-authored fixtures on the synthetic axial series', () => {
     const [original] = measurementGroups(dataset);
     expect(numsOf(rewritten).map(num => pointsOfItem(geometryOf(num)))).toEqual(numsOf(original).map(num => pointsOfItem(geometryOf(num))));
     expect(valuesOf(rewritten)).toEqual(valuesOf(original));
+  });
+
+  it('writes the MR statistics of an out-of-plane circle record (as the sync keeps them), and hydrates them with their quantity', () => {
+    // The record of a circle drawn in an MPR view of an MR series, its statistics kept by the sync
+    const stats = { mean: 812.5, stdDev: 40.25, max: 990, modalityUnit: '', statisticsModality: 'MR' };
+    const record = {
+      ...OBLIQUE_TOOLS.CircleROI[0], toolName: 'CircleROI', points: OBLIQUE_TOOLS.CircleROI[0].patientPoints,
+      data: { cachedStats: { ...circleValues(10), ...stats } },
+    };
+    const tool = { ...patientToolData(record), _id: 'circle-oblique' };
+    const writeTool = (given, document) => readSR(write({}, {
+      toolState: { [SERIES_KEY]: { CircleROI: { data: [given] } } }, patientSeries: { [SERIES_KEY]: SERIES }, headers: HEADERS, document,
+    }).result);
+    const dataset = writeTool(tool);
+    const statisticNums = numsOf(measurementGroups(dataset)[0]).slice(3);
+    expect(statisticNums.map(num => [firstItem(num.ConceptNameCodeSequence).CodeValue, Number(firstItem(num.MeasuredValueSequence).NumericValue)]))
+      .toEqual([['110852', 812.5], ['110852', 40.25], ['110852', 990]]);
+    statisticNums.forEach(num => expect(geometryOf(num)).toMatchObject({ ValueType: 'SCOORD3D', GraphicType: 'ELLIPSE' }));
+
+    // Hydrated: the statistics, unit and quantity survive, and a re-save of the held record writes them again
+    const [state] = hydrate(dataset, CT).byType.CircleROI;
+    expect(state.annotation.data.recordValue.values).toMatchObject(stats);
+    const held = heldOutOfPlaneRecord('CircleROI', state, first.StudyInstanceUID);
+    expect(held.data.cachedStats).toMatchObject(stats);
+    const [rewritten] = measurementGroups(writeTool({ ...patientToolData({ ...held, uid: 'circle-oblique' }), _id: 'circle-oblique' }, reSaveOf(dataset)));
+    expect(numsOf(rewritten).slice(3).map(num => Number(firstItem(num.MeasuredValueSequence).NumericValue))).toEqual([812.5, 40.25, 990]);
+    expect(firstItem(numsOf(rewritten)[3].ConceptNameCodeSequence).CodeValue).toBe('110852');
   });
 
   it('refuses an out-of-plane circle without a valid Drawing-Plane', () => {

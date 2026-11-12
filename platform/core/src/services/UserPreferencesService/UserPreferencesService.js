@@ -46,6 +46,11 @@ export const SEG_EDITOR_MESH_COLOR_DEFAULT = SEG_EDITOR_MESH_COLOR_AUTO;
 export const SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY = 'segEditorFollowSelection';
 export const SEG_EDITOR_FOLLOW_SELECTION_DEFAULT = false;
 
+// The value the Annotations panel leads with for the region tools (Ellipse, Rectangle, Freehand):
+// 'area' (the default) or 'mean'. A display preference, set from the panel's settings drawer.
+export const ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY = 'annotationsRegionLeadValue';
+export const ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT = 'area';
+
 // The keys held here and their defaults, which also fix each key's type: a stored value of another
 // type (a document edited by hand, or written by another release) is read as the default.
 const GENERAL_DEFAULTS = Object.freeze({
@@ -53,6 +58,7 @@ const GENERAL_DEFAULTS = Object.freeze({
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: SEG_EDITOR_MESH_COLOR_DEFAULT,
   [SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  [ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY]: ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT,
 });
 
 // Values a key accepts beyond its default's type
@@ -60,11 +66,13 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const VALIDATORS = Object.freeze({
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: value => HEX_COLOR.test(value),
   [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: value => value === SEG_EDITOR_MESH_COLOR_AUTO || HEX_COLOR.test(value),
+  [ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY]: value => value === 'area' || value === 'mean',
 });
 
 // Keys the server does not accept yet (see above): kept in this browser, not in the section POST
 const LOCAL_ONLY_KEYS = new Set([
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY, SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
+  ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY,
 ]);
 
 // Where a local-only value is kept in the browser's storage
