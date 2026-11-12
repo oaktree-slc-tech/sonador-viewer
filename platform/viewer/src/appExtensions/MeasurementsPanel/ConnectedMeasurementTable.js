@@ -23,20 +23,28 @@ const { MeasurementApi } = OHIF.measurements;
 const { DisplaySetApi } = OHIF.display;
 
 
-function groupBy(list, props) {
+function groupBy(list, keyOf) {
   /**
-  * Takes a list of objects and a property and return the list grouped by the property
+  * Takes a list of objects and a key function and return the list grouped by the key
   *
   * @param {Array} list - The objects to be grouped by
-  * @param {string} props - The property to group the objects
+  * @param {Function} keyOf - The key of an object
   * @returns {Object}
   */
 
   return list.reduce((a, b) => {
-    (a[b[props]] = a[b[props]] || []).push(b);
+    const key = keyOf(b);
+    (a[key] = a[key] || []).push(b);
     return a;
   }, {});
 }
+
+/** The row of a measurement representation: its _id, else (no _id) its measurement number */
+const rowKeyOf = representation => (representation._id ? `id:${representation._id}` : `number:${representation.measurementNumber}`);
+
+/** Whether a representation is the one a panel row shows: by its _id, else by its number */
+export const isRowEntry = (entry, row) => (row.measurementId
+  ? entry._id === row.measurementId : entry.measurementNumber === row.measurementNumber);
 
 
 function getAllTools(toolGroups = []) {
@@ -289,11 +297,12 @@ function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, 
     const toolMeasurements = toolCollections[toolId];
     const tool = tools.find((tool) => tool.id === toolId);
 
-    // Group by measurementNumber so we can display then all in the same line
-    const groupedMeasurements = groupBy(toolMeasurements, 'measurementNumber');
+    // One row per measurement, in the order of their numbers: two measurements that share a number
+    // still have a row each
+    const groupedMeasurements = _.sortBy(Object.values(groupBy(toolMeasurements, rowKeyOf)),
+      list => Number(list[0].measurementNumber) || 0);
 
-    Object.keys(groupedMeasurements).forEach((groupedMeasurementsIndex) => {
-      const measurementNumberList = groupedMeasurements[groupedMeasurementsIndex];
+    groupedMeasurements.forEach((measurementNumberList) => {
 
       // Retrieve Cornerstone tools version of the data
       const csMeasurementData = measurementNumberList[0];
@@ -572,7 +581,6 @@ const mapDispatchToProps = (dispatch, ownProps) => {
 
       const activateMeasurement = () => {
         const toolType = MeasurementApi._getToolType(measurementData);
-        const { measurementNumber } = measurementData;
         const measurementApi = MeasurementApi.Instance;
 
         Object.keys(measurementApi.tools).forEach((toolType) => {
@@ -583,9 +591,7 @@ const mapDispatchToProps = (dispatch, ownProps) => {
           });
         });
 
-        const measurementsToActive = measurementApi.tools[toolType].filter((measurement) => {
-          return measurement.measurementNumber === measurementNumber;
-        });
+        const measurementsToActive = measurementApi.tools[toolType].filter(measurement => isRowEntry(measurement, measurementData));
 
         measurementsToActive.forEach((measurementToActive) => {
           measurementToActive.active = true;

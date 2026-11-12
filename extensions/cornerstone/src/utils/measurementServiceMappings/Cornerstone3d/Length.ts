@@ -2,6 +2,7 @@ import SUPPORTED_TOOLS from './constants/supportedTools';
 import { getIsLocked } from './utils/getIsLocked';
 import { getIsVisible } from './utils/getIsVisible';
 import getSOPInstanceAttributes from './utils/getSOPInstanceAttributes';
+import displaySetOf from './utils/displaySetOf';
 import { utils } from '@ohif/core';
 import { config } from '@cornerstonejs/tools/annotation';
 
@@ -52,16 +53,7 @@ const Length = {
       annotation
     );
 
-    let displaySet;
-
-    if (SOPInstanceUID) {
-      displaySet = displaySetService.getDisplaySetForSOPInstanceUID(
-        SOPInstanceUID,
-        SeriesInstanceUID
-      );
-    } else {
-      displaySet = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID)[0];
-    }
+    const displaySet = displaySetOf(displaySetService, SOPInstanceUID, SeriesInstanceUID);
 
     const { points, textBox } = data.handles;
 
@@ -118,7 +110,7 @@ function getMappedAnnotations(annotation, displaySetService) {
       annotation
     );
 
-    const displaySet = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID)[0];
+    const displaySet = displaySetOf(displaySetService, undefined, SeriesInstanceUID);
 
     const { SeriesNumber } = displaySet;
     const { length, unit = 'mm' } = targetStats;

@@ -12,6 +12,7 @@ import OHIF from '@ohif/core';
 
 import { getIsLocked } from './utils/getIsLocked';
 import getSOPInstanceAttributes from './utils/getSOPInstanceAttributes';
+import displaySetOf from './utils/displaySetOf';
 import { getIsVisible } from './utils/getIsVisible';
 
 const { log, utils, DICOMSR } = OHIF;
@@ -61,16 +62,7 @@ const DICOMSRSeriesTagTool = {
       annotation
     );
 
-    let displaySet;
-
-    if (SOPInstanceUID) {
-      displaySet = displaySetService.getDisplaySetForSOPInstanceUID(
-        SOPInstanceUID,
-        SeriesInstanceUID
-      );
-    } else {
-      displaySet = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID)[0];
-    }
+    const displaySet = displaySetOf(displaySetService, SOPInstanceUID, SeriesInstanceUID);
 
     // Tag value, text, scheme, and scheme version
     const value = csToolsEventDetail.value || annotation.value || data.value;

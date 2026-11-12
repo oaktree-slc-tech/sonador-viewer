@@ -44,3 +44,14 @@ it('prefers the row\'s own SOP Instance UID', () => {
   const { viewportSpecificData } = jump({ SOPInstanceUID: '2.25.11', StudyInstanceUID: '2.25.1', metadata: { SOPInstanceUID: '2.25.12' } });
   expect(viewportSpecificData[0].displaySet.SOPInstanceUID).toBe('2.25.11');
 });
+
+it("jumps to the row's own measurement when another shares its measurement number", () => {
+  const { viewportSpecificData } = jumpToRowItem({ toolType: 'Length', measurementNumber: 1, measurementId: 'len-2' }, viewports, {
+    timepoints: [{ timepointId: 't1' }],
+    measurements: { Length: [
+      { _id: 'len-1', timepointId: 't1', measurementNumber: 1, SOPInstanceUID: '2.25.11', StudyInstanceUID: '2.25.1' },
+      { _id: 'len-2', timepointId: 't1', measurementNumber: 1, SOPInstanceUID: '2.25.12', StudyInstanceUID: '2.25.1' },
+    ] },
+  });
+  expect(viewportSpecificData[0].displaySet.SOPInstanceUID).toBe('2.25.12');
+});

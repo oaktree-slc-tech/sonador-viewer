@@ -258,6 +258,8 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
   let measurementNumber = 1;
   const skippedWithoutImage = [];
+  const notMapped = [];
+  let imported = 0;
 
   // Generate tool data / annotation structure
   _.each(_.keys(hydratableMeasurementsInSR), annotationType => {
@@ -297,7 +299,9 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       // drawn off the acquired images, no loaded image holds its points, or no loaded series
       // shares its Frame of Reference) is held as an out-of-plane measurement
       if (!imageId && isPatientDomainState(annotationType, toolData)) {
-        addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR });
+        if (addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR })) {
+          imported += 1;
+        }
         return;
       }
 
@@ -373,9 +377,23 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
           annotation.metadata.createRenderVersion = true;
         }
 
-        // Create measurement via the parser source and trigger EVENTS.MEASUREMENT_ADDED
-        const measurement_uid = parserSource.annotationToMeasurement(annotationType, { annotation, });
-        const measurement = measurementService.getMeasurement(measurement_uid);
+        // Create measurement via the parser source and trigger EVENTS.MEASUREMENT_ADDED. A measurement
+        // that cannot be mapped is left out with a warning; the report's others are still read.
+        let measurement_uid;
+        try {
+          measurement_uid = parserSource.annotationToMeasurement(annotationType, { annotation, });
+        } catch (error) {
+          notMapped.push(annotationType);
+          log.warn('[DICOM-SR:parseDicomStructuredReport:not-mapped] measurement left out of the report read: '
+            + 'annotationType='+annotationType+' trackingUid='+trackingUid, error);
+          return;
+        }
+        const measurement = measurement_uid && measurementService.getMeasurement(measurement_uid);
+        if (!measurement) {
+          notMapped.push(annotationType);
+          return;
+        }
+        imported += 1;
         measurementService._broadcastEvent(measurementService.EVENTS.MEASUREMENT_ADDED, {
           source: parserSource, measurement, data: annotation,
         });
@@ -430,6 +448,21 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     }
   }
 
+  if (notMapped.length) {
+    const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+    const counts = _.map(_.countBy(notMapped), (count, type) => `${type} (${count})`).join(', ');
+    const report = instanceSR.SeriesDescription || instanceSR.SeriesInstanceUID;
+    const outcome = imported
+      ? `${plural(imported, 'other measurement')} of the report ${imported === 1 ? 'was' : 'were'} imported.`
+      : 'No measurement of the report was imported.';
+    const message = `${plural(notMapped.length, 'measurement')} of report ${report} could not be read: ${counts}. ${outcome}`;
+    if (LoggerService && typeof LoggerService.error === 'function') {
+      LoggerService.error({ title: 'Measurements could not be read from a report', message, notify: true });
+    } else {
+      log.warn('[DICOM-SR:parseDicomStructuredReport:not-mapped]', message);
+    }
+  }
+
   if (skippedWithoutImage.length) {
     log.warn('[DICOM-SR:parseDicomStructuredReport:skipped] annotations skipped, no image loaded for their SOP instances',
       _.uniq(skippedWithoutImage));
@@ -452,7 +485,8 @@ function isPatientDomainState(annotationType, toolData) {
 }
 
 function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }) {
-  // Hold a hydrated patient-domain group as an out-of-plane measurement-service record, once. One
+  // Hold a hydrated patient-domain group as an out-of-plane measurement-service record, once; true
+  // when it was added. One
   // whose Frame of Reference no loaded series shares keeps the report's evidence for its series, so
   // that a save writes it again.
   const record = heldOutOfPlaneRecord(annotationType, toolData, instanceSR.StudyInstanceUID);
@@ -478,7 +512,7 @@ function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, me
     log.warn('[DICOM-SR:parseDicomStructuredReport:out-of-plane] no Cornerstone3D source for', annotationType, TrackingUniqueIdentifier);
     return;
   }
-  measurementService.addRawMeasurement(source, annotationType, { id: guid(), annotation: { data: {} } }, () => record);
+  return Boolean(measurementService.addRawMeasurement(source, annotationType, { id: guid(), annotation: { data: {} } }, () => record));
 }
 
 
