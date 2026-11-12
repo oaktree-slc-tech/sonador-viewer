@@ -2052,11 +2052,17 @@ export default class MeasurementApi {
     const { toolServiceManaged } = this._serviceManagedTool(toolType);
     if (toolServiceManaged && addedMeasurement._id) {
 
-      // Ensure that measurement service representation includes the measurement number
-      const measurement0 = this.getMeasurementByCornerstoneId(addedMeasurement._id);
+      // Ensure that measurement service representation includes the measurement number. Only the
+      // service record is updated (by the representation's service uid, else the _id it carries):
+      // the representation itself would be stored in the record's place, without its uid or points.
+      const { uid: serviceUid } = MeasurementApi._unpackMeasurementData(addedMeasurement);
+      const measurement0 = (serviceUid && this.measurementService.getMeasurement(serviceUid))
+        || this.getServiceMeasurementByCornerstoneId(addedMeasurement._id);
       if (measurement0 && (!measurement0.metadata?.measurementNumber || measurement0.metadata?.measurementNumber != addedMeasurement.measurementNumber)) {
-        _.extend(measurement0.metadata, _.pick(addedMeasurement, 'measurementNumber'));
-        this.updateMeasurement(toolType, measurement0);
+        this.updateMeasurement(toolType, {
+          ...measurement0,
+          metadata: { ...(measurement0.metadata || {}), ..._.pick(addedMeasurement, 'measurementNumber') },
+        });
       }
     }
 
@@ -2208,8 +2214,12 @@ export default class MeasurementApi {
     // Synchronize tool state across integrated components
     const { measurementNumber } = measurement;
 
-    // Remove measurement from MeasurementService
-    const _measurement = this.measurementService.getMeasurement(measurement.uid || measurement._id);
+    // Remove measurement from MeasurementService. A representation keeps the service uid in its
+    // nested sections, and its _id need not be the uid: the record is also found by the _id it carries.
+    const { uid: serviceUid } = MeasurementApi._unpackMeasurementData(measurement);
+    const _measurement = (serviceUid && this.measurementService.getMeasurement(serviceUid))
+      || (measurement._id && (this.measurementService.getMeasurement(measurement._id)
+        || this.getServiceMeasurementByCornerstoneId(measurement._id)));
     if (_measurement) {
       this.measurementService.remove(_measurement.uid);
     }

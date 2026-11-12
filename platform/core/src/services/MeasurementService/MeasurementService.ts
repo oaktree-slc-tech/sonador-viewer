@@ -394,10 +394,11 @@ class MeasurementService extends PubSubService {
     // Ensure that measurement service ID attributes remain intact
     measurement = this._backfillMeasurementAttrs(measurementUID, measurement);
    
-    // Create updated measurement instance
+    // Create updated measurement instance; it keeps the uid it is stored under
     const updatedMeasurement = {
       ...measurement,
       modifiedTimestamp: Math.floor(Date.now() / 1000),
+      uid: measurementUID,
     };
 
     // Update the measurement instance

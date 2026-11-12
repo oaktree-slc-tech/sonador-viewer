@@ -72,6 +72,7 @@ jest.mock('@cornerstonejs/adapters', () => {
         Angle: load('Cornerstone3D/Angle.js'),
         CobbAngle: load('Cornerstone3D/CobbAngle.js'),
         Length: load('Cornerstone3D/Length.js'),
+        CircleROI: load('Cornerstone3D/CircleROI.js'),
         CodeScheme: load('Cornerstone3D/CodingScheme.js'),
       },
     },

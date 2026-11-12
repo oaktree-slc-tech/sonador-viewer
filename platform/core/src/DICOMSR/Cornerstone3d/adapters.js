@@ -26,7 +26,7 @@ import frameImageIds from './utils/frameImageIds';
 const { TID300Measurement } = utilities.TID300;
 const {
   BaseAdapter3D, MeasurementReport: LibraryMeasurementReport, Angle: LibraryAngle, CobbAngle: LibraryCobbAngle,
-  Length: LibraryLength,
+  Length: LibraryLength, CircleROI: LibraryCircleROI,
 } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
 
@@ -410,12 +410,9 @@ function circleMeasurementState(adapter, state, MeasurementGroup, context) {
   return state;
 }
 
-class CircleROI extends BaseAdapter3D {
-  static {
-    this.init(CIRCLE_TRACKING_TOOL, TID300Measurement);
-    this.registerLegacy();
-  }
-
+// Replaces the library CircleROI (registered under the same tool type and tracking identifiers,
+// both prefixes), as Angle, CobbAngle and Length do
+class CircleROI extends LibraryCircleROI {
   static getMeasurementData(MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifier, options) {
     const imageIdsForToolState = options && options.imageIdsForToolState;
     const locked = !options || options.locked !== false;
