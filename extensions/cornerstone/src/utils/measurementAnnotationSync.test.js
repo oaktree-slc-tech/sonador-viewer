@@ -80,6 +80,7 @@ jest.mock('@ohif/core', () => ({
     log: { warn: () => {}, info: () => {}, debug: () => {} },
     DICOMSR: {
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
+      circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
       outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
       drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
       measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
@@ -94,7 +95,7 @@ jest.mock('@ohif/core', () => ({
           return () => mockVisibilitySources.delete(source);
         },
         Instance: {
-          _serviceManagedTool: toolName => (['Length', 'Angle', 'CobbAngle', 'ArrowAnnotate'].includes(toolName)
+          _serviceManagedTool: toolName => (['Length', 'Angle', 'CobbAngle', 'ArrowAnnotate', 'CircleRoi'].includes(toolName)
             ? { toolServiceManaged: true, source: { name: 'CornerstoneTools', version: '4', ...mockClassic }, toolMapping: mockClassic }
             : { toolServiceManaged: false }),
         },
@@ -859,6 +860,20 @@ describe('a measurement drawn in the 3D Inspector', () => {
     expect(mockStyles[annotationUIDFor(record.uid)]).toBeUndefined();
   });
 
+  it('off the acquired plane, a circle becomes a pending out-of-plane CircleROI with its values', async () => {
+    await drawn('CircleROI', [[12, 0, 0], [12, 3, -4]]);
+
+    const [record] = records();
+    expect(record).toMatchObject({
+      toolName: 'CircleROI', points: [[12, 0, 0], [12, 3, -4]], unit: 'mm',
+      metadata: { outOfPlane: true, sourceSeries: '2.25.1002', views: ['sagittal'] },
+    });
+    expect(record.data.cachedStats.radius).toBeCloseTo(5, 9);
+    expect(record.data.cachedStats.area).toBeCloseTo(25 * Math.PI, 9);
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    expect(mirror(record.uid).metadata.toolName).toBe('CircleROI');
+  });
+
   it('is announced once a session as shown in the MPR and 3D views only', async () => {
     await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
     await drawn('CobbAngle', [[12, 0, 0], [12, 10, 0], [12, 0, -10], [12, 0, -20]]);
@@ -973,6 +988,31 @@ describe('a measurement drawn in the 3D Inspector', () => {
     expect(mockLocked.has(annotationUIDFor('skew-1'))).toBe(true);
   });
 
+  // A held circle read from an ELLIPSE on the coronal plane y = 20, without a Drawing-Plane
+  const heldCircle = (id, sourceGeometry) => service.addRawMeasurement(outOfPlaneSource, 'CircleROI', { id }, () => ({
+    toolName: 'CircleROI', points: [[10, 20, 30], [15, 20, 30]], FrameOfReferenceUID: '2.25.7001', isLocked: true,
+    data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
+    metadata: { outOfPlane: true, isLocked: true, isReadOnly: true, views: ['coronal'], sourceGeometry },
+  }));
+
+  it('draws a held circle in the plane of the ELLIPSE it was read from, not a plane chosen for its center and edge', () => {
+    heldCircle('coronal-1', {
+      valueType: 'SCOORD3D', graphicType: 'ELLIPSE', graphicData: [5, 20, 30, 15, 20, 30, 10, 20, 25, 10, 20, 35],
+      FrameOfReferenceUID: '2.25.7001',
+    });
+    const annotation = mirror('coronal-1');
+    expect(annotation.metadata.toolName).toBe('CircleROI');
+    expect(annotation.metadata.viewPlaneNormal.map(value => Math.abs(value) + 0)).toEqual([0, 1, 0]);
+    expect(annotation.metadata.planeUnknown).toBeUndefined();
+    expect(annotation.data.handles.points).toEqual([[10, 20, 30], [15, 20, 30]]);
+  });
+
+  it('marks a held circle read from a stock CIRCLE SCOORD3D as having no known plane', () => {
+    heldCircle('legacy-1', { valueType: 'SCOORD3D', graphicType: 'CIRCLE', graphicData: [10, 20, 30, 15, 20, 30], FrameOfReferenceUID: '2.25.7001' });
+    const annotation = mirror('legacy-1');
+    expect(annotation.metadata).toMatchObject({ toolName: 'CircleROI', planeUnknown: true });
+  });
+
   it('is removed with its annotation, either way', async () => {
     await drawn('Length', [[12, 0, 0], [12, 30, -40]]);
     const [{ uid }] = records();
@@ -981,3 +1021,54 @@ describe('a measurement drawn in the 3D Inspector', () => {
   });
 });
 
+
+
+describe('circles', () => {
+  const circle = (uid = 'circle-1') => ({
+    uid,
+    toolName: 'CircleRoi',
+    source: classicSource,
+    referencedImageId: 'wadors:image',
+    FrameOfReferenceUID: '2.25.7001',
+    points: [{ x: 0.5, y: 0.5 }, { x: 3.5, y: 4.5 }],
+    data: {
+      cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI },
+      handles: { start: { x: 0.5, y: 0.5 }, end: { x: 3.5, y: 4.5 }, textBox: {} },
+    },
+    metadata: { TrackingUniqueIdentifier: '2.25.8200' },
+  });
+
+  it('mirror the classic CircleRoi as a Cornerstone3D CircleROI, center first, with its values', () => {
+    service.add(circle());
+
+    expect(mirror('circle-1').metadata.toolName).toBe('CircleROI');
+    expect(mirror('circle-1').data.handles.points).toEqual([[0, 0, 0], [3, 4, 0]]);
+    expect(mirror('circle-1').data.recordValue).toEqual({
+      values: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI }, points: [[0, 0, 0], [3, 4, 0]],
+    });
+  });
+
+  it('carry an edit in a Cornerstone3D view to the classic handles and values', () => {
+    service.add(circle());
+    const annotation = mirror('circle-1');
+    annotation.data.handles.points[1] = [6, 8, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+
+    expect(service.update).toHaveBeenCalledTimes(1);
+    const [, measurement] = service.update.mock.calls[0];
+    expect(measurement.toolName).toBe('CircleRoi');
+    expect(measurement.data.handles.end).toEqual({ x: 6.5, y: 8.5 });
+    expect(measurement.data.cachedStats.radius).toBeCloseTo(10, 9);
+    expect(measurement.data.cachedStats.area).toBeCloseTo(100 * Math.PI, 9);
+    expect(measurement.metadata.TrackingUniqueIdentifier).toBe('2.25.8200');
+  });
+
+  it('move their annotation when the classic circle is edited', () => {
+    service.add(circle());
+    const edited = circle();
+    edited.data.handles.end = { x: 6.5, y: 8.5 };
+    service.publish('updated', { source: classicSource, measurement: edited });
+
+    expect(mirror('circle-1').data.handles.points[1]).toEqual([6, 8, 0]);
+  });
+});

@@ -13,7 +13,7 @@ jest.mock('@cornerstonejs/core', () => ({
   metaData: { get: (type, imageId) => (type === 'imagePlaneModule' ? mockPlanes[imageId] : undefined) },
 }), { virtual: true });
 
-const mockTools = { Length: [], CobbAngle: [] };
+const mockTools = { Length: [], CobbAngle: [], CircleRoi: [] };
 jest.mock('@ohif/core', () => {
   const angleGeometry = jest.requireActual('../../../../core/src/DICOMSR/utils/angleGeometry');
   const MeasurementApi = {
@@ -153,6 +153,16 @@ it("asks in the viewer's voice: a question title, the consequence, a verb on the
   expect(DIALOG).toMatchObject({ title: 'Close MPR View?', confirmText: 'Show Measurement', cancelText: 'Cancel' });
   expect(DIALOG.message).toBe('This measurement is on another series. To show it, the MPR view closes and the viewer '
     + 'opens that series at the measurement.');
+});
+
+it('targets the center of a circle, not the middle of its center and edge', () => {
+  const target = worldTargetOf({
+    toolType: 'CircleRoi', referencedImageId: 'wadors:axial-12',
+    handles: { start: { x: 100.5, y: 120.5 }, end: { x: 140.5, y: 120.5 }, textBox: { x: 900, y: 900 } },
+  });
+  expect(target[0]).toBeCloseTo(-100 + 0.5 * 100, 6);
+  expect(target[1]).toBeCloseTo(-100 + 0.5 * 120, 6);
+  expect(target[2]).toBeCloseTo(12, 6);
 });
 
 it('targets the image centre for a measurement without handles, and nothing without an image plane', () => {

@@ -1,18 +1,20 @@
-// Display of the Length, Angle and Cobb angle annotations in a Cornerstone3D 3D (volume rendering)
-// viewport: every annotation of those tools in the viewport's Frame of Reference, including the
+// Display of the Length, Angle, Cobb angle and circle annotations in a Cornerstone3D 3D (volume
+// rendering) viewport: every annotation of those tools in the viewport's Frame of Reference, including the
 // ones the classic and out-of-plane measurements are mirrored to (extensions/cornerstone
 // measurementAnnotationSync). This tool only draws them. The stock tools offer an annotation only to
 // views whose plane is parallel to it, which a rotating 3D view almost never is, so this tool draws
 // them whatever the camera: the lines, the handles and the value (DICOMSR angleGeometry
 // `annotationLength`, in mm, and `annotationAngle`: for a mirrored measurement, the value its record
-// and SR hold while its points are unchanged). The tool keeps its name, which the views
-// that add it use.
+// and SR hold while its points are unchanged). A circle is drawn in its plane (the annotation's view
+// plane normal) with its radius (DICOMSR circleGeometry `annotationCircle`). The tool keeps its name,
+// which the views that add it use.
 //
 // Display only: it takes no mouse input, and editing stays with the 2D and inspection views. Add it to a tool
 // group with `addAngleDisplay3DToolToGroup`; `setAngleDisplay3DEnabled` shows or hides it.
 
 import { annotationAngle, annotationLength } from '@ohif/core/src/DICOMSR/utils/angleGeometry';
 import { NON_PLANAR_COBB_ANGLE } from '@ohif/core/src/DICOMSR/utils/outOfPlane';
+import { annotationCircle, circleOutline } from '@ohif/core/src/DICOMSR/utils/circleGeometry';
 
 import { utilities as c3dUtils } from '@cornerstonejs/core';
 import {
@@ -28,7 +30,7 @@ const { drawHandles, drawLine, drawLinkedTextBox, drawPolyline } = c3dSvgDrawing
 
 // Tools whose annotations are drawn, with their point counts: a Cobb angle whose lines lie in no
 // common plane is kept under its own tool name, which no slice tool draws, and drawn as a Cobb angle
-const DISPLAYED_TOOLS = { Length: 2, Angle: 3, CobbAngle: 4, [NON_PLANAR_COBB_ANGLE]: 4 };
+const DISPLAYED_TOOLS = { Length: 2, Angle: 3, CobbAngle: 4, [NON_PLANAR_COBB_ANGLE]: 4, CircleROI: 2 };
 const drawnAs = toolName => (toolName === NON_PLANAR_COBB_ANGLE ? 'CobbAngle' : toolName);
 
 
@@ -84,7 +86,18 @@ class AngleDisplay3DTool extends AnnotationTool {
       const lineOptions = { color, width: this.getStyle('lineWidth', styleSpecifier, annotation) };
 
       const canvasCoordinates = data.handles.points.map(point => viewport.worldToCanvas(point));
-      if (toolName === 'Length') {
+      if (toolName === 'CircleROI') {
+        // The outline in the circle's plane; the radius without one, or when the plane is not
+        // known (a stock CIRCLE SCOORD3D, drawn in a view that only holds its two points)
+        const [center, edge] = data.handles.points;
+        const outline = !annotation.metadata?.planeUnknown && circleOutline(center, edge, annotation.metadata?.viewPlaneNormal);
+        if (outline) {
+          drawPolyline(svgDrawingHelper, annotationUID, 'circle', outline.map(point => viewport.worldToCanvas(point)),
+            { ...lineOptions, closePath: true });
+        } else {
+          drawLine(svgDrawingHelper, annotationUID, 'line', canvasCoordinates[0], canvasCoordinates[1], lineOptions);
+        }
+      } else if (toolName === 'Length') {
         drawLine(svgDrawingHelper, annotationUID, 'line', canvasCoordinates[0], canvasCoordinates[1], lineOptions);
       } else if (toolName === 'Angle') {
         drawPolyline(svgDrawingHelper, annotationUID, 'angle', canvasCoordinates, lineOptions);
@@ -96,16 +109,17 @@ class AngleDisplay3DTool extends AnnotationTool {
 
       // The value; 0 is a value, and an incomplete or degenerate angle without a matching record
       // value has none
-      const value = toolName === 'Length' ? annotationLength(data) : annotationAngle(toolName, data);
+      const value = toolName === 'CircleROI' ? annotationCircle(data).radius
+        : toolName === 'Length' ? annotationLength(data) : annotationAngle(toolName, data);
       if (!Number.isFinite(value)) {
         return;
       }
-      const unit = toolName === 'Length' ? 'mm' : String.fromCharCode(176);
+      const unit = toolName === 'Length' || toolName === 'CircleROI' ? 'mm' : String.fromCharCode(176);
       drawLinkedTextBox(
         svgDrawingHelper,
         annotationUID,
         'textBox',
-        [`${c3dUtils.roundNumber(value)} ${unit}`],
+        [toolName === 'CircleROI' ? `Radius: ${c3dUtils.roundNumber(value)} ${unit}` : `${c3dUtils.roundNumber(value)} ${unit}`],
         c3dToolsUtilities.drawing.getTextBoxCoordsCanvas(canvasCoordinates),
         canvasCoordinates,
         {},

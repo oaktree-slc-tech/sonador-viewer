@@ -2,11 +2,15 @@
 // mirrored record's value while the points are unchanged.
 
 const mockAddTool = jest.fn();
+// The annotations the stock circle statistics ran for
+const mockStockCircleStats = [];
 // Annotations by tool name, and annotation UIDs hidden
 const mockAnnotations = {};
 const mockHidden = new Set();
 // The unit the stock Length tool measures in (`mm` on a calibrated image, `px` otherwise)
 let mockLengthUnit = 'mm';
+// The unit the stock circle measures in, the same way
+let mockCircleUnit = 'mm';
 jest.mock('@cornerstonejs/tools', () => {
   // As the published 4.22.13 tools: the renderer is an instance property and draws a label only
   // for a truthy cached angle
@@ -108,10 +112,29 @@ jest.mock('@cornerstonejs/tools', () => {
     }
   }
   LengthTool.toolName = 'Length';
+  // As the published 4.22.13 CircleROITool: the statistics are an instance property (bound in the
+  // constructor, with its throttled copy), the radius in index space with intensity statistics
+  class CircleROITool extends StockTool {
+    constructor(toolProps = {}) {
+      super();
+      this.configuration = { getTextLines: () => ['stock'], ...(toolProps.configuration || {}) };
+      this._calculateCachedStats = (annotation) => {
+        Object.keys(annotation.data.cachedStats).forEach(id => {
+          annotation.data.cachedStats[id] = { radius: 99, area: 1, perimeter: 2, mean: 40, stdDev: 3, max: 50, min: 30, radiusUnit: mockCircleUnit, areaUnit: `${mockCircleUnit}2` };
+        });
+        mockStockCircleStats.push(annotation);
+        return annotation.data.cachedStats;
+      };
+      this._throttledCalculateCachedStats = this._calculateCachedStats;
+    }
+  }
+  CircleROITool.toolName = 'CircleROI';
   return {
     AngleTool,
     CobbAngleTool,
     LengthTool,
+    CircleROITool,
+    utilities: { throttle: fn => fn, roundNumber: value => Math.round(value * 100) / 100 },
     addTool: (...args) => mockAddTool(...args),
     annotation: {
       state: { getAnnotations: toolName => mockAnnotations[toolName] || [] },
@@ -121,10 +144,15 @@ jest.mock('@cornerstonejs/tools', () => {
 }, { virtual: true });
 jest.mock('@ohif/core', () => ({
   __esModule: true,
-  default: { DICOMSR: { angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry') } },
+  default: { DICOMSR: {
+    angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
+    circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
+  } },
 }), { virtual: true });
 
-import { ExchangeAngleTool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools } from './exchangeAngleTools';
+import {
+  ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools,
+} from './exchangeAngleTools';
 import { CobbAngleTool } from '@cornerstonejs/tools';
 
 const annotationOf = (points, recordValue) => ({ data: { handles: { points }, cachedStats: { 'imageId:a': {} }, recordValue } });
@@ -194,7 +222,7 @@ describe('Length', () => {
 
 it('registers under the stock tool names', () => {
   registerExchangeAngleTools();
-  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle', 'Length']);
+  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle', 'Length', 'CircleROI']);
 });
 
 
@@ -255,5 +283,66 @@ describe('pointer tests of a Cobb angle', () => {
     expect(tool.distanceToLines({ points: [[0, 0, 0], [10, 0, 0]] })).toMatchObject({ isNearFirstLine: false, distanceToPoint: Infinity });
     expect(tool.distanceToLines({ points: [[0, 0, 0], [10, 0, 0], undefined, [5, 5, 0]] }).distanceToPoint).toBe(Infinity);
     expect(tool.distanceToLines({ points: [[0, 2, 0], [10, 2, 0], [0, 5, 0], [5, 5, 0]] }).distanceToPoint).toBe(2);
+  });
+});
+
+
+describe('circle', () => {
+  const circleAnnotation = (points, recordValue) => ({ data: { handles: { points }, cachedStats: { 'imageId:a': {}, 'volumeId:b': {} }, recordValue } });
+
+  it('replaces the stock statistics with the radius between the world points, the area and perimeter, and no intensity', () => {
+    const annotation = circleAnnotation([[0, 0, 0], [3, 4, 0]]);
+    new ExchangeCircleROITool()._calculateCachedStats(annotation);
+    // The stock pass still runs (its handle checks and modified events)
+    expect(mockStockCircleStats).toContain(annotation);
+    Object.values(annotation.data.cachedStats).forEach(stats => {
+      expect(stats).toMatchObject({ radius: 5, radiusUnit: 'mm', areaUnit: 'mm\u00B2', isEmptyArea: false });
+      expect(stats.area).toBeCloseTo(25 * Math.PI, 10);
+      expect(stats.perimeter).toBeCloseTo(10 * Math.PI, 10);
+      ['mean', 'stdDev', 'max', 'min'].forEach(key => expect(stats).not.toHaveProperty(key));
+      expect(stats.statsArray.map(stat => stat.name)).toEqual(['area', 'radius', 'circumference']);
+    });
+  });
+
+  it("keeps a mirrored record's stored values while the points are unchanged, and the throttled pass does the same", () => {
+    const points = [[0, 0, 0], [3, 4, 0]];
+    const values = { radius: 5.25, area: 86.6, perimeter: 33 };
+    const tool = new ExchangeCircleROITool();
+    const annotation = circleAnnotation(points, { values, points: points.map(point => point.slice()) });
+    tool._throttledCalculateCachedStats(annotation);
+    expect(annotation.data.cachedStats['imageId:a']).toMatchObject(values);
+
+    annotation.data.handles.points = [[0, 0, 0], [6, 8, 0]];
+    tool._calculateCachedStats(annotation);
+    expect(annotation.data.cachedStats['imageId:a'].radius).toBe(10);
+  });
+
+  it('labels a circle with its radius and its area', () => {
+    const tool = new ExchangeCircleROITool();
+    const annotation = circleAnnotation([[0, 0, 0], [3, 4, 0]]);
+    tool._calculateCachedStats(annotation);
+    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5 mm', 'Area: 78.54 mm\u00B2']);
+    // A configured label is kept
+    expect(new ExchangeCircleROITool({ configuration: { getTextLines: () => ['own'] } }).configuration.getTextLines()).toEqual(['own']);
+  });
+
+  it('keeps pixels as the unit when the stock pass reports an image without calibration', () => {
+    mockCircleUnit = 'px';
+    try {
+      const tool = new ExchangeCircleROITool();
+      const annotation = circleAnnotation([[0, 0, 0], [3, 4, 0]]);
+      tool._calculateCachedStats(annotation);
+      expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ radius: 5, radiusUnit: 'px', areaUnit: 'px\u00B2' });
+      expect(annotation.data.cachedStats['imageId:a'].statsArray.map(stat => stat.unit)).toEqual(['px\u00B2', 'px', 'px']);
+      expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['Radius: 5 px', 'Area: 78.54 px\u00B2']);
+    } finally {
+      mockCircleUnit = 'mm';
+    }
+  });
+
+  it('is registered under the stock name with the other exchange tools', () => {
+    mockAddTool.mockClear();
+    registerExchangeAngleTools();
+    expect(mockAddTool.mock.calls.map(([tool]) => tool)).toContain(ExchangeCircleROITool);
   });
 });

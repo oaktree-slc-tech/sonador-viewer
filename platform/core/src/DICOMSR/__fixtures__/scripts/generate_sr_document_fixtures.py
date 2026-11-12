@@ -17,22 +17,30 @@
 	  and Cobb angle on the slice at z = 18, under tracking UIDs of its own, so that the two
 	  documents are not drawn over each other.
 
+	Both documents also hold a circle on the plane of their measurements: the Area, Perimeter and
+	Radius NUMs, each inferred from its own copy of the SCOORD3D ELLIPSE, properties under the Area
+	NUM. The client release this script runs against has no circle model, so the script adds that
+	group to each document after the client writes it, copying the properties of the document's
+	first Length. A client release with the circle model replaces the hand-built group.
+
 	Every identifier is synthetic. Run with the Sonador IO client (sonador-client `master`) and the
 	Oak-Tree highdicom fork it requires on the Python path, from the directory holding the `sonador`
 	package:
 
 		python generate_sr_document_fixtures.py OUTPUT_DIRECTORY
 '''
-import os, sys
+import copy, os, sys
 
 import numpy as np
 
 import pydicom
 from pydicom.dataset import Dataset, FileMetaDataset
+from pydicom.sequence import Sequence
 from pydicom.sr.codedict import codes
 from pydicom.uid import ExplicitVRLittleEndian
 
-from highdicom.sr import CodedConcept, RelationshipTypeValues, TextContentItem
+from highdicom.sr import CodedConcept, GraphicTypeValues3D, NumContentItem, RelationshipTypeValues, \
+	Scoord3DContentItem, TextContentItem
 
 from sonador.apisettings.base import AngleMeasurement, CobbAngleMeasurement, Finding, ImageReference, \
 	LengthMeasurement, Measurement, ReportMetaGroup
@@ -130,8 +138,66 @@ def measurements(uid_base, z):
 	]
 
 
-def write(model, path, instance_uid):
-	doc = model.create_sr(record_instances=True, dcmsr_series_uid='%s.1' % instance_uid, dcmsr_instance_uid=instance_uid)
+# The circle of each document: its center on the plane of the measurements, its radius in mm
+CIRCLE_CENTER = (10.0, -8.0)
+CIRCLE_RADIUS = 6.0
+CIRCLE_TRACKING_ID = 'cornerstoneTools@^4.0.0:CircleROI'
+CIRCLE_VALUES = (
+	(CodedConcept('42798000', 'SCT', 'Area'), CodedConcept('mm2', 'UCUM', 'square millimeter'), lambda r: np.pi * r ** 2),
+	(CodedConcept('131191004', 'SCT', 'Perimeter'), CodedConcept('mm', 'UCUM', 'mm'), lambda r: 2 * np.pi * r),
+	(CodedConcept('131190003', 'SCT', 'Radius'), CodedConcept('mm', 'UCUM', 'mm'), lambda r: r),
+)
+
+
+def code_value(item):
+	concept = item.ConceptNameCodeSequence[0]
+	return getattr(concept, 'CodeValue', None) or getattr(concept, 'LongCodeValue', None)
+
+
+def circle_group(doc, tracking_uid, z):
+	'''	A circle measurement group on the axial plane at `z`: the ELLIPSE `c - ru, c + ru, c - rv, c + rv`
+		with u the row direction and v = n x u (n the plane normal, +z), under each NUM; under the Area
+		NUM the properties of the document's first Length, with a description of its own. Like the
+		other measurements of the documents it has no Drawing-Plane: it lies on the plane of a slice.
+	'''
+	(cx, cy), r = CIRCLE_CENTER, CIRCLE_RADIUS
+	ellipse = np.array([(cx - r, cy, z), (cx + r, cy, z), (cx, cy - r, z), (cx, cy + r, z)])
+
+	container = next(item for item in doc.ContentSequence if code_value(item) == '126010')
+	length = next(group for group in container.ContentSequence
+		if any(getattr(item, 'TextValue', None) == 'cornerstoneTools@^4.0.0:Length' for item in group.ContentSequence))
+	length_num = next(item for item in length.ContentSequence if item.ValueType == 'NUM')
+	properties = [copy.deepcopy(item) for item in length_num.ContentSequence if item.RelationshipType == 'HAS PROPERTIES']
+	for item in properties:
+		if code_value(item) == 'Sonador-Measurement.Description':
+			item.TextValue = 'Circle (synthetic)'
+
+	group = copy.deepcopy(length)
+	for item in group.ContentSequence:
+		if code_value(item) == '112039':
+			item.TextValue = CIRCLE_TRACKING_ID
+		elif code_value(item) == '112040':
+			item.UID = tracking_uid
+	nums = []
+	for index, (name, unit, value) in enumerate(CIRCLE_VALUES):
+		num = Dataset(NumContentItem(name=name, value=float(value(r)), unit=unit,
+			relationship_type=RelationshipTypeValues.CONTAINS))
+		geometry = Dataset(Scoord3DContentItem(name=codes.DCM.ImageRegion, graphic_type=GraphicTypeValues3D.ELLIPSE,
+			graphic_data=ellipse, frame_of_reference_uid=FRAME_OF_REFERENCE_UID,
+			relationship_type=RelationshipTypeValues.INFERRED_FROM))
+		# As the client writes its geometry: no concept name
+		del geometry.ConceptNameCodeSequence
+		num.ContentSequence = Sequence([geometry] + (properties if index == 0 else []))
+		nums.append(num)
+	group.ContentSequence = Sequence([item for item in group.ContentSequence if item.ValueType != 'NUM'] + nums)
+	container.ContentSequence.append(group)
+
+
+def write(model, path, instance_uid, circle_uid, z):
+	model.create_sr(record_instances=True, dcmsr_series_uid='%s.1' % instance_uid, dcmsr_instance_uid=instance_uid).save_as(path)
+	# The circle group is added to the document as written, read back as plain datasets
+	doc = pydicom.dcmread(path)
+	circle_group(doc, circle_uid, z)
 	doc.save_as(path)
 	return doc
 
@@ -157,10 +223,10 @@ def main(output):
 			meta=[TextContentItem(name=codes.DCM.Comment, value='Synthetic planning note',
 				relationship_type=RelationshipTypeValues.CONTAINS)])],
 		**common)
-	write(application, os.path.join(output, 'sonador-io.application-document.dcm'), '2.25.316170500')
+	write(application, os.path.join(output, 'sonador-io.application-document.dcm'), '2.25.316170500', '2.25.31617057', Z_IMAGE)
 
 	exchange = SonadorImagingMeasurementReport(measurements=measurements('2.25.3161706', Z_EXCHANGE), **common)
-	write(exchange, os.path.join(output, 'sonador-io.exchange-document.dcm'), '2.25.316170600')
+	write(exchange, os.path.join(output, 'sonador-io.exchange-document.dcm'), '2.25.316170600', '2.25.31617067', Z_EXCHANGE)
 
 
 if __name__ == '__main__':

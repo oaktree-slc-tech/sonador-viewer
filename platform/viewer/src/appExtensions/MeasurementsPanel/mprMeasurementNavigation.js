@@ -84,7 +84,10 @@ function worldTargetOf(measurement) {
   }
   const handles = (measurement && (measurement.handles || (measurement.measurementData && measurement.measurementData.handles)
     || (measurement.data && measurement.data.handles))) || {};
-  const points = Object.keys(handles)
+  // A circle is centred on its center (its `start` handle), any other measurement on its handles
+  const toolType = measurement && (measurement.toolType || measurement.toolName || (measurement.metadata && measurement.metadata.toolName));
+  const names = toolType === 'CircleRoi' ? ['start'] : Object.keys(handles);
+  const points = names
     .filter(name => name !== 'textBox' && handles[name] && Number.isFinite(handles[name].x) && Number.isFinite(handles[name].y))
     .map(name => [handles[name].x, handles[name].y]);
   const imagePoint = points.length

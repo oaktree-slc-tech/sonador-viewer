@@ -1,7 +1,8 @@
 // The read-only path on the synthetic documents in __fixtures__ (written by the Sonador IO client,
-// see __fixtures__/scripts): an application document's measurements are drawn in place from the
-// patient coordinates it holds, on the synthetic CT series (unequal row and column spacing, slices
-// 3 mm apart), and an exchange document's measurements read the same way.
+// their circle group by the script itself, see __fixtures__/scripts): an application document's
+// measurements are drawn in place from the patient coordinates it holds, on the synthetic CT series
+// (unequal row and column spacing, slices 3 mm apart), and an exchange document's measurements
+// read the same way.
 
 import fs from 'fs';
 import path from 'path';
@@ -100,6 +101,7 @@ describe('the synthetic application document, read-only', () => {
       ['cornerstoneTools@^4.0.0:Angle', '2.25.31617052'],
       ['cornerstoneTools@^4.0.0:CobbAngle', '2.25.31617053'],
       ['cornerstoneTools@^4.0.0:Length', '2.25.31617054'],
+      ['cornerstoneTools@^4.0.0:CircleROI', '2.25.31617057'],
     ]);
     // The primary group: a scalar measurement under the application's own tracking identifier
     expect(measurements[0]).toMatchObject({ TrackingIdentifier: 'Clinical-Report', coords: [] });
@@ -110,26 +112,34 @@ describe('the synthetic application document, read-only', () => {
       metadata: { text: 'Synthetic', location: 'Synthetic location', views: ['axial'] },
       displayAttributes: { Color: { Border: '#FF8800' } },
     });
+
+    // The circle: its ELLIPSE in the patient domain, its properties from under the Area NUM
+    const circle = byUid(measurements, '2.25.31617057');
+    expect(circle).toMatchObject({ description: 'Circle (synthetic)', metadata: { views: ['axial'] } });
+    expect(circle.coords.map(coord => [coord.ValueType, coord.GraphicType])).toContainEqual(['SCOORD3D', 'ELLIPSE']);
+    expect(pointsOf(circle.coords[0])).toEqual([[4, -8, 9], [16, -8, 9], [10, -14, 9], [10, -2, 9]]);
   });
 
   it('draws the Cornerstone groups, unlisted, and names the groups it ignores in one log line', () => {
     const document = srDisplaySet('sonador-io.application-document.dcm', true);
     const summary = addReadOnlyMeasurements({ srDisplaySets: [document], imageDisplaySets: [ctDisplaySet()], imageIds });
 
-    // The Length, Angle and Cobb angle lie on the slice at z = 9; the Length at z = 10.5 lies 1.5 mm
-    // from the nearest slice and is drawn in the Cornerstone3D viewports only
+    // The Length, Angle, Cobb angle and circle lie on the slice at z = 9; the Length at z = 10.5 lies
+    // 1.5 mm from the nearest slice and is drawn in the Cornerstone3D viewports only
     expect(mockPlaced.map(({ uid, imageId, listed }) => [uid, imageId, listed])).toEqual([
       ['2.25.31617051', 'synthetic-ct:4', false],
       ['2.25.31617052', 'synthetic-ct:4', false],
       ['2.25.31617053', 'synthetic-ct:4', false],
+      ['2.25.31617057', 'synthetic-ct:4', false],
     ]);
     expect(mockPatientOnly).toEqual(['2.25.31617054']);
-    expect(summary).toEqual({ placed: 3, patientOnly: 1, skipped: 0 });
+    expect(summary).toEqual({ placed: 4, patientOnly: 1, skipped: 0 });
 
     const [line] = mockInfo.mock.calls.filter(([message]) => /application document 2\.25\.316170500/.test(message));
     expect(line[1]).toEqual([
       'cornerstoneTools@^4.0.0:Length 2.25.31617051', 'cornerstoneTools@^4.0.0:Angle 2.25.31617052',
       'cornerstoneTools@^4.0.0:CobbAngle 2.25.31617053', 'cornerstoneTools@^4.0.0:Length 2.25.31617054',
+      'cornerstoneTools@^4.0.0:CircleROI 2.25.31617057',
     ]);
     // The Series Tag is shown through its hydrated annotation, not drawn here
     expect(line[3]).toEqual([
@@ -169,13 +179,15 @@ describe('the synthetic exchange document, read-only', () => {
     const exchange = srDisplaySet('sonador-io.exchange-document.dcm', false);
     const application = srDisplaySet('sonador-io.application-document.dcm', true);
     const geometry = (measurements, uids) => uids.map(uid => byUid(measurements, uid).coords.map(pointsOf));
-    const atZ18 = geometry(application.measurements, ['2.25.31617051', '2.25.31617052', '2.25.31617053'])
-      .map(coords => coords.map(points => points.map(([x, y]) => [x, y, 18])));
-    expect(geometry(exchange.measurements, ['2.25.31617061', '2.25.31617062', '2.25.31617063'])).toEqual(atZ18);
+    const uids = ['2.25.31617061', '2.25.31617062', '2.25.31617063', '2.25.31617067'];
+    expect(geometry(exchange.measurements, uids)).toEqual(
+      geometry(application.measurements, ['2.25.31617051', '2.25.31617052', '2.25.31617053', '2.25.31617057'])
+        .map(coords => coords.map(points => points.map(([x, y]) => [x, y, 18]))));
 
     addReadOnlyMeasurements({ srDisplaySets: [exchange], imageDisplaySets: [ctDisplaySet()], imageIds });
     expect(mockPlaced.map(({ uid, imageId, listed }) => [uid, imageId, listed])).toEqual([
       ['2.25.31617061', 'synthetic-ct:7', true], ['2.25.31617062', 'synthetic-ct:7', true], ['2.25.31617063', 'synthetic-ct:7', true],
+      ['2.25.31617067', 'synthetic-ct:7', true],
     ]);
   });
 });

@@ -117,6 +117,7 @@ import utils from './../../utils';
 import Enums from '../enums';
 import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
 import { isCarriedForward, isOutOfPlaneMeasurement } from '../../DICOMSR/utils/outOfPlane';
+import { classicToolName } from '../../DICOMSR/utils/circleGeometry';
 import { clearSRDisplayAnnotations, setSRDisplayAnnotationVisible } from '../../DICOMSR/readOnly/srDisplayAnnotations';
 import {
   SERIES_TAG_TOOL, getCustomLineTextColor, getLineTextColor, resolveDisplayColor, withLineTextColor,
@@ -924,7 +925,8 @@ export default class MeasurementApi {
         const outOfPlane = this.measurementService.getMeasurements().filter((m) => {
           const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
           const pending = !Boolean(isReadOnly);
-          return m.toolName == tool.id && isOutOfPlaneMeasurement(m) && (pending || isCarriedForward(m))
+          // The circle's records carry its Cornerstone3D name; its tool configuration the classic one
+          return classicToolName(m.toolName) == tool.id && isOutOfPlaneMeasurement(m) && (pending || isCarriedForward(m))
             && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
         });
         measurementData[toolGroup.id] = [...measurementData[toolGroup.id], ...outOfPlane];

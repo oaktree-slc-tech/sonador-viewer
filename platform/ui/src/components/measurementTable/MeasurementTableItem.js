@@ -324,6 +324,11 @@ const MeasurementTableItem = ({
               <span className="refItem refView"><span className="refLabel">View:</span><span className="refValue">{outOfPlane.view}</span></span>
             )}
             <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
+            {(measurementData.circleDetail || []).map(({ label, value }) => (
+              <span key={label} className="refItem refCircleValue" data-cy={`measurement-circle-${label.toLowerCase()}`}>
+                <span className="refLabel">{t(label)}:</span><span className="refValue">{value}</span>
+              </span>
+            ))}
           </div>)}
           {measurementData && Boolean((measurementData.label || '').replace('...', '')) && (
             <TruncatedLabel text={t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })} />

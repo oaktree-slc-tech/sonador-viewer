@@ -31,6 +31,7 @@ jest.mock('@cornerstonejs/tools', () => {
     ArrowAnnotateTool: tool('ArrowAnnotate'),
     AngleTool: tool('Angle'),
     CobbAngleTool: tool('CobbAngle'),
+    CircleROITool: tool('CircleROI'),
     BidirectionalTool: tool('Bidirectional'),
     EllipticalROITool: tool('EllipticalROI'),
     RectangleROITool: tool('RectangleROI'),
@@ -53,7 +54,7 @@ jest.mock('./enums', () => ({
   Enums: { MPR: { VTK_MPRSLICE_RENDER_ID: 'vtk-mprslice', VTK_MPRSLICE_TOOLGROUP_ID: 'vtk-mprslice', TOOLS: {} }, VIEWPORT: 'VIEWPORT' },
 }));
 
-const MEASUREMENT_TOOLS = ['Length', 'ArrowAnnotate', 'Angle', 'CobbAngle', 'Bidirectional', 'EllipticalROI',
+const MEASUREMENT_TOOLS = ['Length', 'ArrowAnnotate', 'Angle', 'CobbAngle', 'CircleROI', 'Bidirectional', 'EllipticalROI',
   'RectangleROI', 'PlanarFreehandROI', 'Probe'];
 
 let actions;

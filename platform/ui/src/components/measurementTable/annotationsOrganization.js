@@ -24,6 +24,8 @@ const TOOL_NAME_ALIASES = {
   ArrowAnnotate: 'Arrow Annotation',
   DICOMSRSeriesTagTool: 'Series Tag',
   DICOMSRDisplayTool: 'Report Measurement',
+  // The circle's Cornerstone3D name (out-of-plane records)
+  CircleROI: 'Circle',
 };
 
 /** "CobbAngle" -> "Cobb Angle" */

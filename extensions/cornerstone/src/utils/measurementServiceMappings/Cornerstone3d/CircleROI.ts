@@ -22,7 +22,7 @@ const CircleROI = {
     const isVisible = getIsVisible(annotationUID);
 
     if (!metadata || !data) {
-      console.warn('Length tool: Missing metadata or data');
+      console.warn('CircleROI tool: Missing metadata or data');
       return null;
     }
 
@@ -66,7 +66,9 @@ const CircleROI = {
       textBox,
       isLocked,
       isVisible,
-      metadata,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js); the
+      // service accepts only its schema keys at the top level
+      metadata: data.displayAttributes ? { ...metadata, displayAttributes: data.displayAttributes } : metadata,
       referenceSeriesUID: SeriesInstanceUID,
       referenceStudyUID: StudyInstanceUID,
       referencedImageId,
@@ -191,7 +193,8 @@ function getDisplayText(mappedAnnotations, displaySet) {
   // Area is the same for all series
   const { area, SOPInstanceUID, frameNumber, areaUnit } = mappedAnnotations[0];
 
-  const instance = displaySet.instances.find(image => image.SOPInstanceUID === SOPInstanceUID);
+  // For OHIF v2 compatibility, check both instances and images properties
+  const instance = (displaySet.instances || displaySet.images || []).find(image => image.SOPInstanceUID === SOPInstanceUID);
 
   let InstanceNumber;
   if (instance) {

@@ -13,6 +13,7 @@ import {
   ArrowAnnotateTool as C3dArrowAnnotateTool,
   AngleTool as C3dAngleTool,
   CobbAngleTool as C3dCobbAngleTool,
+  CircleROITool as C3dCircleROITool,
   BidirectionalTool as C3dBidirectionalTool,
   EllipticalROITool as C3dEllipticalROITool,
   RectangleROITool as C3dRectangleROITool,
@@ -53,7 +54,7 @@ const { DisplaySetApi } = OHIF.display;
 // measurementAnnotationSync), and the session-only ones. Passive: an annotation is drawn in the
 // pane parallel to its plane, and a pending one can be edited there; a saved one stays locked.
 const MPR_MEASUREMENT_TOOLS = [
-  C3dLengthTool, C3dArrowAnnotateTool, C3dAngleTool, C3dCobbAngleTool,
+  C3dLengthTool, C3dArrowAnnotateTool, C3dAngleTool, C3dCobbAngleTool, C3dCircleROITool,
   C3dBidirectionalTool, C3dEllipticalROITool, C3dRectangleROITool, C3dPlanarFreehandROITool, C3dProbeTool,
 ];
 

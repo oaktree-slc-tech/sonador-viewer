@@ -327,6 +327,8 @@ const SHORT_HAND_MAP = {
   'Long Axis': 'L ',
   AREA: 'Area ',
   Length: '',
+  // A circle's read-only label is its radius, shown as on the drawing tools
+  Radius: 'Radius: ',
   CORNERSTONEFREETEXT: '',
 };
 

@@ -1,20 +1,22 @@
-// Measurements panel rows of out-of-plane measurements (Length, Angle and Cobb angle held in the
-// patient domain, DICOMSR utils/outOfPlane.js), and navigation to them. The row is the ordinary
+// Measurements panel rows of out-of-plane measurements (Length, Angle, Cobb angle and circle held in
+// the patient domain, DICOMSR utils/outOfPlane.js), and navigation to them. The row is the ordinary
 // measurement row, marked as shown in the MPR and 3D views only, with the measurement's view in
 // place of its image. A pending one is listed with the pending measurements, a saved one with the
 // saved measurements, locked.
 //
 // Selecting one in the MPR view turns the pane nearest its plane onto it and moves the panes to
-// its centroid; points in no common plane are centred on without turning a pane. The MPR view's
-// series must share the measurement's Frame of Reference. The classic viewport cannot draw it: its
-// row offers to open the MPR of a series of its Frame of Reference (its source series first), which
-// then navigates the same way. A measurement whose Frame of Reference matches no loaded series
-// offers no navigation.
+// its centroid (a circle's center); points in no common plane are centred on without turning a
+// pane. The MPR view's series must share the measurement's Frame of Reference. The classic
+// viewport cannot draw it: its row offers to open the MPR of a series of its Frame of Reference
+// (its source series first), which then navigates the same way. A measurement whose Frame of
+// Reference matches no loaded series offers no navigation.
 
 import _ from 'lodash';
 
 import OHIF, { DicomMetadataStore } from '@ohif/core';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
+import { circleDetailItems, circleDisplayValues } from '@ohif/core/src/measurements/tools/circleDisplay';
+import { circlePlanePoints, classicToolName, isCircleTool, isLegacyGeometry } from '@ohif/core/src/DICOMSR/utils/circleGeometry';
 
 import { isMprActive } from './mprMeasurementNavigation.js';
 
@@ -47,7 +49,7 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
   const series = outOfPlane().seriesOfFrameOfReference(measurement.FrameOfReferenceUID || metadata.FrameOfReferenceUID, DicomMetadataStore);
   const view = _.first(metadata.views);
   // Points in no common plane are drawn in the 3D views only: no slice contains them
-  const planar = drawingPlanes().navigationPlaneOf(measurement.points || [], metadata.drawingPlane).kind !== 'none';
+  const planar = drawingPlanes().navigationPlaneOf(planePointsOf(measurement), metadata.drawingPlane).kind !== 'none';
   return {
     toolType: measurement.toolName,
     trackingIdentifier: MeasurementApi.trackingIdentifierOf(measurement),
@@ -60,6 +62,7 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
     isLocked: Boolean(isLocked || isReadOnly),
     isPending: !isReadOnly,
     customColor: MeasurementApi.customLineTextColor(measurement),
+    circleDetail: measurement.toolName === 'CircleROI' ? circleDetailItems(circleDisplayValues(measurement)) : undefined,
     isDirty,
     isVisible: _.isNil(isVisible) ? true : isVisible,
     data: [{ displayText: displayFunction(measurement) || '...' }],
@@ -80,7 +83,8 @@ function outOfPlaneRows(tools, { labelOf, viewports }) {
   const inClassicViewport = !isMprActive(viewports);
   const rows = { saved: [], pending: [] };
   outOfPlaneMeasurements().forEach((measurement) => {
-    const tool = tools.find(candidate => candidate.id === measurement.toolName);
+    // The circle's records carry its Cornerstone3D name, its tool configuration the classic one
+    const tool = tools.find(candidate => candidate.id === classicToolName(measurement.toolName));
     if (!tool) {
       return;
     }
@@ -115,13 +119,26 @@ function frameOfReferenceOfSeries(StudyInstanceUID, SeriesInstanceUID) {
 
 const frameOfReferenceOf = record => record && (record.FrameOfReferenceUID || (record.metadata && record.metadata.FrameOfReferenceUID));
 
-/** Where to navigate for a record: { worldPoint, viewPlaneNormal }; no normal for points in no common plane */
+// The points a record's plane is found from: a circle's from the ELLIPSE it was read from
+function planePointsOf(record) {
+  const points = record.points || [];
+  return isCircleTool(record.toolName) ? circlePlanePoints(points, record.metadata && record.metadata.sourceGeometry) || points : points;
+}
+
+/**
+ * Where to navigate for a record: { worldPoint, viewPlaneNormal }; no normal for points in no
+ * common plane, nor for a circle whose plane is not known (a stock CIRCLE SCOORD3D)
+ */
 function navigationTargetOf(record) {
-  const plane = record && drawingPlanes().navigationPlaneOf(record.points, record.metadata.drawingPlane);
+  const plane = record && drawingPlanes().navigationPlaneOf(planePointsOf(record), record.metadata.drawingPlane);
   if (!plane) {
     return undefined;
   }
-  return { worldPoint: plane.centroid, viewPlaneNormal: plane.kind === 'none' ? undefined : plane.normal };
+  const isCircle = isCircleTool(record.toolName);
+  // A circle is centred on its center, its first point
+  const worldPoint = isCircle ? Array.from(record.points[0], Number).slice(0, 3) : plane.centroid;
+  const planeUnknown = plane.kind === 'none' || (isCircle && isLegacyGeometry(record.metadata.sourceGeometry));
+  return { worldPoint, viewPlaneNormal: planeUnknown ? undefined : plane.normal };
 }
 
 /**

@@ -18,6 +18,9 @@ import { encodingWarnings, handlePointsOf, imageToPatient, isPlane } from '../ut
 import { findImageForPoints, planeFromModule } from '../readOnly/planeGeometry';
 import { DCMSR_MEASUREMENT_DRAWING_PLANE } from '../enums';
 import { drawingPlaneProblem } from '../utils/drawingPlane';
+import {
+  CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleGeometryItem, circleNumItems, circleOfGeometry, circleRadius, circleValues,
+} from '../utils/circleGeometry';
 import frameImageIds from './utils/frameImageIds';
 
 const { TID300Measurement } = utilities.TID300;
@@ -280,15 +283,170 @@ class Length extends LibraryLength {
 registerAdapter(Length);
 
 
+// Circle (Cornerstone3D `CircleROI`: points[0] the center, points[1] a point on the circumference;
+// utils/circleGeometry.js), from a CIRCLE (image domain), an ELLIPSE (patient domain) or the
+// undefined CIRCLE SCOORD3D of stock Cornerstone3D (read with a warning: center and radius, no
+// plane). The geometry is that of the first NUM item carrying one. The Area, Perimeter and Radius
+// NUM items are found by code or meaning; a value the group lacks is computed from the radius. The
+// stored values are kept, shown, and written back while the circle is unchanged. Placement on a
+// loaded image, the Drawing-Plane rule, the tracking identity and the lock follow the angles.
+
+const toPatient = (module, point) => imageToPatient(module, point);
+
+function circleMeasurementState(adapter, state, MeasurementGroup, context) {
+  const { sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked = true } = context;
+  const groupItems = asArray(MeasurementGroup.ContentSequence);
+  const { num, coordinates } = circleGeometryItem(groupItems);
+  const { annotation } = state;
+  const TrackingUniqueIdentifier = trackingUID(MeasurementGroup);
+  if (!coordinates) {
+    throw new Error(`circle group without geometry trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  const points = graphicPoints(coordinates);
+  const circle = circleOfGeometry({ ValueType: coordinates.ValueType, GraphicType: coordinates.GraphicType, points });
+  if (!circle) {
+    throw new Error(`${coordinates.ValueType} ${coordinates.GraphicType} is not a circle trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const isPatientDomain = coordinates.ValueType === 'SCOORD3D';
+  if (circle.legacy) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] CIRCLE SCOORD3D (stock Cornerstone3D) read with its center `
+      + `and radius, no plane trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const reference = firstItem(asArray(coordinates.ContentSequence).find(item => item.ValueType === 'IMAGE')?.ReferencedSOPSequence);
+  annotation.metadata.coordinateDomain = isPatientDomain ? 'patient' : 'image';
+
+  // A valid Drawing-Plane keeps a patient-domain circle off the images
+  const drawingPlaneItem = asArray(num && num.ContentSequence)
+    .find(item => conceptNameValue(item) === DCMSR_MEASUREMENT_DRAWING_PLANE.value);
+  const drawingPlaneText = drawingPlaneItem && drawingPlaneItem.TextValue;
+  const problem = isPatientDomain && drawingPlaneText !== undefined ? drawingPlaneProblem(drawingPlaneText, points) : undefined;
+  if (problem) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] malformed Drawing-Plane "${drawingPlaneText}" (${problem}), `
+      + `treated as absent trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const outOfPlane = isPatientDomain && drawingPlaneText !== undefined && !problem;
+  if (outOfPlane) {
+    annotation.metadata.outOfPlane = true;
+  }
+
+  let placement;
+  if (isPatientDomain && !outOfPlane) {
+    const image = findImageForPoints(imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata),
+      points, { FrameOfReferenceUID: coordinates.ReferencedFrameOfReferenceUID });
+    if (image) {
+      state.sopInstanceUid = image.SOPInstanceUID;
+      annotation.metadata.referencedImageId = image.imageId;
+      annotation.data.frameNumber = image.frameNumber;
+      placement = { SOPInstanceUID: image.SOPInstanceUID, frameNumber: image.frameNumber };
+    } else {
+      delete annotation.metadata.referencedImageId;
+      console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] no loaded image of Frame of Reference `
+        + `${coordinates.ReferencedFrameOfReferenceUID} holds the circle trackingUID=${TrackingUniqueIdentifier}`);
+    }
+  }
+
+  // Handle points in patient coordinates: as read in the patient domain, mapped from the image
+  const { referencedImageId } = annotation.metadata;
+  let module;
+  if (referencedImageId) {
+    try {
+      module = metadata.get('imagePlaneModule', referencedImageId);
+    } catch (error) {
+      module = undefined;
+    }
+  }
+  let handlePoints;
+  if (isPatientDomain) {
+    handlePoints = [circle.center, circle.edge];
+  } else if (isPlane(module)) {
+    handlePoints = [circle.center, circle.edge].map(point => toPatient(module, point));
+  } else {
+    handlePoints = annotation.data.handles.points;
+  }
+  annotation.data.handles = { ...annotation.data.handles, points: handlePoints };
+
+  // The stored values, a missing one computed from the radius
+  const stored = circleNumItems(groupItems);
+  let radius = stored.radius && stored.radius.value;
+  if (!_.isFinite(radius)) {
+    radius = isPatientDomain ? circle.radius
+      : (isPlane(module) ? circleRadius(toPatient(module, circle.center), toPatient(module, circle.edge)) : NaN);
+  }
+  const computed = circleValues(radius);
+  const values = {
+    radius,
+    area: stored.area && _.isFinite(stored.area.value) ? stored.area.value : computed.area,
+    perimeter: stored.perimeter && _.isFinite(stored.perimeter.value) ? stored.perimeter.value : computed.perimeter,
+  };
+  if (!(radius >= MIN_RADIUS)) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] degenerate circle (radius ${radius}) trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  if (referencedImageId) {
+    annotation.data.cachedStats = {
+      [`imageId:${referencedImageId}`]: { ...values, radiusUnit: 'mm', areaUnit: 'mm\u00B2' },
+    };
+  }
+  // The values shown while the handles are those they were read with
+  annotation.data.recordValue = { values: { ...values }, points: _.cloneDeep(handlePoints) };
+
+  annotation.metadata.sourceGeometry = {
+    valueType: coordinates.ValueType,
+    graphicType: coordinates.GraphicType,
+    graphicData: Array.from(coordinates.GraphicData || [], Number),
+    FrameOfReferenceUID: coordinates.ReferencedFrameOfReferenceUID,
+    ReferencedSOPInstanceUID: reference && reference.ReferencedSOPInstanceUID,
+    ReferencedFrameNumber: reference && reference.ReferencedFrameNumber,
+    placement,
+    values,
+    value: values.radius,
+  };
+  annotation.metadata.TrackingUniqueIdentifier = TrackingUniqueIdentifier;
+  annotation.metadata.TrackingIdentifier = trackingIdentifier;
+  if (locked) {
+    annotation.metadata.isReadOnly = true;
+    annotation.metadata.isLocked = true;
+  }
+  return state;
+}
+
+class CircleROI extends BaseAdapter3D {
+  static {
+    this.init(CIRCLE_TRACKING_TOOL, TID300Measurement);
+    this.registerLegacy();
+  }
+
+  static getMeasurementData(MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifier, options) {
+    const imageIdsForToolState = options && options.imageIdsForToolState;
+    const locked = !options || options.locked !== false;
+    const imageIds = frameImageIds(sopInstanceUIDToImageIdMap, imageIdsForToolState);
+    const { state } = LibraryMeasurementReport.getSetupMeasurementData(MeasurementGroup, imageIds, metadata, this.toolType);
+    state.annotation.data = { ...state.annotation.data, handles: { ...(state.annotation.data.handles || {}) } };
+    return circleMeasurementState(this, state, MeasurementGroup, {
+      sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked,
+    });
+  }
+
+  static getTID300RepresentationArguments() {
+    // Circles are written by the classic adapter (SCOORD3D/adapters.js)
+    throw new Error('The Cornerstone3D circle adapter does not write; the classic adapter does');
+  }
+}
+registerAdapter(CircleROI);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
   DICOMSRSeriesTagTool,
   Angle,
+  CircleROI,
+  // The classic tool's name, for the checks of the tools a report holds (utils/isToolSupported.js)
+  CircleRoi: CircleROI,
   CobbAngle,
   Length,
 });
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, CobbAngle, Length };
+export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, CircleROI, CobbAngle, Length };

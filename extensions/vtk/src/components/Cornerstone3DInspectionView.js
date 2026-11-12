@@ -22,6 +22,7 @@ import {
   StackScrollTool as C3dStackScrollTool,
   AngleTool as C3dAngleTool,
   CobbAngleTool as C3dCobbAngleTool,
+  CircleROITool as C3dCircleROITool,
   LengthTool as C3dLengthTool,
   ArrowAnnotateTool as C3dArrowAnnotateTool,
   BidirectionalTool as C3dBidirectionalTool,
@@ -84,8 +85,8 @@ const SESSION_TOOL_STATE = _.fromPairs(SESSION_TOOLS.map(({ stateKey }) => [stat
 
 class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   // VTK viewport which renders the provided volume and allows inspection of its properties.
-  // Allows access to zoom, levels, pan, and the length, angle, Cobb angle and arrow annotation
-  // tools. Measurements drawn on an acquired image are saved like those drawn in 2D (the
+  // Allows access to zoom, levels, pan, and the length, angle, Cobb angle, circle and arrow
+  // annotation tools. Measurements drawn on an acquired image are saved like those drawn in 2D (the
   // cornerstone extension's measurementAnnotationSync). The bidirectional, ellipse, rectangle,
   // freehand and probe tools measure in this session's 3D views; those measurements are not saved.
 
@@ -115,6 +116,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     lengthToolActive: false,
     angleToolActive: false,
     cobbAngleToolActive: false,
+    circleToolActive: false,
     arrowToolActive: false,
     ...SESSION_TOOL_STATE,
 
@@ -219,6 +221,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     c3dAddTool(C3dAngleTool);
     c3dAddTool(C3dLengthTool);
     c3dAddTool(C3dCobbAngleTool);
+    c3dAddTool(C3dCircleROITool);
     c3dAddTool(C3dArrowAnnotateTool);
     SESSION_TOOLS.forEach(({ tool }) => c3dAddTool(tool));
 
@@ -258,6 +261,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       component.imgTools.addTool(C3dScaleOverlayTool.toolName);
       component.imgTools.addTool(ViewportGridOverlayTool.toolName);
       component.imgTools.addTool(C3dCobbAngleTool.toolName);
+      component.imgTools.addTool(C3dCircleROITool.toolName);
       component.imgTools.addTool(C3dArrowAnnotateTool.toolName);
       SESSION_TOOLS.forEach(({ tool }) => component.imgTools.addTool(tool.toolName));
 
@@ -325,6 +329,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       imgTools.setToolPassive(C3dLengthTool.toolName, options);
       imgTools.setToolPassive(C3dAngleTool.toolName, options);
       imgTools.setToolPassive(C3dCobbAngleTool.toolName, options);
+      imgTools.setToolPassive(C3dCircleROITool.toolName, options);
       imgTools.setToolPassive(C3dArrowAnnotateTool.toolName, options);
       SESSION_TOOLS.forEach(({ tool }) => imgTools.setToolPassive(tool.toolName, options));
     }
@@ -421,6 +426,14 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
             { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
           ]
         })
+      } else if (mode == 'circle-tool') {
+
+        // Set Circle Tool to left mouse button
+        imgTools.setToolActive(C3dCircleROITool.toolName, {
+          bindings: [
+            { mouseButton: c3dToolsEnums.MouseBindings.Primary }, // Left click
+          ]
+        })
       } else if (mode == 'arrow-tool') {
 
         // Set Arrow Annotate Tool to left mouse button
@@ -466,6 +479,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       lengthToolActive: false, 
       angleToolActive: false,
       cobbAngleToolActive: false,
+      circleToolActive: false,
       arrowToolActive: false,
       ...SESSION_TOOL_STATE,
     });
@@ -527,6 +541,14 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const component = this;
     component.selectionToolState({ cobbAngleToolActive: true });
     component.activateTools('cobb-angle-tool');
+  }
+
+  activateCircleTool() {
+    // Activate circle tool
+
+    const component = this;
+    component.selectionToolState({ circleToolActive: true });
+    component.activateTools('circle-tool');
   }
 
   activateArrowTool() {
@@ -686,7 +708,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const component = this;
     const { paintFilterLabelMapDetails } = component.props;
     const { stackScrollActive, zoomActive, levelsActive, panActive, lengthToolActive, 
-      angleToolActive, cobbAngleToolActive, arrowToolActive, gridActive, segDisplayActive } = component.state;
+      angleToolActive, cobbAngleToolActive, circleToolActive, arrowToolActive, gridActive, segDisplayActive } = component.state;
 
     return (
       <div className="inspectionViewRoot"><div className="inspectionViewModalContent" >
@@ -711,6 +733,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
           />
           <ToolbarButton isToggle label="Cobb Angle" icon="cobb-angle"
             isActive={cobbAngleToolActive} onClick={component.activateCobbAngleTool.bind(component)}
+          />
+          <ToolbarButton isToggle label="Circle" icon="circle-radius"
+            isActive={circleToolActive} onClick={component.activateCircleTool.bind(component)}
           />
           <ToolbarButton isToggle label="Annotate" icon="measure-non-target"
             isActive={arrowToolActive} onClick={component.activateArrowTool.bind(component)}

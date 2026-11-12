@@ -16,6 +16,7 @@ import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigat
 import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
+import { circleDetailItems, circleDisplayValues } from '@ohif/core/src/measurements/tools/circleDisplay';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -235,6 +236,8 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       // mapping, such as the rectangle, is neither)
       isPending: Boolean(toolServiceManaged && uid) && !isReadOnly,
       customColor: MeasurementApi.customLineTextColor(measurement),
+      // A circle's area, perimeter and radius, for its detail line
+      circleDetail: toolType === 'CircleRoi' ? circleDetailItems(circleDisplayValues(measurement)) : undefined,
       isDirty,
       isVisible: _.isNil(isVisible) ? true : isVisible,
       warningTitle,

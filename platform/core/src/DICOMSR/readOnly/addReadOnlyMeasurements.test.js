@@ -240,6 +240,15 @@ describe('an application document', () => {
     expect(plain.labels).toEqual([{ label: 'Angle', value: '45 deg' }]);
   });
 
+  it('labels a circle without a description with its radius only', () => {
+    const circle = {
+      ...tracked('CircleROI', angleOnImage), TrackingUniqueIdentifier: '2.25.530',
+      labels: [{ label: 'Area', value: '452.39 mm2' }, { label: 'Perimeter', value: '75.4 mm' }, { label: 'Radius', value: '12 mm' }],
+    };
+    addReadOnlyMeasurements({ srDisplaySets: [application([circle])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(circle.labels).toEqual([{ label: 'Radius', value: '12 mm' }]);
+  });
+
   it('leaves an exchange document unfiltered', () => {
     const summary = addReadOnlyMeasurements({ srDisplaySets: [{ measurements: [foreign], referencedDisplaySets: [] }],
       imageDisplaySets: [imageDisplaySet()], imageIds });
