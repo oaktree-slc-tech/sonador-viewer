@@ -161,18 +161,29 @@ it('nests each group by series in series-number order, Series Unavailable last, 
   setSwitch('annotations-group-by-series', true);
   expect($$('.measurementSeriesTitle').map(element => element.textContent))
     .toEqual(['Axial Bone', 'Sag T2 FSE', 'Series Unavailable', 'Sag T2 FSE', 'Sag T2 FSE']);
-  // Each heading's card: title; the series' types and counts across every group, the pending ones
-  // marked; then S: and instances at the left, modality at the right
+  // Each heading leads with the series number as the rows write it; Series Unavailable has none
+  expect($$('.measurementSeriesHeader').map(header => (header.querySelector('.measurementSeriesNumber') || {}).textContent))
+    .toEqual(['S:3', 'S:12', undefined, 'S:12', 'S:12']);
+  // Each heading's card: "Series N", the modality and instance count, the number of annotations,
+  // the series description; the series' types and counts across every group, the pending ones marked
   const cards = $$('[data-cy="series-group-card"]');
-  const table = card => [...card.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent));
-  expect(table(cards[0])).toEqual([['Length', '1']]);
-  expect(table(cards[1])).toEqual([['Cobb Angle', '1'], ['Series Tag', '1'], ['LengthPending', '1']]);
-  expect(cards[1].querySelector('.seriesAnnotationPending').textContent).toBe('Pending');
-  expect(cards[1].textContent.endsWith('S: 122MR')).toBe(true);
+  const text = (card, selector) => (card.querySelector(selector) || {}).textContent;
+  const types = card => [...card.querySelectorAll('.seriesCardType')].map(line => [
+    line.querySelector('.seriesCardTypeName').textContent, line.querySelector('.seriesCardTypeCount').textContent,
+  ]);
+  expect(types(cards[0])).toEqual([['Length', '1']]);
+  expect([text(cards[1], '.seriesCardName'), text(cards[1], '.seriesCardSub'), text(cards[1], '.seriesCardChip')])
+    .toEqual(['Series 12', 'MR \u00B7 2 images', '3']);
+  expect(text(cards[1], '.seriesCardDescription')).toBe('Sag T2 FSE');
+  expect(types(cards[1])).toEqual([['Cobb Angle', '1'], ['Series Tag', '1'], ['LengthPending', '1']]);
+  expect(text(cards[1], '.seriesCardMark.isPending')).toBe('Pending');
   // The same series' card is the same in every group
-  expect(table(cards[3])).toEqual(table(cards[1]));
-  expect(table(cards[2])).toEqual([['Arrow Annotation', '1']]);
-  expect(cards[2].textContent).toContain("Shows measurements whose series isn't loaded");
+  expect(types(cards[3])).toEqual(types(cards[1]));
+  // Series Unavailable: the reason instead of a description, then its types
+  expect(text(cards[2], '.seriesCardName')).toBe('Series Unavailable');
+  expect(cards[2].querySelector('.seriesCardSub')).toBeNull();
+  expect(text(cards[2], '.seriesCardNote')).toContain("Shows measurements whose series isn't loaded");
+  expect(types(cards[2])).toEqual([['Arrow Annotation', '1']]);
   expect(listed()).toEqual(['l1', 'c1', 'a1', 't1', 'p1']);
   // Computed once per change of the measurements, not per heading
   expect(mockApi.getMeasurementsBySeries.mock.calls.length).toBeLessThanOrEqual(2);

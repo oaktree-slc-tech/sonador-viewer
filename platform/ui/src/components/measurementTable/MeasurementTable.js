@@ -4,13 +4,17 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
-import OHIF from '@ohif/core';
+import OHIF, {
+  ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT, ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY, UserPreferencesService,
+  UserPreferencesServiceEvents,
+} from '@ohif/core';
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger, Icons, Label, PanelSection, ScrollArea, Switch,
   Tooltip as HelpTag, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
+import { toolIcon } from '@ohif/core/src/measurements/tools/measurementDetail';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableList } from '../tableList';
@@ -47,6 +51,13 @@ function writeGroupBySeries(value) {
   }
 }
 
+/** The value the region tools' rows lead with ('area' or 'mean'), a general user preference */
+function readRegionLeadValue() {
+  const value = UserPreferencesService && UserPreferencesService.getGeneral
+    ? UserPreferencesService.getGeneral(ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY) : undefined;
+  return value || ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT;
+}
+
 /** A series sub-group's heading, translated when it is generated ("Series 4", "Series Unavailable") */
 const seriesLabel = (series, t) => (series.labelKey ? t(series.labelKey, series.labelValues) : series.label);
 
@@ -54,49 +65,71 @@ const seriesLabel = (series, t) => (series.labelKey ? t(series.labelKey, series.
 const rowsOf = groups => (groups || []).flatMap(group => (group && group.measurements) || []);
 
 
+/** The series glyph: two stacked squares, as the series thumbnail's instance count */
+const SeriesGlyph = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="8" width="12" height="12" rx="1.5" />
+    <path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4h9A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H16" />
+  </svg>
+);
+
 /**
- * A series sub-group's hover card, after the study browser's series thumbnail without its image:
- * the series title; a table of the series' annotation types and counts across every group, the
- * pending ones on their own lines marked "Pending"; then the series number and instance count (the
- * thumbnail's stacked-squares glyph) at the left and the modality at the right. The Series
- * Unavailable group says why its measurements are there instead.
+ * A series sub-group's hover card, in the shell of the measurement detail card: a header with the
+ * series glyph, "Series N" (else the heading), the modality and instance count, and the number of
+ * annotations; the series description when it is not the name; then the series' annotation types
+ * across every group with their tool icons and counts, 3D and Pending marked after the name. The
+ * Series Unavailable group says why its measurements are there instead of a description.
  */
 function SeriesCard({ series, types, t }) {
   const unavailable = Boolean(series.help);
   const hasNumber = series.seriesNumber !== undefined && series.seriesNumber !== null && !Number.isNaN(series.seriesNumber);
+  const heading = seriesLabel(series, t);
+  const name = !unavailable && hasNumber ? t('Series {{number}}', { number: series.seriesNumber }) : heading;
+  const sub = unavailable ? [] : [
+    series.modality,
+    series.instanceCount > 0 ? t('{{count}} images', { count: series.instanceCount }) : undefined,
+  ].filter(Boolean);
+  const total = types.reduce((sum, type) => sum + type.count, 0);
 
   return (
-    <TooltipContent side="right" align="start" sideOffset={8} className="w-64 max-w-xs whitespace-normal" data-cy="series-group-card">
-      <div className="font-semibold leading-snug break-words">{seriesLabel(series, t)}</div>
-      {types.length > 0 && (
-        <table className="seriesAnnotationTypes mt-3 w-full text-xs" data-cy="series-annotation-types">
-          <tbody>
-            {types.map(({ name, pending, count }) => (
-              <tr key={`${pending ? 'pending' : 'saved'}:${name}`}>
-                <td>
-                  {name}
-                  {pending && <span className="seriesAnnotationPending">{t('Pending')}</span>}
-                </td>
-                <td className="text-right tabular-nums">{count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <TooltipContent side="right" align="start" sideOffset={8}
+      className="annotationHoverCard seriesCard whitespace-normal" data-cy="series-group-card">
+      <div className="seriesCardHeader">
+        <span className="seriesCardTile"><SeriesGlyph /></span>
+        <div className="seriesCardTitle">
+          <div className="seriesCardName">{name}</div>
+          {sub.length > 0 && <div className="seriesCardSub">{sub.join(' \u00B7 ')}</div>}
+        </div>
+        {total > 0 && <span className="seriesCardChip" data-cy="series-card-count">{total}</span>}
+      </div>
+      {!unavailable && heading !== name && (
+        <div className="seriesCardDescription">{heading}</div>
       )}
-      {unavailable ? (
-        <div className="mt-2 text-xs opacity-80">{t(series.help)}</div>
-      ) : (
-        <div className="mt-2 flex items-center justify-between gap-3 text-xs opacity-80">
-          <div className="flex items-center gap-3">
-            {hasNumber && <span><span className="font-black">S:</span> {series.seriesNumber}</span>}
-            {series.instanceCount > 0 && (
-              <span className="flex items-center gap-1.5">
-                <span className="seriesFramesGlyph" aria-hidden="true" />
-                {series.instanceCount}
-              </span>
-            )}
-          </div>
-          {series.modality && <span className="font-black">{series.modality}</span>}
+      {unavailable && (
+        <div className="seriesCardSection">
+          <div className="seriesCardNote">{t(series.help)}</div>
+        </div>
+      )}
+      {types.length > 0 && (
+        <div className="seriesCardSection" data-cy="series-annotation-types">
+          <div className="seriesCardSectionHeader">{t('Annotations')}</div>
+          {types.map(({ name: typeName, toolType, outOfPlane, pending, count }) => {
+            const icon = toolIcon(toolType);
+            return (
+              <div key={`${pending ? 1 : 0}:${outOfPlane ? 1 : 0}:${typeName}`} className="seriesCardType">
+                <span className="seriesCardTypeIcon">
+                  {icon && <Icon name={icon} width="16px" height="16px" aria-hidden="true" />}
+                </span>
+                <span className="seriesCardTypeName">
+                  {t(typeName)}
+                  {outOfPlane && <span className="seriesCardMark">{t('3D')}</span>}
+                  {pending && <span className="seriesCardMark isPending">{t('Pending')}</span>}
+                </span>
+                <span className="seriesCardTypeCount">{count}</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </TooltipContent>
@@ -118,6 +151,7 @@ const MeasurementTable = ({
   onOpenInMprClick,
   onToggleLockClick,
   onLineTextColorClick,
+  onViewportValuesChangeClick,
   selectedMeasurementId,
   saveFunction,
   onSaveComplete,
@@ -147,6 +181,27 @@ const MeasurementTable = ({
   const setGroupBySeries = (value) => {
     setGroupBySeriesState(value);
     writeGroupBySeries(value);
+  };
+
+  // The region tools' lead value, set here or wherever the preference is set
+  const [regionLeadValue, setRegionLeadValueState] = useState(readRegionLeadValue);
+  useEffect(() => {
+    if (!UserPreferencesService || !UserPreferencesService.subscribe || !UserPreferencesServiceEvents) {
+      return undefined;
+    }
+    const { unsubscribe } = UserPreferencesService.subscribe(UserPreferencesServiceEvents.GENERAL_CHANGED, ({ key, value }) => {
+      if (key === ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY) {
+        setRegionLeadValueState(value || ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT);
+      }
+    });
+    return unsubscribe;
+  }, []);
+  const setRegionLeadMean = (leadMean) => {
+    const value = leadMean ? 'mean' : 'area';
+    setRegionLeadValueState(value);
+    if (UserPreferencesService && UserPreferencesService.setGeneral) {
+      UserPreferencesService.setGeneral(ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY, value);
+    }
   };
 
   // Every measurement by series (the measurement API's shared query), for the series hover cards;
@@ -333,6 +388,8 @@ const MeasurementTable = ({
           onOpenInMpr={onOpenInMprClick}
           onToggleLock={onToggleLockClick}
           onLineTextColor={onLineTextColorClick}
+          onViewportValuesChange={onViewportValuesChangeClick}
+          regionLeadValue={regionLeadValue}
           isSelected={isSelected}
           isActive={isActive}
         />
@@ -385,6 +442,11 @@ const MeasurementTable = ({
                 <AccordionTrigger asChild>
                   <TooltipTrigger asChild>
                     <button type="button" className="measurementSeriesHeader">
+                      {/* The series number, unless the title is already "Series N" */}
+                      {series.seriesNumber !== undefined && series.seriesNumber !== null && !Number.isNaN(series.seriesNumber)
+                        && series.labelKey !== 'Series {{number}}' && (
+                        <span className="measurementSeriesNumber"><span className="refLabel">S:</span>{series.seriesNumber}</span>
+                      )}
                       <span className="measurementSeriesTitle">{seriesLabel(series, t)}</span>
                       <span className="measurementSeriesCount">{series.measurements.length}</span>
                       <span className="measurementGroupToggle" aria-hidden="true">
@@ -464,6 +526,17 @@ const MeasurementTable = ({
         <Switch id="annotations-search-in-views" checked={applySearchToViews} onCheckedChange={setApplySearchToViews} />
         <Label htmlFor="annotations-search-in-views" className="text-muted-foreground ml-2.5 mr-2 text-xs">
           {t('Filter annotations in imaging viewports')}
+        </Label>
+      </div>
+      <div className="my-2 flex items-center pl-0.5">
+        <Switch
+          id="annotations-region-lead-mean"
+          checked={regionLeadValue === 'mean'}
+          onCheckedChange={setRegionLeadMean}
+          data-cy="annotations-region-lead-mean"
+        />
+        <Label htmlFor="annotations-region-lead-mean" className="text-muted-foreground ml-2.5 mr-2 text-xs">
+          {t('Lead ellipse, rectangle and freehand rows with the mean')}
         </Label>
       </div>
     </div>
@@ -600,6 +673,8 @@ MeasurementTable.propTypes = {
   onToggleLockClick: PropTypes.func,
   /** Choose the line or text color of a pending measurement: (event, measurementData, 'line' | 'text') */
   onLineTextColorClick: PropTypes.func,
+  /** Set the values a pending measurement's viewport label shows: (measurementData, keys) */
+  onViewportValuesChangeClick: PropTypes.func,
   saveFunction: PropTypes.func,
   onSaveComplete: PropTypes.func,
   eventTimeout: PropTypes.number,

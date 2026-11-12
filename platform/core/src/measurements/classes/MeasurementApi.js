@@ -1232,6 +1232,24 @@ export default class MeasurementApi {
     refreshCornerstoneViewports();
   }
 
+  setMeasurementViewportValues(uid, keys) {
+    // Set the values the viewport label of a pending measurement (by its service uid) shows, from
+    // its detail card: the keys of its detail values, at least one. They last with the measurement
+    // for the session. Both sections carry them: a classic tool's edit returns them in `data`.
+
+    const measurement = this._pendingServiceMeasurement(uid);
+    const viewportValues = _.uniq((keys || []).filter(key => typeof key === 'string' && key));
+    if (!measurement || !viewportValues.length) {
+      return;
+    }
+    this.measurementService.update(uid, {
+      ...measurement,
+      metadata: { ...(measurement.metadata || {}), viewportValues },
+      data: { ...(measurement.data || {}), viewportValues: [...viewportValues] },
+    }, true);
+    refreshCornerstoneViewports();
+  }
+
   setAllMeasurementsVisibility(visibility) {
     // Show or hide every measurement, in every view: those of the measurement service (which
     // holds the global state), the read-only representations only the API holds, and the

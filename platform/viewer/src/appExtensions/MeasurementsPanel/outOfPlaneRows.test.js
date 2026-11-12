@@ -92,7 +92,7 @@ describe('the rows', () => {
     });
   });
 
-  it('lists a circle (its Cornerstone3D record) with its radius and its area, perimeter and radius detail', () => {
+  it('lists a circle (its Cornerstone3D record) with its radius, and the record as the source of its detail', () => {
     mockRecords.set('circle', record('circle', {
       toolName: 'CircleROI', points: [[12, 0, 0], [12, 3, -4]], length: undefined, unit: 'mm',
       data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
@@ -101,9 +101,8 @@ describe('the rows', () => {
 
     expect(toolGroup).toBe('allTools');
     expect(row.data).toEqual([{ displayText: '5.00 mm' }]);
-    expect(row.circleDetail).toEqual([
-      { label: 'Area', value: '78.54 mm²' }, { label: 'Perimeter', value: '31.42 mm' }, { label: 'Radius', value: '5.00 mm' },
-    ]);
+    // Its detail (the card, the reference line's +N) is built from the record, in patient coordinates
+    expect(row.detailSource).toEqual({ measurement: mockRecords.get('circle'), context: { calibrated: true } });
   });
 
   it('marks a measurement whose points lie in no common plane as not planar, and a Length without a Drawing-Plane as planar', () => {

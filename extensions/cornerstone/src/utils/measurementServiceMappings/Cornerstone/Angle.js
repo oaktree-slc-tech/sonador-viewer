@@ -3,7 +3,8 @@
 // `rAngle`; the measurement carries the handle points in that order. A measurement hydrated from
 // DICOM-SR also carries its tracking identity, coordinate domain and source geometry, which the SR
 // writer reuses. Patient points map to image points as DICOM defines them (DICOMSR angleGeometry),
-// the mapping hydration and the writer use.
+// the mapping hydration and the writer use. A Cobb angle also carries the values its viewport label
+// shows (`viewportValues`, chosen from its detail card); its label text is redrawn when they change.
 
 import _ from 'lodash';
 
@@ -65,6 +66,11 @@ function storedAngle(measurement) {
   return utils.dataProc.firstDefinedValue(data.rAngle, measurement.rAngle, stats && stats.angle, anyStats && anyStats.angle);
 }
 
+/** The values a measurement shows in its viewport label, from the first section that has them */
+const viewportValuesOf = (...sections) => sections
+  .flatMap(section => (section ? [section.viewportValues, section.metadata && section.metadata.viewportValues] : []))
+  .find(Array.isArray);
+
 function srAttributes(...sources) {
   const result = {};
   SR_ATTRIBUTES.forEach(key => {
@@ -98,6 +104,11 @@ function angleMapping(toolName) {
       const complete = toolName !== 'CobbAngle' ? undefined
         : !(measurementData.complete === false || measurement.complete === false);
       const toolFields = complete === undefined ? { handles, rAngle } : { handles, rAngle, complete };
+      const viewportValues = toolName === 'CobbAngle' && viewportValuesOf(measurementMeta, measurementData, measurement);
+      if (viewportValues) {
+        // The stock renderer draws `value` (the label text) and computes it only while it is empty
+        Object.assign(toolFields, { viewportValues: [...viewportValues], value: undefined });
+      }
       _.extend(annotationData, toolFields, attributes);
       _.extend(annotation.metadata, attributes);
       _.extend(annotation, toolFields);
@@ -134,6 +145,11 @@ function angleMapping(toolName) {
         csToolsAnnotation.rAngle, annotation.rAngle, measurement.data.rAngle);
       measurement.type = measurementService.VALUE_TYPES.ANGLE;
       measurement.unit = '°';
+      const viewportValues = toolName === 'CobbAngle' && viewportValuesOf(...live);
+      if (viewportValues) {
+        measurement.data.viewportValues = [...viewportValues];
+        measurement.metadata.viewportValues = [...viewportValues];
+      }
       _.extend(measurement.metadata, srAttributes(measurement.metadata, annotation, csToolsAnnotation.metadata));
 
       return measurement;

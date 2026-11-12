@@ -19,7 +19,7 @@ import { findImageForPoints, planeFromModule } from '../readOnly/planeGeometry';
 import { DCMSR_MEASUREMENT_DRAWING_PLANE } from '../enums';
 import { drawingPlaneProblem } from '../utils/drawingPlane';
 import {
-  CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleGeometryItem, circleNumItems, circleOfGeometry, circleRadius, circleValues,
+  CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleGeometryItem, circleNumItems, circleStatisticNumItems, circleOfGeometry, circleRadius, circleValues,
 } from '../utils/circleGeometry';
 import frameImageIds from './utils/frameImageIds';
 
@@ -374,10 +374,12 @@ function circleMeasurementState(adapter, state, MeasurementGroup, context) {
       : (isPlane(module) ? circleRadius(toPatient(module, circle.center), toPatient(module, circle.edge)) : NaN);
   }
   const computed = circleValues(radius);
+  // The pixel statistics as stored (finite ones only, never computed here), kept with the values
   const values = {
     radius,
     area: stored.area && _.isFinite(stored.area.value) ? stored.area.value : computed.area,
     perimeter: stored.perimeter && _.isFinite(stored.perimeter.value) ? stored.perimeter.value : computed.perimeter,
+    ...(circleStatisticNumItems(groupItems) || {}),
   };
   if (!(radius >= MIN_RADIUS)) {
     console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] degenerate circle (radius ${radius}) trackingUID=${TrackingUniqueIdentifier}`);

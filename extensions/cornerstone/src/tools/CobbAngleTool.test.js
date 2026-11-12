@@ -6,6 +6,11 @@ jest.mock('cornerstone-tools', () => {
     constructor(props = {}) {
       this.name = props.name || 'CobbAngle';
     }
+
+    // As the stock label: the angle as stored, in degrees
+    textBoxText({ rAngle }) {
+      return rAngle === undefined ? '' : `${rAngle}\u00B0`;
+    }
   }
   const internals = {
     'util/getPixelSpacing': image => ({ rowPixelSpacing: image.rowPixelSpacing, colPixelSpacing: image.columnPixelSpacing }),
@@ -43,4 +48,22 @@ it('has no value for a zero-length line', () => {
   const data = statsOf({ start: point(0, 0), end: point(0, 0), start2: point(0, 10), end2: point(5, 20) });
   expect(data.rAngle).toBeUndefined();
   expect(data.invalidated).toBe(false);
+});
+
+
+it('labels the angle alone by default, as the stock tool does, and refreshes the label with the angle', () => {
+  const data = statsOf({ start: point(0, 0), end: point(10, 0), start2: point(0, 10), end2: point(10, 20) });
+  expect(data.value).toBe('135\u00B0');
+  data.handles.end2 = point(0, 20);
+  new CobbAngleTool().updateCachedStats({ rowPixelSpacing: 1, columnPixelSpacing: 1 }, {}, data);
+  expect(data.value).toBe('90\u00B0');
+});
+
+it('labels the values the measurement chose: the angle and its arcs, with the pixel spacing applied', () => {
+  // Line 1 along x, line 2 at 45 degrees, the midpoints (5, 0) and (5, 25) joined along y
+  const handles = { start: point(0, 0), end: point(10, 0), start2: point(0, 20), end2: point(10, 30) };
+  const data = { handles, viewportValues: ['angle', 'arc1', 'arc2'] };
+  new CobbAngleTool().updateCachedStats({ rowPixelSpacing: 1, columnPixelSpacing: 1 }, {}, data);
+  expect(data.value).toEqual(['Cobb angle: 135.00\u00B0', 'Arc 1: 90.00\u00B0', 'Arc 2: 135.00\u00B0']);
+  expect(new CobbAngleTool().textBoxText({ ...data, viewportValues: ['arc2'] }, 1, 1)).toEqual(['Arc 2: 135.00\u00B0']);
 });

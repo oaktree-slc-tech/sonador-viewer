@@ -2,15 +2,17 @@
 // perimeter and radius for its detail line. The values are a classic tool's `cachedStats`, a
 // service measurement's `data.cachedStats`, or a Cornerstone3D one's statistics by image; without
 // a finite radius nothing is shown. They are in millimetres, or in pixels when they were measured
-// on an image without calibration, and are shown with that unit.
+// on an image without calibration, and are shown with that unit. The pixel statistics the tools
+// compute (mean, standard deviation, maximum and their unit) travel with them for the detail card.
 
 import { circleUnit } from '../../DICOMSR/utils/circleGeometry';
 
 const VALUE_KEYS = ['radius', 'area', 'perimeter'];
+const STAT_KEYS = ['mean', 'stdDev', 'max', 'modalityUnit'];
 
 const statsWithRadius = value => value && typeof value === 'object' && Number.isFinite(Number(value.radius));
 
-/** The values of a circle measurement: { radius, area, perimeter, unit }, or undefined */
+/** The values of a circle measurement: { radius, area, perimeter, unit, stats }, or undefined */
 export function circleDisplayValues(data) {
   if (!data) {
     return undefined;
@@ -25,8 +27,9 @@ export function circleDisplayValues(data) {
     return undefined;
   }
   const values = VALUE_KEYS.reduce((result, key) => ({ ...result, [key]: Number(stats[key]) }), {});
+  const pixelStats = STAT_KEYS.reduce((result, key) => (stats[key] === undefined ? result : { ...result, [key]: stats[key] }), {});
   // A measurement records its unit beside the values (`unit` on the measurement itself)
-  return { ...values, unit: circleUnit(stats.unit || stats.radiusUnit ? stats : data) };
+  return { ...values, unit: circleUnit(stats.unit || stats.radiusUnit ? stats : data), stats: pixelStats };
 }
 
 /** The detail-line items of a circle: [{ label, value }] for its area, perimeter and radius */

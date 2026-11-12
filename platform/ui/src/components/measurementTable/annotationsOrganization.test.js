@@ -105,16 +105,17 @@ it("lists a series' annotation types from the API's by-series query, saved first
     ['2.25.99', [entry('ArrowAnnotate')]],
     [null, [entry('DICOMSRSeriesTagTool')]],
   ]);
+  const line = (name, toolType, pending, count) => ({ name, toolType, outOfPlane: false, pending, count });
   expect(seriesAnnotationTypes(seriesEntries(bySeries, '2.25.21'))).toEqual([
-    { name: 'Length', pending: false, count: 2 },
-    { name: 'Cobb Angle', pending: false, count: 1 },
-    { name: 'Series Tag', pending: false, count: 1 },
-    { name: 'Length', pending: true, count: 2 },
-    { name: 'Angle', pending: true, count: 1 },
+    line('Length', 'Length', false, 2),
+    line('Cobb Angle', 'CobbAngle', false, 1),
+    line('Series Tag', 'DICOMSRSeriesTagTool', false, 1),
+    line('Length', 'Length', true, 2),
+    line('Angle', 'Angle', true, 1),
   ]);
   // Series Unavailable: the measurements without a series and those of a series the store does not know
   expect(seriesAnnotationTypes(seriesEntries(bySeries, UNAVAILABLE_KEY)))
-    .toEqual([{ name: 'Arrow Annotation', pending: false, count: 1 }, { name: 'Series Tag', pending: false, count: 1 }]);
+    .toEqual([line('Arrow Annotation', 'ArrowAnnotate', false, 1), line('Series Tag', 'DICOMSRSeriesTagTool', false, 1)]);
   expect(seriesEntries(undefined, '2.25.21')).toEqual([]);
 });
 
@@ -127,15 +128,15 @@ it('searches the view of an out-of-plane measurement', () => {
   expect(matchesQuery(length, 'sagittal')).toBe(false);
 });
 
-it('counts out-of-plane measurements as a type of their own on the series card', () => {
+it('counts out-of-plane measurements as a type of their own on the series card, flagged for its 3D mark', () => {
   const entries = [
     { toolType: 'Length' }, { toolType: 'Length', outOfPlane: true }, { toolType: 'Length', outOfPlane: true },
     { toolType: 'CobbAngle', outOfPlane: true, pending: true },
   ];
   expect(seriesAnnotationTypes(entries)).toEqual([
-    { name: '3D Length', pending: false, count: 2 },
-    { name: 'Length', pending: false, count: 1 },
-    { name: '3D Cobb Angle', pending: true, count: 1 },
+    { name: 'Length', toolType: 'Length', outOfPlane: true, pending: false, count: 2 },
+    { name: 'Length', toolType: 'Length', outOfPlane: false, pending: false, count: 1 },
+    { name: 'Cobb Angle', toolType: 'CobbAngle', outOfPlane: true, pending: true, count: 1 },
   ]);
 });
 

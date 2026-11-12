@@ -2,13 +2,18 @@
 // circleGeometry.js): `start` is the center and `end` a point on the circumference; the radius is
 // the distance between their patient points, in millimetres, the perimeter 2 pi r and the area
 // pi r^2, so the drawn values, the Measurements panel and the saved report agree on any pixel
-// spacing. The label shows the radius and the area; no intensity statistics are computed or shown.
-// A measurement whose values are held (`cachedStats`, as hydrated) shows them until an edit
+// spacing. The pixel statistics inside the circle (mean, standard deviation, maximum) are computed
+// as the stock tool computes them, in HU on CT and without a unit otherwise, for the detail card of
+// the Annotations panel; new statistics are announced as a measurement change so the measurement's
+// record holds the values drawn. The label shows the values the measurement chose for the viewport
+// (`viewportValues`, set from its detail card), else the radius and the area, as the panel formats
+// them. A measurement whose values are held (`cachedStats`, as hydrated) shows them until an edit
 // invalidates it.
 
 import csTools from 'cornerstone-tools';
 import { metaData as c3dMetaData } from '@cornerstonejs/core';
 import OHIF from '@ohif/core';
+import { viewportLabelLines } from '@ohif/core/src/measurements/tools/measurementDetail';
 
 const draw = csTools.importInternal('drawing/draw');
 const drawCircle = csTools.importInternal('drawing/drawCircle');
@@ -18,6 +23,13 @@ const getNewContext = csTools.importInternal('drawing/getNewContext');
 const setShadow = csTools.importInternal('drawing/setShadow');
 const getROITextBoxCoords = csTools.importInternal('util/getROITextBoxCoords');
 const getPixelSpacing = csTools.importInternal('util/getPixelSpacing');
+const triggerEvent = csTools.importInternal('util/triggerEvent');
+const ellipseUtils = csTools.importInternal('util/ellipseUtils');
+
+const STAT_KEYS = ['mean', 'stdDev', 'max', 'modalityUnit'];
+
+// The circles whose pixel statistics were read without changing their values (a held measurement)
+const statsRead = new WeakSet();
 
 
 function imagePlaneOf(imageId) {
@@ -54,11 +66,31 @@ function circleValuesOf(image, handles) {
   return { ...circleGeometry.circleValues(radius), unit: calibrated ? 'mm' : 'px' };
 }
 
-/** The two label lines of a circle's values */
-function circleTextLines(stats) {
-  const unit = (stats && stats.unit) || 'mm';
-  const format = value => (Number.isFinite(value) ? value.toFixed(2) : '–');
-  return [`Radius: ${format(stats && stats.radius)} ${unit}`, `Area: ${format(stats && stats.area)} ${unit}²`];
+/**
+ * The pixel statistics inside a circle's handles: { mean, stdDev, max, modalityUnit }, or an empty
+ * object when its pixels cannot be read
+ */
+function pixelStatsOf(image, element, { start, end }) {
+  const { cornerstone } = csTools.external;
+  try {
+    const radius = Math.hypot(end.x - start.x, end.y - start.y);
+    if (!(radius > 0) || !cornerstone || !ellipseUtils) {
+      return {};
+    }
+    // The circle's bounding square, as the stock tool reads it
+    const bounds = { left: Math.round(start.x - radius), top: Math.round(start.y - radius), width: Math.round(2 * radius), height: Math.round(2 * radius) };
+    const pixels = cornerstone.getPixels(element, bounds.left, bounds.top, bounds.width, bounds.height);
+    const { mean, stdDev, max } = ellipseUtils.calculateEllipseStatistics(pixels, bounds);
+    const series = cornerstone.metaData.get('generalSeriesModule', image.imageId) || {};
+    return { mean, stdDev, max, modalityUnit: series.modality === 'CT' ? 'HU' : '' };
+  } catch (error) {
+    return {};
+  }
+}
+
+/** The label lines of a circle: the values it shows in the viewport */
+function circleTextLines(stats, viewportValues) {
+  return viewportLabelLines('CircleRoi', { cachedStats: stats || {}, viewportValues });
 }
 
 /** The four points of the circle the label's link line can anchor to */
@@ -75,8 +107,30 @@ function anchorPoints(start, end) {
 
 export default class CircleRoiTool extends csTools.CircleRoiTool {
   updateCachedStats(image, element, data) {
-    data.cachedStats = circleValuesOf(image, data.handles);
+    const previous = data.cachedStats || {};
+    data.cachedStats = { ...circleValuesOf(image, data.handles), ...pixelStatsOf(image, element, data.handles) };
     data.invalidated = false;
+    this._announceStats(element, data, previous);
+  }
+
+  _addPixelStats(image, element, data) {
+    // The pixel statistics of a circle whose values are held: added once, its values unchanged
+    if (statsRead.has(data)) {
+      return;
+    }
+    statsRead.add(data);
+    const previous = data.cachedStats;
+    data.cachedStats = { ...previous, ...pixelStatsOf(image, element, data.handles) };
+    this._announceStats(element, data, previous);
+  }
+
+  _announceStats(element, data, previous) {
+    // New statistics are a change of the measurement, so its record holds the values drawn
+    if (element && STAT_KEYS.some(key => data.cachedStats[key] !== previous[key])) {
+      triggerEvent(element, csTools.EVENTS.MEASUREMENT_MODIFIED, {
+        toolName: this.name, toolType: this.name, element, measurementData: data,
+      });
+    }
   }
 
   renderToolData(evt) {
@@ -112,12 +166,14 @@ export default class CircleRoiTool extends csTools.CircleRoiTool {
 
         if (data.invalidated === true || !data.cachedStats || !Number.isFinite(data.cachedStats.radius)) {
           this.updateCachedStats(image, element, data);
+        } else if (!Number.isFinite(data.cachedStats.mean)) {
+          this._addPixelStats(image, element, data);
         }
 
         if (!data.handles.textBox.hasMoved) {
           Object.assign(data.handles.textBox, getROITextBoxCoords(eventData.viewport, data.handles));
         }
-        drawLinkedTextBox(ctx, element, data.handles.textBox, circleTextLines(data.cachedStats), data.handles,
+        drawLinkedTextBox(ctx, element, data.handles.textBox, circleTextLines(data.cachedStats, data.viewportValues), data.handles,
           handles => anchorPoints(handles.start, handles.end), color, lineWidth, 10, true);
       });
     });

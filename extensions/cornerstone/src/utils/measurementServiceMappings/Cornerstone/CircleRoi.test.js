@@ -62,14 +62,14 @@ const hydratedCircle = {
 };
 
 describe('Cornerstone3D -> classic', () => {
-  it('converts the center and edge to start and end with the stored values only', () => {
+  it('converts the center and edge to start and end with the stored values and pixel statistics', () => {
     const converted = CircleRoi.toAltSourceMeasurementSchema(measurementService, classicSource, hydratedCircle, c3dSource);
     const annotation = CircleRoi.toAnnotation(measurementService, converted, CircleRoi.toolName);
 
     expect(converted.toolName).toBe('CircleRoi');
-    expect(converted.data.cachedStats).toEqual({ ...VALUES, unit: 'mm' });
+    expect(converted.data.cachedStats).toEqual({ ...VALUES, mean: 12, unit: 'mm' });
     expect(annotation.handles).toMatchObject({ start: { x: 0.5, y: 0.5 }, end: { x: 3.5, y: 4.5 }, textBox: expect.any(Object) });
-    expect(annotation.cachedStats).toEqual({ ...VALUES, unit: 'mm' });
+    expect(annotation.cachedStats).toEqual({ ...VALUES, mean: 12, unit: 'mm' });
     expect(annotation.measurementData).toMatchObject({
       TrackingUniqueIdentifier: '2.25.8200', TrackingIdentifier: 'cornerstoneTools@^4.0.0:CircleROI', coordinateDomain: 'image',
     });
@@ -118,5 +118,20 @@ describe('classic -> measurement', () => {
     const annotation = CircleRoi.toAnnotation(service, measurement, CircleRoi.toolName);
     expect(annotation.cachedStats.unit).toBe('px');
     expect(circleTextLines(annotation.cachedStats)).toEqual(['Radius: 5.00 px', 'Area: 78.54 px²']);
+  });
+
+  it('carries the values its viewport label shows both ways', () => {
+    const drawn = {
+      toolType: 'CircleRoi', measurementId: 'c-3', SOPInstanceUID: '2.25.1003', imagePath: 'image-path',
+      handles: { start: { x: 1, y: 2 }, end: { x: 4, y: 6 }, textBox: {} },
+      cachedStats: { ...VALUES, unit: 'mm' }, viewportValues: ['diameter', 'mean'],
+    };
+    const service = { ...measurementService, getMeasurement: () => undefined };
+    const measurement = CircleRoi.toMeasurement(service, { ...drawn, measurementData: drawn });
+    expect(measurement.metadata.viewportValues).toEqual(['diameter', 'mean']);
+
+    const annotation = CircleRoi.toAnnotation(service, measurement, CircleRoi.toolName);
+    expect(annotation.viewportValues).toEqual(['diameter', 'mean']);
+    expect(annotation.measurementData.viewportValues).toEqual(['diameter', 'mean']);
   });
 });

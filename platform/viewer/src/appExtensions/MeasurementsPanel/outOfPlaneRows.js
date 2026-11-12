@@ -15,7 +15,7 @@ import _ from 'lodash';
 
 import OHIF, { DicomMetadataStore } from '@ohif/core';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
-import { circleDetailItems, circleDisplayValues } from '@ohif/core/src/measurements/tools/circleDisplay';
+import measurementDetailSource from './measurementDetailSource.js';
 import { circlePlanePoints, classicToolName, isCircleTool, isLegacyGeometry } from '@ohif/core/src/DICOMSR/utils/circleGeometry';
 
 import { isMprActive } from './mprMeasurementNavigation.js';
@@ -62,7 +62,7 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
     isLocked: Boolean(isLocked || isReadOnly),
     isPending: !isReadOnly,
     customColor: MeasurementApi.customLineTextColor(measurement),
-    circleDetail: measurement.toolName === 'CircleROI' ? circleDetailItems(circleDisplayValues(measurement)) : undefined,
+    detailSource: measurementDetailSource(measurement, { patient: true }),
     isDirty,
     isVisible: _.isNil(isVisible) ? true : isVisible,
     data: [{ displayText: displayFunction(measurement) || '...' }],

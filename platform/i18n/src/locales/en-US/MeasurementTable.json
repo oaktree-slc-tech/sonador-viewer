@@ -7,5 +7,9 @@
   "NonTargets": "NonTargets",
   "Relabel": "Relabel",
   "Set anatomic location": "Set anatomic location",
-  "Targets": "Targets"
+  "Targets": "Targets",
+  "{{count}} images_one": "{{count}} image",
+  "{{count}} images_other": "{{count}} images",
+  "{{count}} more values_one": "{{count}} more value",
+  "{{count}} more values_other": "{{count}} more values"
 }

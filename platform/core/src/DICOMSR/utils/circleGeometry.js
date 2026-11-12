@@ -2,7 +2,8 @@
 // measurement group per circle, tracking identifier `cornerstoneTools@^4.0.0:CircleROI` (the
 // Cornerstone3D prefix accepted on read), with three NUM items in this order, each INFERRED FROM
 // its own copy of the geometry:
-//   Area (42798000, SCT) in mm2, Perimeter (131191004, SCT) in mm, Radius (131190003, SCT) in mm.
+//   Area (42798000, SCT) in mm2, Perimeter (131191004, SCT) in mm, Radius (131190003, SCT) in mm,
+//   then the pixel statistics the circle has (CIRCLE_STATISTICS below).
 // Readers accept the SRT codes (G-A166, G-A197, G-A196) and match by meaning as well, in any order.
 //
 // * Image domain: SCOORD CIRCLE of two points, the center then one point on the circumference,
@@ -56,6 +57,120 @@ export const CIRCLE_VALUES = Object.freeze([
     unit: unitCode('mm', 'millimeter'),
   }),
 ]);
+
+// The circle's pixel statistics (TID 1419 style): one NUM per statistic after the Radius, named by
+// the quantity the pixels measure, in that quantity's unit, its statistic a Derivation (121401, DCM)
+// modifier from CID 7464, INFERRED FROM the same geometry. A statistic is written only when it is a
+// finite number and the quantity is known: the attenuation coefficient of CT (HU), SUVbw of PT (SUV),
+// MR signal intensity (no units). Readers also accept the stock Cornerstone3D form, a NUM named by
+// the CID 7464 code itself.
+export const DERIVATION = Object.freeze({ CodeValue: '121401', CodingSchemeDesignator: 'DCM', CodeMeaning: 'Derivation' });
+
+// Each with its retired SNOMED-RT (SRT) code, which readers also accept
+export const CIRCLE_STATISTICS = Object.freeze([
+  Object.freeze({
+    name: 'mean', code: Object.freeze({ CodeValue: '373098007', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Mean' }), srt: 'R-00317',
+  }),
+  Object.freeze({
+    name: 'stdDev',
+    code: Object.freeze({ CodeValue: '386136009', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Standard Deviation' }),
+    srt: 'R-10047',
+  }),
+  Object.freeze({
+    name: 'max', code: Object.freeze({ CodeValue: '56851009', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Maximum' }), srt: 'G-A437',
+  }),
+]);
+
+// The quantity of statistics read without one the circle writes (no units, or a unit of no known
+// quantity): they are shown, and not written again under a quantity the image suggests
+export const UNKNOWN_QUANTITY = 'unknown';
+
+// The quantities, with the unit written and the modality unit it reads back as
+const STATISTIC_QUANTITIES = Object.freeze({
+  CT: Object.freeze({
+    concept: Object.freeze({ CodeValue: '112031', CodingSchemeDesignator: 'DCM', CodeMeaning: 'Attenuation Coefficient' }),
+    unit: unitCode("[hnsf'U]", 'Hounsfield Unit'),
+    modalityUnit: 'HU',
+  }),
+  PT: Object.freeze({
+    concept: Object.freeze({ CodeValue: '126401', CodingSchemeDesignator: 'DCM', CodeMeaning: 'SUVbw' }),
+    unit: unitCode('g/ml{SUVbw}', 'Standardized Uptake Value body weight'),
+    modalityUnit: 'SUV',
+  }),
+  MR: Object.freeze({
+    concept: Object.freeze({ CodeValue: '110852', CodingSchemeDesignator: 'DCM', CodeMeaning: 'MR signal intensity' }),
+    unit: unitCode('1', 'no units'),
+    modalityUnit: '',
+  }),
+});
+
+const BODY_WEIGHT_SUV = ['SUV', 'SUVBW', 'G/ML{SUVBW}'];
+
+/**
+ * The quantity a circle's pixel statistics measure, from the image's modality and the statistics'
+ * modality unit (HU: CT; SUV: PT); undefined when it is not one the circle's statistics are written in.
+ */
+function statisticQuantity({ modality, modalityUnit } = {}) {
+  const unitValue = String(modalityUnit || '').toUpperCase();
+  const of = expected => !modality || modality === expected;
+  if ((unitValue === 'HU' && of('CT')) || (modality === 'CT' && !unitValue)) {
+    return STATISTIC_QUANTITIES.CT;
+  }
+  // SUV is body weight SUV (the Cornerstone3D scaling); another normalization is not SUVbw
+  if (BODY_WEIGHT_SUV.includes(unitValue) && of('PT')) {
+    return STATISTIC_QUANTITIES.PT;
+  }
+  if (modality === 'MR' && !unitValue) {
+    return STATISTIC_QUANTITIES.MR;
+  }
+  return undefined;
+}
+
+/**
+ * The statistic NUM items of a circle (in CIRCLE_STATISTICS order) for its statistics
+ * ({ mean, stdDev, max, modalityUnit }) on an image of `modality`, each with a copy of the geometry
+ * from `geometryItem()`. The quantity the statistics carry (`statisticsModality`, as computed or read)
+ * names them before the image's modality does. None without a known quantity; a statistic that is not
+ * a finite number is left out.
+ */
+function circleStatisticItems(statistics, modality, geometryItem) {
+  const quantity = statistics && statisticQuantity({
+    modality: statistics.statisticsModality || modality, modalityUnit: statistics.modalityUnit,
+  });
+  if (!statistics || !quantity) {
+    return [];
+  }
+  return CIRCLE_STATISTICS
+    .filter(({ name }) => _.isFinite(statistics[name]))
+    .map(({ name, code }) => ({
+      RelationshipType: 'CONTAINS',
+      ValueType: 'NUM',
+      ConceptNameCodeSequence: { ...quantity.concept },
+      MeasuredValueSequence: { MeasurementUnitsCodeSequence: { ...quantity.unit }, NumericValue: statistics[name] },
+      ContentSequence: [
+        { RelationshipType: 'HAS CONCEPT MOD', ValueType: 'CODE', ConceptNameCodeSequence: { ...DERIVATION }, ConceptCodeSequence: { ...code } },
+        geometryItem(),
+      ],
+    }));
+}
+
+/**
+ * The statistics a circle carries (`cachedStats`, or a record's statistics by image): the first with a
+ * finite mean, standard deviation or maximum, as { mean, stdDev, max, modalityUnit, statisticsModality }.
+ * `statisticsModality` is the modality of the pixels measured: the Cornerstone3D statistics' `Modality`,
+ * or the quantity a stored circle was read with; it names the quantity when no image does.
+ */
+function circleStatisticsOf(...candidates) {
+  const stats = candidates.find(candidate => candidate && CIRCLE_STATISTICS.some(({ name }) => _.isFinite(candidate[name])));
+  if (!stats) {
+    return undefined;
+  }
+  const statisticsModality = stats.statisticsModality || stats.Modality;
+  return CIRCLE_STATISTICS.reduce((picked, { name }) => (_.isFinite(stats[name]) ? { ...picked, [name]: stats[name] } : picked), {
+    ...(_.isNil(stats.modalityUnit) ? {} : { modalityUnit: stats.modalityUnit }),
+    ...(statisticsModality ? { statisticsModality } : {}),
+  });
+}
 
 const isCircleTool = toolType => CIRCLE_TOOLS.includes(toolType);
 
@@ -237,6 +352,95 @@ function circleNumItems(groupItems) {
   }, {});
 }
 
+const childrenOf = item => (Array.isArray(item && item.ContentSequence) ? item.ContentSequence
+  : [item && item.ContentSequence].filter(Boolean));
+const firstCode = sequence => (Array.isArray(sequence) ? sequence[0] : sequence);
+const codeValue = code => code && (code.CodeValue || code.LongCodeValue || code.URNCodeValue);
+
+const UCUM_SCHEMES = ['UCUM'];
+const sameCode = (code, expected, schemes = [expected.CodingSchemeDesignator]) => Boolean(code)
+  && codeValue(code) === expected.CodeValue && schemes.includes(code.CodingSchemeDesignator);
+/** Whether `code` is a statistic's SCT code, or its SRT code */
+const isStatisticCode = (code, { code: sct, srt }) => sameCode(code, sct)
+  || sameCode(code, { CodeValue: srt, CodingSchemeDesignator: 'SRT' });
+
+/**
+ * The quantity of a stock statistic NUM, from its UCUM unit: { modalityUnit, statisticsModality }, or
+ * undefined when the unit is not UCUM or names an SUV normalization other than body weight. No
+ * units, or a unit of no known quantity, is UNKNOWN_QUANTITY: the image's modality does not name it.
+ */
+function stockQuantityOfUnit(code) {
+  const value = codeValue(code);
+  if (!value || value === '1') {
+    return !code || UCUM_SCHEMES.includes(code.CodingSchemeDesignator)
+      ? { modalityUnit: '', statisticsModality: UNKNOWN_QUANTITY } : undefined;
+  }
+  if (!UCUM_SCHEMES.includes(code.CodingSchemeDesignator)) {
+    return undefined;
+  }
+  const quantity = Object.entries(STATISTIC_QUANTITIES).find(([, candidate]) => candidate.unit.CodeValue === value);
+  if (quantity) {
+    return { modalityUnit: quantity[1].modalityUnit, statisticsModality: quantity[0] };
+  }
+  const unitValue = value.toUpperCase();
+  if (unitValue === 'HU') {
+    return { modalityUnit: 'HU', statisticsModality: 'CT' };
+  }
+  if (BODY_WEIGHT_SUV.includes(unitValue)) {
+    return { modalityUnit: 'SUV', statisticsModality: 'PT' };
+  }
+  return unitValue.startsWith('SUV') || unitValue.includes('{SUV') ? undefined
+    : { modalityUnit: value, statisticsModality: UNKNOWN_QUANTITY };
+}
+
+/**
+ * The circle's pixel statistics in a measurement group: { mean, stdDev, max, modalityUnit,
+ * statisticsModality } with the finite values found, or undefined when it has none. A statistic is a
+ * NUM whose Derivation modifier is a CIRCLE_STATISTICS code (SCT, or its SRT code), named by a quantity of
+ * STATISTIC_QUANTITIES in that quantity's unit; or the stock Cornerstone3D NUM named by the statistic's
+ * code (SCT) in a UCUM unit. A statistic of another quantity, scheme or SUV normalization is not read,
+ * and statistics of different quantities are not read at all: one quantity is never relabelled as another.
+ */
+function circleStatisticNumItems(groupItems) {
+  const nums = (groupItems || []).filter(item => item && item.ValueType === 'NUM');
+  const identityOf = (num, unit) => {
+    // { statistic, modalityUnit, statisticsModality } of a statistic NUM, else undefined
+    const modifier = childrenOf(num).find(child => child && child.RelationshipType === 'HAS CONCEPT MOD'
+      && sameCode(conceptOf(child), DERIVATION));
+    const named = conceptOf(num);
+    if (modifier) {
+      const derivation = firstCode(modifier.ConceptCodeSequence);
+      const statistic = CIRCLE_STATISTICS.find(candidate => isStatisticCode(derivation, candidate));
+      const quantity = Object.entries(STATISTIC_QUANTITIES).find(([, candidate]) => sameCode(named, candidate.concept)
+        && sameCode(unit, candidate.unit, UCUM_SCHEMES));
+      return statistic && quantity
+        && { statistic, modalityUnit: quantity[1].modalityUnit, statisticsModality: quantity[0] };
+    }
+    const statistic = CIRCLE_STATISTICS.find(candidate => isStatisticCode(named, candidate));
+    const quantity = statistic && stockQuantityOfUnit(unit);
+    return quantity && { statistic, ...quantity };
+  };
+  const found = [];
+  nums.forEach((num) => {
+    const measured = firstCode(num.MeasuredValueSequence);
+    const value = measured && !_.isNil(measured.NumericValue) ? Number(measured.NumericValue) : NaN;
+    const identity = Number.isFinite(value) && identityOf(num, firstCode(measured.MeasurementUnitsCodeSequence));
+    if (identity && !found.some(({ statistic }) => statistic === identity.statistic)) {
+      found.push({ ...identity, value });
+    }
+  });
+  if (!found.length) {
+    return undefined;
+  }
+  const [{ modalityUnit, statisticsModality }] = found;
+  if (found.some(item => item.modalityUnit !== modalityUnit || item.statisticsModality !== statisticsModality)) {
+    return undefined;
+  }
+  return found.reduce((statistics, { statistic, value }) => ({ ...statistics, [statistic.name]: value }), {
+    modalityUnit, ...(statisticsModality ? { statisticsModality } : {}),
+  });
+}
+
 /** The geometry item of a circle group: the first SCOORD / SCOORD3D under one of its NUM items */
 function circleGeometryItem(groupItems) {
   const nums = (groupItems || []).filter(item => item && item.ValueType === 'NUM');
@@ -276,6 +480,10 @@ export {
   annotationCircle,
   circleGeometryItem,
   circleNumItems,
+  circleStatisticItems,
+  circleStatisticNumItems,
+  circleStatisticsOf,
+  statisticQuantity,
   circleOfCenterAndEdge,
   circleOfEllipse,
   circleOfGeometry,
