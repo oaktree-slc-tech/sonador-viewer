@@ -20,11 +20,16 @@ import {
 	isPlane, patientToImage,
 } from '../utils/angleGeometry';
 import { DEFAULT_PLANE_TOLERANCE } from '../readOnly/planeGeometry';
+import {
+	CIRCLE_TOOL_NAMES, CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleOfGeometry, circleRadius, circleValues, ellipseOfCircle,
+} from '../utils/circleGeometry';
+import { drawingPlaneOf } from '../utils/drawingPlane';
 
 
 const { CORNERSTONE_TOOLS_SR_TAG, CORNERSTONE_3D_TAG } = SREnums;
 const {
 	DICOMReferencedSOPInstanceFinding: TID300DICOMReferencedSOPInstanceFinding,
+	CircleMeasurement: TID300CircleMeasurement,
 	CobbAngleMeasurement: TID300CobbAngleMeasurement,
 	LengthMeasurement: TID300LengthMeasurement,
 } = TID300;
@@ -114,6 +119,7 @@ const UNCHANGED_TOLERANCE = 1e-3;
 // Reasons a tool is not written; parseMeasurementsData turns them into the save result
 const REFUSAL = Object.freeze({
 	INCOMPLETE: 'incomplete', DEGENERATE: 'degenerate', UNCALIBRATED: 'uncalibrated', FRAME_OF_REFERENCE: 'frame-of-reference',
+	PLANE: 'plane',
 });
 const refusal = (code, message) => Object.assign(new Error(message), { code });
 
@@ -439,15 +445,202 @@ Length.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAngleTrack
 CornerstoneLegacyMeasurementReport.registerTool(Length);
 
 
+// Circle (cornerstone-tools `CircleRoi`: `start` the center, `end` a point on the circumference;
+// utils/circleGeometry.js). A measurement hydrated from an SR whose handles and image did not change
+// is written with the geometry and values it was read with. Otherwise:
+// * image domain: a CIRCLE of the center and edge image points, with the values of the radius
+//   measured in millimetres from their patient points, which needs the image's plane and pixel
+//   spacing (an uncalibrated circle is refused);
+// * patient domain (a measurement read in it, or an out-of-plane measurement, which holds patient
+//   points): an ELLIPSE whose second diameter follows the normal of the plane it lies in (the image
+//   plane, or the out-of-plane measurement's Drawing-Plane; without one it is refused).
+// A radius below MIN_RADIUS is refused.
+
+const samePoint = (a, b, tolerance) => !!a && !!b && a.length === b.length
+	&& a.every((value, i) => Math.abs(value - b[i]) <= tolerance);
+
+function storedCircleOf(source) {
+	// The circle a hydrated measurement was read with: { circle, points, values }, or undefined
+	if (!source || !source.values || !_.isFinite(source.values.radius)) {
+		return undefined;
+	}
+	const points = sourcePoints(source);
+	const circle = circleOfGeometry({ ValueType: source.valueType, GraphicType: source.graphicType, points });
+	return circle && !circle.legacy ? { circle, points, values: source.values } : undefined;
+}
+
+function storedCircleArguments(tool, stored, { use3DSpatialCoordinates, FrameOfReferenceUID }) {
+	// The arguments of an unchanged hydrated circle, its geometry and values as read; a degenerate one
+	// (kept with a warning on read) is refused as a drawn one is
+	const radii = [stored.values.radius, use3DSpatialCoordinates ? stored.circle.radius : stored.values.radius];
+	if (!radii.every(radius => radius >= MIN_RADIUS)) {
+		throw refusal(REFUSAL.DEGENERATE, `Circle radius is below ${MIN_RADIUS} mm`);
+	}
+	return circleArguments(tool, { points: stored.points, values: stored.values, use3DSpatialCoordinates, FrameOfReferenceUID });
+}
+
+const circleTrackingIdentifier = (tool) => {
+	const meta = tool.metadata || {};
+	const readIdentifier = tool.TrackingIdentifier || meta.TrackingIdentifier;
+	return isAngleTrackingIdentifier(CIRCLE_TRACKING_TOOL, readIdentifier)
+		? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, CIRCLE_TRACKING_TOOL].join(':');
+};
+
+function circleArguments(tool, { points, values, use3DSpatialCoordinates, FrameOfReferenceUID }) {
+	const meta = tool.metadata || {};
+	return {
+		points,
+		values,
+		use3DSpatialCoordinates,
+		ReferencedFrameOfReferenceUID: use3DSpatialCoordinates ? FrameOfReferenceUID : undefined,
+		trackingIdentifierTextValue: circleTrackingIdentifier(tool),
+		trackingUniqueIdentifier: tool.TrackingUniqueIdentifier || meta.TrackingUniqueIdentifier,
+		finding: tool.finding,
+		findingSites: tool.findingSites || [],
+	};
+}
+
+function patientCircleArguments(tool, center, edge, normal, FrameOfReferenceUID) {
+	// The ELLIPSE of a circle of patient points in the plane of `normal`, with the values of its radius
+	if (!normal) {
+		throw refusal(REFUSAL.PLANE, 'Circle has no plane: its Drawing-Plane is missing or not valid');
+	}
+	const points = ellipseOfCircle(center, edge, normal);
+	if (!points) {
+		throw refusal(REFUSAL.DEGENERATE, `Circle radius is below ${MIN_RADIUS} mm`);
+	}
+	const radius = circleRadius(points[0], points[1]) / 2;
+	return circleArguments(tool, { points, values: circleValues(radius), use3DSpatialCoordinates: true, FrameOfReferenceUID });
+}
+
+const imagePlaneNormal = (module) => {
+	const row = Array.from(module.rowCosines, Number);
+	const column = Array.from(module.columnCosines, Number);
+	return [row[1] * column[2] - row[2] * column[1], row[2] * column[0] - row[0] * column[2], row[0] * column[1] - row[1] * column[0]];
+};
+
+function circleToolArguments(tool, context) {
+	// TID 300 arguments of a circle; throws an error with a REFUSAL `code` when it cannot be written
+	const meta = tool.metadata || {};
+	const source = tool.sourceGeometry || meta.sourceGeometry;
+	const stored = storedCircleOf(source);
+
+	if (tool.patientPoints) {
+		const points = tool.patientPoints;
+		if (points.length !== 2 || points.some(point => point.length !== 3 || !point.every(_.isFinite))) {
+			throw refusal(REFUSAL.INCOMPLETE, 'Circle is incomplete: its center and edge point are required');
+		}
+		if (!tool.FrameOfReferenceUID) {
+			throw refusal(REFUSAL.FRAME_OF_REFERENCE, 'Circle has no Frame of Reference');
+		}
+		const [center, edge] = points;
+		if (stored && source.valueType === 'SCOORD3D' && source.FrameOfReferenceUID === tool.FrameOfReferenceUID
+				&& samePoint(stored.circle.center, center, UNCHANGED_PATIENT_TOLERANCE)
+				&& samePoint(stored.circle.edge, edge, UNCHANGED_PATIENT_TOLERANCE)) {
+			return storedCircleArguments(tool, stored, { use3DSpatialCoordinates: true, FrameOfReferenceUID: tool.FrameOfReferenceUID });
+		}
+		const plane = drawingPlaneOf(meta.drawingPlane, points);
+		return patientCircleArguments(tool, center, edge, plane && plane.normal, tool.FrameOfReferenceUID);
+	}
+
+	const { imageId, metadataProvider } = context || {};
+	const handles = tool.handles || {};
+	if (['start', 'end'].some(name => !handles[name] || !_.isFinite(handles[name].x) || !_.isFinite(handles[name].y))) {
+		throw refusal(REFUSAL.INCOMPLETE, 'Circle is incomplete: handles start, end are required');
+	}
+	const imagePoints = [[handles.start.x, handles.start.y], [handles.end.x, handles.end.y]];
+	const module = metadataOf(metadataProvider, 'imagePlaneModule', imageId);
+	const sopCommon = metadataOf(metadataProvider, 'sopCommonModule', imageId) || {};
+	const frameNumber = metadataOf(metadataProvider, 'frameNumber', imageId);
+
+	if (stored) {
+		// Read in the image domain on this image and frame, or in the patient domain on the plane of
+		// this image (where it was placed), with the same center and edge point
+		const onImage = source.valueType === 'SCOORD'
+			&& source.ReferencedSOPInstanceUID === sopCommon.sopInstanceUID
+			&& Number(source.ReferencedFrameNumber || 1) === Number(frameNumber || 1)
+			&& stored.points.every((point, i) => samePoint(point, imagePoints[i], UNCHANGED_TOLERANCE));
+		const placement = source.placement || {};
+		const onPlane = source.valueType === 'SCOORD3D' && isPlane(module)
+			&& module.frameOfReferenceUID === source.FrameOfReferenceUID
+			&& placement.SOPInstanceUID === sopCommon.sopInstanceUID && Number(placement.frameNumber || 1) === Number(frameNumber || 1)
+			&& [stored.circle.center, stored.circle.edge].every((point, i) =>
+				samePoint(patientToImage(module, point), imagePoints[i], UNCHANGED_TOLERANCE));
+		if (onImage || onPlane) {
+			return storedCircleArguments(tool, stored, {
+				use3DSpatialCoordinates: source.valueType === 'SCOORD3D', FrameOfReferenceUID: source.FrameOfReferenceUID,
+			});
+		}
+	}
+
+	if (!isPlane(module)) {
+		throw refusal(REFUSAL.UNCALIBRATED, `Circle is on an image without pixel spacing (imageId=${imageId})`);
+	}
+	const [center, edge] = imagePoints.map(point => imageToPatient(module, point));
+	const radius = circleRadius(center, edge);
+	if (!(radius >= MIN_RADIUS)) {
+		throw refusal(REFUSAL.DEGENERATE, `Circle radius is below ${MIN_RADIUS} mm`);
+	}
+	const domain = (source && source.valueType === 'SCOORD3D') ? 'patient' : (tool.coordinateDomain || meta.coordinateDomain);
+	if (domain === 'patient' && module.frameOfReferenceUID) {
+		return patientCircleArguments(tool, center, edge, imagePlaneNormal(module), module.frameOfReferenceUID);
+	}
+	return circleArguments(tool, { points: imagePoints, values: circleValues(radius), use3DSpatialCoordinates: false });
+}
+
+function circleMeasurementData(MeasurementGroup) {
+	// cornerstone-tools state of an image-domain circle group (start the center, end the edge point)
+	const { defaultState, SCOORDGroup } = LibraryLegacyMeasurementReport.getSetupMeasurementData(MeasurementGroup);
+	const [center, edge] = _.chunk(Array.from(SCOORDGroup.GraphicData, Number), 2);
+	return {
+		...defaultState,
+		toolType: CIRCLE_TOOL_NAMES.CLASSIC,
+		handles: {
+			start: { x: center[0], y: center[1], highlight: true, active: false },
+			end: { x: edge[0], y: edge[1], highlight: true, active: false },
+			textBox: { hasMoved: false, movesIndependently: false, drawnIndependently: true, allowedOutsideImage: true, hasBoundingBox: true },
+		},
+	};
+}
+
+function circleAdapter(toolType) {
+	// The circle's writer under a tool name: the classic tool, and the Cornerstone3D name the
+	// out-of-plane records (utils/outOfPlane.js) hold
+	const adapter = class {
+		static getMeasurementData(MeasurementGroup) {
+			return circleMeasurementData(MeasurementGroup);
+		}
+
+		static getTID300RepresentationArguments(tool, context) {
+			return circleToolArguments(tool, context);
+		}
+	};
+	adapter.toolType = toolType;
+	adapter.utilityToolType = toolType;
+	adapter.TID300Representation = TID300CircleMeasurement;
+	adapter.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAngleTrackingIdentifier(CIRCLE_TRACKING_TOOL, TrackingIdentifier);
+	return adapter;
+}
+
+const CircleRoi = circleAdapter(CIRCLE_TOOL_NAMES.CLASSIC);
+const CircleROI = circleAdapter(CIRCLE_TOOL_NAMES.CORNERSTONE_3D);
+
+CornerstoneLegacyMeasurementReport.registerTool(CircleRoi);
+CornerstoneLegacyMeasurementReport.registerTool(CircleROI);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 	DICOMSRSeriesTagTool,
 	Angle,
+	CircleRoi,
 	CobbAngle,
 	Length,
 });
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, angleToolArguments, lengthToolArguments, Angle, CobbAngle, Length, REFUSAL, }
+export {
+	sonadorAdaptersSR, angleToolArguments, circleToolArguments, lengthToolArguments, Angle, CircleRoi, CobbAngle, Length, REFUSAL,
+}

@@ -104,6 +104,14 @@ const definitions = [
         commandOptions: { toolName: 'CobbAngle' },
       },
       {
+        id: 'CircleRoi',
+        label: 'Circle',
+        icon: 'circle-radius',
+        type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+        commandName: 'setToolActive',
+        commandOptions: { toolName: 'CircleRoi' },
+      },
+      {
         id: 'Bidirectional',
         label: 'Bidirectional',
         icon: 'measure-target',

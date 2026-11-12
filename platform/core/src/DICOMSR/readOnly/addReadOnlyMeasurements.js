@@ -22,6 +22,7 @@ import addMeasurement from '../SCOORD3D/utils/addMeasurement';
 import { findImageForPoints, planeFromInstance } from './imagePlane';
 import { patientPoints } from './renderableData';
 import { addSRDisplayAnnotation, renderSRDisplayAnnotations } from './srDisplayAnnotations';
+import { CIRCLE_TRACKING_TOOL } from '../utils/circleGeometry';
 
 
 const _instanceOf = image => {
@@ -123,11 +124,18 @@ function _ignoredReason(measurement) {
 
 /**
  * The labels a read-only measurement is drawn with: its description, when it has one, else the
- * labels the report gives it (the NUM value and unit)
+ * labels the report gives it (the NUM value and unit). A circle shows its radius, when its group has
+ * a Radius NUM, rather than its first NUM (the area).
  */
 function _displayLabels(measurement) {
   const description = measurement.description || measurement.metadata?.description;
-  return description ? [{ label: description, value: '' }] : measurement.labels;
+  if (description) {
+    return [{ label: description, value: '' }];
+  }
+  const labels = measurement.labels || [];
+  const isCircle = String(measurement.TrackingIdentifier || '').split(':').pop() === CIRCLE_TRACKING_TOOL;
+  const radius = isCircle && labels.find(label => String(label && label.label).toLowerCase() === 'radius');
+  return radius ? [radius] : labels;
 }
 
 

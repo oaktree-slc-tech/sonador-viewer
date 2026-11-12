@@ -50,7 +50,7 @@ function viewOfImageOrientation(rowCosines, columnCosines) {
 
 
 // The Viewer's own tools that are labelled with the view they were drawn in
-const VIEW_TOOLS = ['Length', 'Angle', 'CobbAngle'];
+const VIEW_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleRoi', 'CircleROI'];
 
 /**
  * The view a measurement drawn in this session is labelled with: from the normal of the view it was

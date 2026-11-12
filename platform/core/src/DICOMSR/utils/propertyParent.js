@@ -9,10 +9,11 @@
 // NUM in document order that carries any of them.
 
 import { ANGLE_TOOLS } from './angleGeometry';
+import { CIRCLE_TOOLS } from './circleGeometry';
 import { PROPERTY_PARENT, RelationshipType } from '../enums';
 import { asArray, conceptNameValue, findingItemOf } from './codedConcept';
 
-const NUM_PARENT_TOOLS = [...ANGLE_TOOLS, 'Length', 'CircleROI'];
+const NUM_PARENT_TOOLS = [...ANGLE_TOOLS, 'Length', ...CIRCLE_TOOLS];
 
 const propertyParentOf = toolType =>
   (NUM_PARENT_TOOLS.includes(toolType) ? PROPERTY_PARENT.NUM : PROPERTY_PARENT.FINDING);

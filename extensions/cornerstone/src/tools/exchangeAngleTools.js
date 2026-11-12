@@ -11,12 +11,19 @@
 // The Length tool likewise shows a mirrored record's stored length while the points are unchanged,
 // in millimetres; a new or edited Length shows the stock calibrated length.
 //
+// The circle tool shows the exchange values (DICOMSR circleGeometry): the radius between its two
+// world points in millimetres, the perimeter 2 pi r and the area pi r^2, or a mirrored record's
+// stored values while its points are unchanged. Its label shows the radius and the area; the stock
+// tool's intensity statistics are dropped.
+//
 // They keep the stock tool names and are registered before any view registers the stock tools,
-// so every tool group that adds `Length`, `Angle` or `CobbAngle` gets them.
+// so every tool group that adds `Length`, `Angle`, `CobbAngle` or `CircleROI` gets them.
 
 import _ from 'lodash';
 
-import { addTool, annotation as c3dAnnotation, AngleTool, CobbAngleTool, LengthTool } from '@cornerstonejs/tools';
+import {
+  addTool, annotation as c3dAnnotation, AngleTool, CircleROITool, CobbAngleTool, LengthTool, utilities as c3dToolsUtilities,
+} from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
 
@@ -143,13 +150,72 @@ class ExchangeLengthTool extends LengthTool {
 }
 
 
+const INTENSITY_STATS = ['mean', 'max', 'min', 'stdDev', 'pointsInShape', 'modalityUnit'];
+
+/** Give a circle annotation's statistics, for every view, its exchange values */
+function applyCircleValues(annotation) {
+  const values = OHIF.DICOMSR.circleGeometry.annotationCircle(annotation.data);
+  const { cachedStats } = annotation.data || {};
+  Object.keys(cachedStats || {}).forEach(targetId => {
+    // The stock pass reports pixels on an image without calibration; that unit is kept
+    const unit = OHIF.DICOMSR.circleGeometry.circleUnit(cachedStats[targetId]);
+    const areaUnit = `${unit}\u00B2`;
+    cachedStats[targetId] = {
+      ..._.omit(cachedStats[targetId], INTENSITY_STATS),
+      ...values,
+      radiusUnit: unit,
+      areaUnit,
+      isEmptyArea: !(values.radius > 0),
+      statsArray: [
+        { name: 'area', value: values.area, unit: areaUnit, type: 'area' },
+        { name: 'radius', value: values.radius, unit, type: 'linear' },
+        { name: 'circumference', value: values.perimeter, unit, type: 'linear' },
+      ],
+    };
+  });
+}
+
+/** The circle's label: its radius and its area */
+function circleTextLines(data, targetId) {
+  const stats = (data && data.cachedStats && data.cachedStats[targetId]) || {};
+  if (!Number.isFinite(stats.radius)) {
+    return [];
+  }
+  const round = value => c3dToolsUtilities.roundNumber(value);
+  const unit = OHIF.DICOMSR.circleGeometry.circleUnit(stats);
+  return [`Radius: ${round(stats.radius)} ${unit}`, `Area: ${round(stats.area)} ${unit}\u00B2`];
+}
+
+class ExchangeCircleROITool extends CircleROITool {
+  constructor(toolProps = {}, defaultToolProps) {
+    super(toolProps, defaultToolProps);
+    if (!(toolProps.configuration && toolProps.configuration.getTextLines)) {
+      this.configuration.getTextLines = circleTextLines;
+    }
+    // The stock statistics are instance properties: the stock pass runs (it keeps the handle
+    // checks and the modified events), then the exchange values replace its own
+    const stockCalculateCachedStats = this._calculateCachedStats;
+    this._calculateCachedStats = (annotation, ...args) => {
+      const result = stockCalculateCachedStats(annotation, ...args);
+      applyCircleValues(annotation);
+      return result;
+    };
+    this._throttledCalculateCachedStats = c3dToolsUtilities.throttle(this._calculateCachedStats, 100, { trailing: true });
+  }
+}
+
+
 /** Register the exchange tools under the stock names (a later stock registration is ignored) */
 function registerExchangeAngleTools() {
   addTool(ExchangeAngleTool);
   addTool(ExchangeCobbAngleTool);
   addTool(ExchangeLengthTool);
+  addTool(ExchangeCircleROITool);
 }
 
 
 export default registerExchangeAngleTools;
-export { exchangeValue, ExchangeAngleTool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools };
+export {
+  applyCircleValues, circleTextLines, exchangeValue, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool,
+  ExchangeLengthTool, registerExchangeAngleTools,
+};

@@ -59,13 +59,25 @@ import {
 import OHIF from '@ohif/core';
 import { getLineTextColor } from '@ohif/core/src/displayAttributes';
 
+import {
+  CIRCLE_TOOL_NAMES, circlePlanePoints, circleRadius, circleValues, classicToolName, cornerstone3DToolName, isCircleTool,
+  isLegacyGeometry,
+} from '@ohif/core/src/DICOMSR/utils/circleGeometry';
+
 import { HANDLE_NAMES as ANGLE_HANDLE_NAMES } from './measurementServiceMappings/Cornerstone/Angle';
 
 const { log } = OHIF;
 
-// Classic handles of each synchronised tool, in point order
-// (the arrow tip is the first point in both tool sets)
-const HANDLE_NAMES = { Length: ['start', 'end'], ArrowAnnotate: ['start', 'end'], ...ANGLE_HANDLE_NAMES };
+// Classic handles of each synchronised tool, in point order (the arrow tip is the first point in
+// both tool sets; a circle's center then its edge point). The circle is `CircleRoi` in the classic
+// tools and `CircleROI` in Cornerstone3D (and in its out-of-plane records).
+const HANDLE_NAMES = {
+  Length: ['start', 'end'],
+  ArrowAnnotate: ['start', 'end'],
+  ...ANGLE_HANDLE_NAMES,
+  [CIRCLE_TOOL_NAMES.CLASSIC]: ['start', 'end'],
+  [CIRCLE_TOOL_NAMES.CORNERSTONE_3D]: ['start', 'end'],
+};
 const ARROW = 'ArrowAnnotate';
 const ANGLE_TOOLS = Object.keys(ANGLE_HANDLE_NAMES);
 
@@ -91,6 +103,7 @@ const OUT_OF_PLANE_REASONS = [NOT_SAVED.PLANE, NOT_SAVED.REFERENCE, NOT_SAVED.GE
 
 const TOOL_NAMES = {
   CobbAngle: 'Cobb angle',
+  CircleROI: 'circle',
   ArrowAnnotate: 'arrow annotation',
   Bidirectional: 'bidirectional measurement',
   EllipticalROI: 'ellipse',
@@ -252,9 +265,13 @@ const textOf = measurement => (measurement.metadata && measurement.metadata.text
   || (measurement.data && measurement.data.text) || '';
 
 function valueOf(toolName, patientPoints) {
-  // The value of patient points: the exchange angle (degrees) or the length (mm); an arrow has none
+  // The value of patient points: the exchange angle (degrees), the length (mm), or a circle's values
+  // ({ radius, area, perimeter }); an arrow has none
   if (toolName === ARROW) {
     return undefined;
+  }
+  if (isCircleTool(toolName)) {
+    return circleValues(circleRadius(patientPoints[0], patientPoints[1]));
   }
   if (toolName === 'Length') {
     const [a, b] = patientPoints;
@@ -264,9 +281,17 @@ function valueOf(toolName, patientPoints) {
   return encodedAngle(encodedPoints(toolName, patientPoints));
 }
 
-/** A measurement's value with the points it belongs to: an angle's (degrees) or a Length's (mm) */
+/**
+ * A measurement's value with the points it belongs to: an angle's (degrees) or a Length's (mm) as
+ * { value, points }, a circle's as { values: { radius, area, perimeter }, points }
+ */
 function recordValueOf(measurement, points) {
   const data = measurement.data || {};
+  if (isCircleTool(measurement.toolName)) {
+    const stats = data.cachedStats;
+    return stats && _.isFinite(stats.radius)
+      ? { values: _.pick(stats, ['radius', 'area', 'perimeter']), points: _.cloneDeep(points) } : undefined;
+  }
   const value = ANGLE_TOOLS.includes(measurement.toolName) ? Number(data.rAngle)
     : measurement.toolName === 'Length' ? Number(_.isNil(measurement.length) ? data.length : measurement.length) : NaN;
   return _.isFinite(value) ? { value, points: _.cloneDeep(points) } : undefined;
@@ -378,7 +403,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       // The same points (within tolerance) keep their handle array, which a tool may be dragging
       const moved = !samePoints(existing.data.handles.points, points) || existing.metadata.referencedImageId !== imageId;
       const current = moved ? points : existing.data.handles.points;
-      const value = recordValue && { value: recordValue.value, points: _.cloneDeep(current) };
+      const value = recordValue && { ...recordValue, points: _.cloneDeep(current) };
       if (!moved && _.isEqual(existing.data.recordValue, value) && existing.data.label === label) {
         return existing;
       }
@@ -398,7 +423,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       invalidated: true,
       highlighted: false,
       metadata: {
-        toolName: measurement.toolName,
+        toolName: cornerstone3DToolName(measurement.toolName),
         FrameOfReferenceUID: module.frameOfReferenceUID || measurement.FrameOfReferenceUID,
         referencedImageId: imageId,
         viewPlaneNormal: normalOf(module),
@@ -422,7 +447,8 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     // A measurement drawn in a Cornerstone3D view on an acquired image becomes a classic
     // measurement; null when it did, otherwise why not (NOT_SAVED). With `insideImageOnly`, a
     // point outside the image's rows and columns keeps it off the image.
-    const { toolName, referencedImageId } = annotation.metadata;
+    const { referencedImageId } = annotation.metadata;
+    const toolName = classicToolName(annotation.metadata.toolName);
     // Only a measured distance from a usable image plane shows the drawing is off the acquisition.
     // No referenced image may mean an unaligned view or images without position metadata (the
     // reference lookup skips those); a referenced image without a usable plane cannot place the
@@ -469,7 +495,8 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       FrameOfReferenceUID: module.frameOfReferenceUID,
       ...(toolName === ARROW ? { text } : {}),
     };
-    const valueData = toolName === ARROW ? { text } : toolName === 'Length' ? { length: value } : { rAngle: value };
+    const valueData = toolName === ARROW ? { text } : toolName === 'Length' ? { length: value }
+      : isCircleTool(toolName) ? { cachedStats: value } : { rAngle: value };
     const measurement = {
       toolName,
       points: imagePoints.map(([x, y]) => ({ x, y })),
@@ -636,6 +663,12 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
 
   function outOfPlaneRecord(toolName, points, attributes) {
     // The measurement-service record of an out-of-plane measurement with these points
+    if (isCircleTool(toolName)) {
+      const values = valueOf(toolName, points);
+      return {
+        toolName, points, isLocked: false, isDirty: true, unit: 'mm', data: { cachedStats: values }, ...attributes,
+      };
+    }
     const value = valueOf(toolName, points);
     const finite = _.isFinite(value) ? value : undefined;
     const isLength = toolName === 'Length';
@@ -653,13 +686,18 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
   function upsertOutOfPlaneAnnotation(measurement) {
     // The Cornerstone3D annotation of an out-of-plane measurement: its patient points, drawn in a
     // view whose plane contains them. A Cobb angle whose lines lie in no common plane is kept under
-    // a tool name no slice tool draws, for the 3D display only.
+    // a tool name no slice tool draws, for the 3D display only. A circle read from an ELLIPSE keeps
+    // that ELLIPSE's plane; one read from a stock CIRCLE SCOORD3D has no known plane: it is drawn
+    // in a view holding its two points and marked `planeUnknown`.
     const annotationUID = annotationUIDFor(measurement.uid);
     const points = (measurement.points || []).map(point => Array.from(point, Number));
     const metadata = measurement.metadata || {};
+    const isCircle = isCircleTool(measurement.toolName);
+    const planeUnknown = isCircle && isLegacyGeometry(metadata.sourceGeometry);
+    const planePoints = isCircle ? circlePlanePoints(points, metadata.sourceGeometry) || points : points;
     const plane = points.length === HANDLE_NAMES[measurement.toolName].length
-      ? drawingPlanes().navigationPlaneOf(points, metadata.drawingPlane) : undefined;
-    if (!plane) {
+      ? drawingPlanes().navigationPlaneOf(planePoints, metadata.drawingPlane) : undefined;
+    if (!plane || (isCircle && plane.kind === 'none')) {
       if (removeAnnotation(annotationUID)) {
         render();
       }
@@ -686,7 +724,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
         existing.data.handles.points = points;
       }
       existing.data.label = label;
-      existing.data.recordValue = recordValue && { value: recordValue.value, points: _.cloneDeep(existing.data.handles.points) };
+      existing.data.recordValue = recordValue && { ...recordValue, points: _.cloneDeep(existing.data.handles.points) };
       existing.invalidated = true;
       render();
       return existing;
@@ -702,6 +740,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
         toolName,
         FrameOfReferenceUID: measurement.FrameOfReferenceUID || metadata.FrameOfReferenceUID,
         ...(plane.kind === 'none' ? {} : { viewPlaneNormal: plane.normal, viewUp: plane.height.map(value => -value) }),
+        ...(planeUnknown ? { planeUnknown: true } : {}),
       },
       data: {
         label,
@@ -802,7 +841,8 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     const finite = _.isFinite(value) ? value : undefined;
     const isLength = measurement.toolName === 'Length';
 
-    const valueData = isArrow ? { text } : isLength ? { length: finite } : { rAngle: finite };
+    const valueData = isArrow ? { text } : isLength ? { length: finite }
+      : isCircleTool(measurement.toolName) ? { cachedStats: value } : { rAngle: finite };
 
     measurementService.update(measurementUID, {
       ...measurement,

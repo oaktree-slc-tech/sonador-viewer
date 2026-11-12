@@ -3,9 +3,10 @@
 // report is uploaded then). Technical details stay in the log. Once the report is stored, the
 // measurements it holds, as they were written, are locked as saved measurements.
 
+import { MIN_RADIUS } from './circleGeometry';
 import { asArray, conceptNameValue } from './codedConcept';
 
-const TOOL_LABELS = { Angle: 'Angle', CobbAngle: 'Cobb angle' };
+const TOOL_LABELS = { Angle: 'Angle', CobbAngle: 'Cobb angle', CircleRoi: 'Circle', CircleROI: 'Circle' };
 
 const ACTIONS = {
   incomplete: 'complete it, or delete it and draw it again',
@@ -14,6 +15,15 @@ const ACTIONS = {
   'frame-of-reference': 'its series has no Frame of Reference, so it cannot be saved in patient coordinates',
 };
 const DEFAULT_ACTION = 'check it and save again';
+
+// What to do about a circle, where it differs from an angle
+const CIRCLE_ACTIONS = {
+  incomplete: 'draw it again with its center and a point on its edge',
+  degenerate: `move its edge point away from its center so that its radius is at least ${MIN_RADIUS} mm`,
+  uncalibrated: 'its image calibration is missing or invalid, so the circle cannot be measured in millimetres; draw it on a calibrated image',
+  plane: 'the plane it was drawn in is not known, so it cannot be saved in patient coordinates',
+};
+const TOOL_ACTIONS = { CircleRoi: CIRCLE_ACTIONS, CircleROI: CIRCLE_ACTIONS };
 
 
 /** A measurement the writer left out: the tool, its label, and the refusal code of the error */
@@ -43,7 +53,8 @@ function saveResultSummary(outcome, destination) {
 
   const lines = omitted.map(({ toolType, label, reason }) => {
     const name = TOOL_LABELS[toolType] || toolType;
-    return `${label ? `${name} "${label}"` : name}: ${ACTIONS[reason] || DEFAULT_ACTION}.`;
+    const action = (TOOL_ACTIONS[toolType] || {})[reason] || ACTIONS[reason] || DEFAULT_ACTION;
+    return `${label ? `${name} "${label}"` : name}: ${action}.`;
   });
   if (saved === 0) {
     const none = omitted.length === 1 ? 'The measurement was not saved.' : `None of the ${omitted.length} measurements was saved.`;

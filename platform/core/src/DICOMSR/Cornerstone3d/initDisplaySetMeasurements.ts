@@ -419,10 +419,17 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
   NUMContentItems.forEach(item => {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
-    // The graphic the value is inferred from, when the NUM carries one
+    // The graphic the value is inferred from, when the NUM carries one. A circle's NUM items each
+    // carry a copy of the same geometry, drawn once.
     const graphicItem = _inferredGraphicOf(ContentSequence);
     if (graphicItem) {
-      measurement.coords.push(_getCoordsFromSCOORDOrSCOORD3D(graphicItem));
+      const coords = _getCoordsFromSCOORDOrSCOORD3D(graphicItem);
+      const graphicData = Array.from(coords.GraphicData || []);
+      const same = measurement.coords.some(drawn => drawn.ValueType === coords.ValueType && drawn.GraphicType === coords.GraphicType
+        && Array.from(drawn.GraphicData || []).join(',') === graphicData.join(','));
+      if (!same) {
+        measurement.coords.push(coords);
+      }
     }
 
     if (MeasuredValueSequence) {

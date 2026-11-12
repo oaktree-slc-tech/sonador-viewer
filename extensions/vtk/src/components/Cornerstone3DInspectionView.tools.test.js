@@ -19,6 +19,7 @@ jest.mock('@cornerstonejs/tools', () => {
     StackScrollTool: tool('StackScroll'),
     AngleTool: tool('Angle'),
     CobbAngleTool: tool('CobbAngle'),
+    CircleROITool: tool('CircleROI'),
     LengthTool: tool('Length'),
     ArrowAnnotateTool: tool('ArrowAnnotate'),
     BidirectionalTool: tool('Bidirectional'),
@@ -61,7 +62,8 @@ import Cornerstone3DInspectionView from './Cornerstone3DInspectionView';
 
 const PRIMARY = 1;
 const MODES = [
-  ['length-tool', 'Length'], ['angle-tool', 'Angle'], ['cobb-angle-tool', 'CobbAngle'], ['arrow-tool', 'ArrowAnnotate'],
+  ['length-tool', 'Length'], ['angle-tool', 'Angle'], ['cobb-angle-tool', 'CobbAngle'], ['circle-tool', 'CircleROI'],
+  ['arrow-tool', 'ArrowAnnotate'],
   ['bidirectional-tool', 'Bidirectional'], ['ellipse-tool', 'EllipticalROI'], ['rectangle-tool', 'RectangleROI'],
   ['freehand-tool', 'PlanarFreehandROI'], ['probe-tool', 'Probe'],
 ];

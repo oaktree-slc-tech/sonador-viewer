@@ -1,8 +1,8 @@
-// The display draws every visible Length, Angle and Cobb angle annotation of a 3D viewport's Frame of
+// The display draws every visible Length, Angle, Cobb angle and circle annotation of a 3D viewport's Frame of
 // Reference, whatever the camera orientation, with its value; it can be shown and hidden.
 // Cornerstone3D is stubbed: annotations come from an in-memory store and drawing calls are recorded.
 
-const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [] };
+const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [], CircleROI: [] };
 const mockHidden = new Set();
 const mockDrawn = [];
 const mockRegisteredTools = {};
@@ -71,6 +71,7 @@ afterEach(() => {
   mockAnnotations.Length = [];
   mockAnnotations.Angle = [];
   mockAnnotations.CobbAngle = [];
+  mockAnnotations.CircleROI = [];
   mockHidden.clear();
 });
 
@@ -99,6 +100,37 @@ it('draws a Length, in-plane or out-of-plane, with its distance in mm', () => {
   expect(textOf('l-2')).toEqual([['50 mm']]);
   // An incomplete Length is not drawn
   expect(mockDrawn.filter(d => d.uid === 'l-3')).toEqual([]);
+});
+
+it('draws a circle as a closed outline in its plane with its radius, the stored radius while unchanged', () => {
+  const values = { radius: 5.25, area: 86.59, perimeter: 32.99 };
+  const circle = (uid, points, extra = {}) => ({
+    annotationUID: uid, metadata: { toolName: 'CircleROI', FrameOfReferenceUID: FOR, viewPlaneNormal: [0, 0, 1] },
+    data: { handles: { points: points.map(p => p.slice()) }, ...extra },
+  });
+  mockAnnotations.CircleROI = [
+    circle('r-1', [[0, 0, 0], [3, 4, 0]]),
+    circle('r-2', [[0, 0, 0], [3, 4, 0]], { recordValue: { values, points: [[0, 0, 0], [3, 4, 0]] } }),
+    circle('r-3', [[0, 0, 0], [6, 8, 0]], { recordValue: { values, points: [[0, 0, 0], [3, 4, 0]] } }),
+  ];
+
+  expect(render()).toBe(true);
+  const outline = mockDrawn.find(d => d.uid === 'r-1' && d.kind === 'polyline');
+  expect(outline).toBeDefined();
+  expect(mockDrawn.filter(d => d.uid === 'r-1').map(d => d.kind)).toEqual(['polyline', 'handles', 'textBox']);
+  expect(textOf('r-1')).toEqual([['Radius: 5 mm']]);
+  expect(textOf('r-2')).toEqual([['Radius: 5.25 mm']]);
+  expect(textOf('r-3')).toEqual([['Radius: 10 mm']]);
+});
+
+it('draws a circle whose plane is not known as its radius line, without an outline', () => {
+  mockAnnotations.CircleROI = [{
+    annotationUID: 'r-legacy', metadata: { toolName: 'CircleROI', FrameOfReferenceUID: FOR, viewPlaneNormal: [0, 0, 1], planeUnknown: true },
+    data: { handles: { points: [[0, 0, 0], [3, 4, 0]] } },
+  }];
+  render();
+  expect(mockDrawn.filter(d => d.uid === 'r-legacy').map(d => d.kind)).toEqual(['line', 'handles', 'textBox']);
+  expect(textOf('r-legacy')).toEqual([['Radius: 5 mm']]);
 });
 
 it("shows a Length's record value while its points are unchanged, and the new distance after an edit", () => {

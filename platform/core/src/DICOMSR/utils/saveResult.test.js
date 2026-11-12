@@ -35,6 +35,15 @@ it('tells the user to complete an incomplete measurement', () => {
 });
 
 
+it.each([['CircleRoi'], ['CircleROI']])('names a %s left out as a circle with what to do', toolType => {
+  const result = saveResultSummary([
+    omittedMeasurement(toolType, { label: 'Lesion' }, refusal('degenerate')),
+    omittedMeasurement(toolType, {}, refusal('uncalibrated')),
+  ]);
+  expect(result.message).toContain('Circle "Lesion": move its edge point away from its center so that its radius is at least 0.01 mm.');
+  expect(result.message).toContain('Circle: its image calibration is missing or invalid, so the circle cannot be measured in millimetres; draw it on a calibrated image.');
+});
+
 describe('the outcome by number of measurements written', () => {
   const degenerate = omittedMeasurement('CobbAngle', { label: 'Hip abduction' }, refusal('degenerate'));
   const uncalibrated = omittedMeasurement('Angle', {}, refusal('uncalibrated'));

@@ -41,15 +41,15 @@ const initLegacyMeasurementServiceMappings = (measurementService) => {
   // Initialize measurement service source and service mappings
   const measurementSource = measurementService.createSource(CORNERSTONE_TOOLS_SOURCE_NAME, CORNERSTONE_TOOLS_SOURCE_VERSION);
   const measurementMappings = cornerstoneMeasurementDataProc.measurementServiceMappingsFactory(measurementService, measurementSource);
-  const { Length, Angle, CobbAngle, ArrowAnnotateTool, DICOMSRSeriesTag } = measurementMappings;
+  const { Length, Angle, CobbAngle, CircleRoi, ArrowAnnotateTool, DICOMSRSeriesTag } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource, 
     Length.toolName, Length.matchingCriteria, 
     Length.toAnnotation, Length.toMeasurement, Length.cleanAnnotation, Length.toAltSourceMeasurementSchema);
 
-  // Angle and Cobb Angle Tools
-  [Angle, CobbAngle].forEach(mapping => measurementService.addMapping(measurementSource,
+  // Angle, Cobb Angle and Circle Tools
+  [Angle, CobbAngle, CircleRoi].forEach(mapping => measurementService.addMapping(measurementSource,
     mapping.toolName, mapping.matchingCriteria,
     mapping.toAnnotation, mapping.toMeasurement, mapping.cleanAnnotation, mapping.toAltSourceMeasurementSchema));
 
@@ -78,7 +78,7 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
   const measurementMappings = cornerstone3dMeasurementDataProc.measurementServiceMappingsFactory(
     measurementService, displaySetService, cornerstoneViewportService, customizationService);
 
-  const { Length, Angle, CobbAngle, ArrowAnnotate, DICOMSRSeriesTagTool } = measurementMappings;
+  const { Length, Angle, CobbAngle, CircleROI, ArrowAnnotate, DICOMSRSeriesTagTool } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource,
@@ -89,6 +89,10 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
     'Angle', Angle.matchingCriteria, Angle.toAnnotation, Angle.toMeasurement);
   measurementService.addMapping(measurementSource,
     'CobbAngle', CobbAngle.matchingCriteria, CobbAngle.toAnnotation, CobbAngle.toMeasurement);
+
+  // Circle Tool
+  measurementService.addMapping(measurementSource,
+    'CircleROI', CircleROI.matchingCriteria, CircleROI.toAnnotation, CircleROI.toMeasurement);
 
   // Arrow Annotation Tool
   measurementService.addMapping(measurementSource, 
@@ -133,8 +137,9 @@ const createRenderVersion = (measurementApi, source, measurement, data) => {
       && (measurement?.metadata?.createRenderVersion || data?.metadata?.createRenderVersion)) {
 
     // Retrieve API MeasurementService source, determine if the tool is managed by the service, and retrieve the tool mapping
-    // which will do the schema conversion.
-    const { source: dstSrc, toolServiceManaged, toolMapping: dstToolMapping } = measurementApi._serviceManagedTool(measurement.toolName);
+    // which will do the schema conversion. The circle has a name of its own in each library.
+    const toolName = OHIF.DICOMSR.circleGeometry.classicToolName(measurement.toolName);
+    const { source: dstSrc, toolServiceManaged, toolMapping: dstToolMapping } = measurementApi._serviceManagedTool(toolName);
 
     if (toolServiceManaged && _.isFunction(dstToolMapping.toAltSourceMeasurementSchema)) {
 
@@ -145,9 +150,9 @@ const createRenderVersion = (measurementApi, source, measurement, data) => {
         // Import the measurement instance into the service. Since there is no way to directly add
         // add a new measurement instance to the service, the destination annotation to measurement
         // and dstToolMapping.toAnnotationSchema methods are used.
-        const annotation = dstToolMapping.toAnnotationSchema(newRawMeasurement, measurement.toolName);        
+        const annotation = dstToolMapping.toAnnotationSchema(newRawMeasurement, toolName);
         const measurement_uid = dstSrc.annotationToMeasurement(
-          measurement.toolName, dstToolMapping.toAnnotationSchema(newRawMeasurement, measurement.toolName));
+          toolName, dstToolMapping.toAnnotationSchema(newRawMeasurement, toolName));
 
         // Retrieve newly created service measurement, broadcast update, remove source measurement
         const svcMeasurement = measurementApi.measurementService.getMeasurement(measurement_uid);

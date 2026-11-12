@@ -1,5 +1,5 @@
-// Out-of-plane measurements: a Length, Angle or Cobb angle held in the patient domain, with no
-// image. Drawn on a view that is not an acquired image, or read from a report whose points no loaded
+// Out-of-plane measurements: a Length, Angle, Cobb angle or circle held in the patient domain, with
+// no image. Drawn on a view that is not an acquired image, or read from a report whose points no loaded
 // image holds (or whose Drawing-Plane says so), it is a Cornerstone3D-source measurement-service
 // record that holds its patient points:
 //
@@ -16,7 +16,8 @@
 // A drawing becomes one only in a view whose volume is registered as a drawing volume (the 3D
 // Inspector), which names the series it shows.
 
-const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle'];
+// The circle's records carry its Cornerstone3D name (circleGeometry.js); the writer knows it too
+const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI'];
 
 // The tool name the Cornerstone3D annotation of a Cobb angle whose lines lie in no common plane is
 // kept under: no slice tool draws it (no slice view contains it), the 3D display draws it as a Cobb
@@ -89,6 +90,9 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
   const points = ((data.handles && data.handles.points) || []).map(point => Array.from(point, Number));
   const value = Number.isFinite(sourceGeometry.value) ? sourceGeometry.value : undefined;
   const isLength = annotationType === 'Length';
+  // A circle's values (radius, area, perimeter) as read
+  const isCircle = annotationType === 'CircleROI';
+  const values = isCircle ? { cachedStats: { ...(sourceGeometry.values || {}) } } : (isLength ? { length: value } : { rAngle: value });
   const locked = Boolean(metadata.isLocked);
   const record = {
     toolName: annotationType,
@@ -99,8 +103,8 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
     description: toolData.description || annotation.description,
     label: '',
     isLocked: locked,
-    ...(isLength ? { length: value, unit: 'mm' } : { value, unit: 'deg' }),
-    data: { ...(isLength ? { length: value } : { rAngle: value }), displayAttributes: data.displayAttributes },
+    ...(isCircle ? { unit: 'mm' } : isLength ? { length: value, unit: 'mm' } : { value, unit: 'deg' }),
+    data: { ...values, displayAttributes: data.displayAttributes },
     metadata: {
       ...pick(metadata, ['TrackingIdentifier', 'sourceSeries', 'drawingPlane', 'views', 'text', 'location', 'numItems', 'sourceGeometry']),
       outOfPlane: true,

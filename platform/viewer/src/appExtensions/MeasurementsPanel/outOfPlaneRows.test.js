@@ -40,7 +40,8 @@ import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRows } from './out
 
 const LENGTH_TOOL = { id: 'Length', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.length.toFixed(2)} mm` } } };
 const COBB_TOOL = { id: 'CobbAngle', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.rAngle.toFixed(2)}°` } } };
-const TOOLS = [LENGTH_TOOL, COBB_TOOL];
+const CIRCLE_TOOL = { id: 'CircleRoi', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.cachedStats.radius.toFixed(2)} mm` } } };
+const TOOLS = [LENGTH_TOOL, COBB_TOOL, CIRCLE_TOOL];
 // The MPR view of series 2.25.2 (Frame of Reference 2.25.7001)
 const MPR = {
   activeViewportIndex: 0, layout: { viewports: [{ vtk: true }] },
@@ -91,6 +92,20 @@ describe('the rows', () => {
     });
   });
 
+  it('lists a circle (its Cornerstone3D record) with its radius and its area, perimeter and radius detail', () => {
+    mockRecords.set('circle', record('circle', {
+      toolName: 'CircleROI', points: [[12, 0, 0], [12, 3, -4]], length: undefined, unit: 'mm',
+      data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
+    }));
+    const [{ row, toolGroup }] = rowsOf(MPR).pending;
+
+    expect(toolGroup).toBe('allTools');
+    expect(row.data).toEqual([{ displayText: '5.00 mm' }]);
+    expect(row.circleDetail).toEqual([
+      { label: 'Area', value: '78.54 mm²' }, { label: 'Perimeter', value: '31.42 mm' }, { label: 'Radius', value: '5.00 mm' },
+    ]);
+  });
+
   it('marks a measurement whose points lie in no common plane as not planar, and a Length without a Drawing-Plane as planar', () => {
     mockRecords.set('skew', record('skew', {
       toolName: 'CobbAngle', points: [[0, 0, 0], [10, 0, 0], [0, 10, 10], [0, 20, 10]], data: { rAngle: 90 },
@@ -133,6 +148,47 @@ describe('navigation', () => {
     expect(anyAngle).toBe(true);
     close(worldPoint, [12, 15, -20]);
     close(viewPlaneNormal.map(Math.abs), [1, 0, 0]);
+  });
+
+  it('centres a circle on its center, turning a pane onto its Drawing-Plane', () => {
+    mockRecords.set('circle', record('circle', {
+      toolName: 'CircleROI', points: [[12, 0, 0], [12, 3, -4]], data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
+    }));
+    const commandsManager = commands();
+    navigateToOutOfPlane({ measurementData: rowOf('circle'), viewportsState: MPR, commandsManager });
+    const [, target] = commandsManager.runCommand.mock.calls[0];
+    close(target.worldPoint, [12, 0, 0]);
+    close(target.viewPlaneNormal.map(Math.abs), [1, 0, 0]);
+  });
+
+  it.each([['absent', undefined], ['malformed', '1,0,0']])(
+    'turns a pane onto the plane of the ELLIPSE a held circle was read from, its Drawing-Plane %s', (name, drawingPlane) => {
+      mockRecords.set('held', record('held', {
+        toolName: 'CircleROI', points: [[10, 20, 30], [15, 20, 30]], isLocked: true,
+        data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
+        metadata: {
+          isReadOnly: true, drawingPlane, views: ['coronal'],
+          sourceGeometry: { valueType: 'SCOORD3D', graphicType: 'ELLIPSE', graphicData: [5, 20, 30, 15, 20, 30, 10, 20, 25, 10, 20, 35] },
+        },
+      }));
+      const commandsManager = commands();
+      navigateToOutOfPlane({ measurementData: rowOf('held'), viewportsState: MPR, commandsManager });
+      const [, target] = commandsManager.runCommand.mock.calls[0];
+      close(target.worldPoint, [10, 20, 30]);
+      close(target.viewPlaneNormal.map(Math.abs), [0, 1, 0]);
+    });
+
+  it('centres on a circle read from a stock CIRCLE SCOORD3D without turning a pane: its plane is not known', () => {
+    mockRecords.set('legacy', record('legacy', {
+      toolName: 'CircleROI', points: [[10, 20, 30], [15, 20, 30]], isLocked: true,
+      data: { cachedStats: { radius: 5, area: 25 * Math.PI, perimeter: 10 * Math.PI } },
+      metadata: { isReadOnly: true, drawingPlane: undefined, sourceGeometry: { valueType: 'SCOORD3D', graphicType: 'CIRCLE', graphicData: [10, 20, 30, 15, 20, 30] } },
+    }));
+    const commandsManager = commands();
+    navigateToOutOfPlane({ measurementData: rowOf('legacy'), viewportsState: MPR, commandsManager });
+    const [, target] = commandsManager.runCommand.mock.calls[0];
+    close(target.worldPoint, [10, 20, 30]);
+    expect(target.viewPlaneNormal).toBeUndefined();
   });
 
   it('centres on points in no common plane without turning a pane', () => {

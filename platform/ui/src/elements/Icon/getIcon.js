@@ -106,6 +106,7 @@ import youtube from './icons/youtube.svg';
 import gridMulti from './icons/grid-multi.svg';
 import compassDrafting from './icons/compass-regular.svg';
 import cobbAngle from './icons/cobb-angle-tool.svg';
+import circleRadius from './icons/circle-radius-tool.svg';
 
 const ICONS = {
   eye,
@@ -211,6 +212,7 @@ const ICONS = {
   'grid-multi': gridMulti,
   'compass-drafting': compassDrafting,
   'cobb-angle': cobbAngle,
+  'circle-radius': circleRadius,
   microscope,
 };
 

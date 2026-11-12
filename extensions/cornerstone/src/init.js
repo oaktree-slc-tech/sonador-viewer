@@ -13,6 +13,7 @@ import { InputDialog } from '@ohif/ui';
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
 import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
+import CircleRoiTool from './tools/CircleRoiTool';
 import CobbAngleTool from './tools/CobbAngleTool';
 import lockable from './tools/lockableMeasurementTool';
 import initCornerstoneTools from './initCornerstoneTools.js';
@@ -100,6 +101,7 @@ export default function init({ servicesManager, commandsManager, configuration }
       lockable(csTools.LengthTool),
       lockable(csTools.AngleTool),
       lockable(CobbAngleTool),
+      lockable(CircleRoiTool),
       csTools.FreehandRoiTool,
       csTools.EllipticalRoiTool,
       csTools.DragProbeTool,
