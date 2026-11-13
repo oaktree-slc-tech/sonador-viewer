@@ -25,12 +25,13 @@ function Hint({ text, children }) {
 Hint.propTypes = { text: PropTypes.string, children: PropTypes.node };
 
 /**
- * The settings pages' footer: Reset Defaults on the left, Save on the right, and, while the page
- * holds changes the user has not saved, a Cancel beside Save that puts the page back to its saved
- * values. The Cancel follows the settings console's pattern (the Series Tags and Viewer Metadata
- * pages): it appears with the first change and goes with the save or the revert.
+ * The settings pages' footer: Reset Defaults on the left and, on the right, Save and a Cancel that
+ * puts the page back to its saved values. A page that reports `changesPending` shows Save and
+ * Cancel only while it holds changes the user has not saved (the settings console's pattern, as on
+ * the Series Tags and Viewer Metadata pages): they appear with the first change and go with the
+ * save or the revert. A page that does not report it always shows Save, and no Cancel.
  */
-export default function TabFooterNG({ onReset, onSave, onCancel, changesPending = false, hasErrors, resetHint, saveHint, cancelHint }) {
+export default function TabFooterNG({ onReset, onSave, onCancel, changesPending, hasErrors, resetHint, saveHint, cancelHint }) {
   const { t } = useTranslation('UserPreferencesModal');
 
   return (
@@ -48,11 +49,13 @@ export default function TabFooterNG({ onReset, onSave, onCancel, changesPending 
             </button>
           </Hint>
         )}
-        <Hint text={saveHint}>
-          <button type="button" className={styles.save} disabled={hasErrors} onClick={onSave} data-cy="settings-save">
-            {t('Save')}
-          </button>
-        </Hint>
+        {changesPending !== false && (
+          <Hint text={saveHint}>
+            <button type="button" className={styles.save} disabled={hasErrors} onClick={onSave} data-cy="settings-save">
+              {t('Save')}
+            </button>
+          </Hint>
+        )}
       </div>
     </div>
   );
@@ -63,7 +66,8 @@ TabFooterNG.propTypes = {
   onSave: PropTypes.func.isRequired,
   /** Puts the page back to its saved values; shown only while `changesPending` */
   onCancel: PropTypes.func,
-  /** Whether the page holds changes the user has not saved */
+  /** Whether the page holds changes the user has not saved; Save and Cancel follow it. Left
+   *  out, Save is always shown */
   changesPending: PropTypes.bool,
   hasErrors: PropTypes.bool,
   /** Hover text for Reset Defaults: what it resets, and that nothing is saved until Save */

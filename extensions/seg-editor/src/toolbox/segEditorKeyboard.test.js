@@ -1,6 +1,11 @@
 // Segmentation Editor keyboard support: active 2D viewport tracking and editor key bindings
 
-import { attachSegEditorKeyBindings, trackActiveViewport } from './segEditorKeyboard';
+// The comparison the Settings page refuses conflicts by, from its source
+jest.mock('@ohif/core', () => jest.requireActual('@ohif/core/src/utils/keyCombination'), { virtual: true });
+
+import { SEG_EDITOR_HOTKEY_DEFAULTS } from '@ohif/core/src/services/UserPreferencesService/UserPreferencesService';
+
+import { attachSegEditorKeyBindings, keyBindingOf, normalizeKeyCombination, trackActiveViewport } from './segEditorKeyboard';
 import { SEG_EDITOR_COMMAND_CONTEXT } from './constants';
 import {
   clearSegEditorToolContext,
@@ -30,6 +35,9 @@ class FakeTarget {
     return full;
   }
 }
+
+// The bindings the editor starts with: the preference defaults
+const DEFAULT_BINDINGS = Object.values(SEG_EDITOR_HOTKEY_DEFAULTS);
 
 beforeEach(() => {
   clearSegEditorToolContext();
@@ -69,10 +77,10 @@ describe('trackActiveViewport', () => {
 });
 
 describe('attachSegEditorKeyBindings', () => {
-  function setup() {
+  function setup(bindings = DEFAULT_BINDINGS) {
     const target = new FakeTarget();
     const commandsManager = { runCommand: jest.fn() };
-    const detach = attachSegEditorKeyBindings({ commandsManager, target });
+    const detach = attachSegEditorKeyBindings({ commandsManager, target, bindings: () => bindings });
     return { target, commandsManager, detach };
   }
 
@@ -123,6 +131,33 @@ describe('attachSegEditorKeyBindings', () => {
     expect(commandsManager.runCommand).not.toHaveBeenCalled();
   });
 
+  it('follows a change to the bindings without re-attaching', () => {
+    const bindings = [{ commandName: 'nextImage', keys: ['d'] }];
+    const { target, commandsManager } = setup(bindings);
+
+    bindings[0] = { commandName: 'nextImage', keys: ['shift', 'right'] };
+    target.dispatch('keydown', { key: 'd' });
+    target.dispatch('keydown', { key: 'ArrowRight', shiftKey: true });
+
+    expect(commandsManager.runCommand.mock.calls).toEqual([['nextImage', {}, SEG_EDITOR_COMMAND_CONTEXT]]);
+  });
+
+  it('matches a recorded combination: modifiers exactly, shifted symbols by their key', () => {
+    const { target, commandsManager } = setup([
+      { commandName: 'undoSegEditor', keys: ['alt', 'u'] },
+      { commandName: 'redoSegEditor', keys: ['shift', '/'] },
+      { commandName: 'nextImage', keys: ['meta', 'k'] },
+    ]);
+
+    target.dispatch('keydown', { key: 'u' }); // Alt not held
+    target.dispatch('keydown', { key: 'u', altKey: true });
+    target.dispatch('keydown', { key: '?', code: 'Slash', shiftKey: true });
+    target.dispatch('keydown', { key: 'k', ctrlKey: true });
+
+    expect(commandsManager.runCommand.mock.calls.map(([name]) => name))
+      .toEqual(['undoSegEditor', 'redoSegEditor', 'nextImage']);
+  });
+
   it('stops listening when detached', () => {
     const { target, commandsManager, detach } = setup();
 
@@ -130,5 +165,17 @@ describe('attachSegEditorKeyBindings', () => {
     target.dispatch('keydown', { key: 'a' });
 
     expect(commandsManager.runCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('key combinations', () => {
+  it('puts a binding and a keypress in the same form', () => {
+    expect(normalizeKeyCombination(['shift', 'ctrl', 'Z'])).toBe('ctrl+shift+z');
+    expect(normalizeKeyCombination(['meta', 'z'])).toBe('ctrl+z');
+    expect(normalizeKeyCombination(['shift', '+'])).toBe('shift++');
+    expect(keyBindingOf({ key: 'Z', metaKey: true, shiftKey: true })).toBe('ctrl+shift+z');
+    expect(keyBindingOf({ key: ' ' })).toBe('space');
+    expect(keyBindingOf({ key: '!', code: 'Digit1', shiftKey: true })).toBe('shift+1');
+    expect(keyBindingOf({})).toBeNull();
   });
 });

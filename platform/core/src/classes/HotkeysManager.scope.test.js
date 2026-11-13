@@ -92,4 +92,25 @@ describe('HotkeysManager scopes', () => {
     expect(manager.hotkeyDefinitions.invertViewport.keys).toEqual(['x']);
     expect(manager.hotkeyDefinitions.toggleOverlay.keys).toEqual(['shift', 'space']);
   });
+
+  it('binds a set in which one command takes the keys another moves off', () => {
+    manager.setHotkeys([
+      { commandName: 'invertViewport', label: 'Invert', keys: ['i'] },
+      { commandName: 'resetViewport', label: 'Reset', keys: ['space'] },
+    ]);
+    hotkeys.bind.mockClear();
+    hotkeys.unbind.mockClear();
+
+    manager.setHotkeys({
+      invertViewport: { label: 'Invert', keys: ['space'] },
+      resetViewport: { label: 'Reset', keys: ['r'] },
+    });
+
+    // Nothing is unbound once the new keys start to be bound
+    const firstBind = Math.min(...hotkeys.bind.mock.invocationCallOrder);
+    expect(hotkeys.unbind.mock.calls.map(([keys]) => keys).sort()).toEqual(['i', 'space']);
+    expect(Math.max(...hotkeys.unbind.mock.invocationCallOrder)).toBeLessThan(firstBind);
+    expect(hotkeys.bind.mock.calls.map(([keys]) => keys)).toEqual(['space', 'r']);
+    expect(manager.hotkeyDefinitions.invertViewport.keys).toEqual(['space']);
+  });
 });

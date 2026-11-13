@@ -396,7 +396,7 @@
   "Two ways to {{verb}}: write the edits to the slices, or discard them._other": "Two ways to {{verb}}: write the edits to the slices, or discard them.",
   "unbounded extent": "unbounded extent",
   "Undo": "Undo",
-  "Undo the last edit (Ctrl+Z)": "Undo the last edit (Ctrl+Z)",
+  "Undo the last edit": "Undo the last edit",
   "Units": "Units",
   "units": "units",
   "Unknown: import as read, uncalibrated": "Unknown: import as read, uncalibrated",
