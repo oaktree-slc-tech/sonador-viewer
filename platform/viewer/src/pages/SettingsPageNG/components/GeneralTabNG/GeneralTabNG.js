@@ -97,7 +97,7 @@ export default function GeneralTabNG() {
   // The latest authoritative value of each field: what the page opened with, what hydration
   // delivered since (whether or not the field was being edited: the latch protects the draft, not
   // this), or what was last saved. Cancel puts it back, and the fields are compared against it to
-  // know whether changes are pending (the settings console's pattern: Cancel appears with the
+  // know whether changes are pending (the settings console's pattern: Save and Cancel appear with the
   // first change).
   const [baseline, setBaseline] = useState({});
   const rebase = (field, value) => setBaseline(current => ({ ...current, [field]: value }));
@@ -230,7 +230,10 @@ export default function GeneralTabNG() {
     [PREVIEW]: previewColor.toLowerCase(),
     [MESH]: meshColor.toLowerCase(),
   };
-  const changesPending = ALL_FIELDS.some(field => field in baseline && values[field] !== baseline[field]);
+  // A save that did not reach the account leaves Save in the footer, so it can be made again
+  const [saveUnconfirmed, setSaveUnconfirmed] = useState(false);
+  const changesPending =
+    saveUnconfirmed || ALL_FIELDS.some(field => field in baseline && values[field] !== baseline[field]);
 
   // Back to the latest authoritative values, on both tabs (a value hydration delivered while a
   // field was being edited included); the fields are open to hydration again
@@ -243,6 +246,7 @@ export default function GeneralTabNG() {
     setMeshColor(baseline[MESH]);
     latch.reset();
     changed.clear();
+    setSaveUnconfirmed(false);
   };
 
   const onSave = () => {
@@ -293,11 +297,21 @@ export default function GeneralTabNG() {
         [LOCKED]: lockedModelsWarning,
       },
       payload =>
-        saveGeneralSection(payload).then(result => {
-          changed.clear();
-          outcome.onSuccess(result);
-        }, outcome.onError)
-    ).catch(outcome.onUnavailable);
+        saveGeneralSection(payload).then(
+          result => {
+            changed.clear();
+            setSaveUnconfirmed(result?.outcome === 'failed');
+            outcome.onSuccess(result);
+          },
+          error => {
+            setSaveUnconfirmed(true);
+            outcome.onError(error);
+          }
+        )
+    ).catch(error => {
+      setSaveUnconfirmed(true);
+      outcome.onUnavailable(error);
+    });
   };
 
   // Every field on both tabs; nothing is saved until Save
@@ -351,8 +365,8 @@ export default function GeneralTabNG() {
         </TabsNG.Content>
       </TabsNG>
 
-      {/* One footer for both tabs: Save posts the section once, Reset Defaults resets both, and
-          Cancel appears while changes are pending and puts the saved values back */}
+      {/* One footer for both tabs: Reset Defaults resets both, and Save and Cancel appear while
+          changes are pending. Save posts the section once; Cancel puts the saved values back */}
       <TabFooterNG
         onReset={onReset}
         onSave={onSave}

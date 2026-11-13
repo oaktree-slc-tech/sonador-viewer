@@ -249,6 +249,8 @@ describe('Settings Save keeps the hidden language', () => {
       title: 'Could not save general preferences',
       type: 'error',
     }));
+    // Nothing reached the account, so Save stays for another try
+    expect(document.querySelector('[data-cy="settings-save"]')).not.toBeNull();
   });
 
   it('lands two Saves in the order they were made, the newest last, when their reads would finish in reverse', async () => {

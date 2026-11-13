@@ -1224,10 +1224,12 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
         segmentationService: component.props.servicesManager?.services?.segmentationService,
       });
 
-      // Editor key bindings (A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo)
+      // Editor key bindings (by default A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo): the
+      // user's Segmentation Editor hotkeys, read at each keypress so a change applies at once
       if (component.props.commandsManager) {
         component._detachKeyBindings = attachSegEditorKeyBindings({
           commandsManager: component.props.commandsManager,
+          bindings: () => Object.values(OHIF.UserPreferencesService.getSegEditorHotkeys()),
         });
       }
 

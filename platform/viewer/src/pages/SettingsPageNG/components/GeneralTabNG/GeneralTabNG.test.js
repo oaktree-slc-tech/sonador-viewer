@@ -202,8 +202,9 @@ describe('GeneralTabNG', () => {
     expect(byId('seg-editor-mesh-color').disabled).toBe(true);
     // The label points at the kit's switch button, so clicking the text toggles it
     expect(document.querySelector('label[for="seg-editor-mesh-color-auto"]').textContent).toBe('SegEditorMeshColorAutoLabel');
-    // The footer is the page's, shown on both tabs
-    expect(document.querySelector('[data-cy="settings-save"]')).not.toBeNull();
+    // The footer is the page's, shown on both tabs; with nothing changed it offers no Save
+    expect(document.querySelector('[data-cy="settings-reset"]')).not.toBeNull();
+    expect(document.querySelector('[data-cy="settings-save"]')).toBeNull();
   });
 
   it('does not offer the language while the selector is hidden, and offers it when enabled', () => {
@@ -229,13 +230,20 @@ describe('GeneralTabNG', () => {
     expect(tab.textContent).toContain('Deutsch');
   });
 
-  it('shows Cancel only while changes are pending, and Cancel puts the saved values back', async () => {
+  it('shows Save and Cancel only while changes are pending, and Cancel puts the saved values back', async () => {
     mount();
     const cancel = () => document.querySelector('[data-cy="settings-cancel"]');
+    const saveButton = () => document.querySelector('[data-cy="settings-save"]');
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
 
     click(byId('offline-archive-transfer'));
     expect(cancel()).not.toBeNull();
+    expect(saveButton()).not.toBeNull();
+    // Put back by hand, the field is no longer a change
+    click(byId('offline-archive-transfer'));
+    expect(saveButton()).toBeNull();
+    click(byId('offline-archive-transfer'));
     openTab('general-settings-seg-editor');
     click(byId('seg-editor-follow-selection'));
     // Still pending, on the other tab, with the same footer
@@ -243,6 +251,7 @@ describe('GeneralTabNG', () => {
 
     click(cancel());
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     expect(checked(byId('seg-editor-follow-selection'))).toBe(false);
     openTab('general-settings-application');
     expect(checked(byId('offline-archive-transfer'))).toBe(true);
@@ -253,8 +262,10 @@ describe('GeneralTabNG', () => {
     expect(cancel()).not.toBeNull();
     await save();
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     act(() => mockDownloads.listeners.retry({ retryAttempts: 2 }));
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     expect(document.querySelector('input').value).toBe('2');
   });
 
@@ -360,10 +371,6 @@ describe('GeneralTabNG', () => {
       message: 'OfflineArchiveTransferSavedOff LockedModelsWarningSavedOff SegEditorFollowSelectionSavedOn',
       type: 'success',
     }));
-
-    // A second Save with nothing changed since names nothing
-    await save();
-    expect(lastMessage().message).toBe('GeneralSettingsSavedDetail');
   });
 
   it('keeps naming a change until the save goes through', async () => {
@@ -372,8 +379,10 @@ describe('GeneralTabNG', () => {
     mockMutate.mockRejectedValueOnce(new Error('rejected'));
     await save();
     expect(mockNotify).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'error' }));
+    // The save did not reach the account, so Save stays for another try
     await save();
     expect(lastMessage().message).toBe('OfflineArchiveTransferSavedOff');
+    expect(document.querySelector('[data-cy="settings-save"]')).toBeNull();
   });
 
   it('Cancel puts back a value hydration delivered while the field was being edited, and Save keeps it', async () => {

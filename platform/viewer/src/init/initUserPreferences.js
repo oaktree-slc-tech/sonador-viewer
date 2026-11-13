@@ -37,6 +37,13 @@ import {
   startGeneralHydration,
 } from '../lib/generalHydration';
 import { persistGeneralPreferences } from '../lib/generalPreferences';
+import {
+  notifyHotkeysApplied,
+  resetHotkeyHydrationForTests,
+  settleHotkeyHydration,
+  startHotkeyHydration,
+} from '../lib/hotkeyHydration';
+import { splitHotkeyValues } from '../lib/hotkeyPreferences';
 import { applyStoredLanguage, resetLanguagePreferenceForTests } from '../lib/languagePreference';
 import {
   flushPreferenceWrites,
@@ -102,6 +109,12 @@ const applyGeneral = (values) => {
 };
 
 const applyHotkeys = (values) => {
+  // The section carries the application's hotkeys and the Segmentation Editor's own keys
+  // (lib/hotkeyPreferences.js). The editor's go to their holder, which the editor reads; they
+  // must never reach the hotkeys manager, which would bind them as application commands.
+  const { application, segEditor } = splitHotkeyValues(values);
+  UserPreferencesService?.applyHydratedSegEditorHotkeys?.(segEditor);
+
   const hotkeysManager = getHotkeysManager();
   if (!hotkeysManager) {
     return;
@@ -109,14 +122,16 @@ const applyHotkeys = (values) => {
   // Defaults first so a default added since the user last saved still appears; the cloud
   // values then take precedence binding by binding.
   hotkeysManager.setHotkeys(hotkeysManager.hotkeyDefaults);
-  hotkeysManager.setHotkeys(values);
+  hotkeysManager.setHotkeys(application);
   // Cloud values overwrite the local cache on successful load (AR-5) -- the same key
   // _initHotkeys reads before authentication.
   try {
-    localStorage.setItem('hotkey-definitions', JSON.stringify(values));
+    localStorage.setItem('hotkey-definitions', JSON.stringify(application));
   } catch (e) {
     // Cache write is best-effort.
   }
+  // The manager announces nothing itself; a settings form showing the bindings follows this
+  notifyHotkeysApplied();
 };
 
 const applyWindowLevel = (values) => {
@@ -258,6 +273,10 @@ export const initUserPreferences = async () => {
   // a section write made on the user's behalf waits for this (lib/generalPreferences.js).
   startGeneralHydration();
   let generalHydrated = false;
+  // The same for the hotkeys section, which Settings > Hotkeys composes from the bindings in
+  // effect (lib/hotkeyPreferences.js)
+  startHotkeyHydration();
+  let hotkeysHydrated = false;
 
   try {
     startPreferenceWriteQueue();
@@ -292,12 +311,14 @@ export const initUserPreferences = async () => {
       // is stored), safe to write back -- unless a queued write for the section is still
       // waiting, in which case the holders were deliberately left alone and hold neither.
       generalHydrated = !hasPendingPreferenceWrite(PREFERENCE_SECTION_PATHS[PREFERENCE_SECTIONS.GENERAL]);
+      hotkeysHydrated = !hasPendingPreferenceWrite(PREFERENCE_SECTION_PATHS[PREFERENCE_SECTIONS.HOTKEYS]);
     }
   } catch (error) {
     // FR-9: hydration must never block startup or surface an error dialog.
     console.error('User preferences: hydration failed; the locally cached values remain in effect.', error);
   } finally {
     settleGeneralHydration({ hydrated: generalHydrated });
+    settleHotkeyHydration({ hydrated: hotkeysHydrated });
 
     // (4) Save-on-change sync starts against the post-hydration baseline (AR-9) -- also on
     // the failure paths, so changes made while offline queue for later replay.
@@ -308,5 +329,6 @@ export const initUserPreferences = async () => {
 export const resetUserPreferencesInitForTests = () => {
   hydratedForUser = null;
   resetGeneralHydrationForTests();
+  resetHotkeyHydrationForTests();
   resetLanguagePreferenceForTests();
 };
