@@ -12,8 +12,12 @@ module.exports = {
     '^.+\\.(js|ts|tsx)$': 'babel-jest',
   },
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx'],
-  // The DICOM-SR tests load the Cornerstone3D adapters from their ESM build
-  transformIgnorePatterns: ['/node_modules/(?!@cornerstonejs/(dicom-image-loader|adapters)/)'],
+  // DICOM-SR tests load the Cornerstone3D adapters from their ESM build; the seg-editor units
+  // confirmation (Cornerstone3dMetadataProvider.spacing.test.js) runs the real
+  // getPixelSpacingInformation of the pinned @cornerstonejs/core (ESM; its enums import is mocked)
+  transformIgnorePatterns: [
+    '/node_modules/(?!@cornerstonejs/(dicom-image-loader|adapters)/|@cornerstonejs/core/dist/esm/utilities/(getPixelSpacingInformation|isEqual)\\.js)',
+  ],
   moduleNameMapper: {
     ...base.moduleNameMapper,
     '^@cornerstonejs/dicom-image-loader/xhrRequest$':

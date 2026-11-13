@@ -75,4 +75,4 @@ const disallowedValidator = ({ pressedKeys = [] }) => {
 
 const hotkeysValidators = [emptyValidator, modifierValidator, conflictingValidator, disallowedValidator];
 
-export { hotkeysValidators };
+export { disallowedValidator, emptyValidator, hotkeysValidators, modifierValidator };

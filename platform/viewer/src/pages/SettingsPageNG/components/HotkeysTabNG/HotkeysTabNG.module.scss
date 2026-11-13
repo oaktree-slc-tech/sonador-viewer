@@ -1,15 +1,38 @@
 @import '@ohif/sonador-viewer/src/styles/breakpoints';
 
-.content {
-  display: flex;
-  padding: 0 20px;
-  margin-bottom: 30px;
-  column-gap: 50px;
-  justify-content: center;
+// Settings > Hotkeys: the dialog tabs (TabsNG, which styles the strip and the triggers) over a
+// two-column list of bindings per tab.
 
+.tabs {
+  // The header, and its divider, are desktop-only.
   @include lg {
     margin-top: 20px;
   }
+}
+
+// The strip scrolls rather than wraps on a narrow screen
+.tabList {
+  @include xs {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+}
+
+// What the bindings on a tab apply to, above its list
+.help {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 21px;
+  color: #a0a4ad;
+}
+
+.content {
+  display: flex;
+  padding: 15px 20px 0;
+  margin-bottom: 30px;
+  column-gap: 50px;
+  justify-content: center;
 
   @include md {
     flex-direction: column;

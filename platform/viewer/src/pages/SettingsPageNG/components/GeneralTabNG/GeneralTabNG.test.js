@@ -89,22 +89,29 @@ jest.mock('react-i18next', () => ({
     },
   }),
 }));
-// The real composer reads the holders; here the same, over the stand-ins, so the test proves the
-// page sets its values on the services BEFORE composing
+// The real composer resolves a base and reads the holders; here the hydrated holders, over the
+// stand-ins, so the test proves the page sets its values on the services BEFORE composing. The
+// base itself, against delayed and failed hydration and a queued write, is exercised through this
+// page in GeneralTabNG.languagePreservation.test.js.
 jest.mock('../../../../lib/generalPreferences', () => ({
-  composeGeneralPreferenceValues: () => {
+  saveGeneralSettings: async (fields, submit) => {
     const { DownloadManagerService, UserPreferencesService } = jest.requireMock('@ohif/core');
-    return {
-      language: 'de',
-      offlineArchiveTransfer: DownloadManagerService.isArchiveTransferEnabled(),
-      offlineRetryAttempts: DownloadManagerService.getRetryAttempts(),
-      ...UserPreferencesService.getGeneralValues(),
-    };
+    return submit({
+      version: '0.4',
+      values: {
+        language: 'de',
+        offlineArchiveTransfer: DownloadManagerService.isArchiveTransferEnabled(),
+        offlineRetryAttempts: DownloadManagerService.getRetryAttempts(),
+        ...UserPreferencesService.getGeneralValues(),
+        ...fields,
+      },
+    });
   },
 }));
-jest.mock('../../../../queries/preferences', () => ({ useUpdateUserPreferenceSection: () => ({ mutate: mockMutate }) }));
+jest.mock('../../../../queries/preferences', () => ({ useUpdateUserPreferenceSection: () => ({ mutateAsync: mockMutate }) }));
 jest.mock('../../../../store/useDeviceStore', () => ({ useDeviceStore: () => ({ isDesktop: true }) }));
 
+import ApplicationSettingsTab from './ApplicationSettingsTab';
 import GeneralTabNG from './GeneralTabNG';
 
 const { UserPreferencesService: mockPrefs, DownloadManagerService: mockDownloads } = jest.requireMock('@ohif/core');
@@ -140,7 +147,8 @@ function mount() {
 }
 
 beforeEach(() => {
-  mockMutate.mockClear();
+  mockMutate.mockReset();
+  mockMutate.mockResolvedValue({ outcome: 'saved' });
   mockNotify.mockClear();
   mockPrefs.setGeneral.mockClear();
   mockPrefs.values = { ...mockPrefs.GENERAL_DEFAULTS };
@@ -167,12 +175,13 @@ const click = element => act(() => {
 });
 const checked = element => element.getAttribute('data-state') === 'checked';
 const openTab = cy => click(document.querySelector(`[data-cy="${cy}"]`));
-const save = () => click(document.querySelector('[data-cy="settings-save"]'));
-const lastPayload = () => mockMutate.mock.calls[mockMutate.mock.calls.length - 1][0];
-const lastMessage = () => {
-  mockMutate.mock.calls[mockMutate.mock.calls.length - 1][1].onSuccess({ outcome: 'saved' });
-  return mockNotify.mock.calls[mockNotify.mock.calls.length - 1][0];
+// Save composes its payload asynchronously before it posts
+const save = async () => {
+  click(document.querySelector('[data-cy="settings-save"]'));
+  await act(async () => {});
 };
+const lastPayload = () => mockMutate.mock.calls[mockMutate.mock.calls.length - 1][0];
+const lastMessage = () => mockNotify.mock.calls[mockNotify.mock.calls.length - 1][0];
 
 describe('GeneralTabNG', () => {
   it('opens on Application, with the Segmentation Editor rows on the second tab', () => {
@@ -193,17 +202,48 @@ describe('GeneralTabNG', () => {
     expect(byId('seg-editor-mesh-color').disabled).toBe(true);
     // The label points at the kit's switch button, so clicking the text toggles it
     expect(document.querySelector('label[for="seg-editor-mesh-color-auto"]').textContent).toBe('SegEditorMeshColorAutoLabel');
-    // The footer is the page's, shown on both tabs
-    expect(document.querySelector('[data-cy="settings-save"]')).not.toBeNull();
+    // The footer is the page's, shown on both tabs; with nothing changed it offers no Save
+    expect(document.querySelector('[data-cy="settings-reset"]')).not.toBeNull();
+    expect(document.querySelector('[data-cy="settings-save"]')).toBeNull();
   });
 
-  it('shows Cancel only while changes are pending, and Cancel puts the saved values back', () => {
+  it('does not offer the language while the selector is hidden, and offers it when enabled', () => {
+    const host = mount();
+    expect(host.textContent).not.toContain('Language');
+    expect(host.textContent).not.toContain('Deutsch');
+
+    const tab = document.createElement('div');
+    document.body.appendChild(tab);
+    const root = createRoot(tab);
+    act(() => {
+      root.render(
+        <TooltipProvider>
+          <ApplicationSettingsTab
+            archiveTransfer retryAttempts={3} languageSelection
+            onArchiveTransferChange={() => {}} onRetryAttemptsChange={() => {}} onStepRetryAttempts={() => {}}
+          />
+        </TooltipProvider>
+      );
+    });
+    mounted.push({ root, host: tab });
+    expect(tab.textContent).toContain('Language');
+    expect(tab.textContent).toContain('Deutsch');
+  });
+
+  it('shows Save and Cancel only while changes are pending, and Cancel puts the saved values back', async () => {
     mount();
     const cancel = () => document.querySelector('[data-cy="settings-cancel"]');
+    const saveButton = () => document.querySelector('[data-cy="settings-save"]');
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
 
     click(byId('offline-archive-transfer'));
     expect(cancel()).not.toBeNull();
+    expect(saveButton()).not.toBeNull();
+    // Put back by hand, the field is no longer a change
+    click(byId('offline-archive-transfer'));
+    expect(saveButton()).toBeNull();
+    click(byId('offline-archive-transfer'));
     openTab('general-settings-seg-editor');
     click(byId('seg-editor-follow-selection'));
     // Still pending, on the other tab, with the same footer
@@ -211,6 +251,7 @@ describe('GeneralTabNG', () => {
 
     click(cancel());
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     expect(checked(byId('seg-editor-follow-selection'))).toBe(false);
     openTab('general-settings-application');
     expect(checked(byId('offline-archive-transfer'))).toBe(true);
@@ -219,10 +260,12 @@ describe('GeneralTabNG', () => {
     // A change that is saved is no longer pending; a value that merely hydrates is not a change
     click(byId('offline-archive-transfer'));
     expect(cancel()).not.toBeNull();
-    save();
+    await save();
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     act(() => mockDownloads.listeners.retry({ retryAttempts: 2 }));
     expect(cancel()).toBeNull();
+    expect(saveButton()).toBeNull();
     expect(document.querySelector('input').value).toBe('2');
   });
 
@@ -294,13 +337,13 @@ describe('GeneralTabNG', () => {
     expect(mockDownloads.listeners).toEqual({});
   });
 
-  it('Save applies every field to its holder, posts the section once, and names what changed', () => {
+  it('Save applies every field to its holder, posts the section once, and names what changed', async () => {
     mount();
     click(byId('offline-archive-transfer'));
     openTab('general-settings-seg-editor');
     click(byId('seg-editor-follow-selection'));
     click(byId('locked-models-warning'));
-    save();
+    await save();
 
     expect(mockDownloads.setArchiveTransferEnabled).toHaveBeenCalledWith(false);
     expect(mockDownloads.setRetryAttempts).toHaveBeenCalledWith(4);
@@ -328,24 +371,21 @@ describe('GeneralTabNG', () => {
       message: 'OfflineArchiveTransferSavedOff LockedModelsWarningSavedOff SegEditorFollowSelectionSavedOn',
       type: 'success',
     }));
-
-    // A second Save with nothing changed since names nothing
-    save();
-    expect(lastMessage().message).toBe('GeneralSettingsSavedDetail');
   });
 
-  it('keeps naming a change until the save goes through', () => {
+  it('keeps naming a change until the save goes through', async () => {
     mount();
     click(byId('offline-archive-transfer'));
-    save();
-    const [, first] = mockMutate.mock.calls[0];
-    first.onError(new Error('rejected'));
+    mockMutate.mockRejectedValueOnce(new Error('rejected'));
+    await save();
     expect(mockNotify).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'error' }));
-    save();
+    // The save did not reach the account, so Save stays for another try
+    await save();
     expect(lastMessage().message).toBe('OfflineArchiveTransferSavedOff');
+    expect(document.querySelector('[data-cy="settings-save"]')).toBeNull();
   });
 
-  it('Cancel puts back a value hydration delivered while the field was being edited, and Save keeps it', () => {
+  it('Cancel puts back a value hydration delivered while the field was being edited, and Save keeps it', async () => {
     mount();
     openTab('general-settings-seg-editor');
     const warning = byId('locked-models-warning');
@@ -364,12 +404,12 @@ describe('GeneralTabNG', () => {
     // An unrelated change saved afterwards carries the hydrated choice, not the pre-hydration default
     openTab('general-settings-application');
     click(byId('offline-archive-transfer'));
-    save();
+    await save();
     expect(lastPayload().values.warnLockedModelsOnOpenAsSegmentation).toBe(false);
     expect(mockPrefs.setGeneral).toHaveBeenCalledWith(KEYS.LOCKED, false, { persist: false });
   });
 
-  it('names a picked colour and the attempt budget in the save message', () => {
+  it('names a picked colour and the attempt budget in the save message', async () => {
     mockPrefs.values[KEYS.MESH] = '#336699';
     mockPrefs.values[KEYS.PREVIEW] = '#112233';
     mount();
@@ -379,7 +419,7 @@ describe('GeneralTabNG', () => {
     });
     openTab('general-settings-seg-editor');
     click(byId('seg-editor-mesh-color-auto'));
-    save();
+    await save();
     expect(mockDownloads.setRetryAttempts).toHaveBeenCalledWith(5);
     expect(lastPayload().values.offlineRetryAttempts).toBe(5);
     expect(lastMessage().message).toBe('OfflineRetryAttemptsSaved(5) SegEditorMeshColorSavedAuto');

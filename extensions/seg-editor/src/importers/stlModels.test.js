@@ -136,3 +136,28 @@ describe('modelsFromM3DSeries', () => {
       .rejects.toThrow('The series has no models');
   });
 });
+
+describe('modelsFromM3DSeries: encoded units (ohif-viewers#151 FR-5)', () => {
+  it('keeps the unit an instance declares in its Measurement Units Code Sequence, and nothing otherwise', async () => {
+    const displaySet = {
+      SeriesInstanceUID: 'series-2',
+      m3dModelType: 'model/stl',
+      series: {
+        metadata: {
+          A: { ContentDescription: 'In inches', MeasurementUnitsCodeSequence: [{ CodeValue: '[in_i]', CodingSchemeDesignator: 'UCUM' }] },
+          B: { ContentDescription: 'Undeclared' },
+        },
+        colors: {},
+      },
+    };
+    const deps = {
+      listSources: jest.fn(() => [{ sopInstanceUID: 'A', fetchRawData: jest.fn() }, { sopInstanceUID: 'B', fetchRawData: jest.fn() }]),
+      acquire: jest.fn(async () => ({ parsed: geometry([0, 0, 0, 1, 0, 0, 0, 1, 0]) })),
+      release: jest.fn(),
+      getSegmentation: jest.fn(() => undefined),
+    };
+    const { models } = await modelsFromM3DSeries({ displaySet, studies: [], deps });
+    expect(models[0].unit).toMatchObject({ unit: 'in', factor: 25.4 });
+    expect(models[1].unit).toBeUndefined();
+  });
+});

@@ -9,6 +9,7 @@ import {
   SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY as MESH_KEY,
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT as PREVIEW_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY as PREVIEW_KEY,
+  SEG_EDITOR_HOTKEY_DEFAULTS as HOTKEY_DEFAULTS,
   UserPreferencesServiceClass,
   UserPreferencesServiceEvents as EVENTS,
 } from './UserPreferencesService';
@@ -194,5 +195,64 @@ describe('UserPreferencesService: local-only keys (the Seg Editor preview colour
     expect(service.getGeneral(PREVIEW_KEY)).toBe('#010203');
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('UserPreferencesService Segmentation Editor hotkeys', () => {
+  const HOTKEYS_STORED = 'sonador.preferences.segEditorHotkeys';
+  const memoryStorage = (initial = {}) => {
+    const items = { ...initial };
+    return {
+      items,
+      getItem: key => (key in items ? items[key] : null),
+      setItem: (key, value) => {
+        items[key] = String(value);
+      },
+    };
+  };
+  const keysOf = service => Object.fromEntries(Object.entries(service.getSegEditorHotkeys()).map(([id, { keys }]) => [id, keys]));
+  const defaults = Object.fromEntries(Object.entries(HOTKEY_DEFAULTS).map(([id, { keys }]) => [id, [...keys]]));
+
+  it('starts from the defaults, each with its command and label', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage() });
+    expect(keysOf(service)).toEqual(defaults);
+    expect(service.getSegEditorHotkeys().undo).toEqual({ commandName: 'undoSegEditor', label: 'Undo', keys: ['ctrl', 'z'] });
+  });
+
+  it('takes the user\'s bindings, announces them and caches them in the browser', () => {
+    const storage = memoryStorage();
+    const service = new UserPreferencesServiceClass({ storage });
+    const changes = [];
+    service.subscribe(EVENTS.SEG_EDITOR_HOTKEYS_CHANGED, change => changes.push(change));
+
+    service.setSegEditorHotkeys({ ...service.getSegEditorHotkeys(), nextImage: { keys: ['shift', 'right'] } });
+
+    expect(keysOf(service)).toEqual({ ...defaults, nextImage: ['shift', 'right'] });
+    expect(changes).toHaveLength(1);
+    expect(changes[0].hydrated).toBe(false);
+    expect(keysOf(new UserPreferencesServiceClass({ storage }))).toEqual({ ...defaults, nextImage: ['shift', 'right'] });
+    expect(JSON.parse(storage.items[HOTKEYS_STORED]).nextImage).toEqual(['shift', 'right']);
+  });
+
+  it('applies hydrated bindings, reading an absent, unknown or malformed one as the default', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage({ [HOTKEYS_STORED]: '{"undo":["u"]}' }) });
+    expect(keysOf(service).undo).toEqual(['u']);
+
+    service.applyHydratedSegEditorHotkeys({
+      previousImage: { keys: ['q'], label: 'Previous Image' },
+      nextImage: { keys: [] },
+      redo: { keys: 'y' },
+      unknownBinding: { keys: ['x'] },
+    });
+
+    expect(keysOf(service)).toEqual({ ...defaults, previousImage: ['q'] });
+    expect(service.getSegEditorHotkeys()).not.toHaveProperty('unknownBinding');
+  });
+
+  it('keeps the user\'s choice over a hydration that lands afterwards', () => {
+    const service = new UserPreferencesServiceClass({ storage: memoryStorage() });
+    service.setSegEditorHotkeys({ undo: ['u'] });
+    service.applyHydratedSegEditorHotkeys({ undo: { keys: ['ctrl', 'u'] } });
+    expect(keysOf(service).undo).toEqual(['u']);
   });
 });

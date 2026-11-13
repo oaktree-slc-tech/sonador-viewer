@@ -6,10 +6,14 @@ import { cn } from '../../lib/utils';
 
 // Sonador: one thumb per value, so a range (`value={[low, high]}`) can be dragged at both ends.
 // Radix renders thumbs only as the children it is given; a single-value slider keeps its one.
-const Slider = React.forwardRef<
-  React.ElementRef<typeof SliderPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
->(({ className, ...props }, ref) => {
+// `thumbProps` reaches each thumb, the element that takes focus and carries the slider role, so a
+// caller can name and describe it (aria-label, aria-describedby).
+type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
+  thumbProps?: React.ComponentPropsWithoutRef<typeof SliderPrimitive.Thumb>;
+};
+
+const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, SliderProps>(
+  ({ className, thumbProps, ...props }, ref) => {
   const thumbs = Math.max(1, (props.value ?? props.defaultValue ?? [0]).length);
   return (
     <SliderPrimitive.Root
@@ -22,13 +26,15 @@ const Slider = React.forwardRef<
       </SliderPrimitive.Track>
       {Array.from({ length: thumbs }, (_, index) => (
         <SliderPrimitive.Thumb
+          {...thumbProps}
           key={index}
           className="border-background bg-primary focus-visible:ring-ring block h-4 w-4 rounded-full border-2 shadow transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50"
         />
       ))}
     </SliderPrimitive.Root>
   );
-});
+  }
+);
 Slider.displayName = SliderPrimitive.Root.displayName;
 
 

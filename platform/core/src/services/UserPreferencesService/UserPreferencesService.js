@@ -8,6 +8,9 @@
 // section's full key set: a section POST replaces the section wholesale, so a write made from here
 // has to carry the other holders' values too.
 //
+// The service also holds the Segmentation Editor's key bindings, which are part of the `hotkeys`
+// section: the Settings page writes that section, the editor reads the bindings from here.
+//
 // A key the server does not accept yet is LOCAL-ONLY: the server's general-section allowlist
 // (sonador `GeneralPrefForm`) refuses a section carrying an unknown key with a 400, which would
 // fail every General save, not just this key's. A local-only key is therefore left out of the
@@ -22,7 +25,49 @@ const EVENTS = {
   // A general preference held here changed: `{ key, value, hydrated }`. Hydration and user
   // choice both announce, so a form showing the value can follow the startup fetch.
   GENERAL_CHANGED: 'event::userPreferencesService:generalChanged',
+  // The Segmentation Editor's key bindings changed: `{ hotkeys, hydrated }`
+  SEG_EDITOR_HOTKEYS_CHANGED: 'event::userPreferencesService:segEditorHotkeysChanged',
 };
+
+// The Segmentation Editor's own key bindings, which apply only while the editor is open and run
+// commands in its command context. Keyed by binding id (two bindings may run the same command);
+// `keys` is one combination in the hotkey vocabulary the Settings page records: modifiers first
+// (`ctrl`, `alt`, `shift`), then the key. `ctrl` also matches Cmd on macOS.
+export const SEG_EDITOR_HOTKEY_DEFAULTS = Object.freeze({
+  previousImage: Object.freeze({ commandName: 'previousImage', label: 'Previous Image', keys: Object.freeze(['a']) }),
+  nextImage: Object.freeze({ commandName: 'nextImage', label: 'Next Image', keys: Object.freeze(['d']) }),
+  undo: Object.freeze({ commandName: 'undoSegEditor', label: 'Undo', keys: Object.freeze(['ctrl', 'z']) }),
+  redo: Object.freeze({ commandName: 'redoSegEditor', label: 'Redo', keys: Object.freeze(['ctrl', 'y']) }),
+  redoAlternate: Object.freeze({
+    commandName: 'redoSegEditor', label: 'Redo (alternate)', keys: Object.freeze(['ctrl', 'shift', 'z']),
+  }),
+});
+
+// The editor's bindings are stored in the `hotkeys` preference section beside the application's,
+// as `<prefix><binding id>: { keys, label }`: the prefix keeps them apart from an application
+// hotkey for a command of the same name (`nextImage`), and from the hotkeys manager.
+export const SEG_EDITOR_HOTKEY_PREFIX = 'segEditor:';
+
+// Where the editor's bindings are cached in the browser's storage, for a start before (or
+// without) the preference document
+const SEG_EDITOR_HOTKEYS_STORAGE_KEY = 'sonador.preferences.segEditorHotkeys';
+
+function _isKeyCombination(keys) {
+  return Array.isArray(keys) && keys.length > 0 && keys.every(key => typeof key === 'string' && key.length > 0);
+}
+
+// The known bindings with the valid combinations of `source` (`id -> { keys }` or `id -> keys`)
+// laid over the defaults; an unknown id or a malformed combination is ignored
+function _resolveSegEditorHotkeys(source) {
+  const values = source && typeof source === 'object' ? source : {};
+  return Object.fromEntries(
+    Object.entries(SEG_EDITOR_HOTKEY_DEFAULTS).map(([id, definition]) => {
+      const candidate = Array.isArray(values[id]) ? values[id] : values[id]?.keys;
+      const keys = _isKeyCombination(candidate) ? candidate : definition.keys;
+      return [id, { ...definition, keys: [...keys] }];
+    })
+  );
+}
 
 // Open as Segmentation says which locked models it leaves out before the editor opens. The
 // dialog's "don't ask again" turns this off; the Settings page turns it back on.
@@ -112,6 +157,8 @@ class UserPreferencesServiceClass extends PubSubService {
     // override: the preference fetch is asynchronous and can land after the choice was made.
     this._userSet = new Set();
     this._persist = null;
+    this._segEditorHotkeys = _resolveSegEditorHotkeys(this._readLocalSegEditorHotkeys());
+    this._segEditorHotkeysUserSet = false;
   }
 
   create() {
@@ -200,6 +247,65 @@ class UserPreferencesServiceClass extends PubSubService {
    */
   setPersistence(persist) {
     this._persist = typeof persist === 'function' ? persist : null;
+  }
+
+  /**
+   * The Segmentation Editor's key bindings in effect.
+   *
+   * @returns {Object} binding id -> `{ commandName: string, label: string, keys: string[] }`
+   */
+  getSegEditorHotkeys() {
+    return _resolveSegEditorHotkeys(this._segEditorHotkeys);
+  }
+
+  /**
+   * Set the Segmentation Editor's key bindings on the user's behalf. The caller writes the
+   * `hotkeys` preference section; here the bindings take effect and are cached in this browser.
+   *
+   * @input hotkeys (Object): binding id -> `{ keys: string[] }` or `string[]`; a binding left out
+   *   returns to its default
+   */
+  setSegEditorHotkeys(hotkeys) {
+    this._segEditorHotkeysUserSet = true;
+    this._setSegEditorHotkeys(_resolveSegEditorHotkeys(hotkeys), false);
+  }
+
+  /**
+   * Apply the editor's bindings startup hydration read from the `hotkeys` section. Bindings the
+   * user set this session keep their choice; a binding absent from the document is the default.
+   *
+   * @input hotkeys (Object): binding id -> `{ keys: string[] }`
+   */
+  applyHydratedSegEditorHotkeys(hotkeys = {}) {
+    if (this._segEditorHotkeysUserSet) {
+      return;
+    }
+    this._setSegEditorHotkeys(_resolveSegEditorHotkeys(hotkeys), true);
+  }
+
+  _setSegEditorHotkeys(hotkeys, hydrated) {
+    const keysOf = map => JSON.stringify(Object.entries(map).map(([id, { keys }]) => [id, keys]));
+    const changed = keysOf(hotkeys) !== keysOf(this._segEditorHotkeys);
+    this._segEditorHotkeys = hotkeys;
+    try {
+      this._storage?.setItem(
+        SEG_EDITOR_HOTKEYS_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries(Object.entries(hotkeys).map(([id, { keys }]) => [id, keys])))
+      );
+    } catch (error) {
+      console.warn('[UserPreferencesService] Caching the Segmentation Editor hotkeys in this browser failed.', error);
+    }
+    if (changed) {
+      this._broadcastEvent(EVENTS.SEG_EDITOR_HOTKEYS_CHANGED, { hotkeys: this.getSegEditorHotkeys(), hydrated });
+    }
+  }
+
+  _readLocalSegEditorHotkeys() {
+    try {
+      return JSON.parse(this._storage?.getItem(SEG_EDITOR_HOTKEYS_STORAGE_KEY) || 'null');
+    } catch (error) {
+      return null;
+    }
   }
 
   _readLocal(key) {

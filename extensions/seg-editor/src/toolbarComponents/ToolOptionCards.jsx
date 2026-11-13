@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import { OPTION_UNITS } from '../toolbox/constants';
-import { GENERIC_UNIT_HINT, LENGTH_UNITS, useSegEditorUnits } from '../utils/segEditorUnits';
+import { unitHintFor, useSegEditorUnits } from '../utils/segEditorUnits';
 
 import { Card, decimalsOf, RangeSliderRow, SegmentedRow, SliderRow } from './panelControls';
 
@@ -25,14 +25,12 @@ export function clampToRange(option, value) {
  *
  * @param {Object} option - a toolbar option; `unit` is one of OPTION_UNITS
  * @param {{ length: string, intensity: string|null }} units - the reference series' units
+ *   (utils/segEditorUnits; the hint on a generic unit names why the grid is not calibrated)
  * @returns {{ unit?: string, unitHint?: string }}
  */
 export function optionUnit(option, units) {
   if (option.unit === OPTION_UNITS.length) {
-    return {
-      unit: units.length,
-      unitHint: units.length === LENGTH_UNITS.generic ? GENERIC_UNIT_HINT : undefined,
-    };
+    return { unit: units.length, unitHint: unitHintFor(units) };
   }
   if (option.unit === OPTION_UNITS.intensity && units.intensity) {
     return { unit: units.intensity, unitHint: 'Hounsfield units' };

@@ -6,23 +6,29 @@ import {
   effectiveWeldTolerance,
   end3DToolJob,
   get3DEditOptions,
+  get3DLength,
   get3DSmoothOptions,
   get3DToolState,
   handle3DToolRequest,
   is3DSelectionTool,
   is3DTargetEditable,
+  LENGTH_BASIS,
+  lengthBasisFor,
   MAX_CONSTRAINTS,
   PAINT_RADIUS,
+  PAINT_RADIUS_VOXELS,
   REMOVAL_DEPTH,
+  REMOVAL_DEPTH_VOXELS,
   request3DToolAction,
   reset3DToolState,
   set3DPreview,
   set3DSelectionCount,
-  set3DUnsynchronizedEdits,
   set3DSurfaceHealth,
   set3DToolBusy,
   set3DToolOption,
   set3DToolTarget,
+  set3DToolUnits,
+  set3DUnsynchronizedEdits,
   setActive3DTool,
   setRemovalDepth,
   subscribe3DToolState,
@@ -153,6 +159,94 @@ describe('threeDToolState', () => {
     reset3DToolState();
 
     expect(get3DToolState()).toMatchObject({ closure: 'flat', maxConstraints: 8, weldFraction: 0.1, smoothPasses: 3 });
+  });
+
+  describe('length settings per basis (ohif-viewers#151 FR-3)', () => {
+    const MM = { calibration: 'mm', length: 'mm', spacing: [0.5, 0.5, 3] };
+    const UNKNOWN = { calibration: 'unknown', length: 'units', spacing: [1, 1, 2.5] };
+    const NO_SPACING = { calibration: 'unknown', length: 'units', spacing: null };
+
+    it('resolves in world units with no target, and on a calibrated grid with the voxel reading beside', () => {
+      expect(lengthBasisFor(null)).toBe(LENGTH_BASIS.world);
+      expect(get3DLength('removalDepth')).toMatchObject({
+        basis: LENGTH_BASIS.world, settingKey: 'removalDepth', range: REMOVAL_DEPTH,
+        value: REMOVAL_DEPTH.default, world: REMOVAL_DEPTH.default, voxels: null, reference: null,
+      });
+
+      set3DToolUnits(MM);
+      setRemovalDepth(2);
+      set3DToolOption('paintRadius', 1.5);
+      expect(get3DLength('removalDepth')).toMatchObject({ basis: LENGTH_BASIS.world, value: 2, world: 2, voxels: 4, reference: 0.5, spacing: [0.5, 0.5, 3] });
+      expect(get3DLength('paintRadius')).toMatchObject({ basis: LENGTH_BASIS.world, value: 1.5, world: 1.5, voxels: 3 });
+    });
+
+    it('switches to voxel units on an uncalibrated grid, resolving whole steps of the smallest spacing', () => {
+      set3DToolUnits(UNKNOWN);
+      expect(lengthBasisFor(UNKNOWN)).toBe(LENGTH_BASIS.voxels);
+      expect(get3DLength('removalDepth')).toMatchObject({
+        basis: LENGTH_BASIS.voxels, settingKey: 'removalDepthVoxels', range: REMOVAL_DEPTH_VOXELS,
+        value: REMOVAL_DEPTH_VOXELS.default, world: REMOVAL_DEPTH_VOXELS.default * 1, voxels: REMOVAL_DEPTH_VOXELS.default, reference: 1,
+      });
+      // The voxel-unit value is whole, clamped to its own range, and never touches the world value
+      expect(set3DToolOption('removalDepthVoxels', 3.6)).toBe(true);
+      expect(set3DToolOption('paintRadiusVoxels', 100)).toBe(true);
+      expect(get3DToolState()).toMatchObject({ removalDepthVoxels: 4, paintRadiusVoxels: PAINT_RADIUS_VOXELS.max, removalDepth: REMOVAL_DEPTH.default, paintRadius: PAINT_RADIUS.default });
+      expect(get3DLength('removalDepth')).toMatchObject({ value: 4, world: 4 });
+      expect(get3DLength('paintRadius')).toMatchObject({ value: PAINT_RADIUS_VOXELS.max, world: PAINT_RADIUS_VOXELS.max, settingKey: 'paintRadiusVoxels' });
+    });
+
+    it('resolves a voxel-unit length against the grid now published, not the one before it', () => {
+      // The reference volume was replaced under the same id on a coarser grid (ohif-viewers!117)
+      set3DToolUnits({ calibration: 'unknown', length: 'units', spacing: [1, 1, 2] });
+      set3DToolOption('removalDepthVoxels', 4);
+      set3DToolOption('paintRadiusVoxels', 2);
+      expect(get3DLength('removalDepth')).toMatchObject({ value: 4, world: 4, reference: 1 });
+      set3DToolUnits({ calibration: 'unknown', length: 'units', spacing: [3, 3, 6] });
+      expect(get3DLength('removalDepth')).toMatchObject({ value: 4, world: 12, reference: 3, spacing: [3, 3, 6] });
+      expect(get3DLength('paintRadius')).toMatchObject({ value: 2, world: 6 });
+    });
+
+    it('keeps a value per basis, so a number set on one kind of grid is never reread on the other', () => {
+      set3DToolUnits(MM);
+      setRemovalDepth(6);
+      set3DToolUnits(UNKNOWN);
+      set3DToolOption('removalDepthVoxels', 9);
+      expect(get3DLength('removalDepth')).toMatchObject({ basis: LENGTH_BASIS.voxels, value: 9, world: 9 });
+      set3DToolUnits(MM);
+      expect(get3DLength('removalDepth')).toMatchObject({ basis: LENGTH_BASIS.world, value: 6, world: 6, voxels: 12 });
+      // Both survive the editor closing, as the other settings do
+      reset3DToolState();
+      expect(get3DToolState()).toMatchObject({ removalDepth: 6, removalDepthVoxels: 9, units: null });
+      expect(get3DLength('removalDepth')).toMatchObject({ basis: LENGTH_BASIS.world, value: 6 });
+    });
+
+    it('stays in world units on an uncalibrated grid without a usable spacing rather than inventing a voxel unit', () => {
+      set3DToolUnits(NO_SPACING);
+      expect(lengthBasisFor(NO_SPACING)).toBe(LENGTH_BASIS.world);
+      expect(get3DLength('removalDepth')).toMatchObject({ basis: LENGTH_BASIS.world, settingKey: 'removalDepth', world: REMOVAL_DEPTH.default, voxels: null, reference: null });
+      expect(get3DLength('paintRadius')).toMatchObject({ basis: LENGTH_BASIS.world, world: PAINT_RADIUS.default });
+      set3DToolUnits({ calibration: 'unknown', spacing: [1, 0, 1] });
+      expect(get3DLength('removalDepth').basis).toBe(LENGTH_BASIS.world);
+      set3DToolUnits({ calibration: 'unknown', spacing: [2, 2, 'x'] });
+      expect(get3DLength('removalDepth').basis).toBe(LENGTH_BASIS.world);
+      // A record for a grid nobody has read yet (no metadata, no spacing) is the same case
+      set3DToolUnits({ calibration: 'unknown', reason: 'no-metadata', spacing: null });
+      expect(get3DLength('paintRadius')).toMatchObject({ basis: LENGTH_BASIS.world, world: PAINT_RADIUS.default });
+    });
+
+    it('re-derives the lengths only when the units or a length setting change', () => {
+      const seen = [];
+      const unsubscribe = subscribe3DToolState(state => seen.push(state.lengths));
+      set3DToolUnits(MM);
+      const afterUnits = get3DToolState().lengths;
+      set3DToolOption('closure', 'flat');
+      expect(get3DToolState().lengths).toBe(afterUnits);
+      set3DToolUnits(MM);
+      expect(get3DToolState().lengths).toBe(afterUnits);
+      setRemovalDepth(3);
+      expect(get3DToolState().lengths).not.toBe(afterUnits);
+      unsubscribe();
+    });
   });
 
   it('derives the weld from the surface statistics, for the developer tools only', () => {

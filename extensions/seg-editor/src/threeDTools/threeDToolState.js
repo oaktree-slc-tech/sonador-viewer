@@ -24,6 +24,20 @@ export const REMOVAL_DEPTH = { min: 0, max: 20, step: 0.5, default: 2 };
 // in a small neighbourhood; a wider brush is a lasso's job, so the radius stops at 5 and steps finely
 export const PAINT_RADIUS = { min: 0.1, max: 5, step: 0.1, default: 1 };
 
+// On a grid whose calibration is unknown (utils/segEditorUnits: no patient-plane spacing), Depth
+// and Brush size are set in voxel units instead: whole steps of the grid's smallest spacing
+// (ohif-viewers#151 FR-3). Each length keeps a value per basis, so a number set in millimetres on
+// one series is never reread as grid steps on another, and the other way round. The world value
+// the canvas and workers use is derived from the basis in force (`lengths` in the state).
+export const LENGTH_BASIS = {
+  // Patient coordinates: millimetres on a calibrated grid
+  world: 'world',
+  // Whole steps of the grid's smallest spacing
+  voxels: 'voxels',
+};
+export const REMOVAL_DEPTH_VOXELS = { min: 0, max: 40, step: 1, default: 2 };
+export const PAINT_RADIUS_VOXELS = { min: 1, max: 10, step: 1, default: 2 };
+
 // Smooth: the Laplacian step per pass, and the number of passes (ohif-viewers#148, FR-8)
 export const SMOOTH_STRENGTH = { min: 0.1, max: 0.9, step: 0.025, default: 0.5 };
 export const SMOOTH_PASSES = { min: 1, max: 10, step: 1, default: 3 };
@@ -58,12 +72,16 @@ export const MAX_CONSTRAINTS = { min: 4, max: 8, step: 1, default: 8 };
 
 // Selection tool settings kept across editor sessions, with their allowed values
 export const EDIT_SETTINGS = {
+  // The removal depth in world units (LENGTH_BASIS.world), and in voxel units for an uncalibrated
+  // grid (LENGTH_BASIS.voxels); `lengths.removalDepth` says which is in force
   removalDepth: { default: REMOVAL_DEPTH.default, min: REMOVAL_DEPTH.min, max: REMOVAL_DEPTH.max },
+  removalDepthVoxels: { default: REMOVAL_DEPTH_VOXELS.default, min: REMOVAL_DEPTH_VOXELS.min, max: REMOVAL_DEPTH_VOXELS.max, integer: true },
   // The lasso: freehand or a box (LASSO_SHAPES)
   lassoShape: { default: LASSO_SHAPES.lasso, values: Object.values(LASSO_SHAPES) },
-  // The brush: paint or erase (PAINT_MODES), and its radius
+  // The brush: paint or erase (PAINT_MODES), and its radius per basis, as the depth
   paintMode: { default: PAINT_MODES.paint, values: Object.values(PAINT_MODES) },
   paintRadius: { default: PAINT_RADIUS.default, min: PAINT_RADIUS.min, max: PAINT_RADIUS.max },
+  paintRadiusVoxels: { default: PAINT_RADIUS_VOXELS.default, min: PAINT_RADIUS_VOXELS.min, max: PAINT_RADIUS_VOXELS.max, integer: true },
   // The action card shown under the tool (SELECTION_ACTIONS); an edit started elsewhere (Delete,
   // a shortcut) switches it to its own
   action: { default: SELECTION_ACTIONS.remove, values: Object.values(SELECTION_ACTIONS) },
@@ -113,12 +131,71 @@ function _coerceSetting(setting, value) {
   return setting.integer ? Math.round(clamped) : clamped;
 }
 
+// The length settings and their setting key and range per basis
+export const LENGTH_SETTINGS = {
+  removalDepth: {
+    [LENGTH_BASIS.world]: { key: 'removalDepth', range: REMOVAL_DEPTH },
+    [LENGTH_BASIS.voxels]: { key: 'removalDepthVoxels', range: REMOVAL_DEPTH_VOXELS },
+  },
+  paintRadius: {
+    [LENGTH_BASIS.world]: { key: 'paintRadius', range: PAINT_RADIUS },
+    [LENGTH_BASIS.voxels]: { key: 'paintRadiusVoxels', range: PAINT_RADIUS_VOXELS },
+  },
+};
+const LENGTH_KEYS = new Set(['units', ...Object.values(LENGTH_SETTINGS).flatMap(bases => Object.values(bases).map(b => b.key))]);
+
+/** The voxel unit of a units record: the grid's smallest step, or null without a usable spacing. */
+export function voxelUnitOf(units) {
+  const spacing = units?.spacing;
+  if (!Array.isArray(spacing) || spacing.length !== 3) {
+    return null;
+  }
+  const steps = spacing.map(Number);
+  return steps.every(step => Number.isFinite(step) && step > 0) ? Math.min(...steps) : null;
+}
+
+/**
+ * The basis the length settings are set in for a units record (utils/segEditorUnits): voxel units
+ * on a grid whose calibration is unknown and whose steps are known, world units otherwise. A grid
+ * without a usable spacing (no target yet, a volume still loading) stays in world units rather
+ * than in a voxel unit nobody can define: the conversion is refused, not invented
+ * (ohif-viewers#151 FR-3).
+ */
+export function lengthBasisFor(units) {
+  return units?.calibration === 'unknown' && voxelUnitOf(units) !== null ? LENGTH_BASIS.voxels : LENGTH_BASIS.world;
+}
+
+/**
+ * The length settings resolved for a state: for each, the basis in force, the setting key and
+ * range the panel edits, the user's value in that basis, the world value the canvas and workers
+ * use, the same length in voxel units for the secondary readout (null without a usable spacing),
+ * the voxel unit and the grid's steps.
+ */
+function _deriveLengths(state) {
+  const basis = lengthBasisFor(state.units);
+  const reference = voxelUnitOf(state.units);
+  const spacing = state.units?.spacing || null;
+  const resolve = name => {
+    const { key, range } = LENGTH_SETTINGS[name][basis];
+    const value = state[key];
+    const world = basis === LENGTH_BASIS.voxels ? value * reference : value;
+    const voxels = reference ? (basis === LENGTH_BASIS.voxels ? value : value / reference) : null;
+    return { basis, settingKey: key, range, value, world, voxels, reference, spacing };
+  };
+  return Object.fromEntries(Object.keys(LENGTH_SETTINGS).map(name => [name, resolve(name)]));
+}
+
 const INITIAL_STATE = {
   // The active 3D tool (THREE_D_TOOLS), or null
   activeTool: null,
   // The segment the tools act on, published by the canvas: { segmentIndex, label, color } when
   // it can be edited, else { segmentIndex, disabledReason }
   target: null,
+  // The units of the target's grid (utils/segEditorUnits: calibration, its source or the reason it
+  // is unknown, the plane and detector spacings, and the grid's own steps), published with the
+  // target; null while no target. Length settings with a relative basis resolve against it
+  // (ohif-viewers#151)
+  units: null,
   // Selected faces of the target segment's surface, the points they have, and the connected
   // regions they form
   selectionCount: 0,
@@ -155,6 +232,10 @@ const INITIAL_STATE = {
   // Selection tool settings (EDIT_SETTINGS; kept across editor sessions, like the brush radius)
   ...Object.fromEntries(Object.entries(EDIT_SETTINGS).map(([key, setting]) => [key, setting.default])),
 };
+// The length settings resolved against the units (_deriveLengths): { removalDepth, paintRadius },
+// each { basis, settingKey, range, value, world, voxels, reference, spacing, unresolved }. The
+// canvas and workers read `world`; the panel edits `settingKey` over `range`.
+INITIAL_STATE.lengths = _deriveLengths(INITIAL_STATE);
 
 let _state = { ...INITIAL_STATE };
 // The job that owns `busy` (begin3DToolJob), so a stale job cannot clear a newer one's flag
@@ -176,11 +257,20 @@ function _notify() {
 
 function _set(changes) {
   const next = { ..._state, ...changes };
-  if (Object.keys(changes).every(key => Object.is(next[key], _state[key]))) {
+  const keys = Object.keys(changes);
+  if (keys.every(key => Object.is(next[key], _state[key]))) {
     return;
+  }
+  if (keys.some(key => LENGTH_KEYS.has(key))) {
+    next.lengths = _deriveLengths(next);
   }
   _state = next;
   _notify();
+}
+
+/** A length setting resolved for the current state (see `lengths`): 'removalDepth' or 'paintRadius'. */
+export function get3DLength(name, state = _state) {
+  return state.lengths[name];
 }
 
 export function get3DToolState() {
@@ -199,6 +289,13 @@ export function setActive3DTool(toolName) {
 
 export function set3DToolTarget(target) {
   _set({ target: target || null });
+}
+
+/** The units record of the target's grid (utils/segEditorUnits), or null. */
+export function set3DToolUnits(units) {
+  if (_state.units !== (units || null)) {
+    _set({ units: units || null });
+  }
 }
 
 export function set3DSelectionCount(selectionCount, {
@@ -383,6 +480,7 @@ export function reset3DToolState({ settings = false } = {}) {
     });
   }
   _state = { ...INITIAL_STATE, ...kept };
+  _state.lengths = _deriveLengths(_state);
   _busyOwner = null;
   _requestHandlers.clear();
   _notify();
