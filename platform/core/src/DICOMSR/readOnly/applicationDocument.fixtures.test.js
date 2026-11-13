@@ -191,3 +191,38 @@ describe('the synthetic exchange document, read-only', () => {
     ]);
   });
 });
+
+
+describe('the Bidirectional documents of Sonador IO and the stock adapter, read-only', () => {
+  // The synthetic frame 2.25.1003 they reference (origin, axial, 2 mm rows, 0.5 mm columns), Frame of
+  // Reference 2.25.7001
+  const frame = {
+    SOPInstanceUID: '2.25.1003', SOPClassUID: '1.2.840.10008.5.1.4.1.1.4', FrameOfReferenceUID: '2.25.7001',
+    ImagePositionPatient: [0, 0, 0], ImageOrientationPatient: [1, 0, 0, 0, 1, 0], PixelSpacing: [2, 0.5],
+  };
+  const frameDisplaySet = () => ({ displaySetInstanceUID: 'ds-synthetic-frame', SRLabels: [], images: [{ getData: () => ({ metadata: frame }) }] });
+  const frameIds = { sopInstanceUIDToImageId: { '2.25.1003': 'synthetic-frame:1' } };
+
+  [
+    ['sonador-io.bidirectional-image.2026-1113.dcm', 'SCOORD', 'placed'],
+    ['sonador-io.bidirectional-axial.2026-1113.dcm', 'SCOORD3D', 'patientOnly'],
+    ['sonador-io.bidirectional-oblique.2026-1113.dcm', 'SCOORD3D', 'patientOnly'],
+    ['cornerstone-adapters.bidirectional-image.2026-1113.dcm', 'SCOORD', 'placed'],
+    ['cornerstone-adapters.bidirectional-patient.2026-1113.dcm', 'SCOORD3D', 'patientOnly'],
+  ].forEach(([file, valueType, drawn]) => {
+    it(`${file}: draws both axes, labelled Long Axis first`, () => {
+      const document = srDisplaySet(file, true);
+      const [measurement] = document.measurements;
+      expect(measurement.TrackingIdentifier).toMatch(/:Bidirectional$/);
+      expect(measurement.coords.map(coord => [coord.ValueType, coord.GraphicType])).toEqual([[valueType, 'POLYLINE'], [valueType, 'POLYLINE']]);
+
+      const summary = addReadOnlyMeasurements({ srDisplaySets: [document], imageDisplaySets: [frameDisplaySet()], imageIds: frameIds });
+      expect(summary[drawn]).toBe(1);
+      expect(summary.skipped).toBe(0);
+      // Without a description, the NUM labels in document order, the Long Axis first
+      if (!measurement.description) {
+        expect(measurement.labels.map(label => label.label)).toEqual(['Long Axis', 'Short Axis']);
+      }
+    });
+  });
+});
