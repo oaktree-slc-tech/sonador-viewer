@@ -1,5 +1,5 @@
 // The read-only path on the synthetic documents in __fixtures__ (written by the Sonador IO client,
-// their circle group by the script itself, see __fixtures__/scripts): an application document's
+// see __fixtures__/scripts): an application document's
 // measurements are drawn in place from the patient coordinates it holds, on the synthetic CT series
 // (unequal row and column spacing, slices 3 mm apart), and an exchange document's measurements
 // read the same way.
@@ -100,8 +100,8 @@ describe('the synthetic application document, read-only', () => {
       ['cornerstoneTools@^4.0.0:Length', '2.25.31617051'],
       ['cornerstoneTools@^4.0.0:Angle', '2.25.31617052'],
       ['cornerstoneTools@^4.0.0:CobbAngle', '2.25.31617053'],
-      ['cornerstoneTools@^4.0.0:Length', '2.25.31617054'],
       ['cornerstoneTools@^4.0.0:CircleROI', '2.25.31617057'],
+      ['cornerstoneTools@^4.0.0:Length', '2.25.31617054'],
     ]);
     // The primary group: a scalar measurement under the application's own tracking identifier
     expect(measurements[0]).toMatchObject({ TrackingIdentifier: 'Clinical-Report', coords: [] });
@@ -138,8 +138,8 @@ describe('the synthetic application document, read-only', () => {
     const [line] = mockInfo.mock.calls.filter(([message]) => /application document 2\.25\.316170500/.test(message));
     expect(line[1]).toEqual([
       'cornerstoneTools@^4.0.0:Length 2.25.31617051', 'cornerstoneTools@^4.0.0:Angle 2.25.31617052',
-      'cornerstoneTools@^4.0.0:CobbAngle 2.25.31617053', 'cornerstoneTools@^4.0.0:Length 2.25.31617054',
-      'cornerstoneTools@^4.0.0:CircleROI 2.25.31617057',
+      'cornerstoneTools@^4.0.0:CobbAngle 2.25.31617053', 'cornerstoneTools@^4.0.0:CircleROI 2.25.31617057',
+      'cornerstoneTools@^4.0.0:Length 2.25.31617054',
     ]);
     // The Series Tag is shown through its hydrated annotation, not drawn here
     expect(line[3]).toEqual([

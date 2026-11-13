@@ -1,6 +1,6 @@
 // Circle DICOM-SR round trip (circleGeometry.js): the Viewer writer (the classic adapter -> TID 300
 // -> TID 1500 -> properties under the Area NUM), the Cornerstone3D hydration, the documents written
-// by Sonador IO and by the stock Cornerstone3D adapter, and the two Viewer-authored fixtures. The
+// by Sonador IO and by the stock Cornerstone3D adapter, and the three Viewer-authored fixtures. The
 // library adapters are loaded from their ESM build; only @cornerstonejs/core is replaced, by a
 // synthetic study whose image planes are known.
 //
@@ -106,7 +106,7 @@ jest.mock('../measurements/classes', () => ({
 
 import { metaData as c3dMetaData } from '@cornerstonejs/core';
 import { asArray, conceptNameValue, firstItem } from './utils/codedConcept';
-import { patientToImage } from './utils/angleGeometry';
+import { imageToPatient, patientToImage } from './utils/angleGeometry';
 import {
   annotationCircle, circleOfEllipse, circleOutline, circlePlanePoints, circleStatisticItems, circleValues, classicToolName,
   cornerstone3DToolName, ellipseOfCircle, UNKNOWN_QUANTITY,
@@ -127,6 +127,7 @@ const FIXTURES = path.join(__dirname, '__fixtures__');
 // The Viewer-authored circles, and the circles written by Sonador IO and by the stock adapter
 const VIEWER_CIRCLE_IMAGE = path.join(FIXTURES, 'sonador-viewer.circle-image.2026-1111.dcm');
 const VIEWER_CIRCLE_OBLIQUE = path.join(FIXTURES, 'sonador-viewer.circle-oblique.2026-1111.dcm');
+const VIEWER_CIRCLE_STATISTICS = path.join(FIXTURES, 'sonador-viewer.circle-statistics.2026-1113.dcm');
 const fixture = name => readSR(fs.readFileSync(path.join(FIXTURES, name)));
 
 const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
@@ -666,6 +667,8 @@ describe('Python-written circles (Sonador IO)', () => {
       radius: 8, center: [10, 20, 30], edge: [10 + 16 / SQRT6, 20 - 8 / SQRT6, 30 - 8 / SQRT6], outOfPlane: true,
     },
     'sonador-io.circle-three-point.2026-1111.dcm': { radius: Math.sqrt(50), center: [5, 5, 0], outOfPlane: true },
+    'sonador-io.circle-statistics-ct.2026-1112.dcm': { radius: 5, center: [10, 20, 30], edge: [15, 20, 30], outOfPlane: true },
+    'sonador-io.circle-statistics-stock.2026-1112.dcm': { radius: 5 },
   };
 
   Object.entries(EXPECTED).forEach(([name, expected]) => {
@@ -800,6 +803,35 @@ describe('pixel statistics (Mean, Standard Deviation, Maximum)', () => {
     tool.handles.end = { x: 28.5, y: 20.5 };
     const [group] = measurementGroups(readSR(write({ [CIRCLE]: [tool] }, { document: reSaveOf(dataset), series: CT_SERIES }).result));
     expect(statisticsOf(group).map(line => line[5])).toEqual([52, 9, 140]);
+  });
+
+  // The statistics of the client's fixtures, and what an unchanged re-save writes for them: the
+  // quantity form, whatever form was read
+  const CLIENT_STATISTICS = { mean: 40.5, stdDev: 12.25, max: 97, modalityUnit: 'HU', statisticsModality: 'CT' };
+  const CLIENT_WRITTEN = [
+    ['112031', 'DCM', "[hnsf'U]", '121401', '373098007', 40.5],
+    ['112031', 'DCM', "[hnsf'U]", '121401', '386136009', 12.25],
+    ['112031', 'DCM', "[hnsf'U]", '121401', '56851009', 97],
+  ];
+
+  it('reads the quantity-form statistics of sonador-io.circle-statistics-ct and holds them on the out-of-plane record', () => {
+    const [state] = hydrate(fixture('sonador-io.circle-statistics-ct.2026-1112.dcm')).byType.CircleROI;
+    expect(state.annotation.metadata.outOfPlane).toBe(true);
+    expect(_.pick(state.annotation.data.recordValue.values, _.keys(CLIENT_STATISTICS))).toEqual(CLIENT_STATISTICS);
+    const record = heldOutOfPlaneRecord('CircleROI', state, SYNTHETIC.StudyInstanceUID);
+    expect(record.data.cachedStats).toMatchObject(CLIENT_STATISTICS);
+  });
+
+  it('reads the stock-form statistics of sonador-io.circle-statistics-stock and writes them back in the quantity form', () => {
+    const dataset = fixture('sonador-io.circle-statistics-stock.2026-1112.dcm');
+    const [state] = hydrate(dataset).byType.CircleROI;
+    expect(_.pick(statsOf(state), _.keys(CLIENT_STATISTICS))).toEqual(CLIENT_STATISTICS);
+    const [group] = measurementGroups(readSR(write({ [CIRCLE]: [toClassicTool(CIRCLE, state)] }, {
+      series: CT_SERIES, document: reSaveOf(dataset),
+    }).result));
+    expect(valuesOf(group).slice(0, 3)).toEqual(valuesOf(measurementGroups(dataset)[0]).slice(0, 3));
+    expect(statisticsOf(group)).toEqual(CLIENT_WRITTEN);
+    expect(trackingUIDOf(group)).toBe(trackingUIDOf(measurementGroups(dataset)[0]));
   });
 
   it('reads the stock Cornerstone3D form: a NUM named by the statistic itself', () => {
@@ -1006,6 +1038,77 @@ describe('Viewer-authored fixtures on the synthetic axial series', () => {
     const rewritten = { [CIRCLE]: [{ ...toClassicTool(CIRCLE, state), _id: 'circle-image' }] };
     const bytes = write(rewritten, { imageId: slice.imageId, series: CT_SERIES, headers: HEADERS, document: reSaveOf(dataset) }).result;
     expect(bytes.equals(fs.readFileSync(VIEWER_CIRCLE_IMAGE))).toBe(true);
+  });
+
+  // The statistics circle on the same slice: center (0, 0, 9), edge 5 columns (6 mm) along +x,
+  // inside the phantom's 400 HU cylinder (radius 15 mm around the z axis), so every pixel it holds
+  // is 400 HU. Image points that SCOORD (float32) holds exactly, and values whose DS text reads
+  // back as written.
+  const STATISTICS_RADIUS = 6;
+  const statisticsCenter = [32.5, 24.5];
+  const statisticsEdge = [37.5, 24.5];
+  const patientPointOf = point => imageToPatient(mockImagePlanes[slice.imageId], point);
+  const STATISTICS = { mean: 400, stdDev: 0, max: 400, modalityUnit: 'HU' };
+  const STATISTICS_TOOLS = { [CIRCLE]: [classicTool(CIRCLE, [statisticsCenter, statisticsEdge], {
+    _id: 'circle-statistics', description: 'Circle (statistics)', cachedStats: STATISTICS,
+  })] };
+  const writeStatistics = (tools, options) => write(tools, {
+    imageId: slice.imageId, series: { ...CT_SERIES, modality: 'CT' }, headers: HEADERS, ...options,
+  }).result;
+
+  it('sonador-viewer.circle-statistics is the Viewer writer output, byte for byte: Mean, Std dev and Max in the quantity form', () => {
+    const bytes = writeStatistics(STATISTICS_TOOLS);
+    if (process.env.UPDATE_SR_FIXTURES) {
+      fs.writeFileSync(VIEWER_CIRCLE_STATISTICS, bytes);
+    }
+    expect(bytes.equals(fs.readFileSync(VIEWER_CIRCLE_STATISTICS))).toBe(true);
+
+    const [group] = measurementGroups(readSR(bytes));
+    expect(trackingIdentifierOf(group)).toBe(TRACKING_IDENTIFIER);
+    const nums = numsOf(group);
+    expect(nums.map(num => firstItem(num.ConceptNameCodeSequence).CodeValue))
+      .toEqual(['42798000', '131191004', '131190003', '112031', '112031', '112031']);
+    expectPoint(patientPointOf(statisticsCenter), [0, 0, 9], 9);
+    expectPoint(patientPointOf(statisticsEdge), [STATISTICS_RADIUS, 0, 9], 9);
+    expectValues(_.zipObject(['area', 'perimeter', 'radius'], valuesOf(group)), STATISTICS_RADIUS, 6);
+    nums.slice(3).forEach((num, i) => {
+      const measured = firstItem(num.MeasuredValueSequence);
+      expect(firstItem(measured.MeasurementUnitsCodeSequence)).toMatchObject({ CodeValue: "[hnsf'U]", CodingSchemeDesignator: 'UCUM' });
+      const modifier = asArray(num.ContentSequence).find(item => item.RelationshipType === 'HAS CONCEPT MOD');
+      expect(firstItem(modifier.ConceptNameCodeSequence)).toMatchObject({ CodeValue: '121401', CodingSchemeDesignator: 'DCM' });
+      expect(firstItem(modifier.ConceptCodeSequence).CodeValue).toBe(['373098007', '386136009', '56851009'][i]);
+      expect(Number(measured.NumericValue)).toBe([400, 0, 400][i]);
+    });
+    // Each NUM is inferred from its own copy of the SCOORD CIRCLE on the slice
+    nums.forEach(num => expect(geometryOf(num)).toMatchObject({ ValueType: 'SCOORD', GraphicType: 'CIRCLE' }));
+    expect(new Set(nums.map(geometryOf)).size).toBe(nums.length);
+    nums.forEach(num => expect(pointsOfItem(geometryOf(num))).toEqual([statisticsCenter, statisticsEdge]));
+  });
+
+  it("sonador-viewer.circle-statistics holds the statistics of the slice's pixels inside the circle", () => {
+    // Pixel (i, j) lies at x = x0 + i * column spacing, y = y0 + j * row spacing
+    const ct = slices[3];
+    const hu = Array.from(new Int16Array(ct.PixelData[0]), value => value * Number(ct.RescaleSlope) + Number(ct.RescaleIntercept));
+    const [x0, y0] = ct.ImagePositionPatient.map(Number);
+    const [rowSpacing, columnSpacing] = ct.PixelSpacing.map(Number);
+    const inside = [];
+    _.range(ct.Rows).forEach(j => _.range(ct.Columns).forEach((i) => {
+      if (Math.hypot(x0 + i * columnSpacing, y0 + j * rowSpacing) <= STATISTICS_RADIUS) {
+        inside.push(hu[j * ct.Columns + i]);
+      }
+    }));
+    expect(inside.length).toBeGreaterThan(100);
+    expect(_.uniq(inside)).toEqual([STATISTICS.mean]);
+  });
+
+  it('sonador-viewer.circle-statistics writes -> parses -> writes to the same bytes', () => {
+    const dataset = readSR(fs.readFileSync(VIEWER_CIRCLE_STATISTICS));
+    const [state] = hydrate(dataset, CT).byType.CircleROI;
+    expect(_.pick(statsOf(state), ['mean', 'stdDev', 'max', 'modalityUnit', 'statisticsModality']))
+      .toEqual({ ...STATISTICS, statisticsModality: 'CT' });
+    const rewritten = { [CIRCLE]: [{ ...toClassicTool(CIRCLE, state), _id: 'circle-statistics' }] };
+    const bytes = writeStatistics(rewritten, { document: reSaveOf(dataset) });
+    expect(bytes.equals(fs.readFileSync(VIEWER_CIRCLE_STATISTICS))).toBe(true);
   });
 
   it('sonador-viewer.circle-oblique is the Viewer writer output, byte for byte: an ELLIPSE on the 45-degree plane', () => {
