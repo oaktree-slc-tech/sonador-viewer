@@ -85,6 +85,7 @@ import { terminateHoleFillingWorker } from '../threeDTools/registerHoleFillingWo
 import { terminateLabelmapCarveWorker } from '../threeDTools/registerLabelmapCarveWorker';
 import { cancelSurfaceEditWrites, pendingSurfaceEditWrites } from '../threeDTools/surfaceEdits';
 import { resetSyncLedger } from '../threeDTools/syncLedger';
+import { resetImportProvenance, watchSegmentProvenance } from '../utils/importProvenance';
 import { registerSegEditorToolbar } from '../toolbox/registerSegEditorToolbar';
 
 const { ViewportType, Events: c3dEvents } = c3dEnums;
@@ -1219,11 +1220,19 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
       component._untrackHistory = trackSegEditorHistory();
       clearSegEditorHistory();
       resetSyncLedger();
+      resetImportProvenance();
+      // Import provenance follows its segments through removal, Undo and Redo
+      component._unwatchProvenance?.();
+      component._unwatchProvenance = watchSegmentProvenance({
+        segmentationService: component.props.servicesManager?.services?.segmentationService,
+      });
 
-      // Editor key bindings (A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo)
+      // Editor key bindings (by default A / D image scrolling, Ctrl/Cmd+Z / Y undo and redo): the
+      // user's Segmentation Editor hotkeys, read at each keypress so a change applies at once
       if (component.props.commandsManager) {
         component._detachKeyBindings = attachSegEditorKeyBindings({
           commandsManager: component.props.commandsManager,
+          bindings: () => Object.values(OHIF.UserPreferencesService.getSegEditorHotkeys()),
         });
       }
 
@@ -1928,6 +1937,9 @@ class Cornerstone3DSegmentationViewerBaseViewport extends Cornerstone3DLabelmapB
     // Recorded edits reference this session's labelmaps: they must not be replayable in the next
     clearSegEditorHistory();
     resetSyncLedger();
+    resetImportProvenance();
+    component._unwatchProvenance?.();
+    component._unwatchProvenance = undefined;
     component._untrackHistory?.();
     component._untrackHistory = undefined;
     component._detachKeyBindings?.();

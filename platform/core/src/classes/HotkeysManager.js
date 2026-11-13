@@ -75,6 +75,17 @@ export class HotkeysManager {
     try {
       const definitions = this._getValidDefinitions(hotkeyDefinitions);
 
+      // Every command being set gives up its current keys before any is bound: bound one at a
+      // time, a command taking over the keys another is moving off would lose them again when
+      // that other command unbinds its old keys.
+      definitions.forEach(({ commandName }) => {
+        const previous = this.hotkeyDefinitions[commandName];
+        if (previous) {
+          this._unbindHotkeys(commandName, previous.keys);
+          this.hotkeyDefinitions[commandName] = { ...previous, keys: undefined };
+        }
+      });
+
       definitions.forEach((definition) => this.registerHotkeys(definition));
     } catch (error) {
       const { UINotificationService, LoggerService } = this._servicesManager.services;

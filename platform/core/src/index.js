@@ -7,6 +7,7 @@ import redux from './redux/';
 import studies from './studies/';
 import utils, { hotkeys } from './utils/';
 import str2ab from './utils/str2ab';
+import { canonicalKeyCombination } from './utils/keyCombination';
 import cornerstone from './cornerstone.js';
 import DICOMSR from './DICOMSR';
 import DICOMWeb from './DICOMWeb';
@@ -59,6 +60,9 @@ import {
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
   SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  SEG_EDITOR_HOTKEY_DEFAULTS,
+  SEG_EDITOR_HOTKEY_PREFIX,
+  canonicalKeyCombination,
   SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
   ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT,
   ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY,
@@ -267,6 +271,9 @@ export {
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
   SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  SEG_EDITOR_HOTKEY_DEFAULTS,
+  SEG_EDITOR_HOTKEY_PREFIX,
+  canonicalKeyCombination,
   SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
   ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT,
   ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY,

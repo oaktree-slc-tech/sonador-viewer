@@ -249,7 +249,7 @@ export function WholeSurfaceStatus() {
       {state.lastEdit && !state.preview && (
         <div className="text-muted-foreground flex items-center justify-between gap-2 px-2 text-xs" data-cy="seg-editor-last-edit">
           <span className="min-w-0 flex-1 leading-snug">{t('Last edit: {{summary}}', { summary: editSummary(t, state.lastEdit) })}</span>
-          <Tip text={t('Undo')} detail={t('Undo the last edit (Ctrl+Z)')}>
+          <Tip text={t('Undo')} detail={t('Undo the last edit')}>
             <Button variant="ghost" size="icon" className="flex-none" aria-label={t('Undo')} onClick={undo} data-cy="seg-editor-undo-last-edit">
               <Icons.Undo className="h-4 w-4" />
             </Button>

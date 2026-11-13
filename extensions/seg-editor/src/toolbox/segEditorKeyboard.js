@@ -7,32 +7,82 @@
 //   in its own context, so the configured Up / Down keys scroll the editor's active 2D viewport.
 // - Editor keys: bindings that only apply while the editor is open, such as A / D for scrolling,
 //   so a hand can stay on the keyboard while the other works the mouse, and Ctrl/Cmd+Z / Y for
-//   undo / redo. They run commands in the editor's command context.
+//   undo / redo. They run commands in the editor's command context. The bindings are the user's
+//   Segmentation Editor hotkey preferences (UserPreferencesService, edited under Settings >
+//   Hotkeys), handed in by the layout.
+
+import { canonicalKeyCombination } from '@ohif/core';
 
 import { SEG_EDITOR_COMMAND_CONTEXT } from './constants';
 import { setSegEditorActiveViewport } from './segEditorToolContext';
 
 
-// Editor-only key bindings. `keys` are KeyboardEvent.key values (letters in lower case), with a
-// `mod+` prefix for Ctrl (Cmd on macOS) and `shift+` for Shift held with it. A key without `mod+`
-// only matches when neither Ctrl/Cmd nor Alt is held.
-export const SEG_EDITOR_KEY_BINDINGS = [
-  { commandName: 'previousImage', keys: ['a'], label: 'Previous Image' },
-  { commandName: 'nextImage', keys: ['d'], label: 'Next Image' },
-  { commandName: 'undoSegEditor', keys: ['mod+z'], label: 'Undo' },
-  { commandName: 'redoSegEditor', keys: ['mod+y', 'mod+shift+z'], label: 'Redo' },
-];
+// The hotkey vocabulary's names for the keys KeyboardEvent.key spells differently
+const KEY_NAMES = {
+  ' ': 'space',
+  arrowdown: 'down',
+  arrowleft: 'left',
+  arrowright: 'right',
+  arrowup: 'up',
+  delete: 'del',
+  escape: 'esc',
+  insert: 'ins',
+};
 
-/** The binding key of a keydown ('a', 'mod+z', 'mod+shift+z'), or null with Alt held */
+// The unshifted character of the keys whose KeyboardEvent.key changes with Shift held, by
+// KeyboardEvent.code: a recorded combination names the key itself (`shift+/`, not `?`)
+const CODE_CHARACTERS = {
+  Backquote: '`', Backslash: '\\', BracketLeft: '[', BracketRight: ']', Comma: ',', Equal: '=', Minus: '-',
+  Period: '.', Quote: "'", Semicolon: ';', Slash: '/',
+};
+
+const MODIFIERS = ['ctrl', 'alt', 'shift'];
+
+function _combination(modifiers, key) {
+  return [...MODIFIERS.filter(modifier => modifiers.has(modifier)), key].join('+');
+}
+
+/**
+ * The canonical form of a binding's key combination, for comparison with `keyBindingOf`. The
+ * Settings page refuses conflicting bindings by the same form.
+ *
+ * @input keys (string[]): one combination in the hotkey vocabulary, e.g. `['ctrl', 'shift', 'z']`
+ * @returns (string): e.g. `ctrl+shift+z`; Cmd counts as `ctrl`
+ */
+export function normalizeKeyCombination(keys = []) {
+  return canonicalKeyCombination(keys, { ctrlMatchesMeta: true });
+}
+
+/**
+ * The key combination of a keydown in canonical form (`a`, `ctrl+z`, `ctrl+shift+z`, `up`).
+ *
+ * @input event (KeyboardEvent)
+ * @returns (string|null): null for an event without a key
+ */
 export function keyBindingOf(event) {
-  if (event.altKey || !event.key) {
+  if (!event.key) {
     return null;
   }
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  const modifiers = new Set();
   if (event.ctrlKey || event.metaKey) {
-    return `mod+${event.shiftKey ? 'shift+' : ''}${key}`;
+    modifiers.add('ctrl');
   }
-  return key;
+  if (event.altKey) {
+    modifiers.add('alt');
+  }
+  if (event.shiftKey) {
+    modifiers.add('shift');
+  }
+
+  const digit = /^(?:Digit|Numpad)(\d)$/.exec(event.code || '');
+  const lower = event.key.toLowerCase();
+  let key = KEY_NAMES[lower] || lower;
+  if (event.shiftKey && digit) {
+    key = digit[1];
+  } else if (event.shiftKey && CODE_CHARACTERS[event.code]) {
+    key = CODE_CHARACTERS[event.code];
+  }
+  return _combination(modifiers, key);
 }
 
 /**
@@ -58,23 +108,26 @@ function _isTextInput(target) {
 /**
  * Listen for the editor's key bindings.
  *
- * @param {Object} params
- * @param {Object} params.commandsManager
- * @param {Object[]} [params.bindings]
- * @param {EventTarget} [params.target] - receives the key events (default: window)
- * @returns {Function} detach
+ * @input commandsManager (Object)
+ * @input bindings (Object[] | function(): Object[]): `{ commandName: string, keys: string[] }`
+ *   entries, `keys` one combination each; a function is read at every keypress, so a change to the
+ *   user's bindings applies without re-attaching
+ * @input target (EventTarget): receives the key events (default: window)
+ * @returns (Function): detach
  */
-export function attachSegEditorKeyBindings({
-  commandsManager, bindings = SEG_EDITOR_KEY_BINDINGS, target = window,
-}) {
-  const commandForKey = new Map();
-  bindings.forEach(({ commandName, keys }) => keys.forEach(key => commandForKey.set(key, commandName)));
+export function attachSegEditorKeyBindings({ commandsManager, bindings = [], target = window }) {
+  const commandFor = combination => {
+    const current = typeof bindings === 'function' ? bindings() : bindings;
+    const match = (current || []).find(({ keys }) => normalizeKeyCombination(keys) === combination);
+    return match && match.commandName;
+  };
 
   const onKeyDown = event => {
     if (event.defaultPrevented || _isTextInput(event.target)) {
       return;
     }
-    const commandName = commandForKey.get(keyBindingOf(event));
+    const combination = keyBindingOf(event);
+    const commandName = combination && commandFor(combination);
     if (commandName) {
       event.preventDefault();
       commandsManager.runCommand(commandName, {}, SEG_EDITOR_COMMAND_CONTEXT);

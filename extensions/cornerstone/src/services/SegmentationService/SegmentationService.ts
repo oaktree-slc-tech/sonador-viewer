@@ -1066,9 +1066,13 @@ class SegmentationService extends PubSubService {
     };
 
     const service = this;
-    const memo: csTypes.Memo = {
+    // Sonador: the memo names its segment, so that what is kept beside a segment (the Seg
+    // Editor's import provenance) can follow it through Undo and Redo
+    const memo: csTypes.Memo & { segmentationId: string; segmentIndex: number } = {
       id: csUtils.uuidv4(),
       operationType: 'segmentIndex',
+      segmentationId,
+      segmentIndex,
       restoreMemo(undo?: boolean) {
         if (undo === true) {
           service.addSegment(segmentationId, segmentState);

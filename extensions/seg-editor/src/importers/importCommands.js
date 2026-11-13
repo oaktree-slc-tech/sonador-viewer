@@ -9,19 +9,23 @@
 // Each source becomes an import payload (importers/*) that importIntoSegmentation numbers and
 // writes; what was added, and what was empty or overlapped, is reported through the
 // notification service. A failure is logged and shown, and leaves the segmentation as it was.
-// STL files carry no unit: a model that does not look like millimetres against the image is
-// offered for rescaling before it is placed (stlScale.js). The check needs an image calibrated in
-// millimetres; on one without pixel spacing the grid's steps say nothing about a model's unit.
+// STL files carry no unit: the user declares the unit the models were saved in, with nothing
+// pre-selected, or imports them as read (ohif-viewers#151 FR-5). A unit encoded by the source (an
+// M3D series) is kept. A declared unit converts to millimetres once, on an image calibrated in
+// them; on one without pixel spacing the models go in as read, in the grid's units. Each added
+// segment's provenance is recorded (utils/importProvenance.js) and stated in the report.
 
 import OHIF from '@ohif/core';
 import { isSTLDisplaySet, setActionStatus } from '@ohif/extension-viewerm3d';
 import i18n from '@ohif/i18n';
 
 import { callConfirmDialog } from '../components/confirmDialog';
+import { callStlUnitsDialog } from '../components/stlUnitsDialog';
 import { volumeAxes } from '../threeDTools/labelmapCarve.js';
 import { getLabelmapForEdit } from '../threeDTools/segmentEdits.js';
 import { request3DToolAction } from '../threeDTools/threeDToolState';
 import { getSegEditorToolContext } from '../toolbox/segEditorToolContext';
+import { PROVENANCE_ORIGIN, recordSegmentProvenance } from '../utils/importProvenance';
 import { getSegEditorUnits, LENGTH_UNITS } from '../utils/segEditorUnits';
 
 import { createStudyFrameResolver, parseDicomSeg } from './dicomSeg.js';
@@ -30,7 +34,7 @@ import { parseNifti } from './nifti.js';
 import { parseNrrd } from './nrrd.js';
 import { pickLocalFiles } from './pickLocalFiles.js';
 import { modelsFromM3DSeries, modelsFromStlFiles } from './stlModels.js';
-import { modelsNeedingRescale, rescaleModel } from './stlScale.js';
+import { modelsNeedingRescale, rescaleModel, STL_UNIT_BY_CODE, STL_UNITS } from './stlScale.js';
 
 
 const { DisplaySetApi } = OHIF.display;
@@ -57,18 +61,26 @@ export function volumeFileKind(fileName) {
   return undefined;
 }
 
+// The declaration that a model's unit is unknown: imported as read, nothing physical claimed
+export const AS_READ = 'as-read';
+
 /** Whether a series can be added to a segmentation: STL models, or a DICOM SEG */
 export function isImportableSeries(displaySet) {
   return !!displaySet && (displaySet.Modality === 'SEG' || isSTLDisplaySet(displaySet));
 }
 
 /** 'x 10 to 20, y 0 to 5, z -3 to 3 mm' */
-export function formatBounds(bounds) {
+/**
+ * Bounds for a message, rounded, followed by the unit they are in: 'mm' on an image calibrated in
+ * millimetres, the grid's units on one that is not, or the name of an unknown model unit.
+ */
+export function formatBounds(bounds, unit = 'mm') {
   if (!bounds) {
     return '-';
   }
-  const mm = value => Math.round(value);
-  return ['x', 'y', 'z'].map((axis, d) => `${axis} ${mm(bounds.min[d])} to ${mm(bounds.max[d])}`).join(', ') + ' mm';
+  const round = value => Math.round(value);
+  const axes = ['x', 'y', 'z'].map((axis, d) => `${axis} ${round(bounds.min[d])} to ${round(bounds.max[d])}`).join(', ');
+  return unit ? `${axes} ${unit}` : axes;
 }
 
 /** A length for a message: three significant figures, without trailing zeros ('0.3', '1200'). */
@@ -123,15 +135,21 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
     isImportable = isImportableSeries,
     // What the import is doing, shown over the editor's 3D view (keyed by the working segmentation)
     setStatus = setActionStatus,
-    // The image grid's bounds, which an STL model's scale is judged against, and the units they
-    // are in (the check runs only on a grid calibrated in millimetres)
+    // The image grid's bounds, which a model's scale is compared against, and the units they are
+    // in (a declared unit converts to millimetres only on a grid calibrated in them)
     getImageBounds = _imageBounds,
     getUnits = getSegEditorUnits,
-    // Asks how models that do not look like millimetres are imported: 'confirm' (rescale),
-    // 'alternate' (as they are) or 'cancel'
-    askRescale = options => callConfirmDialog({
+    // Asks which unit the models were saved in (ohif-viewers#151 FR-5): resolves the unit code,
+    // AS_READ, or null when cancelled
+    askModelUnits = options => callStlUnitsDialog({
       uiDialogService: servicesManager?.services?.UIDialogService, ...options,
     }),
+    // Confirms an import as read onto an uncalibrated image: true, or false when cancelled
+    confirmAsRead = options => callConfirmDialog({
+      uiDialogService: servicesManager?.services?.UIDialogService, ...options,
+    }),
+    // Keeps where each added segment came from, for the report and the serializer
+    recordProvenance = recordSegmentProvenance,
     // Resolves a 3D surface the 2D views have not caught up with before the import replaces the
     // labelmap (ohif-viewers#152 handoff): false when the user chose to keep editing in 3D
     resolveHandoff = async () => {
@@ -153,8 +171,67 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
 
   const workingSegmentationId = () => getContext()?.segmentationId;
 
+  /**
+   * Where the added segments' geometry came from (ohif-viewers#151 FR-7): the source unit and how
+   * it was known, the scale applied, and whether the image was calibrated. One sentence per kind.
+   */
+  function _unitsReport(segments) {
+    const groups = new Map();
+    segments.forEach(segment => {
+      const record = segment.provenance;
+      if (!record) {
+        return;
+      }
+      const key = [record.origin, record.sourceUnit, record.scale, record.destination].join('|');
+      const group = groups.get(key) || { record, labels: [] };
+      group.labels.push(segment.label);
+      groups.set(key, group);
+    });
+    const sentences = [...groups.values()].map(({ record, labels }) => {
+      const segments = labels.join(', ');
+      if (record.origin === PROVENANCE_ORIGIN.asRead) {
+        return record.destination === 'mm'
+          ? t('{{segments}}: unit unknown, imported as read and recorded as uncalibrated.', { segments })
+          : t('{{segments}}: imported as read onto an uncalibrated image, in its grid units.', { segments });
+      }
+      const unit = t(STL_UNIT_BY_CODE[record.sourceUnit]?.name || record.sourceUnit);
+      const how = record.origin === PROVENANCE_ORIGIN.encoded ? t('{{unit}} from the source', { unit }) : t('declared in {{unit}}', { unit });
+      if (record.scale === null) {
+        return t('{{segments}}: {{how}}, placed as read on an uncalibrated image.', { segments, how });
+      }
+      return record.scale === 1
+        ? t('{{segments}}: {{how}}, no conversion needed.', { segments, how })
+        : t('{{segments}}: {{how}}, converted to millimetres once (× {{scale}}).', { segments, how, scale: formatLength(record.scale) });
+    });
+    return sentences.length ? `${t('Units')}: ${sentences.join(' ')}` : '';
+  }
+
+  /**
+   * The unit an import's source bounds are in. The bounds are the union of the placed sources, in
+   * the grid's coordinates: a model converted from a known unit, any model on an uncalibrated grid,
+   * and a labelmap source are in the grid's units. A model imported as read onto a calibrated
+   * image keeps its own unknown unit, read as millimetres. When every model is such, the extent is
+   * in the models' own units; when only some are, it is millimetres as placed, and the message
+   * names the models whose unit is unknown.
+   */
+  function _sourceUnit(result, gridUnit) {
+    const models = [...result.segments, ...result.emptySegments].filter(segment => segment.provenance);
+    const asRead = models.filter(({ provenance }) => provenance.destination === 'mm' && provenance.sourceUnit === 'unknown');
+    if (!asRead.length) {
+      return gridUnit;
+    }
+    if (asRead.length === models.length) {
+      return t('in the models\' own units (unknown)');
+    }
+    return t('{{unit}} as placed; {{models}} imported as read, unit unknown', {
+      unit: gridUnit, models: asRead.map(model => model.label).join(', '),
+    });
+  }
+
   function _report(title, result, payload) {
     const names = list => list.map(segment => segment.label).join(', ');
+    // What the image's coordinates are in: millimetres, or the grid's own steps
+    const gridUnit = getUnits().length === LENGTH_UNITS.mm ? 'mm' : t('grid units');
     if (result.segments.length) {
       notify({
         type: 'success',
@@ -172,10 +249,14 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
         title,
         message: t('These segments have no voxels on the image grid and were not added: {{segments}}. The image spans {{image}}; the imported data spans {{source}}.', {
           segments: names(result.emptySegments),
-          image: formatBounds(result.targetBounds),
-          source: formatBounds(result.sourceBounds),
+          image: formatBounds(result.targetBounds, gridUnit),
+          source: formatBounds(result.sourceBounds, _sourceUnit(result, gridUnit)),
         }),
       });
+    }
+    const units = _unitsReport(result.segments);
+    if (units) {
+      notify({ type: 'info', title, message: units });
     }
     if (result.overlapVoxels) {
       notify({
@@ -236,6 +317,8 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
           }))
           : undefined,
       });
+      result.segments.forEach(segment => segment.provenance
+        && recordProvenance(segmentationId, segment.segmentIndex, segment.provenance));
       _report(title, result, payload);
       return result;
     } catch (error) {
@@ -257,59 +340,84 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
   }
 
   /**
-   * STL models with the scale the user chose: each group of models that looks to be in another
-   * unit than millimetres is offered for rescaling. Resolves undefined when the user cancels.
+   * The models of an import with their units declared (ohif-viewers#151 FR-5). An STL file carries
+   * no unit: the user names the unit the models were saved in, with nothing pre-selected, or
+   * imports them as read, uncalibrated. A model whose source encoded its unit (an M3D instance's
+   * Measurement Units Code Sequence) keeps it and is not asked about. On a grid calibrated in
+   * millimetres a known unit is converted to them once; on an uncalibrated grid a physical unit
+   * cannot be placed, so the models go in as read, in the grid's units, and the record says so.
+   * The comparison of each model with the image is advice beside the choice, never a declaration.
+   * Resolves undefined when the user cancels.
    */
-  async function _checkStlScale(title, segmentationId, payload, status) {
-    if (getUnits().length !== LENGTH_UNITS.mm) {
-      notify({
-        type: 'info',
-        title,
-        message: t('The image has no pixel spacing, so the scale of the models could not be checked. They are placed as read, in the image grid\'s units.'),
-      });
-      return payload;
-    }
-    let imageBounds = null;
-    try {
-      imageBounds = getImageBounds(segmentationId);
-    } catch (error) {
-      console.warn('[SegEditor-import] The image bounds are not available; the STL scale is not checked', error);
-    }
-    if (!imageBounds) {
-      return payload;
-    }
-    const rescaled = new Map();
-    for (const { suggestion, models } of modelsNeedingRescale(payload.models, imageBounds)) {
-      const names = models.map(model => model.label).join(', ');
+  async function _declareModelUnits(title, segmentationId, payload, status) {
+    const models = payload.models || [];
+    const calibrated = getUnits().length === LENGTH_UNITS.mm;
+    const undeclared = models.filter(model => !model.unit);
+    const names = undeclared.map(model => model.label).join(', ');
+    // model -> { unit: a STL_UNITS entry or null, origin }
+    const declared = new Map(models.filter(model => model.unit)
+      .map(model => [model, { unit: model.unit, origin: PROVENANCE_ORIGIN.encoded }]));
+
+    if (undeclared.length && !calibrated) {
       // The dialog asks over the view: no status behind it
       status(null);
-      const answer = await askRescale({
-        id: 'seg-editor-stl-scale',
-        title: t('Check the model scale'),
-        message: t('{{models}} may be in {{unit}} rather than millimetres. Read as millimetres, it is {{extent}} mm across and does not fit the image ({{image}} mm across). Rescaled from {{unit}}, it is {{scaled}} mm across.', {
-          models: names,
-          unit: t(suggestion.name),
-          extent: formatLength(suggestion.extent),
-          image: formatLength(Math.max(...[0, 1, 2].map(d => imageBounds.max[d] - imageBounds.min[d]))),
-          scaled: formatLength(suggestion.scaledExtent),
-        }),
-        confirmText: t('Rescale from {{unit}}', { unit: suggestion.unit }),
-        alternateText: t('Import as-is'),
+      const proceed = await confirmAsRead({
+        id: 'seg-editor-model-units',
+        title: t('Model units'),
+        message: t('The image is not calibrated in millimetres, so a unit declared for {{models}} could not be placed on it. The models are imported as read, in the image grid\'s units, and recorded as uncalibrated.', { models: names }),
+        confirmText: t('Import as read'),
         cancelText: t('Cancel'),
       });
-      if (answer === 'cancel' || answer === false) {
+      if (!proceed) {
         return undefined;
       }
-      if (answer === 'confirm' || answer === true) {
-        models.forEach(model => rescaled.set(model, suggestion.factor));
+      undeclared.forEach(model => declared.set(model, { unit: null, origin: PROVENANCE_ORIGIN.asRead }));
+    } else if (undeclared.length) {
+      let imageBounds = null;
+      try {
+        imageBounds = getImageBounds(segmentationId);
+      } catch (error) {
+        console.warn('[SegEditor-import] The image bounds are not available; the models are not compared with the image', error);
       }
+      const suggestions = imageBounds
+        ? modelsNeedingRescale(undeclared, imageBounds).map(({ suggestion, models: group }) => t('{{models}}: read as millimetres, {{extent}} mm across against an image {{image}} mm across; from {{unit}}, {{scaled}} mm across.', {
+          models: group.map(model => model.label).join(', '),
+          extent: formatLength(suggestion.extent),
+          image: formatLength(Math.max(...[0, 1, 2].map(d => imageBounds.max[d] - imageBounds.min[d]))),
+          unit: t(suggestion.name),
+          scaled: formatLength(suggestion.scaledExtent),
+        }))
+        : [];
+      status(null);
+      const choice = await askModelUnits({
+        id: 'seg-editor-model-units',
+        title: t('Declare the model units'),
+        message: t('STL files carry no unit. Choose the source unit for {{models}}. A declared unit is converted to millimetres once and placed in the patient coordinates of the image; Unknown imports the models as read, uncalibrated.', { models: names }),
+        options: [
+          ...STL_UNITS.map(unit => ({ value: unit.unit, label: `${t(unit.name)} (${unit.unit})` })),
+          { value: AS_READ, label: t('Unknown: import as read, uncalibrated') },
+        ],
+        suggestions,
+        confirmText: t('Import'),
+        cancelText: t('Cancel'),
+      });
+      if (!choice) {
+        return undefined;
+      }
+      const unit = choice === AS_READ ? null : STL_UNIT_BY_CODE[choice];
+      undeclared.forEach(model => declared.set(model, { unit, origin: unit ? PROVENANCE_ORIGIN.declared : PROVENANCE_ORIGIN.asRead }));
     }
-    if (!rescaled.size) {
-      return payload;
-    }
+
+    const destination = calibrated ? 'mm' : 'unknown';
     return {
       ...payload,
-      models: payload.models.map(model => (rescaled.has(model) ? rescaleModel(model, rescaled.get(model)) : model)),
+      models: models.map(model => {
+        const { unit, origin } = declared.get(model) || { unit: null, origin: PROVENANCE_ORIGIN.asRead };
+        // Converted once, to millimetres, only when both ends are physical
+        const scale = unit && calibrated ? unit.factor : null;
+        const provenance = { sourceUnit: unit ? unit.unit : 'unknown', origin, scale, destination };
+        return { ...(scale && scale !== 1 ? rescaleModel(model, scale) : model), provenance };
+      }),
     };
   }
 
@@ -327,7 +435,7 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
         }
         importingModels(title, files.length);
         status(t('Reading {{count}} file(s)...', { count: files.length }));
-        return _checkStlScale(title, workingSegmentationId(), await readStlFiles(files), status);
+        return _declareModelUnits(title, workingSegmentationId(), await readStlFiles(files), status);
       });
     },
 
@@ -387,7 +495,7 @@ export default function createImportCommands({ servicesManager, deps = {} }) {
         }
         importingModels(title, displaySet.numImageFrames || 1);
         status(t('Loading the models of the series...'));
-        return readM3DSeries({ displaySet, studies: studyList });
+        return _declareModelUnits(title, workingSegmentationId(), await readM3DSeries({ displaySet, studies: studyList }), status);
       });
     },
   };

@@ -64,13 +64,35 @@ export function writeStatusText(t, edit) {
   }
 }
 
+const _round3 = value => Number(Number(value).toPrecision(3));
+
+/**
+ * The removal depth as it was set, with its basis and calibration state (ohif-viewers#151 FR-7):
+ * "depth 2 mm (≈ 4 vox)" on a calibrated grid, "depth 4 vox (= 4 units)" on one whose
+ * calibration is unknown; the other reading is left out when the grid's steps are not known.
+ */
+export function depthText(t, depth) {
+  if (!depth || !(depth.value >= 0)) {
+    return '';
+  }
+  const unit = t(depth.unit || 'units');
+  if (depth.basis === 'voxels') {
+    return depth.world === null || depth.world === undefined
+      ? `${t('depth')} ${depth.value} ${t('vox')}`
+      : t('depth {{value}} vox (= {{world}} {{unit}})', { value: depth.value, world: _round3(depth.world), unit });
+  }
+  return depth.voxels === null || depth.voxels === undefined
+    ? `${t('depth')} ${_round3(depth.value)} ${unit}`
+    : t('depth {{value}} {{unit}} (≈ {{voxels}} vox)', { value: _round3(depth.value), unit, voxels: _round3(depth.voxels) });
+}
+
 /**
  * One line on an edit's outcome.
  */
 export function editSummary(t, edit) {
   const {
     holes = 0, methods = {}, closed, openEdges = 0, repair, points = 0, faces = 0, kind,
-    preexistingLoops = 0, introduced, before, after, conditioning,
+    preexistingLoops = 0, introduced, before, after, conditioning, depth,
   } = edit;
   const parts = [];
   if (kind === 'sync') {
@@ -87,6 +109,10 @@ export function editSummary(t, edit) {
       }
     } else {
       parts.push(`${t('{{count}} face(s) removed', { count: faces || points })}, ${t('{{count}} hole(s) closed', { count: holes })}${how}`);
+      const depthPart = depthText(t, depth);
+      if (depthPart) {
+        parts.push(depthPart);
+      }
     }
     if (preexistingLoops) {
       parts.push(t('{{count}} opening(s) left as found', { count: preexistingLoops }));

@@ -186,8 +186,8 @@ export async function rasterizeImport({
  *   through it so the panels and viewports hear of them)
  * @param {Function} [params.onProgress] - (fraction 0..1) => void
  * @param {Object} [params.deps] - injectable (tests)
- * @returns {Promise<{ segments: Array<{ segmentIndex: number, label: string, voxels: number }>,
- *   emptySegments: Array<{ label: string, error?: Error }>, overlapVoxels: number,
+ * @returns {Promise<{ segments: Array<{ segmentIndex: number, label: string, voxels: number, provenance?: Object }>,
+ *   emptySegments: Array<{ label: string, error?: Error, provenance?: Object }>, overlapVoxels: number,
  *   lockedVoxels: number, writtenVoxels: number, sourceBounds: Object|null,
  *   targetBounds: Object }>} `segments` are the segments added; `emptySegments` those left out;
  *   `lockedVoxels` the imported voxels left out because a locked segment held their place; the
@@ -282,10 +282,13 @@ async function _importIntoSegmentation({
   entries.forEach((entry, i) => {
     const voxels = voxelsByEntry.get(i + 1) || 0;
     if (!voxels) {
-      emptySegments.push({ label: entry.label, error: failures.find(f => f.entry === i + 1)?.error });
+      emptySegments.push({
+        label: entry.label, error: failures.find(f => f.entry === i + 1)?.error,
+        ...(entry.provenance ? { provenance: entry.provenance } : {}),
+      });
       return;
     }
-    added.push({ entry: i + 1, label: entry.label, color: entry.color, voxels });
+    added.push({ entry: i + 1, label: entry.label, color: entry.color, voxels, provenance: entry.provenance });
   });
   if (!added.length) {
     return { segments: [], emptySegments, overlapVoxels: 0, lockedVoxels: 0, writtenVoxels: 0, ...bounds };
@@ -376,7 +379,11 @@ async function _importIntoSegmentation({
   }
 
   return {
-    segments: added.map(({ label, voxels }, i) => ({ segmentIndex: segmentIndices[i], label, voxels })),
+    segments: added.map(({ label, voxels, provenance }, i) => ({
+      segmentIndex: segmentIndices[i], label, voxels,
+      // Where the model came from (ohif-viewers#151 FR-6), when the import declared it
+      ...(provenance ? { provenance } : {}),
+    })),
     emptySegments,
     overlapVoxels,
     lockedVoxels,

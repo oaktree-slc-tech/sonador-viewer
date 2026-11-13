@@ -5,13 +5,41 @@
 // compared with the image at each common unit: the unit at which it lies on the image, at a
 // plausible size, is suggested when it is not millimetres.
 
-// Common STL units, as millimetres per unit
+// The units a model can be declared in (CID 7063 Model Scale Unit, ohif-viewers#151 FR-5), as
+// millimetres per unit, millimetres first (the scale check reads the model as millimetres first)
 export const STL_UNITS = [
   { unit: 'mm', name: 'millimetres', factor: 1 },
+  { unit: 'µm', name: 'micrometres', factor: 0.001 },
   { unit: 'cm', name: 'centimetres', factor: 10 },
   { unit: 'in', name: 'inches', factor: 25.4 },
   { unit: 'm', name: 'metres', factor: 1000 },
 ];
+
+/** The unit entry for a code ('mm', 'µm', 'cm', 'in', 'm'), or undefined. */
+export const STL_UNIT_BY_CODE = Object.fromEntries(STL_UNITS.map(unit => [unit.unit, unit]));
+
+// The UCUM codes of CID 7063 that name these units (Measurement Units Code Sequence (0040,08EA)
+// of an encapsulated model)
+const UCUM_UNITS = { mm: 'mm', um: 'µm', cm: 'cm', m: 'm', '[in_i]': 'in' };
+
+/**
+ * The unit an encapsulated model declares in its Measurement Units Code Sequence, as a STL_UNITS
+ * entry, or undefined when the sequence is absent or names a unit the import does not handle.
+ *
+ * @param {Object} [metadata] - the model instance's metadata
+ */
+export function unitFromMeasurementUnits(metadata) {
+  const item = metadata?.MeasurementUnitsCodeSequence?.[0];
+  if (!item) {
+    return undefined;
+  }
+  const designator = item.CodingSchemeDesignator;
+  const code = String(item.CodeValue ?? '').trim();
+  if (designator && designator !== 'UCUM') {
+    return undefined;
+  }
+  return STL_UNIT_BY_CODE[UCUM_UNITS[code]];
+}
 
 // A model lies on the image when at least this fraction of its bounding box is inside the image's
 const MIN_OVERLAP = 0.5;

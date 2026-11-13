@@ -158,6 +158,7 @@ import {
   set3DSelectionCount,
   set3DSurfaceHealth,
   set3DToolTarget,
+  set3DToolUnits,
   setActive3DTool,
   subscribe3DToolState,
   THREE_D_TOOLS,
@@ -168,7 +169,7 @@ import { getMeshColor, subscribeMeshColor } from '../utils/meshColor';
 import { animateCamera, FRAME_DURATION_MS, framedCamera } from '../utils/frameSegment';
 import { getPreviewColor, subscribePreviewColor } from '../utils/previewColor';
 import { isDeveloperToolsEnabled } from '../utils/segEditorDeveloper';
-import { getSegEditorUnits } from '../utils/segEditorUnits';
+import { getSegEditorUnits, subscribeSegEditorUnits } from '../utils/segEditorUnits';
 
 
 const SurfaceRepresentation = c3dToolsEnums.SegmentationRepresentations.Surface;
@@ -837,11 +838,20 @@ export default class SegEditorSurfaceView extends Component {
         || previous?.disabledReason !== disabledReason || previous?.color !== color) {
       set3DToolTarget({ segmentIndex, label, color, disabledReason });
     }
+    // The grid's units travel with the target (ohif-viewers#151): the record is cached per
+    // reference geometry, so this is a lookup after the first publication
+    this._publishUnits(segmentIndex);
     this._refreshSurfaceHealth();
     this._refreshEditMode();
     // The synchronization ledger (threeDTools/syncLedger) lives with the session, not with this
     // canvas: a remounted canvas starts from it
     publishSyncLedger();
+  }
+
+  // The lengths the tools dispatch are resolved against these units: a reference volume replaced
+  // or evicted under the same id republishes them (subscribeSegEditorUnits)
+  _publishUnits(segmentIndex = get3DToolState().target?.segmentIndex) {
+    set3DToolUnits(segmentIndex ? getSegEditorUnits() : null);
   }
 
   _apply3DToolState(state = get3DToolState()) {
@@ -877,7 +887,7 @@ export default class SegEditorSurfaceView extends Component {
       }
     }
     if (this._brush) {
-      this._brush.scale.setScalar(state.paintRadius);
+      this._brush.scale.setScalar(state.lengths.paintRadius.world ?? 0);
     }
 
     // The selection is kept between the two selection tools, and dropped with them
@@ -1170,7 +1180,9 @@ export default class SegEditorSurfaceView extends Component {
     const collected = collectTrianglesInSphere({
       geometry: model.instance.geometry,
       center: [center.x, center.y, center.z],
-      radius: state.paintRadius,
+      // The brush radius in world units, resolved by the state from the basis in force
+      // (ohif-viewers#151 FR-3); null while a voxel-unit radius has no spacing to resolve against
+      radius: state.lengths.paintRadius.world ?? 0,
     });
     const painted = connectedTriangles({ collected, seed: hit.faceIndex, topology });
     const erasing = erase || state.paintMode === PAINT_MODES.erase;
@@ -1206,7 +1218,7 @@ export default class SegEditorSurfaceView extends Component {
       this._brush.material.color.copy(tint);
     }
     this._brush.position.copy(point);
-    this._brush.scale.setScalar(get3DToolState().paintRadius);
+    this._brush.scale.setScalar(get3DToolState().lengths.paintRadius.world ?? 0);
     this._brush.visible = true;
   }
 
@@ -1744,7 +1756,9 @@ export default class SegEditorSurfaceView extends Component {
           });
           return null;
         }
-        const depth = state.removalDepth;
+        // The removal depth in world units, resolved by the state from the basis in force
+        // (ohif-viewers#151 FR-3); a voxel-unit depth with no spacing to resolve against is 0
+        const depth = state.lengths.removalDepth.world ?? 0;
         // The result is written to the labelmap only when it has no open, non-manifold or
         // inverted edge, retained or new (FR-4: a detected defect needs the user's explicit
         // acknowledgement, which ohif-viewers#152's handoff will ask for), and when no earlier
@@ -1759,6 +1773,8 @@ export default class SegEditorSurfaceView extends Component {
           editBox: cut.editBox,
           selectedPoints: cut.selectedPoints,
           depth,
+          // The depth as it was set, with its basis, for the edit's report (ohif-viewers#151 FR-7)
+          depthLength: state.lengths.removalDepth,
           write: writable ? { kind: WRITE_KINDS.delete, selectedPoints: cut.selectedPoints, depth } : null,
           surfaceOnly: !writable,
           surfaceOnlyReason: !sound ? SURFACE_ONLY_REASONS.defects : !synchronized ? SURFACE_ONLY_REASONS.unsynchronized : null,
@@ -2014,6 +2030,16 @@ export default class SegEditorSurfaceView extends Component {
       after: diagnostics.output || null,
       conditioning: diagnostics.conditioning || null,
       repair: !!edit.repair,
+      // The removal depth with its basis and calibration state (ohif-viewers#151 FR-7): the value
+      // as set, the basis it was set in, the world value applied, the same length in voxel units,
+      // and the word for the grid's length unit
+      depth: edit.depthLength ? {
+        value: edit.depthLength.value,
+        basis: edit.depthLength.basis,
+        world: edit.depthLength.world,
+        voxels: edit.depthLength.voxels,
+        unit: getSegEditorUnits().length,
+      } : null,
       // What the 2D views got: queued, written (with counts), surfaceOnly, refused or failed
       write,
     };
@@ -2931,6 +2957,7 @@ export default class SegEditorSurfaceView extends Component {
     c3dEventTarget.addEventListener(Events.SEGMENTATION_DATA_MODIFIED, this._onLabelmapModified);
     this._unsubscribers.push(
       subscribe3DToolState(this._apply3DToolState),
+      subscribeSegEditorUnits(() => this._publishUnits()),
       subscribePreviewColor(this._onPreviewColor),
       subscribeMeshColor(this._onMeshColor),
       handle3DToolRequest('deleteSelection', () => this.deleteSelectedPoints()),
