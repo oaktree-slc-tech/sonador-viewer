@@ -31,13 +31,6 @@ const EXTENDED_META = [
   ['text', SonadorCodeValues.DCMSR_MEASUREMENT_TEXT],
   ['location', SonadorCodeValues.DCMSR_MEASUREMENT_LOCATION],
 ];
-const EXTENDED_META_CODES = [
-  ...EXTENDED_META.map(([, code]) => code.value),
-  SonadorCodeValues.DCMSR_MEASUREMENT_VIEW.value,
-  SonadorCodeValues.DCMSR_MEASUREMENT_SOURCE_SERIES.value,
-  SonadorCodeValues.DCMSR_MEASUREMENT_DRAWING_PLANE.value,
-];
-
 
 function encodeExtendedMeta(measurement, srItem, options) {
   // Add extended metadata attributes from the measurement to the associated srItem (a measurement
@@ -94,7 +87,7 @@ function parseExtendedMeta(srItem, annotation, options) {
   // Children of the property parent first, then the Finding and group-level items (files written
   // before the properties moved)
   const groupItems = asArray(_.isArray(srItem) ? srItem : srItem.ContentSequence);
-  const candidates = propertyCandidates(groupItems, options.propertyParent, EXTENDED_META_CODES);
+  const candidates = propertyCandidates(groupItems, options.propertyParent);
   const textOf = code => {
     const item = candidates.find(contentItem => conceptNameValue(contentItem) === code.value);
     return item && item.TextValue;

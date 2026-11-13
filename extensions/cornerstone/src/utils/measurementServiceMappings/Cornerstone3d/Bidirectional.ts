@@ -1,5 +1,6 @@
 import SUPPORTED_TOOLS from './constants/supportedTools';
 import getSOPInstanceAttributes from './utils/getSOPInstanceAttributes';
+import displaySetOf from './utils/displaySetOf';
 import { utils } from '@ohif/core';
 import { getDisplayUnit } from './utils';
 import { getIsLocked } from './utils/getIsLocked';
@@ -21,7 +22,7 @@ const Bidirectional = {
     const isVisible = getIsVisible(annotationUID);
 
     if (!metadata || !data) {
-      console.warn('Length tool: Missing metadata or data');
+      console.warn('Bidirectional tool: Missing metadata or data');
       return null;
     }
 
@@ -38,16 +39,7 @@ const Bidirectional = {
       annotation
     );
 
-    let displaySet;
-
-    if (SOPInstanceUID) {
-      displaySet = displaySetService.getDisplaySetForSOPInstanceUID(
-        SOPInstanceUID,
-        SeriesInstanceUID
-      );
-    } else {
-      displaySet = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID)[0];
-    }
+    const displaySet = displaySetOf(displaySetService, SOPInstanceUID, SeriesInstanceUID);
 
     const { points, textBox } = data.handles;
 
@@ -65,7 +57,9 @@ const Bidirectional = {
       textBox,
       isLocked,
       isVisible,
-      metadata,
+      // Display colours read from the report (DICOMSR/utils/dcmsrDisplayAttributes.js); the
+      // service accepts only its schema keys at the top level
+      metadata: data.displayAttributes ? { ...metadata, displayAttributes: data.displayAttributes } : metadata,
       referenceSeriesUID: SeriesInstanceUID,
       referenceStudyUID: StudyInstanceUID,
       referencedImageId,
@@ -101,10 +95,10 @@ function getMappedAnnotations(annotation, displaySetService) {
       annotation
     );
 
-    const displaySet = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID)[0];
+    const displaySet = displaySetOf(displaySetService, undefined, SeriesInstanceUID);
 
     const { SeriesNumber } = displaySet;
-    const { length, width, unit } = targetStats;
+    const { length, width, unit, widthUnit } = targetStats;
 
     annotations.push({
       SeriesInstanceUID,
@@ -112,6 +106,7 @@ function getMappedAnnotations(annotation, displaySetService) {
       SeriesNumber,
       frameNumber,
       unit,
+      widthUnit: widthUnit || unit,
       length,
       width,
     });
@@ -134,9 +129,9 @@ function _getReport(mappedAnnotations, points, FrameOfReferenceUID, customizatio
   values.push('Cornerstone:Bidirectional');
 
   mappedAnnotations.forEach(annotation => {
-    const { length, width, unit } = annotation;
-    columns.push(`Length`, `Width`, 'Unit');
-    values.push(length, width, unit);
+    const { length, width, unit, widthUnit } = annotation;
+    columns.push(`Length`, `Width`, 'Unit', 'Width unit');
+    values.push(length, width, unit, widthUnit);
   });
 
   if (FrameOfReferenceUID) {
@@ -169,11 +164,12 @@ function getDisplayText(mappedAnnotations, displaySet) {
   }
 
   // Area is the same for all series
-  const { length, width, unit, SeriesNumber, SOPInstanceUID, frameNumber } = mappedAnnotations[0];
+  const { length, width, unit, widthUnit, SeriesNumber, SOPInstanceUID, frameNumber } = mappedAnnotations[0];
   const roundedLength = utils.roundNumber(length, 2);
   const roundedWidth = utils.roundNumber(width, 2);
 
-  const instance = displaySet.instances.find(image => image.SOPInstanceUID === SOPInstanceUID);
+  // For OHIF v2 compatibility, check both instances and images properties
+  const instance = (displaySet.instances || displaySet.images || []).find(image => image.SOPInstanceUID === SOPInstanceUID);
 
   let InstanceNumber;
   if (instance) {
@@ -184,7 +180,7 @@ function getDisplayText(mappedAnnotations, displaySet) {
   const frameText = displaySet.isMultiFrame ? ` F: ${frameNumber}` : '';
 
   displayText.primary.push(`L: ${roundedLength} ${getDisplayUnit(unit)}`);
-  displayText.primary.push(`W: ${roundedWidth} ${getDisplayUnit(unit)}`);
+  displayText.primary.push(`W: ${roundedWidth} ${getDisplayUnit(widthUnit)}`);
   displayText.secondary.push(`S: ${SeriesNumber}${instanceText}${frameText}`);
 
   return displayText;

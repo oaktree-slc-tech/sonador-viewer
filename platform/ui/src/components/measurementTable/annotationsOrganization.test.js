@@ -14,7 +14,9 @@ jest.mock('@ohif/core', () => ({
     utils: { referenceIdentifiers: (store, { SeriesInstanceUID }) => mockSeries[SeriesInstanceUID] || null },
     measurements: {
       MeasurementApi: {
-        getConfiguration: () => ({ measurementTools: [{ childTools: [{ id: 'CobbAngle', name: 'Cobb Angle' }, { id: 'Length', name: 'Length' }] }] }),
+        getConfiguration: () => ({ measurementTools: [{ childTools: [
+          { id: 'CobbAngle', name: 'Cobb Angle' }, { id: 'Length', name: 'Length' }, { id: 'Bidirectional', name: 'Target' },
+        ] }] }),
       },
     },
   },
@@ -44,6 +46,16 @@ it('searches a measurement read from a report by the tool it was drawn with', ()
   expect(matchesQuery(row('r2', { toolType: 'DICOMSRDisplayTool', trackingIdentifier: 'Cornerstone3DTools@^0.1.0:CobbAngle' }), 'cobb angle')).toBe(true);
   expect(trackedToolType('no-colon')).toBeUndefined();
   expect(matchesQuery(row('l2'), 'length')).toBe(true);
+});
+
+it('finds a Bidirectional by its configured name and its tool name, drawn, out-of-plane or read from a report', () => {
+  expect(toolTypeNames('Bidirectional')).toEqual(['Target', 'Bidirectional']);
+  const drawn = row('b1', { toolType: 'Bidirectional', label: 'Liver lesion' });
+  expect(matchesQuery(drawn, 'target')).toBe(true);
+  expect(matchesQuery(drawn, 'bidirectional liver')).toBe(true);
+  const reported = row('b2', { toolType: 'DICOMSRDisplayTool', trackingIdentifier: 'cornerstoneTools@^4.0.0:Bidirectional' });
+  expect(rowToolType(reported)).toBe('Bidirectional');
+  expect(matchesQuery(reported, 'bidirectional')).toBe(true);
 });
 
 it('searches the type, label, location, description, modality and series description', () => {

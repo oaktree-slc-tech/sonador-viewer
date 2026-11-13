@@ -1,16 +1,17 @@
-// Cornerstone3D representation of the classic Length, Angle, Cobb angle and arrow annotation
-// measurements, for the Cornerstone3D views (the 3D Inspector; the volume viewer draws the
-// angles). The classic (cornerstone-tools) measurement is the single measurement-service record,
-// the one a save writes.
+// Cornerstone3D representation of the classic Length, Angle, Cobb angle, circle, Bidirectional and
+// arrow annotation measurements, for the Cornerstone3D views (the 3D Inspector; the volume viewer
+// draws the angles). The classic (cornerstone-tools) measurement is the single measurement-service
+// record, the one a save writes.
 //
 // * A classic measurement on an image with a complete plane (position, orientation, pixel spacing)
 //   and a full set of handles has a Cornerstone3D annotation with the same geometry, drawn by the
 //   tools of those views (for the angles, the exchange-value tools of tools/exchangeAngleTools.js)
 //   and edited there while the measurement is not locked. Added or updated -> annotation created
-//   or moved, carrying the record's angle with the points it belongs to, and an arrow's text;
-//   removed -> removed.
+//   or moved, carrying the record's value with the points it belongs to (a Bidirectional's two
+//   lengths), and an arrow's text; removed -> removed.
 // * An annotation moved in a Cornerstone3D view updates its classic measurement with the value of
-//   the new geometry (and redraws the classic viewports), an arrow's text edited there updates the
+//   the new geometry (a Bidirectional: the length of each axis whose points moved, the other kept;
+//   and redraws the classic viewports), an arrow's text edited there updates the
 //   measurement's text; removed there, its measurement is removed.
 // * A measurement drawn in a Cornerstone3D view on an acquired image (the view aligned with it,
 //   every point within placement distance of its plane) becomes a classic measurement, and its
@@ -20,15 +21,16 @@
 //   draw lines), and the user is told it is not saved and why. So does one for which no referenced
 //   image was found (an unaligned view, or images without position metadata), one whose image has
 //   no usable plane information, a measurement of a tool without a DICOM-SR mapping here (the
-//   Inspector's bidirectional, ellipse, rectangle, freehand and probe tools), and one that could
-//   not be added to the measurements.
+//   Inspector's ellipse, rectangle, freehand and probe tools), and one that could not be added to
+//   the measurements.
 // * A measurement on an image stays on it. A handle dragged off the image's plane in a
 //   Cornerstone3D view is moved onto the plane as it is dragged, and a handle dragged outside the
 //   image's rows and columns returns, when the drag ends, to where it was before the drag. Points
 //   are never clipped to the image's edges.
-// * In the 3D Inspector (a registered drawing volume, DICOMSR utils/outOfPlane.js) a Length, Angle
-//   or Cobb angle that is not in-plane (off the acquired image's plane, on no acquired image, or
-//   with a point outside the image's rows and columns) becomes a pending out-of-plane measurement:
+// * In the 3D Inspector (a registered drawing volume, DICOMSR utils/outOfPlane.js) a Length, Angle,
+//   Cobb angle, circle or Bidirectional that is not in-plane (off the acquired image's plane, on no
+//   acquired image, or with a point outside the image's rows and columns) becomes a pending
+//   out-of-plane measurement:
 //   a Cornerstone3D-source record holding its patient points, its source series, Drawing-Plane and
 //   View, listed and saved with the others. The first in a session is announced as shown in the
 //   MPR and 3D views only. It is edited on its drawing plane until it is saved, and locked after.
@@ -68,19 +70,26 @@ import {
   isLegacyGeometry,
 } from '@ohif/core/src/DICOMSR/utils/circleGeometry';
 
+import {
+  BIDIRECTIONAL_TOOL, CLASSIC_VALUE_NAMES as BIDIRECTIONAL_VALUES, HANDLE_NAMES as BIDIRECTIONAL_HANDLES, bidirectionalValues,
+  isBidirectionalTool, valuesKeepingAxes,
+} from '@ohif/core/src/DICOMSR/utils/bidirectionalGeometry';
+
 import { HANDLE_NAMES as ANGLE_HANDLE_NAMES } from './measurementServiceMappings/Cornerstone/Angle';
 
 const { log } = OHIF;
 
 // Classic handles of each synchronised tool, in point order (the arrow tip is the first point in
-// both tool sets; a circle's center then its edge point). The circle is `CircleRoi` in the classic
-// tools and `CircleROI` in Cornerstone3D (and in its out-of-plane records).
+// both tool sets; a circle's center then its edge point; a Bidirectional's long axis then its short
+// axis). The circle is `CircleRoi` in the classic tools and `CircleROI` in Cornerstone3D (and in its
+// out-of-plane records).
 const HANDLE_NAMES = {
   Length: ['start', 'end'],
   ArrowAnnotate: ['start', 'end'],
   ...ANGLE_HANDLE_NAMES,
   [CIRCLE_TOOL_NAMES.CLASSIC]: ['start', 'end'],
   [CIRCLE_TOOL_NAMES.CORNERSTONE_3D]: ['start', 'end'],
+  [BIDIRECTIONAL_TOOL]: [...BIDIRECTIONAL_HANDLES],
 };
 const ARROW = 'ArrowAnnotate';
 const ANGLE_TOOLS = Object.keys(ANGLE_HANDLE_NAMES);
@@ -94,7 +103,7 @@ const PLANE_TOLERANCE = 1;
 const UNSAVED_STYLE = { lineDash: '4,4' };
 
 // Cornerstone3D tools of those views whose measurements are not saved (no classic mapping)
-const UNSAVED_TOOLS = ['Bidirectional', 'EllipticalROI', 'RectangleROI', 'PlanarFreehandROI', 'Probe'];
+const UNSAVED_TOOLS = ['EllipticalROI', 'RectangleROI', 'PlanarFreehandROI', 'Probe'];
 
 // Why a measurement drawn in a Cornerstone3D view was not saved (OUTSIDE: on the plane, a point
 // outside the image's rows and columns)
@@ -269,13 +278,16 @@ const textOf = measurement => (measurement.metadata && measurement.metadata.text
   || (measurement.data && measurement.data.text) || '';
 
 function valueOf(toolName, patientPoints) {
-  // The value of patient points: the exchange angle (degrees), the length (mm), or a circle's values
-  // ({ radius, area, perimeter }); an arrow has none
+  // The value of patient points: the exchange angle (degrees), the length (mm), a circle's values
+  // ({ radius, area, perimeter }) or a Bidirectional's ({ length, width }); an arrow has none
   if (toolName === ARROW) {
     return undefined;
   }
   if (isCircleTool(toolName)) {
     return circleValues(circleRadius(patientPoints[0], patientPoints[1]));
+  }
+  if (isBidirectionalTool(toolName)) {
+    return bidirectionalValues(patientPoints);
   }
   if (toolName === 'Length') {
     const [a, b] = patientPoints;
@@ -285,10 +297,6 @@ function valueOf(toolName, patientPoints) {
   return encodedAngle(encodedPoints(toolName, patientPoints));
 }
 
-/**
- * A measurement's value with the points it belongs to: an angle's (degrees) or a Length's (mm) as
- * { value, points }, a circle's as { values: { radius, area, perimeter }, points }
- */
 /** The values a measurement's viewport label shows, when it chose them */
 const viewportValuesOf = measurement => [measurement.metadata, measurement.data]
   .map(section => section && section.viewportValues).find(Array.isArray);
@@ -297,8 +305,28 @@ const viewportValuesOf = measurement => [measurement.metadata, measurement.data]
 // modality of the pixels measured (it names the quantity in a report when no image does)
 const CIRCLE_STAT_KEYS = ['mean', 'stdDev', 'max', 'modalityUnit', 'statisticsModality'];
 
+/** A Bidirectional's tool data and record fields of its lengths, each with its unit */
+const bidirectionalData = ({ length, width, unit = 'mm', widthUnit }) => ({
+  [BIDIRECTIONAL_VALUES.long]: _.isFinite(length) ? length : undefined,
+  [BIDIRECTIONAL_VALUES.short]: _.isFinite(width) ? width : undefined,
+  unit,
+  widthUnit: widthUnit || unit,
+});
+
+/**
+ * A measurement's value with the points it belongs to: an angle's (degrees) or a Length's (mm) as
+ * { value, points }, a circle's as { values: { radius, area, perimeter }, points }, a Bidirectional's
+ * as { values: { length, width }, points }
+ */
 function recordValueOf(measurement, points) {
   const data = measurement.data || {};
+  if (isBidirectionalTool(measurement.toolName)) {
+    const [length, width] = [data[BIDIRECTIONAL_VALUES.long], data[BIDIRECTIONAL_VALUES.short]]
+      .map(value => (_.isNil(value) ? NaN : Number(value)));
+    const unit = data.unit || measurement.unit || 'mm';
+    return _.isFinite(length)
+      ? { values: { length, width, unit, widthUnit: data.widthUnit || unit }, points: _.cloneDeep(points) } : undefined;
+  }
   if (isCircleTool(measurement.toolName)) {
     const stats = data.cachedStats;
     return stats && _.isFinite(stats.radius)
@@ -511,8 +539,11 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       FrameOfReferenceUID: module.frameOfReferenceUID,
       ...(toolName === ARROW ? { text } : {}),
     };
-    const valueData = toolName === ARROW ? { text } : toolName === 'Length' ? { length: value }
+    let valueData = toolName === ARROW ? { text } : toolName === 'Length' ? { length: value }
       : isCircleTool(toolName) ? { cachedStats: value } : { rAngle: value };
+    if (isBidirectionalTool(toolName)) {
+      valueData = bidirectionalData(value);
+    }
     const measurement = {
       toolName,
       points: imagePoints.map(([x, y]) => ({ x, y })),
@@ -523,6 +554,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       referenceStudyUID: instance.StudyInstanceUID,
       ...(toolName === 'Length' ? { length: value } : {}),
       ...(toolName === ARROW ? { label: text } : {}),
+      ...(isBidirectionalTool(toolName) ? { unit: 'mm' } : {}),
       data: { _id, handles, ...valueData },
       metadata,
     };
@@ -681,8 +713,13 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     return null;
   }
 
-  function outOfPlaneRecord(toolName, points, attributes) {
-    // The measurement-service record of an out-of-plane measurement with these points
+  function outOfPlaneRecord(toolName, points, attributes, recordValue) {
+    // The measurement-service record of an out-of-plane measurement with these points (a
+    // Bidirectional keeps the recorded length of an axis whose points did not move)
+    if (isBidirectionalTool(toolName)) {
+      const values = valuesKeepingAxes(points, recordValue);
+      return { toolName, points, isLocked: false, isDirty: true, unit: values.unit, data: bidirectionalData(values), ...attributes };
+    }
     if (isCircleTool(toolName)) {
       const values = valueOf(toolName, points);
       return {
@@ -799,7 +836,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     if (samePoints(measurement.points, points)) {
       return;
     }
-    const updated = outOfPlaneRecord(measurement.toolName, points, {});
+    const updated = outOfPlaneRecord(measurement.toolName, points, {}, annotation.data.recordValue);
     measurementService.update(measurementUID, {
       ...measurement,
       points,
@@ -900,13 +937,17 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     });
 
     // The value of the new geometry, not the tool's stats cache, which is recalculated (throttled)
-    // after the handles move and may still hold the previous value
+    // after the handles move and may still hold the previous value. A Bidirectional keeps the
+    // record's length of an axis whose points did not move.
     const value = valueOf(measurement.toolName, annotation.data.handles.points);
     const finite = _.isFinite(value) ? value : undefined;
     const isLength = measurement.toolName === 'Length';
 
-    const valueData = isArrow ? { text } : isLength ? { length: finite }
+    let valueData = isArrow ? { text } : isLength ? { length: finite }
       : isCircleTool(measurement.toolName) ? { cachedStats: value } : { rAngle: finite };
+    if (isBidirectionalTool(measurement.toolName)) {
+      valueData = bidirectionalData(valuesKeepingAxes(annotation.data.handles.points, annotation.data.recordValue));
+    }
 
     measurementService.update(measurementUID, {
       ...measurement,

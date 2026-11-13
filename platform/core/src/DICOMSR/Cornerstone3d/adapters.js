@@ -16,17 +16,21 @@ import { readFindingCode } from '../TID300/DICOMReferencedSOPInstanceFinding';
 import { asArray, conceptNameValue, firstItem } from '../utils/codedConcept';
 import { encodingWarnings, handlePointsOf, imageToPatient, isPlane } from '../utils/angleGeometry';
 import { findImageForPoints, planeFromModule } from '../readOnly/planeGeometry';
-import { DCMSR_MEASUREMENT_DRAWING_PLANE } from '../enums';
+import { DCMSR_MEASUREMENT_DRAWING_PLANE, PROPERTY_PARENT } from '../enums';
 import { drawingPlaneProblem } from '../utils/drawingPlane';
 import {
   CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleGeometryItem, circleNumItems, circleStatisticNumItems, circleOfGeometry, circleRadius, circleValues,
 } from '../utils/circleGeometry';
+import {
+  BIDIRECTIONAL_AXES, MIN_AXIS_LENGTH, axesProblem, axisGeometryOf, bidirectionalNumItems, bidirectionalValues, inMillimetres,
+} from '../utils/bidirectionalGeometry';
+import { propertyCandidates } from '../utils/propertyParent';
 import frameImageIds from './utils/frameImageIds';
 
 const { TID300Measurement } = utilities.TID300;
 const {
   BaseAdapter3D, MeasurementReport: LibraryMeasurementReport, Angle: LibraryAngle, CobbAngle: LibraryCobbAngle,
-  Length: LibraryLength, CircleROI: LibraryCircleROI,
+  Length: LibraryLength, CircleROI: LibraryCircleROI, Bidirectional: LibraryBidirectional,
 } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
 
@@ -434,11 +438,161 @@ class CircleROI extends LibraryCircleROI {
 registerAdapter(CircleROI);
 
 
+// Bidirectional (Cornerstone3D `BidirectionalTool`: points[0..1] the long axis, points[2..3] the
+// short axis; utils/bidirectionalGeometry.js), from the Long Axis and Short Axis NUM items, found by
+// code or meaning, each with its own two-point POLYLINE: the axes as labelled, never swapped. The
+// stored lengths are kept, shown, and written back while each axis is unchanged. A pair whose short
+// axis does not cross its long axis, or is not perpendicular to it within 1 degree, is not hydrated:
+// it is left to the read-only display. A degenerate axis is kept with a warning. Placement on a
+// loaded image, the Drawing-Plane rule (read from the first NUM carrying the properties), the
+// tracking identity and the lock follow the angles.
+
+const BIDIRECTIONAL_LOG = '[DICOM-SR:Bidirectional]';
+
+function bidirectionalMeasurementState(adapter, state, MeasurementGroup, context) {
+  const { sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked = true } = context;
+  const groupItems = asArray(MeasurementGroup.ContentSequence);
+  const { annotation } = state;
+  const TrackingUniqueIdentifier = trackingUID(MeasurementGroup);
+
+  const nums = bidirectionalNumItems(groupItems);
+  const geometries = BIDIRECTIONAL_AXES.map(({ name }) => nums[name] && axisGeometryOf(nums[name].item));
+  const [longGeometry, shortGeometry] = geometries;
+  if (!longGeometry || !shortGeometry || longGeometry === shortGeometry
+      || geometries.some(item => item.GraphicType !== 'POLYLINE' || graphicPoints(item).length !== 2)
+      || longGeometry.ValueType !== shortGeometry.ValueType) {
+    throw new Error(`Bidirectional group without a two-point POLYLINE under each axis trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const points = geometries.flatMap(graphicPoints);
+  const isPatientDomain = longGeometry.ValueType === 'SCOORD3D';
+  const reference = firstItem(asArray(longGeometry.ContentSequence).find(item => item.ValueType === 'IMAGE')?.ReferencedSOPSequence);
+  annotation.metadata.coordinateDomain = isPatientDomain ? 'patient' : 'image';
+
+  // A valid Drawing-Plane keeps a patient-domain Bidirectional off the images
+  const drawingPlaneItem = propertyCandidates(groupItems, PROPERTY_PARENT.NUM)
+    .find(item => conceptNameValue(item) === DCMSR_MEASUREMENT_DRAWING_PLANE.value);
+  const drawingPlaneText = drawingPlaneItem && drawingPlaneItem.TextValue;
+  const problem = isPatientDomain && drawingPlaneText !== undefined ? drawingPlaneProblem(drawingPlaneText, points) : undefined;
+  if (problem) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] malformed Drawing-Plane "${drawingPlaneText}" (${problem}), `
+      + `treated as absent trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const outOfPlane = isPatientDomain && drawingPlaneText !== undefined && !problem;
+  if (outOfPlane) {
+    annotation.metadata.outOfPlane = true;
+  }
+
+  let placement;
+  if (isPatientDomain && !outOfPlane) {
+    const image = findImageForPoints(imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata),
+      points, { FrameOfReferenceUID: longGeometry.ReferencedFrameOfReferenceUID });
+    if (image) {
+      state.sopInstanceUid = image.SOPInstanceUID;
+      annotation.metadata.referencedImageId = image.imageId;
+      annotation.data.frameNumber = image.frameNumber;
+      placement = { SOPInstanceUID: image.SOPInstanceUID, frameNumber: image.frameNumber };
+    } else {
+      delete annotation.metadata.referencedImageId;
+      console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] no loaded image of Frame of Reference `
+        + `${longGeometry.ReferencedFrameOfReferenceUID} holds the axes trackingUID=${TrackingUniqueIdentifier}`);
+    }
+  }
+
+  // Handle points in patient coordinates: as read in the patient domain, mapped from the image
+  const { referencedImageId } = annotation.metadata;
+  let module;
+  if (referencedImageId) {
+    try {
+      module = metadata.get('imagePlaneModule', referencedImageId);
+    } catch (error) {
+      module = undefined;
+    }
+  }
+  let handlePoints;
+  if (isPatientDomain) {
+    handlePoints = points;
+  } else if (isPlane(module)) {
+    handlePoints = points.map(point => imageToPatient(module, point));
+  } else {
+    handlePoints = annotation.data.handles.points;
+  }
+  annotation.data.handles = { ...annotation.data.handles, points: handlePoints };
+
+  // The stored lengths, a missing one computed from its axis; the angle and the crossing are measured
+  // in millimetres when the points are known in patient coordinates. Each axis keeps the unit it was
+  // stored in.
+  const measured = (isPatientDomain || isPlane(module)) ? handlePoints : points;
+  const computed = bidirectionalValues(measured);
+  const unitOf = num => (num.unit && num.unit.CodeValue) || 'mm';
+  const storedOf = (num, fallback) => (_.isFinite(num.value) ? [num.value, unitOf(num)] : [fallback, 'mm']);
+  const [length, unit] = storedOf(nums.long, computed.length);
+  const [width, widthUnit] = storedOf(nums.short, computed.width);
+  const values = { length, width, unit, widthUnit };
+  const storedMillimetres = [inMillimetres(length, unit), inMillimetres(width, widthUnit)].filter(value => value !== undefined);
+  const degenerate = [...storedMillimetres, computed.length, computed.width].some(value => !(value >= MIN_AXIS_LENGTH));
+  if (degenerate) {
+    console.warn(`${BIDIRECTIONAL_LOG} degenerate axis (length ${values.length}, width ${values.width}) trackingUID=${TrackingUniqueIdentifier}`);
+  } else if (axesProblem(measured)) {
+    console.warn(`${BIDIRECTIONAL_LOG} axes are not perpendicular or do not intersect (${axesProblem(measured)}) `
+      + `trackingUID=${TrackingUniqueIdentifier}`);
+    throw new Error(`Bidirectional not hydrated: axes are not perpendicular or do not intersect trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  if (referencedImageId) {
+    annotation.data.cachedStats = { [`imageId:${referencedImageId}`]: { ...values } };
+  }
+  // The lengths shown while each axis has the points it was read with
+  annotation.data.recordValue = { values: { ...values }, points: _.cloneDeep(handlePoints) };
+
+  annotation.metadata.sourceGeometry = {
+    valueType: longGeometry.ValueType,
+    graphicType: 'POLYLINE',
+    graphicData: points.flat(),
+    FrameOfReferenceUID: longGeometry.ReferencedFrameOfReferenceUID,
+    ReferencedSOPInstanceUID: reference && reference.ReferencedSOPInstanceUID,
+    ReferencedFrameNumber: reference && reference.ReferencedFrameNumber,
+    placement,
+    values,
+    value: values.length,
+    // The code scheme and unit each axis was read with, written again while it is unchanged
+    axes: _.fromPairs(BIDIRECTIONAL_AXES.map(({ name }) => [name, { scheme: nums[name].scheme, unit: _.cloneDeep(nums[name].unit) }])),
+  };
+  annotation.metadata.TrackingUniqueIdentifier = TrackingUniqueIdentifier;
+  annotation.metadata.TrackingIdentifier = trackingIdentifier;
+  if (locked) {
+    annotation.metadata.isReadOnly = true;
+    annotation.metadata.isLocked = true;
+  }
+  return state;
+}
+
+// Replaces the library Bidirectional (both tracking identifier prefixes), as the circle does
+class Bidirectional extends LibraryBidirectional {
+  static getMeasurementData(MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifier, options) {
+    const imageIdsForToolState = options && options.imageIdsForToolState;
+    const locked = !options || options.locked !== false;
+    const imageIds = frameImageIds(sopInstanceUIDToImageIdMap, imageIdsForToolState);
+    const { state } = LibraryMeasurementReport.getSetupMeasurementData(MeasurementGroup, imageIds, metadata, this.toolType);
+    state.annotation.data = { ...state.annotation.data, handles: { ...(state.annotation.data.handles || {}) } };
+    return bidirectionalMeasurementState(this, state, MeasurementGroup, {
+      sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked,
+    });
+  }
+
+  static getTID300RepresentationArguments() {
+    // Bidirectionals are written by the classic adapter (SCOORD3D/adapters.js)
+    throw new Error('The Cornerstone3D Bidirectional adapter does not write; the classic adapter does');
+  }
+}
+registerAdapter(Bidirectional);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
   DICOMSRSeriesTagTool,
   Angle,
+  Bidirectional,
   CircleROI,
   // The classic tool's name, for the checks of the tools a report holds (utils/isToolSupported.js)
   CircleRoi: CircleROI,
@@ -448,4 +602,4 @@ const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, CircleROI, CobbAngle, Length };
+export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, Bidirectional, CircleROI, CobbAngle, Length };

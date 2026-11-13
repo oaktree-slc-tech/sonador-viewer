@@ -249,6 +249,26 @@ describe('an application document', () => {
     expect(circle.labels).toEqual([{ label: 'Radius', value: '12 mm' }]);
   });
 
+  it('draws both axes of a Bidirectional, labelled with its description, else with its NUMs in document order', () => {
+    const bidirectional = () => tracked('Bidirectional', {
+      TrackingUniqueIdentifier: '2.25.540',
+      labels: [{ label: 'Long Axis', value: '24 mm' }, { label: 'Short Axis', value: '8 mm' }],
+      coords: [[1, 1, 9, 9], [7, 3, 3, 7]].map(GraphicData => ({
+        ValueType: 'SCOORD', GraphicType: 'POLYLINE', GraphicData, ReferencedSOPSequence: { ReferencedSOPInstanceUID: '2.25.12' },
+      })),
+    });
+    const plain = bidirectional();
+    const summary = addReadOnlyMeasurements({ srDisplaySets: [application([plain])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(summary.placed).toBe(1);
+    expect(plain.coords).toHaveLength(2);
+    // The long axis first (the read-only tool draws them "L 24 mm", "W 8 mm")
+    expect(plain.labels).toEqual([{ label: 'Long Axis', value: '24 mm' }, { label: 'Short Axis', value: '8 mm' }]);
+
+    const described = { ...bidirectional(), TrackingUniqueIdentifier: '2.25.541', description: 'Lesion axes' };
+    addReadOnlyMeasurements({ srDisplaySets: [application([described])], imageDisplaySets: [imageDisplaySet()], imageIds });
+    expect(described.labels).toEqual([{ label: 'Lesion axes', value: '' }]);
+  });
+
   it('leaves an exchange document unfiltered', () => {
     const summary = addReadOnlyMeasurements({ srDisplaySets: [{ measurements: [foreign], referencedDisplaySets: [] }],
       imageDisplaySets: [imageDisplaySet()], imageIds });

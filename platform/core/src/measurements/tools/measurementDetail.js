@@ -13,6 +13,7 @@
 
 import { angleBetweenLines } from '../../DICOMSR/utils/angleGeometry';
 import { classicToolName } from '../../DICOMSR/utils/circleGeometry';
+import { bidirectionalDisplayValues } from '../../DICOMSR/utils/bidirectionalGeometry';
 import { circleDetailItems, circleDisplayValues } from './circleDisplay';
 
 const DEGREE = String.fromCharCode(176);
@@ -156,11 +157,19 @@ const TOOLS = {
       if (!isNumber(long)) {
         return { primary: null, sections: [] };
       }
-      // The tool measures its axes through the image's pixel spacing: pixels without one
-      const unit = calibrated ? 'mm' : 'px';
+      // Each axis in the unit it holds (one read from a report keeps its own); without one, the tool
+      // measures through the image's pixel spacing: pixels without one
+      const stated = sectionsOf(measurement).some(section => typeof section.unit === 'string' && section.unit);
+      const values = stated ? bidirectionalDisplayValues(measurement) : undefined;
+      const unit = values ? values.unit : (calibrated ? 'mm' : 'px');
+      const widthUnit = values ? values.widthUnit : unit;
       const items = [item('long', 'Long axis', withUnit(fixed(long), unit))];
       if (isNumber(short)) {
-        items.push(item('short', 'Short axis', withUnit(fixed(short), unit)));
+        items.push(item('short', 'Short axis', withUnit(fixed(short), widthUnit)));
+      }
+      if (isNumber(short) && widthUnit !== unit) {
+        const text = `${withUnit(fixed(long), unit)} × ${withUnit(fixed(short), widthUnit)}`;
+        return { primary: primaryOf('long', text, '', text), sections: [{ title: 'Axes', items }] };
       }
       const value = isNumber(short) ? `${fixed(long)} × ${fixed(short)}` : fixed(long);
       return { primary: primaryOf('long', value, unit), sections: [{ title: 'Axes', items }] };

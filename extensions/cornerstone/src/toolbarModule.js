@@ -316,16 +316,6 @@ const definitions = [
     ],
   },
   {
-    // Add a tag to the series shown in the MPR view, as the classic viewport's Series Tag does
-    id: 'SeriesTagMPR',
-    label: 'Series Tag',
-    icon: 'tags',
-    CustomComponent: SeriesTagToolbarButton,
-    type: TOOLBAR_BUTTON_TYPES.COMMAND,
-    commandName: 'seriesTagDialog',
-    context: 'ACTIVE_VIEWPORT::VTK',
-  },
-  {
     // Exit 2D MPR View
     id: 'Exit2DMPR',
     label: 'Exit 2D MPR',

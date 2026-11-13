@@ -41,15 +41,15 @@ const initLegacyMeasurementServiceMappings = (measurementService) => {
   // Initialize measurement service source and service mappings
   const measurementSource = measurementService.createSource(CORNERSTONE_TOOLS_SOURCE_NAME, CORNERSTONE_TOOLS_SOURCE_VERSION);
   const measurementMappings = cornerstoneMeasurementDataProc.measurementServiceMappingsFactory(measurementService, measurementSource);
-  const { Length, Angle, CobbAngle, CircleRoi, ArrowAnnotateTool, DICOMSRSeriesTag } = measurementMappings;
+  const { Length, Angle, CobbAngle, CircleRoi, Bidirectional, ArrowAnnotateTool, DICOMSRSeriesTag } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource, 
     Length.toolName, Length.matchingCriteria, 
     Length.toAnnotation, Length.toMeasurement, Length.cleanAnnotation, Length.toAltSourceMeasurementSchema);
 
-  // Angle, Cobb Angle and Circle Tools
-  [Angle, CobbAngle, CircleRoi].forEach(mapping => measurementService.addMapping(measurementSource,
+  // Angle, Cobb Angle, Circle and Bidirectional Tools
+  [Angle, CobbAngle, CircleRoi, Bidirectional].forEach(mapping => measurementService.addMapping(measurementSource,
     mapping.toolName, mapping.matchingCriteria,
     mapping.toAnnotation, mapping.toMeasurement, mapping.cleanAnnotation, mapping.toAltSourceMeasurementSchema));
 
@@ -78,7 +78,7 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
   const measurementMappings = cornerstone3dMeasurementDataProc.measurementServiceMappingsFactory(
     measurementService, displaySetService, cornerstoneViewportService, customizationService);
 
-  const { Length, Angle, CobbAngle, CircleROI, ArrowAnnotate, DICOMSRSeriesTagTool } = measurementMappings;
+  const { Length, Angle, CobbAngle, CircleROI, Bidirectional, ArrowAnnotate, DICOMSRSeriesTagTool } = measurementMappings;
 
   // Length Tool
   measurementService.addMapping(measurementSource,
@@ -93,6 +93,10 @@ const initCornerstone3dMeasurementServiceMappings = (measurementService, display
   // Circle Tool
   measurementService.addMapping(measurementSource,
     'CircleROI', CircleROI.matchingCriteria, CircleROI.toAnnotation, CircleROI.toMeasurement);
+
+  // Bidirectional Tool
+  measurementService.addMapping(measurementSource,
+    'Bidirectional', Bidirectional.matchingCriteria, Bidirectional.toAnnotation, Bidirectional.toMeasurement);
 
   // Arrow Annotation Tool
   measurementService.addMapping(measurementSource, 
@@ -188,9 +192,9 @@ const connectToolsToMeasurementService = (measurementService, displaySetService,
     measurementMappings: c3dToolsServiceMappings,
   } = initCornerstone3dMeasurementServiceMappings(measurementService, displaySetService, cornerstoneViewportService, customizationService);
 
-  // Length, Angle and Cobb angle: the exchange-value Cornerstone3D angle tools, a Cornerstone3D
-  // annotation for each eligible classic measurement (editable while the measurement is, locked
-  // once it is saved), and the measurements drawn in the Cornerstone3D views
+  // Length, Angle, Cobb angle, circle and Bidirectional: the exchange-value Cornerstone3D tools, a
+  // Cornerstone3D annotation for each eligible classic measurement (editable while the measurement
+  // is, locked once it is saved), and the measurements drawn in the Cornerstone3D views
   // (utils/measurementAnnotationSync.js)
   registerExchangeAngleTools();
   connectMeasurementAnnotationSync(measurementService, csToolsLegacyVer4MeasurementSource, {

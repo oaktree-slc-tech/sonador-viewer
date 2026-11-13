@@ -1,8 +1,8 @@
-// The display draws every visible Length, Angle, Cobb angle and circle annotation of a 3D viewport's Frame of
-// Reference, whatever the camera orientation, with its value; it can be shown and hidden.
+// The display draws every visible Length, Angle, Cobb angle, circle and Bidirectional annotation of a 3D
+// viewport's Frame of Reference, whatever the camera orientation, with its value; it can be shown and hidden.
 // Cornerstone3D is stubbed: annotations come from an in-memory store and drawing calls are recorded.
 
-const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [], CircleROI: [] };
+const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [], CircleROI: [], Bidirectional: [] };
 const mockHidden = new Set();
 const mockDrawn = [];
 const mockRegisteredTools = {};
@@ -72,6 +72,7 @@ afterEach(() => {
   mockAnnotations.Angle = [];
   mockAnnotations.CobbAngle = [];
   mockAnnotations.CircleROI = [];
+  mockAnnotations.Bidirectional = [];
   mockHidden.clear();
 });
 
@@ -121,6 +122,39 @@ it('draws a circle as a closed outline in its plane with its radius, the stored 
   expect(textOf('r-1')).toEqual([['Radius: 5 mm']]);
   expect(textOf('r-2')).toEqual([['Radius: 5.25 mm']]);
   expect(textOf('r-3')).toEqual([['Radius: 10 mm']]);
+});
+
+it('draws a Bidirectional as its two axes with L x W mm, the stored length of an unchanged axis, and follows its visibility', () => {
+  const points = [[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]];
+  const bidirectional = {
+    annotationUID: 'b-1', metadata: { toolName: 'Bidirectional', FrameOfReferenceUID: FOR, viewPlaneNormal: [0, 0, 1] },
+    data: { handles: { points }, recordValue: { values: { length: 20.04, width: 11.98 }, points: points.map(point => point.slice()) } },
+  };
+  mockAnnotations.Bidirectional = [bidirectional];
+  expect(render()).toBe(true);
+  const lines = mockDrawn.filter(d => d.kind === 'line' && d.uid === 'b-1');
+  expect(lines.map(d => d.partUID)).toEqual(['line1', 'line2']);
+  expect(lines.map(d => d.args.slice(0, 2))).toEqual([[[0, 0], [20, 0]], [[10, -6], [10, 6]]]);
+  expect(textOf('b-1')).toEqual([['20.04 x 11.98 mm']]);
+
+  // A moved long-axis handle: its length measured, the width kept
+  bidirectional.data.handles.points = [[0, 0, 0], [30, 0, 0], [10, -6, 0], [10, 6, 0]];
+  render();
+  expect(textOf('b-1')).toEqual([['30.00 x 11.98 mm']]);
+
+  mockHidden.add('b-1');
+  render();
+  expect(mockDrawn.filter(d => d.uid === 'b-1')).toEqual([]);
+});
+
+it('shows each axis of a Bidirectional in its stored unit', () => {
+  const points = [[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]];
+  mockAnnotations.Bidirectional = [{
+    annotationUID: 'b-2', metadata: { toolName: 'Bidirectional', FrameOfReferenceUID: FOR, viewPlaneNormal: [0, 0, 1] },
+    data: { handles: { points }, recordValue: { values: { length: 20, width: 1.2, unit: 'mm', widthUnit: 'cm' }, points: points.map(p => p.slice()) } },
+  }];
+  render();
+  expect(textOf('b-2')).toEqual([['20.00 mm x 1.20 cm']]);
 });
 
 it('draws a circle whose plane is not known as its radius line, without an outline', () => {

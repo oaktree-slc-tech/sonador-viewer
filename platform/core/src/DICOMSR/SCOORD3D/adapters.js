@@ -24,11 +24,16 @@ import {
 	CIRCLE_TOOL_NAMES, CIRCLE_TRACKING_TOOL, MIN_RADIUS, circleOfGeometry, circleRadius, circleStatisticsOf, circleValues, ellipseOfCircle,
 } from '../utils/circleGeometry';
 import { drawingPlaneOf } from '../utils/drawingPlane';
+import {
+	BIDIRECTIONAL_AXES, BIDIRECTIONAL_TOOL, HANDLE_NAMES as BIDIRECTIONAL_HANDLES, MILLIMETRE, MIN_AXIS_LENGTH, axisConcept, axisGeometryOf,
+	axisLength, bidirectionalNumItems, inMillimetres,
+} from '../utils/bidirectionalGeometry';
 
 
 const { CORNERSTONE_TOOLS_SR_TAG, CORNERSTONE_3D_TAG } = SREnums;
 const {
 	DICOMReferencedSOPInstanceFinding: TID300DICOMReferencedSOPInstanceFinding,
+	BidirectionalMeasurement: TID300BidirectionalMeasurement,
 	CircleMeasurement: TID300CircleMeasurement,
 	CobbAngleMeasurement: TID300CobbAngleMeasurement,
 	LengthMeasurement: TID300LengthMeasurement,
@@ -643,11 +648,200 @@ CornerstoneLegacyMeasurementReport.registerTool(CircleRoi);
 CornerstoneLegacyMeasurementReport.registerTool(CircleROI);
 
 
+// Bidirectional (cornerstone-tools `Bidirectional`: `start`, `end` the long axis, `perpendicularStart`,
+// `perpendicularEnd` the short axis; utils/bidirectionalGeometry.js), written long axis first as the
+// axes are held. An axis of a measurement hydrated from an SR whose two points and image did not
+// change keeps the points, value, code and unit it was read with. Any other axis is measured in
+// millimetres between its patient points, which needs the image's plane and pixel spacing (an
+// uncalibrated Bidirectional is refused). A measurement read in the patient domain, and an
+// out-of-plane one (patient points, utils/outOfPlane.js), are written in it; any other in the image
+// domain. An axis below MIN_AXIS_LENGTH is refused: its geometry, measured in millimetres, on every
+// path, and its value in the unit it is written in.
+
+// The identifier read from the SR (either accepted prefix) is kept; new measurements get the
+// cornerstoneTools form, as the angles, Length and the circle
+const bidirectionalTrackingIdentifier = (tool) => {
+	const readIdentifier = tool.TrackingIdentifier || (tool.metadata || {}).TrackingIdentifier;
+	return isAngleTrackingIdentifier(BIDIRECTIONAL_TOOL, readIdentifier)
+		? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, BIDIRECTIONAL_TOOL].join(':');
+};
+
+function storedBidirectionalOf(source) {
+	// The axes a hydrated Bidirectional was read with: { valueType, points (four), values, axes }, or undefined
+	if (!source || source.graphicType !== 'POLYLINE' || !source.values) {
+		return undefined;
+	}
+	const points = sourcePoints(source);
+	return points.length === 4 ? { valueType: source.valueType, points, values: source.values, axes: source.axes || {} } : undefined;
+}
+
+function unchangedAxes(stored, sameAxisPoint) {
+	// [long, short]: whether each axis still has the two points it was read with
+	return [0, 2].map(first => !!stored && sameAxisPoint(stored.points[first], first) && sameAxisPoint(stored.points[first + 1], first + 1));
+}
+
+function bidirectionalArguments(tool, { axes, use3DSpatialCoordinates, FrameOfReferenceUID, patientOf }) {
+	// `patientOf` maps a written point to patient coordinates (none: image points of an image without
+	// a plane, measured as they are)
+	const meta = tool.metadata || {};
+	axes.forEach(({ value, unit, points }, i) => {
+		const ends = patientOf ? points.map(patientOf) : points;
+		const valueMillimetres = inMillimetres(value, unit && unit.CodeValue);
+		if (!(axisLength(ends[0], ends[1]) >= MIN_AXIS_LENGTH) || !_.isFinite(value)
+				|| (valueMillimetres !== undefined && !(valueMillimetres >= MIN_AXIS_LENGTH))) {
+			throw refusal(REFUSAL.DEGENERATE, `Bidirectional ${BIDIRECTIONAL_AXES[i].concept.CodeMeaning} is below ${MIN_AXIS_LENGTH} mm`);
+		}
+	});
+	return {
+		axes,
+		use3DSpatialCoordinates,
+		ReferencedFrameOfReferenceUID: use3DSpatialCoordinates ? FrameOfReferenceUID : undefined,
+		trackingIdentifierTextValue: bidirectionalTrackingIdentifier(tool),
+		trackingUniqueIdentifier: tool.TrackingUniqueIdentifier || meta.TrackingUniqueIdentifier,
+		finding: tool.finding,
+		findingSites: tool.findingSites || [],
+	};
+}
+
+function axesOf(stored, unchanged, points, patientPoints) {
+	// The two axes written, long axis first: an unchanged one as it was read, another with its `points`
+	// and the length (mm) of its `patientPoints`
+	return BIDIRECTIONAL_AXES.map((axis, i) => {
+		const [first, valueName] = [2 * i, i === 0 ? 'length' : 'width'];
+		const read = stored && stored.axes[axis.name];
+		const concept = axisConcept(axis, read && read.scheme);
+		if (unchanged[i] && _.isFinite(stored.values[valueName])) {
+			return {
+				concept, unit: (read && read.unit) || MILLIMETRE, value: stored.values[valueName], points: stored.points.slice(first, first + 2),
+			};
+		}
+		return {
+			concept,
+			unit: MILLIMETRE,
+			value: axisLength(patientPoints[first], patientPoints[first + 1]),
+			points: points.slice(first, first + 2).map(point => Array.from(point, Number)),
+		};
+	});
+}
+
+function bidirectionalToolArguments(tool, context) {
+	// TID 300 arguments of a Bidirectional; throws an error with a REFUSAL `code` when it cannot be written
+	const meta = tool.metadata || {};
+	const stored = storedBidirectionalOf(tool.sourceGeometry || meta.sourceGeometry);
+
+	if (tool.patientPoints) {
+		const points = tool.patientPoints;
+		if (points.length !== 4 || points.some(point => point.length !== 3 || !point.every(_.isFinite))) {
+			throw refusal(REFUSAL.INCOMPLETE, 'Bidirectional is incomplete: four patient points are required');
+		}
+		if (!tool.FrameOfReferenceUID) {
+			throw refusal(REFUSAL.FRAME_OF_REFERENCE, 'Bidirectional has no Frame of Reference');
+		}
+		const source = tool.sourceGeometry || meta.sourceGeometry;
+		const inPatientDomain = stored && stored.valueType === 'SCOORD3D' && source.FrameOfReferenceUID === tool.FrameOfReferenceUID;
+		const unchanged = unchangedAxes(inPatientDomain && stored, (point, i) => samePoint(point, points[i], UNCHANGED_PATIENT_TOLERANCE));
+		return bidirectionalArguments(tool, {
+			axes: axesOf(stored, unchanged, points, points),
+			use3DSpatialCoordinates: true,
+			FrameOfReferenceUID: tool.FrameOfReferenceUID,
+			patientOf: point => point,
+		});
+	}
+
+	const { imageId, metadataProvider } = context || {};
+	const handles = tool.handles || {};
+	if (BIDIRECTIONAL_HANDLES.some(name => !handles[name] || !_.isFinite(handles[name].x) || !_.isFinite(handles[name].y))) {
+		throw refusal(REFUSAL.INCOMPLETE, `Bidirectional is incomplete: handles ${BIDIRECTIONAL_HANDLES.join(', ')} are required`);
+	}
+	const imagePoints = BIDIRECTIONAL_HANDLES.map(name => [handles[name].x, handles[name].y]);
+	const module = metadataOf(metadataProvider, 'imagePlaneModule', imageId);
+	const sopCommon = metadataOf(metadataProvider, 'sopCommonModule', imageId) || {};
+	const frameNumber = metadataOf(metadataProvider, 'frameNumber', imageId);
+	const source = tool.sourceGeometry || meta.sourceGeometry;
+
+	// Read in the image domain on this image and frame, or in the patient domain on the plane of this
+	// image (where it was placed): an axis is unchanged while its image points are those it was read with
+	let unchanged = [false, false];
+	if (stored && stored.valueType === 'SCOORD') {
+		const onImage = source.ReferencedSOPInstanceUID === sopCommon.sopInstanceUID
+			&& Number(source.ReferencedFrameNumber || 1) === Number(frameNumber || 1);
+		unchanged = unchangedAxes(onImage && stored, (point, i) => samePoint(point, imagePoints[i], UNCHANGED_TOLERANCE));
+	} else if (stored && stored.valueType === 'SCOORD3D') {
+		const placement = source.placement || {};
+		const onPlane = isPlane(module) && module.frameOfReferenceUID === source.FrameOfReferenceUID
+			&& placement.SOPInstanceUID === sopCommon.sopInstanceUID && Number(placement.frameNumber || 1) === Number(frameNumber || 1)
+			&& stored.points.every(point => Math.abs(distanceFromImagePlane(module, point)) <= DEFAULT_PLANE_TOLERANCE);
+		unchanged = unchangedAxes(onPlane && stored, (point, i) => samePoint(patientToImage(module, point), imagePoints[i], UNCHANGED_TOLERANCE));
+	}
+
+	const domain = (source && source.valueType === 'SCOORD3D') ? 'patient' : (tool.coordinateDomain || meta.coordinateDomain);
+	if (unchanged.every(Boolean)) {
+		const inPatient = stored.valueType === 'SCOORD3D';
+		return bidirectionalArguments(tool, {
+			axes: axesOf(stored, unchanged, [], []),
+			use3DSpatialCoordinates: inPatient,
+			FrameOfReferenceUID: source.FrameOfReferenceUID,
+			patientOf: inPatient ? point => point : (isPlane(module) ? point => imageToPatient(module, point) : undefined),
+		});
+	}
+	if (!isPlane(module)) {
+		throw refusal(REFUSAL.UNCALIBRATED, `Bidirectional is on an image without pixel spacing (imageId=${imageId})`);
+	}
+	const patientPoints = imagePoints.map(point => imageToPatient(module, point));
+	const patient = domain === 'patient' && !!module.frameOfReferenceUID;
+	return bidirectionalArguments(tool, {
+		axes: axesOf(stored, unchanged, patient ? patientPoints : imagePoints, patientPoints),
+		use3DSpatialCoordinates: patient,
+		FrameOfReferenceUID: module.frameOfReferenceUID,
+		patientOf: patient ? point => point : point => imageToPatient(module, point),
+	});
+}
+
+function bidirectionalMeasurementData(MeasurementGroup) {
+	// cornerstone-tools state of an image-domain Bidirectional group (handles from each axis' POLYLINE)
+	const { defaultState } = LibraryLegacyMeasurementReport.getSetupMeasurementData(MeasurementGroup);
+	const nums = bidirectionalNumItems(_.castArray(MeasurementGroup.ContentSequence));
+	const points = BIDIRECTIONAL_AXES.flatMap(({ name }) => {
+		const geometry = nums[name] && axisGeometryOf(nums[name].item);
+		return geometry ? _.chunk(Array.from(geometry.GraphicData, Number), 2) : [];
+	});
+	if (points.length !== 4) {
+		throw new Error('Bidirectional group without two axes of two points');
+	}
+	const handles = _.zipObject(BIDIRECTIONAL_HANDLES, points.map(([x, y]) => ({ x, y, highlight: true, active: false })));
+	handles.textBox = { hasMoved: false, movesIndependently: false, drawnIndependently: true, allowedOutsideImage: true, hasBoundingBox: true };
+	return {
+		...defaultState,
+		toolType: BIDIRECTIONAL_TOOL,
+		handles,
+		longestDiameter: nums.long.value,
+		shortestDiameter: nums.short.value,
+	};
+}
+
+class Bidirectional {
+	static getMeasurementData(MeasurementGroup) {
+		return bidirectionalMeasurementData(MeasurementGroup);
+	}
+
+	static getTID300RepresentationArguments(tool, context) {
+		return bidirectionalToolArguments(tool, context);
+	}
+}
+Bidirectional.toolType = BIDIRECTIONAL_TOOL;
+Bidirectional.utilityToolType = BIDIRECTIONAL_TOOL;
+Bidirectional.TID300Representation = TID300BidirectionalMeasurement;
+Bidirectional.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAngleTrackingIdentifier(BIDIRECTIONAL_TOOL, TrackingIdentifier);
+
+CornerstoneLegacyMeasurementReport.registerTool(Bidirectional);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 	DICOMSRSeriesTagTool,
 	Angle,
+	Bidirectional,
 	CircleRoi,
 	CobbAngle,
 	Length,
@@ -656,5 +850,6 @@ const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 
 export default sonadorAdaptersSR;
 export {
-	sonadorAdaptersSR, angleToolArguments, circleToolArguments, lengthToolArguments, Angle, CircleRoi, CobbAngle, Length, REFUSAL,
+	sonadorAdaptersSR, angleToolArguments, bidirectionalToolArguments, circleToolArguments, lengthToolArguments, Angle, Bidirectional,
+	CircleRoi, CobbAngle, Length, REFUSAL,
 }

@@ -4,9 +4,10 @@
 // measurements it holds, as they were written, are locked as saved measurements.
 
 import { MIN_RADIUS } from './circleGeometry';
+import { MIN_AXIS_LENGTH } from './bidirectionalGeometry';
 import { asArray, conceptNameValue } from './codedConcept';
 
-const TOOL_LABELS = { Angle: 'Angle', CobbAngle: 'Cobb angle', CircleRoi: 'Circle', CircleROI: 'Circle' };
+const TOOL_LABELS = { Angle: 'Angle', CobbAngle: 'Cobb angle', CircleRoi: 'Circle', CircleROI: 'Circle', Bidirectional: 'Bidirectional' };
 
 const ACTIONS = {
   incomplete: 'complete it, or delete it and draw it again',
@@ -23,7 +24,13 @@ const CIRCLE_ACTIONS = {
   uncalibrated: 'its image calibration is missing or invalid, so the circle cannot be measured in millimetres; draw it on a calibrated image',
   plane: 'the plane it was drawn in is not known, so it cannot be saved in patient coordinates',
 };
-const TOOL_ACTIONS = { CircleRoi: CIRCLE_ACTIONS, CircleROI: CIRCLE_ACTIONS };
+// What to do about a Bidirectional, where it differs from an angle
+const BIDIRECTIONAL_ACTIONS = {
+  incomplete: 'draw it again with both of its axes',
+  degenerate: `move the endpoints of each axis apart so that both axes are at least ${MIN_AXIS_LENGTH} mm long`,
+  uncalibrated: 'its image calibration is missing or invalid, so its axes cannot be measured in millimetres; draw it on a calibrated image',
+};
+const TOOL_ACTIONS = { CircleRoi: CIRCLE_ACTIONS, CircleROI: CIRCLE_ACTIONS, Bidirectional: BIDIRECTIONAL_ACTIONS };
 
 
 /** A measurement the writer left out: the tool, its label, and the refusal code of the error */
