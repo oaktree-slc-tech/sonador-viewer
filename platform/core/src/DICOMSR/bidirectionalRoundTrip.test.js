@@ -130,11 +130,6 @@ const FIXTURES = path.join(__dirname, '__fixtures__');
 const VIEWER_IMAGE = path.join(FIXTURES, 'sonador-viewer.bidirectional-image.2026-1113.dcm');
 const VIEWER_OBLIQUE = path.join(FIXTURES, 'sonador-viewer.bidirectional-oblique.2026-1113.dcm');
 const fixture = name => readSR(fs.readFileSync(path.join(FIXTURES, name)));
-// The fixtures of the other writers, by name prefix (any date): undefined while not committed
-const optionalFixture = (prefix) => {
-  const name = fs.readdirSync(FIXTURES).filter(file => file.startsWith(`${prefix}.`) && file.endsWith('.dcm')).sort().pop();
-  return name;
-};
 
 const COMPREHENSIVE_3D_SR = '1.2.840.10008.5.1.4.1.1.88.34';
 const CT_IMAGE = '1.2.840.10008.5.1.4.1.1.2';
@@ -907,36 +902,117 @@ describe('out-of-plane: patient domain with a Drawing-Plane', () => {
 });
 
 
-describe('documents of the other writers, when present', () => {
-  // Sonador IO (oak-tree/medical-imaging/sonador-client) and the stock @cornerstonejs/adapters
-  // 4.22.13 writer: each fixture, by name prefix, is checked when it is committed
-  const OTHER_WRITERS = [
-    'sonador-io.bidirectional-image', 'sonador-io.bidirectional-axial', 'sonador-io.bidirectional-oblique',
-    'cornerstone-adapters.bidirectional-image', 'cornerstone-adapters.bidirectional-patient',
+describe('documents of the other writers', () => {
+  // Sonador IO (oak-tree/medical-imaging/sonador-client, ftests/test_sr/sr_bidirectional.py) and the stock
+  // @cornerstonejs/adapters 4.22.13 writer (its generator under ftests/test_sr/fixtures/generators)
+  const LINE_TEXT = { Line: '#C81E28', Text: '#FAFA0A' };
+  // The client's calibration of the synthetic frame 2.25.1003: origin (0, 0, 0), axial, 2 mm between
+  // rows and 0.5 mm between columns
+  const CLIENT_FRAME = { SOPInstanceUID: IMAGE.SOPInstanceUID, imageId: 'client-frame:2.25.1003' };
+  mockImagePlanes[CLIENT_FRAME.imageId] = {
+    imagePositionPatient: [0, 0, 0], rowCosines: [1, 0, 0], columnCosines: [0, 1, 0],
+    rowPixelSpacing: 2, columnPixelSpacing: 0.5, frameOfReferenceUID: SYNTHETIC.FrameOfReferenceUID,
+  };
+  IMAGES.push(CLIENT_FRAME);
+  const OBLIQUE_WIDTH = [1, -1, 0].map(v => v / Math.SQRT2);
+  const OBLIQUE_HEIGHT = [1, 1, -2].map(v => v / Math.sqrt(6));
+  const along = (origin, direction, distance) => origin.map((v, i) => v + distance * direction[i]);
+  const OBLIQUE_ORIGIN = [10, 20, 30];
+
+  const CASES = [
+    {
+      name: 'sonador-io.bidirectional-image.2026-1113.dcm', images: [CLIENT_FRAME], prefix: 'cornerstoneTools@^4.0.0',
+      domain: 'image', points: [[20, 10], [20, 20], [15, 15], [25, 15]], values: [20, 5], view: 'axial', properties: true,
+    },
+    {
+      name: 'sonador-io.bidirectional-axial.2026-1113.dcm', images: [IMAGE], prefix: 'cornerstoneTools@^4.0.0',
+      domain: 'patient', points: [[-10, 20, 30], [10, 20, 30], [0, 15, 30], [0, 25, 30]], values: [20, 10], view: 'axial',
+      drawingPlane: '1,0,0,0,1,0', properties: true,
+    },
+    {
+      name: 'sonador-io.bidirectional-oblique.2026-1113.dcm', images: [IMAGE], prefix: 'cornerstoneTools@^4.0.0', domain: 'patient',
+      points: [along(OBLIQUE_ORIGIN, OBLIQUE_WIDTH, -10), along(OBLIQUE_ORIGIN, OBLIQUE_WIDTH, 10),
+        along(OBLIQUE_ORIGIN, OBLIQUE_HEIGHT, -4), along(OBLIQUE_ORIGIN, OBLIQUE_HEIGHT, 4)],
+      values: [20, 8], view: 'oblique', drawingPlane: '0.707107,-0.707107,0,0.408248,0.408248,-0.816497', properties: true,
+    },
+    // Written from handles given short axis first: the stock writer puts the longer pair under the Long Axis NUM
+    {
+      name: 'cornerstone-adapters.bidirectional-image.2026-1113.dcm', images: [IMAGE], prefix: 'Cornerstone3DTools@^0.1.0',
+      domain: 'image', points: [[10, 20], [30, 20], [20, 15], [20, 25]], values: [20, 10],
+    },
+    // Patient domain: the stock writer stores no value; the lengths are those of the axes
+    {
+      name: 'cornerstone-adapters.bidirectional-patient.2026-1113.dcm', images: [IMAGE], prefix: 'Cornerstone3DTools@^0.1.0',
+      domain: 'patient', points: [[0, 20, 30], [20, 20, 30], [10, 15, 30], [10, 25, 30]], values: [20, 10], noStoredValue: true,
+    },
   ];
 
-  OTHER_WRITERS.forEach(prefix => {
-    const name = optionalFixture(prefix);
-    (name ? it : it.skip)(`${name || prefix}: hydrates with its stored lengths and its axes point for point`, () => {
+  CASES.forEach(({ name, images, prefix, domain, points, values, view, drawingPlane, properties, noStoredValue }) => {
+    it(`${name}: hydrates through the Sonador adapter with its lengths and both POLYLINEs as written`, () => {
       const dataset = fixture(name);
-      const groups = measurementGroups(dataset).filter(group => /:Bidirectional$/.test(trackingIdentifierOf(group)));
-      expect(groups.length).toBeGreaterThan(0);
-      const { byType } = hydrate(dataset);
-      const states = byType.Bidirectional || [];
-      expect(states).toHaveLength(groups.length);
-      states.forEach((state, index) => {
-        const nums = bidirectionalNumItems(numsOf(groups[index]));
-        const values = state.annotation.data.recordValue.values;
-        // Agreement with the writer's values: 0.01 mm per axis
-        expect(Math.abs(values.length - nums.long.value)).toBeLessThan(0.01);
-        expect(Math.abs(values.width - nums.short.value)).toBeLessThan(0.01);
-        const graphic = [nums.long, nums.short].flatMap(({ item }) => pointsOfItem(geometryOf(item)));
-        expect(state.annotation.metadata.sourceGeometry.graphicData).toEqual(graphic.flat());
-        if (prefix.startsWith('cornerstone-adapters')) {
-          expect(state.annotation.metadata.TrackingIdentifier).toBe('Cornerstone3DTools@^0.1.0:Bidirectional');
-        }
-      });
+      const [group] = measurementGroups(dataset);
+      expect(trackingIdentifierOf(group)).toBe(`${prefix}:Bidirectional`);
+      expect(numsOf(group).map(num => firstItem(num.ConceptNameCodeSequence).CodeValue)).toEqual(['103339001', '103340004']);
+      expect(numsOf(group).map(num => firstItem(num.ConceptNameCodeSequence).CodingSchemeDesignator)).toEqual(['SCT', 'SCT']);
+
+      const { byType, warnings } = hydrate(dataset, images);
+      expect(warnings.filter(message => message.startsWith(NOT_PERPENDICULAR_WARNING))).toEqual([]);
+      const [state] = byType.Bidirectional;
+      const { metadata, data } = state.annotation;
+      expect(metadata).toMatchObject({ TrackingIdentifier: `${prefix}:Bidirectional`, TrackingUniqueIdentifier: trackingUIDOf(group),
+        coordinateDomain: domain, isLocked: true, isReadOnly: true });
+
+      // Both lengths within 0.01 mm of the writer's, in mm; both POLYLINEs point for point
+      const { length, width, unit, widthUnit } = data.recordValue.values;
+      expect(Math.abs(length - values[0])).toBeLessThan(0.01);
+      expect(Math.abs(width - values[1])).toBeLessThan(0.01);
+      expect([unit, widthUnit]).toEqual(['mm', 'mm']);
+      const written = metadata.sourceGeometry.graphicData;
+      expect(written).toHaveLength(points.flat().length);
+      written.forEach((value, i) => expect(value).toBeCloseTo(points.flat()[i], 4));
+      if (noStoredValue) {
+        expect(numsOf(group).map(num => firstItem(num.MeasuredValueSequence).NumericValue)).toEqual([undefined, undefined]);
+      }
+
+      if (domain === 'image') {
+        expect(metadata.referencedImageId).toBe(images[0].imageId);
+      }
+      if (drawingPlane) {
+        // Held out of plane, navigated by its Drawing-Plane
+        expect(metadata).toMatchObject({ outOfPlane: true, drawingPlane, sourceSeries: SYNTHETIC.SeriesInstanceUID });
+        const held = heldOutOfPlaneRecord(BIDIRECTIONAL, state, SYNTHETIC.StudyInstanceUID);
+        expect(held.data).toMatchObject({ unit: 'mm', widthUnit: 'mm' });
+        expect(navigationPlaneOf(held.points, held.metadata.drawingPlane).kind).toBe('drawing-plane');
+      } else {
+        expect(metadata.outOfPlane).toBeUndefined();
+      }
+      if (properties) {
+        // Read from the Long Axis NUM
+        const name_ = name.replace(/^sonador-io\.(.*)\.2026-1113\.dcm$/, '$1 measurement');
+        expect(state.description).toBe(name_);
+        expect(metadata).toMatchObject({ text: 'Synthetic', location: 'Synthetic location', views: [view] });
+        expect(data.displayAttributes.Color).toEqual(LINE_TEXT);
+        expect(asArray(numsOf(group)[1].ContentSequence).map(item => item.RelationshipType)).toEqual(['INFERRED FROM']);
+      }
     });
+  });
+
+  it('writes the client axial Bidirectional back unchanged as a held measurement', () => {
+    const dataset = fixture('sonador-io.bidirectional-axial.2026-1113.dcm');
+    const [state] = hydrate(dataset).byType.Bidirectional;
+    const held = { ...heldOutOfPlaneRecord(BIDIRECTIONAL, state, SYNTHETIC.StudyInstanceUID), uid: 'held-axial' };
+    const key = `patient:${SYNTHETIC.SeriesInstanceUID}`;
+    const [group] = measurementGroups(readSR(write({}, {
+      toolState: { [key]: { [BIDIRECTIONAL]: { data: [{ ...patientToolData(held), _id: 'held-axial', description: state.description }] } } },
+      patientSeries: { [key]: { StudyInstanceUID: SYNTHETIC.StudyInstanceUID, SeriesInstanceUID: SYNTHETIC.SeriesInstanceUID, instances: [] } },
+      document: reSaveOf(dataset),
+    }).result));
+    const [source] = measurementGroups(dataset);
+    expect(trackingIdentifierOf(group)).toBe(trackingIdentifierOf(source));
+    expect(trackingUIDOf(group)).toBe(trackingUIDOf(source));
+    expect(valuesOf(group)).toEqual(valuesOf(source));
+    expect(numsOf(group).map(num => pointsOfItem(geometryOf(num)))).toEqual(numsOf(source).map(num => pointsOfItem(geometryOf(num))));
+    expect(textValues(asArray(numsOf(group)[0].ContentSequence), DRAWING_PLANE)).toEqual(['1,0,0,0,1,0']);
   });
 });
 
