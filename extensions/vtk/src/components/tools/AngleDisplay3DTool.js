@@ -1,4 +1,4 @@
-// Display of the Length, Angle, Cobb angle and circle annotations in a Cornerstone3D 3D (volume
+// Display of the Length, Angle, Cobb angle, circle and Bidirectional annotations in a Cornerstone3D 3D (volume
 // rendering) viewport: every annotation of those tools in the viewport's Frame of Reference, including the
 // ones the classic and out-of-plane measurements are mirrored to (extensions/cornerstone
 // measurementAnnotationSync). This tool only draws them. The stock tools offer an annotation only to
@@ -6,8 +6,9 @@
 // them whatever the camera: the lines, the handles and the value (DICOMSR angleGeometry
 // `annotationLength`, in mm, and `annotationAngle`: for a mirrored measurement, the value its record
 // and SR hold while its points are unchanged). A circle is drawn in its plane (the annotation's view
-// plane normal) with its radius (DICOMSR circleGeometry `annotationCircle`). The tool keeps its name,
-// which the views that add it use.
+// plane normal) with its radius (DICOMSR circleGeometry `annotationCircle`), a Bidirectional as its
+// two axes with `L x W mm` (DICOMSR bidirectionalGeometry `annotationBidirectional`). The tool keeps
+// its name, which the views that add it use.
 //
 // Display only: it takes no mouse input, and editing stays with the 2D and inspection views. Add it to a tool
 // group with `addAngleDisplay3DToolToGroup`; `setAngleDisplay3DEnabled` shows or hides it.
@@ -15,6 +16,7 @@
 import { annotationAngle, annotationLength } from '@ohif/core/src/DICOMSR/utils/angleGeometry';
 import { NON_PLANAR_COBB_ANGLE } from '@ohif/core/src/DICOMSR/utils/outOfPlane';
 import { annotationCircle, circleOutline } from '@ohif/core/src/DICOMSR/utils/circleGeometry';
+import { annotationBidirectional, bidirectionalText } from '@ohif/core/src/DICOMSR/utils/bidirectionalGeometry';
 
 import { utilities as c3dUtils } from '@cornerstonejs/core';
 import {
@@ -30,7 +32,7 @@ const { drawHandles, drawLine, drawLinkedTextBox, drawPolyline } = c3dSvgDrawing
 
 // Tools whose annotations are drawn, with their point counts: a Cobb angle whose lines lie in no
 // common plane is kept under its own tool name, which no slice tool draws, and drawn as a Cobb angle
-const DISPLAYED_TOOLS = { Length: 2, Angle: 3, CobbAngle: 4, [NON_PLANAR_COBB_ANGLE]: 4, CircleROI: 2 };
+const DISPLAYED_TOOLS = { Length: 2, Angle: 3, CobbAngle: 4, [NON_PLANAR_COBB_ANGLE]: 4, CircleROI: 2, Bidirectional: 4 };
 const drawnAs = toolName => (toolName === NON_PLANAR_COBB_ANGLE ? 'CobbAngle' : toolName);
 
 
@@ -51,7 +53,7 @@ class AngleDisplay3DTool extends AnnotationTool {
   getHandleNearImagePoint = () => undefined;
 
   _annotations(viewport) {
-    // Visible Length / Angle / Cobb angle annotations of the viewport's Frame of Reference, with
+    // Visible annotations of the displayed tools in the viewport's Frame of Reference, with
     // complete geometry
     const FrameOfReferenceUID = viewport.getFrameOfReferenceUID();
     return Object.keys(DISPLAYED_TOOLS).flatMap(toolName =>
@@ -106,6 +108,16 @@ class AngleDisplay3DTool extends AnnotationTool {
         drawLine(svgDrawingHelper, annotationUID, 'line2', canvasCoordinates[2], canvasCoordinates[3], lineOptions);
       }
       drawHandles(svgDrawingHelper, annotationUID, 'handles', canvasCoordinates, { color });
+
+      if (toolName === 'Bidirectional') {
+        const text = bidirectionalText(annotationBidirectional(data));
+        if (text) {
+          drawLinkedTextBox(svgDrawingHelper, annotationUID, 'textBox', [text],
+            c3dToolsUtilities.drawing.getTextBoxCoordsCanvas(canvasCoordinates), canvasCoordinates, {},
+            this.getLinkedTextBoxStyle(styleSpecifier, annotation));
+        }
+        return;
+      }
 
       // The value; 0 is a value, and an incomplete or degenerate angle without a matching record
       // value has none

@@ -1,4 +1,5 @@
-// Each classic Length / Angle / Cobb angle measurement has one editable Cornerstone3D annotation;
+// Each classic Length / Angle / Cobb angle / circle / Bidirectional measurement has one editable
+// Cornerstone3D annotation;
 // edits and deletions travel both ways, and the measurement service keeps a single record. A
 // measurement drawn in a Cornerstone3D view on an acquired image becomes that record; drawn on any
 // other plane, with a tool that has no classic mapping, or when it cannot be added, it stays in the
@@ -81,6 +82,7 @@ jest.mock('@ohif/core', () => ({
     DICOMSR: {
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
       circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
+      bidirectionalGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/bidirectionalGeometry'),
       outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
       drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
       measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
@@ -95,7 +97,7 @@ jest.mock('@ohif/core', () => ({
           return () => mockVisibilitySources.delete(source);
         },
         Instance: {
-          _serviceManagedTool: toolName => (['Length', 'Angle', 'CobbAngle', 'ArrowAnnotate', 'CircleRoi'].includes(toolName)
+          _serviceManagedTool: toolName => (['Length', 'Angle', 'CobbAngle', 'ArrowAnnotate', 'CircleRoi', 'Bidirectional'].includes(toolName)
             ? { toolServiceManaged: true, source: { name: 'CornerstoneTools', version: '4', ...mockClassic }, toolMapping: mockClassic }
             : { toolServiceManaged: false }),
         },
@@ -201,7 +203,7 @@ it('creates one editable annotation for a classic measurement, in patient coordi
 });
 
 it('ignores measurements of other tools and of the Cornerstone3D source', () => {
-  service.add({ ...cobbAngle('bidirectional'), toolName: 'Bidirectional' });
+  service.add({ ...cobbAngle('ellipse'), toolName: 'EllipticalRoi' });
   service.add({ ...cobbAngle('c3d'), source: c3dSource });
   expect(mockAnnotations.size).toBe(0);
 });
@@ -493,6 +495,18 @@ describe('a measurement drawn in a Cornerstone3D view', () => {
     expect(measurement.data.length).toBeCloseTo(5, 6);
   });
 
+  it('saves a Bidirectional with its four handles in order and both lengths in mm', async () => {
+    mockClassic.toAnnotationSchema.mockImplementation(measurement => ({ measurement }));
+    mockClassic.annotationToMeasurement.mockImplementation(() => undefined);
+    await drawn('Bidirectional', [[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]]);
+    const [measurement, toolName] = mockClassic.toAnnotationSchema.mock.calls[0];
+    expect(toolName).toBe('Bidirectional');
+    expect(measurement.points).toEqual([{ x: 0.5, y: 0.5 }, { x: 20.5, y: 0.5 }, { x: 10.5, y: -5.5 }, { x: 10.5, y: 6.5 }]);
+    expect(Object.keys(measurement.data.handles)).toEqual(['start', 'end', 'perpendicularStart', 'perpendicularEnd']);
+    expect(measurement.data).toMatchObject({ longestDiameter: 20, shortestDiameter: 12 });
+    expect(measurement.unit).toBe('mm');
+  });
+
   it('without a referenced image stays in the view, dashed, announced without claiming why no image was found', async () => {
     // The reference lookup returns none for an unaligned view and for images without position metadata
     const annotation = await drawn('Angle', [[10, 0, 0], [0, 0, 0], [0, 10, 0]], null);
@@ -518,7 +532,6 @@ describe('a measurement drawn in a Cornerstone3D view', () => {
   });
 
   it.each([
-    ['Bidirectional', 'bidirectional measurement', [[0, 0, 0], [10, 0, 0], [5, -3, 0], [5, 3, 0]]],
     ['EllipticalROI', 'ellipse', [[0, 0, 0], [10, 0, 0], [5, -3, 0], [5, 3, 0]]],
     ['RectangleROI', 'rectangle', [[0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0]]],
     ['PlanarFreehandROI', 'freehand outline', []],
@@ -874,6 +887,30 @@ describe('a measurement drawn in the 3D Inspector', () => {
     expect(mirror(record.uid).metadata.toolName).toBe('CircleROI');
   });
 
+  it('off the acquired plane, a Bidirectional becomes a pending out-of-plane measurement with both lengths, its Drawing-Plane holding all four points', async () => {
+    const { drawingPlaneProblem } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane');
+    const points = [[12, 0, 0], [12, 20, 0], [12, 10, -6], [12, 10, 6]];
+    await drawn('Bidirectional', points);
+
+    const [record] = records();
+    expect(record).toMatchObject({
+      toolName: 'Bidirectional', points, unit: 'mm', isLocked: false,
+      data: { longestDiameter: 20, shortestDiameter: 12 },
+      metadata: { outOfPlane: true, sourceSeries: '2.25.1002', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'] },
+    });
+    expect(drawingPlaneProblem(record.metadata.drawingPlane, record.points)).toBeUndefined();
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    expect(mirror(record.uid).metadata.toolName).toBe('Bidirectional');
+    expect(mirror(record.uid).data.recordValue).toEqual({ values: { length: 20, width: 12, unit: 'mm', widthUnit: 'mm' }, points });
+
+    // An edit on its drawing plane recomputes the moved axis only
+    const annotation = mirror(record.uid);
+    annotation.data.handles.points[1] = [12, 30, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    const [, updated] = service.update.mock.calls[service.update.mock.calls.length - 1];
+    expect(updated.data).toMatchObject({ longestDiameter: 30, shortestDiameter: 12 });
+  });
+
   it('keeps the modality of the statistics a circle drawn on an MR volume computes, through an edit, to the report writer', async () => {
     const { patientToolData } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane');
     const { circleStatisticItems, circleStatisticNumItems } = jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry');
@@ -1050,6 +1087,109 @@ describe('a measurement drawn in the 3D Inspector', () => {
   });
 });
 
+
+
+describe('Bidirectional', () => {
+  // Long axis (0.5, 10.5) -> (20.5, 10.5), 20 mm; short axis (10.5, 4.5) -> (10.5, 16.5), 12 mm
+  const bidirectional = (uid = 'bidirectional-1') => ({
+    uid,
+    toolName: 'Bidirectional',
+    source: classicSource,
+    referencedImageId: 'wadors:image',
+    FrameOfReferenceUID: '2.25.7001',
+    points: [{ x: 0.5, y: 10.5 }, { x: 20.5, y: 10.5 }, { x: 10.5, y: 4.5 }, { x: 10.5, y: 16.5 }],
+    unit: 'mm',
+    data: {
+      longestDiameter: 20.04,
+      shortestDiameter: 11.98,
+      handles: {
+        start: { x: 0.5, y: 10.5 }, end: { x: 20.5, y: 10.5 }, perpendicularStart: { x: 10.5, y: 4.5 }, perpendicularEnd: { x: 10.5, y: 16.5 },
+        textBox: {},
+      },
+    },
+    metadata: { TrackingUniqueIdentifier: '2.25.8300' },
+  });
+  const PATIENT = [[0, 10, 0], [20, 10, 0], [10, 4, 0], [10, 16, 0]];
+
+  it('mirror the four classic handles onto the Cornerstone3D points in order, with both stored lengths', () => {
+    service.add(bidirectional());
+    expect(mirror('bidirectional-1').metadata.toolName).toBe('Bidirectional');
+    expect(mirror('bidirectional-1').data.handles.points).toEqual(PATIENT);
+    expect(mirror('bidirectional-1').data.recordValue).toEqual({
+      values: { length: 20.04, width: 11.98, unit: 'mm', widthUnit: 'mm' }, points: PATIENT,
+    });
+  });
+
+  it('carry a moved long-axis handle in a Cornerstone3D view to the classic record: its length recomputed, the width kept', () => {
+    service.add(bidirectional());
+    const annotation = mirror('bidirectional-1');
+    annotation.data.handles.points[1] = [25, 10, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+
+    expect(service.update).toHaveBeenCalledTimes(1);
+    const [, measurement] = service.update.mock.calls[0];
+    expect(measurement.data.handles.end).toEqual({ x: 25.5, y: 10.5 });
+    expect(measurement.data.handles.perpendicularEnd).toEqual({ x: 10.5, y: 16.5 });
+    expect(measurement.points).toHaveLength(4);
+    expect(measurement.data).toMatchObject({ longestDiameter: 25, shortestDiameter: 11.98 });
+    expect(measurement.metadata.TrackingUniqueIdentifier).toBe('2.25.8300');
+  });
+
+  it('carry each axis in its unit to the mirror, and keep the unit of the axis that did not move', () => {
+    const inCentimetres = bidirectional();
+    inCentimetres.data = { ...inCentimetres.data, shortestDiameter: 1.2, unit: 'mm', widthUnit: 'cm' };
+    service.add(inCentimetres);
+    expect(mirror('bidirectional-1').data.recordValue.values).toEqual({ length: 20.04, width: 1.2, unit: 'mm', widthUnit: 'cm' });
+    const annotation = mirror('bidirectional-1');
+    annotation.data.handles.points[1] = [25, 10, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    const [, measurement] = service.update.mock.calls[0];
+    expect(measurement.data).toMatchObject({ longestDiameter: 25, shortestDiameter: 1.2, unit: 'mm', widthUnit: 'cm' });
+  });
+
+  it('carry a moved short-axis handle the same way: its width recomputed, the length kept', () => {
+    service.add(bidirectional());
+    const annotation = mirror('bidirectional-1');
+    annotation.data.handles.points[3] = [10, 18, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    const [, measurement] = service.update.mock.calls[0];
+    expect(measurement.data).toMatchObject({ longestDiameter: 20.04, shortestDiameter: 14 });
+  });
+
+  it('move their annotation when the classic Bidirectional is edited, with the new lengths', () => {
+    service.add(bidirectional());
+    const edited = bidirectional();
+    edited.data.handles.end = { x: 25.5, y: 10.5 };
+    edited.data.longestDiameter = 25;
+    service.publish('updated', { source: classicSource, measurement: edited });
+    expect(mirror('bidirectional-1').data.handles.points[1]).toEqual([25, 10, 0]);
+    expect(mirror('bidirectional-1').data.recordValue.values).toEqual({ length: 25, width: 11.98, unit: 'mm', widthUnit: 'mm' });
+    expect(mockAnnotations.size).toBe(1);
+  });
+
+  it('are removed in both places from either', () => {
+    service.add(bidirectional());
+    service.remove('bidirectional-1');
+    expect(mirror('bidirectional-1')).toBeUndefined();
+
+    service.add(bidirectional('bidirectional-2'));
+    const annotation = mirror('bidirectional-2');
+    mockAnnotations.delete(annotation.annotationUID);
+    mockListeners.ANNOTATION_REMOVED({ detail: { annotation } });
+    expect(service.getMeasurement('bidirectional-2')).toBeUndefined();
+  });
+
+  it('lock the annotation of a saved or hydrated Bidirectional, whose edits are not carried', () => {
+    const locked = bidirectional();
+    locked.metadata = { ...locked.metadata, isLocked: true, isReadOnly: true };
+    service.add(locked);
+    expect(mockLocked.has(annotationUIDFor('bidirectional-1'))).toBe(true);
+    const annotation = mirror('bidirectional-1');
+    annotation.data.handles.points[1] = [25, 10, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    expect(service.update).not.toHaveBeenCalled();
+  });
+});
 
 
 describe('circles', () => {

@@ -1,6 +1,6 @@
 // A measurement drawn in a Cornerstone3D view with a point on an image edge (image x or y of 0)
-// becomes a classic measurement with every point, through the real classic Length, Angle, circle
-// and arrow mappings: 0 is a coordinate.
+// becomes a classic measurement with every point, through the real classic Length, Angle, circle,
+// Bidirectional and arrow mappings: 0 is a coordinate.
 
 const mockAnnotations = new Map();
 const mockLocked = new Set();
@@ -68,6 +68,7 @@ jest.mock('@ohif/core', () => ({
     DICOMSR: {
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
       circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
+      bidirectionalGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/bidirectionalGeometry'),
       outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
       drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
       measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
@@ -88,7 +89,10 @@ jest.mock('@ohif/core', () => ({
 import { connectMeasurementAnnotationSync } from './measurementAnnotationSync';
 import measurementServiceMappingsFactory from './measurementServiceMappings/Cornerstone/measurementServiceMappingsFactory';
 
-const VALUE_TYPES = { CIRCLE: 'value_type::circle', POLYLINE: 'value_type::polyline', POINT: 'value_type::point', ELLIPSE: 'value_type::ellipse', ANGLE: 'value_type::polyline' };
+const VALUE_TYPES = {
+  CIRCLE: 'value_type::circle', POLYLINE: 'value_type::polyline', POINT: 'value_type::point', ELLIPSE: 'value_type::ellipse', ANGLE: 'value_type::polyline',
+  BIDIRECTIONAL: 'value_type::shortAxisLongAxis',
+};
 
 let measurements;
 let notified;
@@ -106,7 +110,7 @@ beforeEach(() => {
   };
   const mappings = measurementServiceMappingsFactory(service);
   const byTool = { Length: mappings.Length, Angle: mappings.Angle, CobbAngle: mappings.CobbAngle, ArrowAnnotate: mappings.ArrowAnnotateTool,
-    CircleRoi: mappings.CircleRoi };
+    CircleRoi: mappings.CircleRoi, Bidirectional: mappings.Bidirectional };
   // As the measurement service source: the tool's annotation mapped to a stored measurement
   const source = {
     name: 'CornerstoneTools',
@@ -184,12 +188,24 @@ it('saves a circle centred on the image origin as a classic CircleRoi with its v
   expect(measurement.data.cachedStats.perimeter).toBeCloseTo(10 * Math.PI, 9);
 });
 
+it('saves a Bidirectional with an end at the image origin as a classic Bidirectional, its handles in order and both lengths', async () => {
+  const measurement = await draw('Bidirectional', [[-0.5, -0.5, 0], [19.5, -0.5, 0], [9.5, -0.5, 0], [9.5, 11.5, 0]]);
+  expect(notified).toEqual([]);
+  expect(measurement.toolName).toBe('Bidirectional');
+  expect(measurement.type).toBe(VALUE_TYPES.BIDIRECTIONAL);
+  expect(measurement.points).toEqual([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 12 }]);
+  expect(measurement.data.handles.perpendicularStart).toMatchObject({ x: 10, y: 0 });
+  expect(measurement.data).toMatchObject({ longestDiameter: 20, shortestDiameter: 12 });
+  expect(measurement.unit).toBe('mm');
+});
+
 // As the stock tools' cancel(): the new drawing is completed, then the view removes it
 it.each([
   ['Length', [[-0.5, 9.5, 0], [9.5, -0.5, 0]]],
   ['Angle', [[9.5, -0.5, 0], [-0.5, -0.5, 0], [-0.5, 9.5, 0]]],
   ['CobbAngle', [[-0.5, -0.5, 0], [9.5, -0.5, 0], [-0.5, 9.5, 0], [9.5, 19.5, 0]]],
   ['CircleROI', [[-0.5, -0.5, 0], [2.5, 3.5, 0]]],
+  ['Bidirectional', [[-0.5, -0.5, 0], [19.5, -0.5, 0], [9.5, -0.5, 0], [9.5, 11.5, 0]]],
 ])('a %s cancelled with Escape while drawing leaves no record and no mirror', async (toolName, points) => {
   const annotation = {
     annotationUID: `cancelled-${toolName}`,

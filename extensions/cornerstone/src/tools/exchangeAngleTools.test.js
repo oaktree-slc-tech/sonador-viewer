@@ -1,5 +1,6 @@
 // The Cornerstone3D Angle and Cobb angle tools show the exchange value: endpoint order kept, and a
-// mirrored record's value while the points are unchanged.
+// mirrored record's value while the points are unchanged. The Length, circle and Bidirectional tools
+// show their exchange values the same way.
 
 const mockAddTool = jest.fn();
 // The annotations the stock circle statistics ran for
@@ -11,6 +12,10 @@ const mockHidden = new Set();
 let mockLengthUnit = 'mm';
 // The unit the stock circle measures in, the same way
 let mockCircleUnit = 'mm';
+// The annotation modifications announced
+const mockModified = [];
+// Annotations present in the annotation state, by uid
+const mockState = new Map();
 jest.mock('@cornerstonejs/tools', () => {
   // As the published 4.22.13 tools: the renderer is an instance property and draws a label only
   // for a truthy cached angle
@@ -129,15 +134,50 @@ jest.mock('@cornerstonejs/tools', () => {
     }
   }
   CircleROITool.toolName = 'CircleROI';
+  // As the published 4.22.13 BidirectionalTool: the statistics and the end of a drag are instance
+  // properties; the longer axis is reported as the length, and a drag that ends with the short axis
+  // longer swaps the axes
+  class BidirectionalTool extends StockTool {
+    constructor(toolProps = {}) {
+      super();
+      this.configuration = { getTextLines: () => ['stock'], ...(toolProps.configuration || {}) };
+      this._calculateCachedStats = (annotation) => {
+        const [p0, p1, p2, p3] = annotation.data.handles.points;
+        const [dist1, dist2] = [distance(p0, p1), distance(p2, p3)];
+        Object.keys(annotation.data.cachedStats).forEach(id => {
+          annotation.data.cachedStats[id] = {
+            length: Math.max(dist1, dist2), width: Math.min(dist1, dist2), unit: mockCircleUnit, widthUnit: mockCircleUnit,
+          };
+        });
+        return annotation.data.cachedStats;
+      };
+      this._throttledCalculateCachedStats = this._calculateCachedStats;
+      this._endCallback = () => {
+        const { annotation } = this.editData;
+        const points = annotation.data.handles.points;
+        if (distance(points[2], points[3]) > distance(points[0], points[1])) {
+          annotation.data.handles.points = [points[2], points[3], points[0], points[1]];
+        }
+        this.editData = null;
+      };
+    }
+  }
+  BidirectionalTool.toolName = 'Bidirectional';
   return {
     AngleTool,
+    BidirectionalTool,
     CobbAngleTool,
     LengthTool,
     CircleROITool,
+    Enums: { ChangeTypes: { HandlesUpdated: 'HandlesUpdated' } },
     utilities: { throttle: fn => fn, roundNumber: value => Math.round(value * 100) / 100 },
     addTool: (...args) => mockAddTool(...args),
     annotation: {
-      state: { getAnnotations: toolName => mockAnnotations[toolName] || [] },
+      state: {
+        getAnnotations: toolName => mockAnnotations[toolName] || [],
+        getAnnotation: uid => mockState.get(uid),
+        triggerAnnotationModified: (annotation, element, changeType) => mockModified.push({ annotation, element, changeType }),
+      },
       visibility: { isAnnotationVisible: uid => !mockHidden.has(uid) },
     },
   };
@@ -147,11 +187,13 @@ jest.mock('@ohif/core', () => ({
   default: { DICOMSR: {
     angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
     circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
+    bidirectionalGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/bidirectionalGeometry'),
   } },
 }), { virtual: true });
 
 import {
-  cobbTextLines, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools,
+  cobbTextLines, ExchangeAngleTool, ExchangeBidirectionalTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool,
+  registerExchangeAngleTools,
 } from './exchangeAngleTools';
 import { CobbAngleTool } from '@cornerstonejs/tools';
 
@@ -222,7 +264,7 @@ describe('Length', () => {
 
 it('registers under the stock tool names', () => {
   registerExchangeAngleTools();
-  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle', 'Length', 'CircleROI']);
+  expect(mockAddTool.mock.calls.map(([Tool]) => Tool.toolName)).toEqual(['Angle', 'CobbAngle', 'Length', 'CircleROI', 'Bidirectional']);
 });
 
 
@@ -360,5 +402,99 @@ describe('Cobb angle label', () => {
     data.viewportValues = ['angle', 'arc1', 'arc2'];
     expect(cobbTextLines(data, 'imageId:a')).toEqual(['Cobb angle: 45.00\u00B0', 'Arc 1: 90.00\u00B0', 'Arc 2: 135.00\u00B0']);
     expect(cobbTextLines({ ...data, cachedStats: {} }, 'imageId:a')).toEqual([]);
+  });
+});
+
+
+describe('Bidirectional', () => {
+  const bidirectionalAnnotation = (points, recordValue) => ({
+    annotationUID: 'bidirectional-1', data: { handles: { points }, cachedStats: { 'imageId:a': {}, 'volumeId:b': {} }, recordValue },
+  });
+  // A short axis longer than the long axis: the stock statistics report the longer one as the length
+  const LABELLED = [[0, 0, 0], [4, 0, 0], [2, -10, 0], [2, 10, 0]];
+
+  it('reports both axes as labelled, in millimetres, in every view', () => {
+    const annotation = bidirectionalAnnotation(LABELLED);
+    new ExchangeBidirectionalTool()._calculateCachedStats(annotation);
+    Object.values(annotation.data.cachedStats).forEach(stats => {
+      expect(stats).toMatchObject({ length: 4, width: 20, unit: 'mm' });
+      expect(stats.statsArray.map(stat => [stat.name, stat.value])).toEqual([['height', 4], ['width', 20]]);
+    });
+  });
+
+  it("keeps a mirrored record's stored length per axis while that axis' points are unchanged", () => {
+    const points = [[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]];
+    const tool = new ExchangeBidirectionalTool();
+    const annotation = bidirectionalAnnotation(points, { values: { length: 20.04, width: 11.98 }, points: points.map(point => point.slice()) });
+    tool._throttledCalculateCachedStats(annotation);
+    expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ length: 20.04, width: 11.98 });
+
+    annotation.data.handles.points = [[0, 0, 0], [30, 0, 0], [10, -6, 0], [10, 6, 0]];
+    tool._calculateCachedStats(annotation);
+    expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ length: 30, width: 11.98 });
+  });
+
+  it('keeps a stored axis in its own unit in the statistics and the label', () => {
+    const points = [[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]];
+    const tool = new ExchangeBidirectionalTool();
+    const annotation = bidirectionalAnnotation(points, {
+      values: { length: 20, width: 1.2, unit: 'mm', widthUnit: 'cm' }, points: points.map(point => point.slice()),
+    });
+    tool._calculateCachedStats(annotation);
+    expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ length: 20, width: 1.2, unit: 'mm', widthUnit: 'cm' });
+    expect(annotation.data.cachedStats['imageId:a'].statsArray.map(stat => stat.unit)).toEqual(['mm', 'cm']);
+    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['L: 20.00 mm', 'W: 1.20 cm']);
+  });
+
+  it('labels the drawing L: and W:, as the classic tool does', () => {
+    const tool = new ExchangeBidirectionalTool();
+    const annotation = bidirectionalAnnotation([[0, 0, 0], [20, 0, 0], [10, -6, 0], [10, 6, 0]]);
+    tool._calculateCachedStats(annotation);
+    expect(tool.configuration.getTextLines(annotation.data, 'imageId:a')).toEqual(['L: 20.00 mm', 'W: 12.00 mm']);
+    expect(new ExchangeBidirectionalTool({ configuration: { getTextLines: () => ['own'] } }).configuration.getTextLines()).toEqual(['own']);
+  });
+
+  it('keeps the stock statistics on an image without calibration', () => {
+    mockCircleUnit = 'px';
+    try {
+      const annotation = bidirectionalAnnotation(LABELLED);
+      new ExchangeBidirectionalTool()._calculateCachedStats(annotation);
+      expect(annotation.data.cachedStats['imageId:a']).toMatchObject({ length: 20, width: 4, unit: 'px' });
+    } finally {
+      mockCircleUnit = 'mm';
+    }
+  });
+
+  it('announces the swap at the end of a drag as a modification, and nothing for a drag without one', () => {
+    const tool = new ExchangeBidirectionalTool();
+    const annotation = bidirectionalAnnotation(LABELLED.map(point => point.slice()));
+    mockState.set(annotation.annotationUID, annotation);
+    mockModified.length = 0;
+    try {
+      tool.editData = { annotation, newAnnotation: false };
+      tool._endCallback({ detail: { element: 'element' } });
+      expect(annotation.data.handles.points).toEqual([[2, -10, 0], [2, 10, 0], [0, 0, 0], [4, 0, 0]]);
+      expect(mockModified).toEqual([{ annotation, element: 'element', changeType: 'HandlesUpdated' }]);
+      expect(annotation.invalidated).toBe(true);
+
+      tool.editData = { annotation, newAnnotation: false };
+      tool._endCallback({ detail: { element: 'element' } });
+      expect(mockModified).toHaveLength(1);
+
+      // A new drawing is completed by the stock tool, not modified
+      const drawn = bidirectionalAnnotation(LABELLED.map(point => point.slice()));
+      mockState.set('bidirectional-1', drawn);
+      tool.editData = { annotation: drawn, newAnnotation: true };
+      tool._endCallback({ detail: { element: 'element' } });
+      expect(mockModified).toHaveLength(1);
+    } finally {
+      mockState.clear();
+    }
+  });
+
+  it('is registered under the stock name with the other exchange tools', () => {
+    mockAddTool.mockClear();
+    registerExchangeAngleTools();
+    expect(mockAddTool.mock.calls.map(([tool]) => tool)).toContain(ExchangeBidirectionalTool);
   });
 });

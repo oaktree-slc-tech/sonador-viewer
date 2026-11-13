@@ -72,7 +72,8 @@ import { clearHydratedReports } from '../utils/srDocument';
 const STUDY = '2.25.1001';
 const imageRef = { ReferencedSOPSequence: { ReferencedSOPInstanceUID: '2.25.900' } };
 
-// Report A: a measurement the viewer cannot edit. Report B: a Series Tag.
+// Report A: a measurement the viewer does not hydrate (here a Bidirectional whose axes the tools
+// cannot hold: its adapter returns no state). Report B: a Series Tag.
 const reportA = { StudyInstanceUID: STUDY, SeriesInstanceUID: '2.25.10.1', SOPInstanceUID: '2.25.10', SOPClassUID: '1.2.840.10008.5.1.4.1.1.88.22',
   ContentTemplateSequence: [{ TemplateIdentifier: '1500' }] };
 const reportB = { ...reportA, SeriesInstanceUID: '2.25.20.1', SOPInstanceUID: '2.25.20' };

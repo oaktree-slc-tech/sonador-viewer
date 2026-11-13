@@ -1,11 +1,10 @@
-const displayFunction = (data) => {
-  if (data.shortestDiameter) {
-    // TODO: Make this check criteria again to see if we should display shortest x longest
-    return data.longestDiameter + ' x ' + data.shortestDiameter;
-  }
+// The Bidirectional (long and short axis) as the Measurements panel lists it: `L x W mm`, two
+// decimals, from a classic tool's or a record's `longestDiameter` / `shortestDiameter`, or
+// Cornerstone3D statistics (DICOMSR bidirectionalGeometry.js).
 
-  return data.longestDiameter;
-};
+import { bidirectionalDisplayValues, bidirectionalText } from '../../DICOMSR/utils/bidirectionalGeometry';
+
+const displayFunction = data => bidirectionalText(bidirectionalDisplayValues(data));
 
 export const bidirectional = {
   id: 'Bidirectional',

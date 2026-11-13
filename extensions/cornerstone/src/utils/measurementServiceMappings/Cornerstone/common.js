@@ -37,7 +37,7 @@ const SUPPORTED_TOOLS = [
 const _getValueTypeFromToolType = (measurementService, toolType) => {
     // Retrieve a value mapping associated with a tool
 
-    const { POLYLINE, ELLIPSE, POINT, CIRCLE } = measurementService.VALUE_TYPES;
+    const { POLYLINE, ELLIPSE, POINT, CIRCLE, BIDIRECTIONAL } = measurementService.VALUE_TYPES;
 
     /* TODO: Relocate static value types */
     const TOOL_TYPE_TO_VALUE_TYPE = {
@@ -46,6 +46,7 @@ const _getValueTypeFromToolType = (measurementService, toolType) => {
       RectangleRoi: POLYLINE,
       ArrowAnnotate: POINT,
       CircleRoi: CIRCLE,
+      Bidirectional: BIDIRECTIONAL,
     };
 
     return TOOL_TYPE_TO_VALUE_TYPE[toolType];

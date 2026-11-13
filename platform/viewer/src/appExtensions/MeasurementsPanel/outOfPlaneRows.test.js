@@ -41,7 +41,11 @@ import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRows } from './out
 const LENGTH_TOOL = { id: 'Length', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.length.toFixed(2)} mm` } } };
 const COBB_TOOL = { id: 'CobbAngle', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.rAngle.toFixed(2)}°` } } };
 const CIRCLE_TOOL = { id: 'CircleRoi', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.cachedStats.radius.toFixed(2)} mm` } } };
-const TOOLS = [LENGTH_TOOL, COBB_TOOL, CIRCLE_TOOL];
+// The Bidirectional's own configuration (Target, `L x W mm`)
+const { bidirectional: BIDIRECTIONAL_TOOL } = jest.requireActual('../../../../core/src/measurements/tools/bidirectional');
+const TOOLS = [LENGTH_TOOL, COBB_TOOL, CIRCLE_TOOL, BIDIRECTIONAL_TOOL];
+// A sagittal Bidirectional (x = 12): long axis along y, short axis along z, crossing at (12, 10, 0)
+const BIDIRECTIONAL_POINTS = [[12, 0, 0], [12, 20, 0], [12, 10, -6], [12, 10, 6]];
 // The MPR view of series 2.25.2 (Frame of Reference 2.25.7001)
 const MPR = {
   activeViewportIndex: 0, layout: { viewports: [{ vtk: true }] },
@@ -105,6 +109,19 @@ describe('the rows', () => {
     expect(row.detailSource).toEqual({ measurement: mockRecords.get('circle'), context: { calibrated: true } });
   });
 
+  it('lists a Bidirectional (its record) as L x W mm, planar, with the record as the source of its detail', () => {
+    mockRecords.set('bidirectional', record('bidirectional', {
+      toolName: 'Bidirectional', points: BIDIRECTIONAL_POINTS, length: undefined, unit: 'mm',
+      data: { longestDiameter: 20, shortestDiameter: 12 },
+    }));
+    const [{ row, toolGroup }] = rowsOf(MPR).pending;
+    expect(toolGroup).toBe('allTools');
+    expect(row.toolType).toBe('Bidirectional');
+    expect(row.data).toEqual([{ displayText: '20.00 x 12.00 mm' }]);
+    expect(row.outOfPlane.planar).toBe(true);
+    expect(row.detailSource).toEqual({ measurement: mockRecords.get('bidirectional'), context: { calibrated: true } });
+  });
+
   it('marks a measurement whose points lie in no common plane as not planar, and a Length without a Drawing-Plane as planar', () => {
     mockRecords.set('skew', record('skew', {
       toolName: 'CobbAngle', points: [[0, 0, 0], [10, 0, 0], [0, 10, 10], [0, 20, 10]], data: { rAngle: 90 },
@@ -157,6 +174,17 @@ describe('navigation', () => {
     navigateToOutOfPlane({ measurementData: rowOf('circle'), viewportsState: MPR, commandsManager });
     const [, target] = commandsManager.runCommand.mock.calls[0];
     close(target.worldPoint, [12, 0, 0]);
+    close(target.viewPlaneNormal.map(Math.abs), [1, 0, 0]);
+  });
+
+  it('centres a Bidirectional on its four points, turning a pane onto its Drawing-Plane', () => {
+    mockRecords.set('bidirectional', record('bidirectional', {
+      toolName: 'Bidirectional', points: BIDIRECTIONAL_POINTS, data: { longestDiameter: 20, shortestDiameter: 12 },
+    }));
+    const commandsManager = commands();
+    expect(navigateToOutOfPlane({ measurementData: rowOf('bidirectional'), viewportsState: MPR, commandsManager })).toBe('shown');
+    const [, target] = commandsManager.runCommand.mock.calls[0];
+    close(target.worldPoint, [12, 10, 0]);
     close(target.viewPlaneNormal.map(Math.abs), [1, 0, 0]);
   });
 

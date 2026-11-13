@@ -13,6 +13,7 @@ import { InputDialog } from '@ohif/ui';
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
 import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
+import BidirectionalTool from './tools/BidirectionalTool';
 import CircleRoiTool from './tools/CircleRoiTool';
 import CobbAngleTool from './tools/CobbAngleTool';
 import lockable from './tools/lockableMeasurementTool';
@@ -97,7 +98,7 @@ export default function init({ servicesManager, commandsManager, configuration }
     // The tools of saved measurements leave a locked one alone (tools/lockableMeasurementTool.js)
     annotations: [
       lockable(csTools.ArrowAnnotateTool),
-      csTools.BidirectionalTool,
+      lockable(BidirectionalTool),
       lockable(csTools.LengthTool),
       lockable(csTools.AngleTool),
       lockable(CobbAngleTool),

@@ -11,6 +11,7 @@ import {
 } from './common.js';
 import { Length as LengthMapping } from './Length'
 import { Angle as AngleMapping, CobbAngle as CobbAngleMapping } from './Angle';
+import { Bidirectional as BidirectionalMapping } from './Bidirectional';
 import { CircleRoi as CircleRoiMapping } from './CircleRoi';
 import { DICOMSRSeriesTagTool as DICOMSRSeriesTagToolMapping } from './DICOMSRSeriesTagTool';
 
@@ -56,6 +57,9 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
     CobbAngle: angleFactory(CobbAngleMapping),
     CircleRoi: _.extend(angleFactory(CircleRoiMapping), {
       matchingCriteria: { valueType: measurementService.VALUE_TYPES.CIRCLE },
+    }),
+    Bidirectional: _.extend(angleFactory(BidirectionalMapping), {
+      matchingCriteria: { valueType: measurementService.VALUE_TYPES.BIDIRECTIONAL },
     }),
     ArrowAnnotateTool: {
       toolName: 'ArrowAnnotate',

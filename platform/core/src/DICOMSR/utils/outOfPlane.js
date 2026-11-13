@@ -1,7 +1,7 @@
-// Out-of-plane measurements: a Length, Angle, Cobb angle or circle held in the patient domain, with
-// no image. Drawn on a view that is not an acquired image, or read from a report whose points no loaded
-// image holds (or whose Drawing-Plane says so), it is a Cornerstone3D-source measurement-service
-// record that holds its patient points:
+// Out-of-plane measurements: a Length, Angle, Cobb angle, circle or Bidirectional held in the patient
+// domain, with no image. Drawn on a view that is not an acquired image, or read from a report whose
+// points no loaded image holds (or whose Drawing-Plane says so), it is a Cornerstone3D-source
+// measurement-service record that holds its patient points:
 //
 //   { uid, toolName, points: [[x, y, z], ...] (handle order), FrameOfReferenceUID,
 //     referenceStudyUID, referenceSeriesUID (the source series), isLocked, isReadOnly,
@@ -17,9 +17,10 @@
 // Inspector), which names the series it shows.
 
 import { circleStatisticsOf } from './circleGeometry';
+import { BIDIRECTIONAL_TOOL, CLASSIC_VALUE_NAMES } from './bidirectionalGeometry';
 
 // The circle's records carry its Cornerstone3D name (circleGeometry.js); the writer knows it too
-const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI'];
+const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI', BIDIRECTIONAL_TOOL];
 
 // The tool name the Cornerstone3D annotation of a Cobb angle whose lines lie in no common plane is
 // kept under: no slice tool draws it (no slice view contains it), the 3D display draws it as a Cobb
@@ -97,9 +98,19 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
   const points = ((data.handles && data.handles.points) || []).map(point => Array.from(point, Number));
   const value = Number.isFinite(sourceGeometry.value) ? sourceGeometry.value : undefined;
   const isLength = annotationType === 'Length';
-  // A circle's values (radius, area, perimeter) as read
+  // A circle's values (radius, area, perimeter) and a Bidirectional's lengths, as read
   const isCircle = annotationType === 'CircleROI';
-  const values = isCircle ? { cachedStats: { ...(sourceGeometry.values || {}) } } : (isLength ? { length: value } : { rAngle: value });
+  const isBidirectional = annotationType === BIDIRECTIONAL_TOOL;
+  const read = sourceGeometry.values || {};
+  let values = isLength ? { length: value } : { rAngle: value };
+  if (isCircle) {
+    values = { cachedStats: { ...read } };
+  } else if (isBidirectional) {
+    values = {
+      [CLASSIC_VALUE_NAMES.long]: read.length, [CLASSIC_VALUE_NAMES.short]: read.width,
+      unit: read.unit || 'mm', widthUnit: read.widthUnit || read.unit || 'mm',
+    };
+  }
   const locked = Boolean(metadata.isLocked);
   const record = {
     toolName: annotationType,
@@ -110,7 +121,8 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
     description: toolData.description || annotation.description,
     label: '',
     isLocked: locked,
-    ...(isCircle ? { unit: 'mm' } : isLength ? { length: value, unit: 'mm' } : { value, unit: 'deg' }),
+    ...(isCircle ? { unit: 'mm' } : isBidirectional ? { unit: values.unit }
+      : isLength ? { length: value, unit: 'mm' } : { value, unit: 'deg' }),
     data: { ...values, displayAttributes: data.displayAttributes },
     metadata: {
       ...pick(metadata, ['TrackingIdentifier', 'sourceSeries', 'drawingPlane', 'views', 'text', 'location', 'numItems', 'sourceGeometry']),

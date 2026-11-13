@@ -27,7 +27,7 @@ import {
 import { MeasurementApi } from '../../measurements/classes';
 import { DISPLAY_LAYOUT, PROPERTY_PARENT, RelationshipType, SonadorCodeValues } from '../enums';
 import { asArray, codedConcept, conceptNameValue, findingItemOf } from './codedConcept';
-import { numItemsOf, propertyCarrier } from './propertyParent';
+import { propertyCarrier, propertyNumOf } from './propertyParent';
 
 const { ContainerContentItem, TextContentItem } = dcmjsSr.valueTypes;
 const { DCMSR_DISPLAY_ATTRIBUTES, DCMSR_DISPLAY_COLOR, DCMSR_DISPLAY_COLOR_ROLES } = SonadorCodeValues;
@@ -92,18 +92,14 @@ function parseDisplayAttributes(srItem, annotation, options) {
   options = options || {};
   _.defaults(options, { path: 'annotation.data.displayAttributes' });
 
-  // Nested or flat under the property parent: for the NUM parent of a group with a NUM, the first
-  // NUM that carries colours (a Finding's colours belong to the Finding); otherwise the Finding. Then
-  // the group-level container (legacy).
+  // Nested or flat under the property parent: for the NUM parent of a group with a NUM, its property
+  // NUM, the one every typed property is read from (propertyParent.js `propertyNumOf`; a Finding's
+  // colours belong to the Finding); otherwise the Finding. Then the group-level container (legacy).
   const groupItems = asArray(_.isArray(srItem) ? srItem : srItem && srItem.ContentSequence);
   const group = { ContentSequence: groupItems };
   const finding = findingItemOf(group);
-  const hasColours = items => !!findContentItem(items, DCMSR_DISPLAY_ATTRIBUTES)
-    || DISPLAY_COLOR_ROLES.some(role => findContentItem(items, DCMSR_DISPLAY_COLOR_ROLES[role]));
-  const nums = options.propertyParent === PROPERTY_PARENT.NUM ? numItemsOf(group) : [];
-  const parentItems = nums.length
-    ? asArray((nums.find(num => hasColours(asArray(num.ContentSequence))) || {}).ContentSequence)
-    : asArray(finding && finding.ContentSequence);
+  const num = options.propertyParent === PROPERTY_PARENT.NUM ? propertyNumOf(groupItems) : undefined;
+  const parentItems = num ? asArray(num.ContentSequence) : asArray(finding && finding.ContentSequence);
   const displayContainer = findContentItem(parentItems, DCMSR_DISPLAY_ATTRIBUTES)
     || findContentItem(groupItems, DCMSR_DISPLAY_ATTRIBUTES);
   const colorContainer = displayContainer && findContentItem(displayContainer.ContentSequence, DCMSR_DISPLAY_COLOR);

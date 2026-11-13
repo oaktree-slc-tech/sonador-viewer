@@ -11,9 +11,10 @@
 // invalidates it.
 
 import csTools from 'cornerstone-tools';
-import { metaData as c3dMetaData } from '@cornerstonejs/core';
 import OHIF from '@ohif/core';
 import { viewportLabelLines } from '@ohif/core/src/measurements/tools/measurementDetail';
+
+import imagePlaneOf from './imagePlaneOf';
 
 const draw = csTools.importInternal('drawing/draw');
 const drawCircle = csTools.importInternal('drawing/drawCircle');
@@ -31,21 +32,6 @@ const STAT_KEYS = ['mean', 'stdDev', 'max', 'modalityUnit'];
 // The circles whose pixel statistics were read without changing their values (a held measurement)
 const statsRead = new WeakSet();
 
-
-function imagePlaneOf(imageId) {
-  // The image plane of the image (Cornerstone3D metadata, else the classic provider)
-  for (const provider of [c3dMetaData, csTools.external.cornerstone && csTools.external.cornerstone.metaData]) {
-    try {
-      const module = provider && provider.get('imagePlaneModule', imageId);
-      if (OHIF.DICOMSR.angleGeometry.isPlane(module)) {
-        return module;
-      }
-    } catch (error) {
-      // try the next provider
-    }
-  }
-  return undefined;
-}
 
 /**
  * The values of a circle's handles on an image: { radius, area, perimeter, unit } in millimetres

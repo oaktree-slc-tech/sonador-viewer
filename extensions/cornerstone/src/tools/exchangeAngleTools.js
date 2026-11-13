@@ -16,18 +16,27 @@
 // stored values while its points are unchanged. The stock tool's pixel statistics (mean, standard
 // deviation, maximum, in the unit of the image) are kept for the detail card; its minimum is dropped.
 //
+// The Bidirectional tool shows its two lengths as labelled (DICOMSR bidirectionalGeometry): the
+// long axis points[0..1], the short axis points[2..3], each in millimetres between its world points
+// or a mirrored record's stored value and unit while that axis' points are unchanged (the stock tool reports
+// the longer axis as the length whatever the labels). Its label is `L: … mm` and `W: … mm`, as the
+// classic tool draws it. The stock tool swaps the axes when a drag ends with the short one longer;
+// a swap of an existing annotation is announced as a modification, so its measurement follows.
+//
 // The circle's and the Cobb angle's labels show the values the measurement chose for the viewport
 // (`data.viewportValues`, set from its detail card), else the tool's default (the circle's radius
 // and area, the Cobb angle's angle), formatted as the Annotations panel formats them
 // (measurements/tools/measurementDetail.js `viewportLabelLines`).
 //
 // They keep the stock tool names and are registered before any view registers the stock tools,
-// so every tool group that adds `Length`, `Angle`, `CobbAngle` or `CircleROI` gets them.
+// so every tool group that adds `Length`, `Angle`, `CobbAngle`, `CircleROI` or `Bidirectional` gets
+// them.
 
 import _ from 'lodash';
 
 import {
-  addTool, annotation as c3dAnnotation, AngleTool, CircleROITool, CobbAngleTool, LengthTool, utilities as c3dToolsUtilities,
+  addTool, annotation as c3dAnnotation, AngleTool, BidirectionalTool, CircleROITool, CobbAngleTool, Enums as c3dToolsEnums,
+  LengthTool, utilities as c3dToolsUtilities,
 } from '@cornerstonejs/tools';
 
 import OHIF from '@ohif/core';
@@ -228,17 +237,83 @@ class ExchangeCircleROITool extends CircleROITool {
 }
 
 
+/** Give a Bidirectional annotation's statistics, for every view, its two lengths as labelled */
+function applyBidirectionalValues(annotation) {
+  const { annotationBidirectional } = OHIF.DICOMSR.bidirectionalGeometry;
+  const values = annotationBidirectional(annotation.data);
+  const { cachedStats } = annotation.data || {};
+  Object.keys(cachedStats || {}).forEach(targetId => {
+    // The stock pass reports pixels on an image without calibration; those statistics are kept
+    if (!cachedStats[targetId] || cachedStats[targetId].unit !== 'mm') {
+      return;
+    }
+    cachedStats[targetId] = {
+      ...cachedStats[targetId],
+      length: values.length,
+      width: values.width,
+      unit: values.unit,
+      widthUnit: values.widthUnit,
+      statsArray: [
+        { value: values.length, name: 'height', unit: values.unit, type: 'linear' },
+        { value: values.width, name: 'width', unit: values.widthUnit, type: 'linear' },
+      ],
+    };
+  });
+}
+
+/** The Bidirectional's label: `L: … mm`, `W: … mm` */
+function bidirectionalTextLines(data, targetId) {
+  const stats = (data && data.cachedStats && data.cachedStats[targetId]) || {};
+  return OHIF.DICOMSR.bidirectionalGeometry.bidirectionalLabelLines(stats);
+}
+
+const pointsOf = annotation => annotation.data.handles.points.map(point => Array.from(point));
+
+class ExchangeBidirectionalTool extends BidirectionalTool {
+  constructor(toolProps = {}, defaultToolProps) {
+    super(toolProps, defaultToolProps);
+    if (!(toolProps.configuration && toolProps.configuration.getTextLines)) {
+      this.configuration.getTextLines = bidirectionalTextLines;
+    }
+    // The stock statistics and drag end are instance properties: the stock pass runs, then the
+    // lengths as labelled replace its own
+    const stockCalculateCachedStats = this._calculateCachedStats;
+    this._calculateCachedStats = (annotation, ...args) => {
+      const result = stockCalculateCachedStats(annotation, ...args);
+      applyBidirectionalValues(annotation);
+      return result;
+    };
+    this._throttledCalculateCachedStats = c3dToolsUtilities.throttle(this._calculateCachedStats, 100, { trailing: true });
+
+    const stockEndCallback = this._endCallback;
+    this._endCallback = (evt) => {
+      const { annotation, newAnnotation } = this.editData || {};
+      const before = annotation && pointsOf(annotation);
+      const result = stockEndCallback(evt);
+      if (annotation && !newAnnotation && c3dAnnotation.state.getAnnotation(annotation.annotationUID) === annotation
+          && !_.isEqual(before, pointsOf(annotation))) {
+        annotation.invalidated = true;
+        c3dAnnotation.state.triggerAnnotationModified(annotation, evt.detail && evt.detail.element,
+          c3dToolsEnums.ChangeTypes.HandlesUpdated);
+      }
+      return result;
+    };
+  }
+}
+
+
 /** Register the exchange tools under the stock names (a later stock registration is ignored) */
 function registerExchangeAngleTools() {
   addTool(ExchangeAngleTool);
   addTool(ExchangeCobbAngleTool);
   addTool(ExchangeLengthTool);
   addTool(ExchangeCircleROITool);
+  addTool(ExchangeBidirectionalTool);
 }
 
 
 export default registerExchangeAngleTools;
 export {
-  applyCircleValues, circleTextLines, cobbTextLines, exchangeValue, ExchangeAngleTool, ExchangeCircleROITool, ExchangeCobbAngleTool,
-  ExchangeLengthTool, registerExchangeAngleTools,
+  applyBidirectionalValues, applyCircleValues, bidirectionalTextLines, circleTextLines, cobbTextLines, exchangeValue, ExchangeAngleTool,
+  ExchangeBidirectionalTool, ExchangeCircleROITool, ExchangeCobbAngleTool, ExchangeLengthTool, registerExchangeAngleTools,
 };

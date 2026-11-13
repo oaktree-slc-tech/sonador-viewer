@@ -1,5 +1,5 @@
 // Tool selection in the 3D Inspector: each measurement tool (Length, Angle, Cobb angle, arrow
-// annotation, and the bidirectional, ellipse, rectangle, freehand and probe tools) takes the
+// annotation, Bidirectional, and the ellipse, rectangle, freehand and probe tools) takes the
 // primary button for creation, the others stay passive so their annotations remain editable, and
 // returning to a navigation tool leaves every measurement tool passive. The view is exercised as a
 // plain object; its base class and Cornerstone3D are stubbed.
