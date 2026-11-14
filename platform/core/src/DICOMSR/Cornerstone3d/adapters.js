@@ -14,7 +14,7 @@ import { adaptersSR as c3dAdaptersSR, helpers as c3dSrHelpers } from '@cornersto
 import Enums from '../../measurements/enums';
 import { readFindingCode } from '../TID300/DICOMReferencedSOPInstanceFinding';
 import { asArray, conceptNameValue, firstItem } from '../utils/codedConcept';
-import { encodingWarnings, handlePointsOf, imageToPatient, isPlane } from '../utils/angleGeometry';
+import { encodingWarnings, handlePointsOf, imageToPatient, isPlane, patientToImage } from '../utils/angleGeometry';
 import { findImageForPoints, planeFromModule } from '../readOnly/planeGeometry';
 import { DCMSR_MEASUREMENT_DRAWING_PLANE, PROPERTY_PARENT } from '../enums';
 import { drawingPlaneProblem } from '../utils/drawingPlane';
@@ -24,13 +24,17 @@ import {
 import {
   BIDIRECTIONAL_AXES, MIN_AXIS_LENGTH, axesProblem, axisGeometryOf, bidirectionalNumItems, bidirectionalValues, inMillimetres,
 } from '../utils/bidirectionalGeometry';
+import {
+  ARROW_TOOL, MIN_ARROW_LENGTH, arrowDisplayText, arrowGeometryOf, arrowLabelOf, arrowLength, derivedImageTail, isFreeTextCode,
+} from '../utils/arrowGeometry';
 import { propertyCandidates } from '../utils/propertyParent';
 import frameImageIds from './utils/frameImageIds';
+import log from '../../log';
 
 const { TID300Measurement } = utilities.TID300;
 const {
   BaseAdapter3D, MeasurementReport: LibraryMeasurementReport, Angle: LibraryAngle, CobbAngle: LibraryCobbAngle,
-  Length: LibraryLength, CircleROI: LibraryCircleROI, Bidirectional: LibraryBidirectional,
+  Length: LibraryLength, CircleROI: LibraryCircleROI, Bidirectional: LibraryBidirectional, ArrowAnnotate: LibraryArrowAnnotate,
 } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
 
@@ -587,11 +591,212 @@ class Bidirectional extends LibraryBidirectional {
 registerAdapter(Bidirectional);
 
 
+// Arrow annotation (Cornerstone3D `ArrowAnnotateTool`, `arrowFirst`: points[0] the tip, points[1] the
+// tail, the text in `data.text`; utils/arrowGeometry.js), from the three forms in circulation: the
+// geometry under the Finding (the Sonador form) or under a legacy NUM (the Viewer's NUM "Center" around
+// a POINT, the stock Cornerstone3D NUM "label" around a POLYLINE), a POLYLINE of tip and tail or a POINT
+// of the tip, SCOORD or SCOORD3D. The stock setup expects a NUM item: the state is built from the
+// Finding, as the Series Tag's is.
+// * The text: the meaning of a free-text Finding (CORNERSTONEFREETEXT, CST4); without a Finding, a
+//   free-text Finding Site (with a warning), else the group's Comment (the stock form of a labelled
+//   annotation). Its source is recorded (`labelSource`) when it is not the Finding.
+//   A coded finding is kept apart from the text: the annotation shows its meaning, the record marks it
+//   (`codedFinding`) and has no text of its own, and a re-save writes the code back verbatim. An
+//   empty or absent text is read as an empty text with a warning.
+// * A missing tail is derived for display (arrowGeometry.js) and recorded in `sourceGeometry`, so an
+//   unchanged re-save writes the POINT again. Tip and tail closer than MIN_ARROW_LENGTH are kept with
+//   a warning.
+// * Placement on a loaded image, the Drawing-Plane rule (read from the Finding's properties), the
+//   tracking identity and the lock follow the angles. The group's description is its
+//   Sonador-Measurement.Description, never the Finding's meaning.
+
+const ARROW_LOG = '[DICOM-SR:ArrowAnnotate]';
+
+function arrowMeasurementState(adapter, MeasurementGroup, context) {
+  const { sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata, trackingIdentifier, locked = true } = context;
+  const groupItems = asArray(MeasurementGroup.ContentSequence);
+  const TrackingUniqueIdentifier = trackingUID(MeasurementGroup);
+
+  const geometry = arrowGeometryOf(groupItems);
+  const coordinates = geometry && geometry.item;
+  const points = coordinates ? graphicPoints(coordinates) : [];
+  const graphicType = coordinates && coordinates.GraphicType;
+  if (!coordinates || !((graphicType === 'POINT' && points.length === 1) || (graphicType === 'POLYLINE' && points.length === 2))) {
+    throw new Error(`Arrow group without a one-point POINT or a two-point POLYLINE trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  if (geometry.carrier !== 'finding') {
+    log.info(`${ARROW_LOG} legacy geometry (under a ${geometry.carrier === 'num' ? 'NUM' : 'group'} item), `
+      + `written under the Finding on re-save trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  const { label, finding, coded, source } = arrowLabelOf(groupItems);
+  if (source === 'finding-site') {
+    console.warn(`${ARROW_LOG} text read from a free-text Finding Site trackingUID=${TrackingUniqueIdentifier}`);
+  } else if (source === 'comment') {
+    log.info(`${ARROW_LOG} text read from the group's Comment, written as the Finding on re-save trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  if (!coded && !label) {
+    console.warn(`${ARROW_LOG} arrow without a text trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  const isPatientDomain = coordinates.ValueType === 'SCOORD3D';
+  // The image the coordinates are SELECTED FROM; an IMAGE in any other relationship is not it
+  const reference = firstItem(asArray(coordinates.ContentSequence)
+    .find(item => item.ValueType === 'IMAGE' && item.RelationshipType === 'SELECTED FROM')?.ReferencedSOPSequence);
+  const imageIds = frameImageIds(sopInstanceUIDToImageIdMap, imageIdsForToolState);
+  const moduleOf = (imageId) => {
+    try {
+      return imageId ? metadata.get('imagePlaneModule', imageId) : undefined;
+    } catch (error) {
+      return undefined;
+    }
+  };
+
+  // A valid Drawing-Plane keeps a patient-domain arrow off the images
+  const drawingPlaneItem = propertyCandidates(groupItems, PROPERTY_PARENT.FINDING)
+    .find(item => conceptNameValue(item) === DCMSR_MEASUREMENT_DRAWING_PLANE.value);
+  const drawingPlaneText = drawingPlaneItem && drawingPlaneItem.TextValue;
+  const problem = isPatientDomain && drawingPlaneText !== undefined ? drawingPlaneProblem(drawingPlaneText, points) : undefined;
+  if (problem) {
+    console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] malformed Drawing-Plane "${drawingPlaneText}" (${problem}), `
+      + `treated as absent trackingUID=${TrackingUniqueIdentifier}`);
+  }
+  const outOfPlane = isPatientDomain && drawingPlaneText !== undefined && !problem;
+
+  let referencedImageId;
+  let frameNumber;
+  let placement;
+  if (!isPatientDomain) {
+    frameNumber = Number((reference && reference.ReferencedFrameNumber) || 1);
+    referencedImageId = reference && imageIds[`${reference.ReferencedSOPInstanceUID}:${frameNumber}`];
+  } else if (!outOfPlane) {
+    const image = findImageForPoints(imageCandidates(sopInstanceUIDToImageIdMap, imageIdsForToolState, metadata),
+      points, { FrameOfReferenceUID: coordinates.ReferencedFrameOfReferenceUID });
+    if (image) {
+      referencedImageId = image.imageId;
+      frameNumber = image.frameNumber;
+      placement = { SOPInstanceUID: image.SOPInstanceUID, frameNumber: image.frameNumber };
+    } else {
+      console.warn(`[DICOMSR:Cornerstone3D:${adapter.toolType}] no loaded image of Frame of Reference `
+        + `${coordinates.ReferencedFrameOfReferenceUID} holds the arrow trackingUID=${TrackingUniqueIdentifier}`);
+    }
+  }
+  const module = moduleOf(referencedImageId);
+
+  // The tail shown for a tip only, in the coordinates of the geometry: a tenth of the image away (image
+  // points), mapped to patient coordinates through the image placed on; 10 mm along x and y without one
+  let derivedTail;
+  if (graphicType === 'POINT') {
+    let pixels;
+    try {
+      pixels = referencedImageId ? metadata.get('imagePixelModule', referencedImageId) : undefined;
+    } catch (error) {
+      pixels = undefined;
+    }
+    if (!isPatientDomain) {
+      derivedTail = derivedImageTail(points[0], pixels);
+    } else if (isPlane(module)) {
+      derivedTail = imageToPatient(module, derivedImageTail(patientToImage(module, points[0]), pixels));
+    } else {
+      derivedTail = [points[0][0] + 10, points[0][1] + 10, points[0][2]];
+    }
+  }
+  const shown = graphicType === 'POINT' ? [points[0], derivedTail] : points;
+
+  // Handle points in patient coordinates: as read in the patient domain, mapped from the image
+  let handlePoints = [];
+  if (isPatientDomain) {
+    handlePoints = shown;
+  } else if (isPlane(module)) {
+    handlePoints = shown.map(point => imageToPatient(module, point));
+  } else if (referencedImageId) {
+    console.warn(`${ARROW_LOG} no image plane for imageId=${referencedImageId} trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  // Tip and tail measured in millimetres when known in patient coordinates, else in pixels
+  const length = handlePoints.length === 2 ? arrowLength(handlePoints[0], handlePoints[1]) : arrowLength(shown[0], shown[1]);
+  if (graphicType === 'POLYLINE' && !(length >= MIN_ARROW_LENGTH)) {
+    console.warn(`${ARROW_LOG} degenerate arrow (tip and tail ${length} apart) trackingUID=${TrackingUniqueIdentifier}`);
+  }
+
+  const annotationUID = DicomMetaDictionary.uid();
+  const text = arrowDisplayText(label, coded ? finding : undefined);
+  const state = {
+    sopInstanceUid: placement ? placement.SOPInstanceUID : reference && reference.ReferencedSOPInstanceUID,
+    finding,
+    findingSites: groupItems
+      .filter(item => conceptNameValue(item) === SREnums.CodeNameCodeSequenceValues.FindingSiteSCT
+        || conceptNameValue(item) === SREnums.CodeNameCodeSequenceValues.FindingSite)
+      .map(item => firstItem(item.ConceptCodeSequence))
+      .filter(code => code && !isFreeTextCode(code)),
+    annotation: {
+      annotationUID,
+      data: {
+        annotationUID,
+        text,
+        label: text,
+        handles: { arrowFirst: true, points: handlePoints, activeHandleIndex: null, textBox: { hasMoved: false } },
+        frameNumber,
+      },
+      metadata: {
+        toolName: adapter.toolType,
+        referencedImageId,
+        FrameOfReferenceUID: isPatientDomain ? coordinates.ReferencedFrameOfReferenceUID : module && module.frameOfReferenceUID,
+        coordinateDomain: isPatientDomain ? 'patient' : 'image',
+        ...(outOfPlane ? { outOfPlane: true } : {}),
+        finding: _.cloneDeep(finding),
+        ...(coded ? { codedFinding: _.cloneDeep(finding) } : {}),
+        ...(source === 'comment' || source === 'finding-site' ? { labelSource: source } : {}),
+        sourceGeometry: {
+          valueType: coordinates.ValueType,
+          graphicType,
+          graphicData: Array.from(coordinates.GraphicData || [], Number),
+          FrameOfReferenceUID: coordinates.ReferencedFrameOfReferenceUID,
+          ReferencedSOPInstanceUID: reference && reference.ReferencedSOPInstanceUID,
+          ReferencedFrameNumber: reference && reference.ReferencedFrameNumber,
+          placement,
+          carrier: geometry.carrier,
+          ...(derivedTail ? { derivedTail } : {}),
+        },
+        TrackingUniqueIdentifier,
+        TrackingIdentifier: trackingIdentifier,
+      },
+    },
+  };
+  if (locked) {
+    state.annotation.metadata.isReadOnly = true;
+    state.annotation.metadata.isLocked = true;
+  }
+  return state;
+}
+
+// Replaces the library ArrowAnnotate (both tracking identifier prefixes), as the circle does
+class ArrowAnnotate extends LibraryArrowAnnotate {
+  static getMeasurementData(MeasurementGroup, sopInstanceUIDToImageIdMap, metadata, trackingIdentifier, options) {
+    return arrowMeasurementState(this, MeasurementGroup, {
+      sopInstanceUIDToImageIdMap,
+      imageIdsForToolState: options && options.imageIdsForToolState,
+      metadata,
+      trackingIdentifier,
+      locked: !options || options.locked !== false,
+    });
+  }
+
+  static getTID300RepresentationArguments() {
+    // Arrows are written by the classic adapter (SCOORD3D/adapters.js)
+    throw new Error('The Cornerstone3D arrow adapter does not write; the classic adapter does');
+  }
+}
+ArrowAnnotate.toolType = ARROW_TOOL;
+registerAdapter(ArrowAnnotate);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
   DICOMSRSeriesTagTool,
   Angle,
+  ArrowAnnotate,
   Bidirectional,
   CircleROI,
   // The classic tool's name, for the checks of the tools a report holds (utils/isToolSupported.js)
@@ -602,4 +807,4 @@ const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone3D, {
 
 
 export default sonadorAdaptersSR;
-export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, Bidirectional, CircleROI, CobbAngle, Length };
+export { sonadorAdaptersSR, DICOMSRSeriesTagTool, Angle, ArrowAnnotate, Bidirectional, CircleROI, CobbAngle, Length };

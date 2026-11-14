@@ -276,6 +276,9 @@ function imagePointsOf(measurement) {
 // The text of a classic arrow annotation (the Cornerstone3D tool keeps it as the label)
 const textOf = measurement => (measurement.metadata && measurement.metadata.text) || measurement.label
   || (measurement.data && measurement.data.text) || '';
+// The text an arrow is drawn with: its own, else the meaning of a coded finding it was read with
+const shownTextOf = measurement => OHIF.DICOMSR.arrowGeometry.arrowDisplayText(textOf(measurement),
+  measurement.metadata && measurement.metadata.codedFinding);
 
 function valueOf(toolName, patientPoints) {
   // The value of patient points: the exchange angle (degrees), the length (mm), a circle's values
@@ -428,7 +431,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     // while they match); a copy, since a tool moves the handles in place
     const recordValue = recordValueOf(measurement, points);
 
-    const label = measurement.toolName === ARROW ? textOf(measurement) : measurement.label;
+    const label = measurement.toolName === ARROW ? shownTextOf(measurement) : measurement.label;
     const locked = isLockedMeasurement(measurement);
     const visible = measurement.isVisible !== false;
     if (existing) {
@@ -715,7 +718,11 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
 
   function outOfPlaneRecord(toolName, points, attributes, recordValue) {
     // The measurement-service record of an out-of-plane measurement with these points (a
-    // Bidirectional keeps the recorded length of an axis whose points did not move)
+    // Bidirectional keeps the recorded length of an axis whose points did not move; an arrow has its
+    // text and no value)
+    if (toolName === ARROW) {
+      return { toolName, points, isLocked: false, isDirty: true, data: {}, ...attributes };
+    }
     if (isBidirectionalTool(toolName)) {
       const values = valuesKeepingAxes(points, recordValue);
       return { toolName, points, isLocked: false, isDirty: true, unit: values.unit, data: bidirectionalData(values), ...attributes };
@@ -765,7 +772,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
     if (present && present.metadata.toolName !== toolName) {
       removeAnnotation(annotationUID);
     }
-    const label = measurement.label;
+    const label = measurement.toolName === ARROW ? shownTextOf(measurement) : measurement.label;
     const locked = isLockedMeasurement(measurement);
     const visible = measurement.isVisible !== false;
     const recordValue = recordValueOf(measurement, points);
@@ -833,7 +840,11 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       });
     }
     const points = handlePoints.map(point => Array.from(point, Number));
-    if (samePoints(measurement.points, points)) {
+    // An arrow's text, edited in the view (its label); the meaning of a coded finding it shows is not a text
+    const isArrow = measurement.toolName === ARROW;
+    const label = isArrow ? (annotation.data.label || '') : undefined;
+    const textChanged = isArrow && label !== shownTextOf(measurement);
+    if (samePoints(measurement.points, points) && !textChanged) {
       return;
     }
     const updated = outOfPlaneRecord(measurement.toolName, points, {}, annotation.data.recordValue);
@@ -841,6 +852,7 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
       ...measurement,
       points,
       ..._.pick(updated, 'length', 'value'),
+      ...(textChanged ? { label, metadata: { ...measurement.metadata, text: label } } : {}),
       data: { ...measurement.data, ...updated.data },
     }, true);
   }
@@ -925,7 +937,9 @@ function connectMeasurementAnnotationSync(measurementService, classicSource, opt
 
   function updateMeasurement(measurementUID, measurement, annotation, imagePoints) {
     const isArrow = measurement.toolName === ARROW;
-    const text = isArrow ? (annotation.data.label || '') : undefined;
+    const shown = isArrow ? (annotation.data.label || '') : undefined;
+    // The meaning of a coded finding the arrow shows is not a text of its own
+    const text = isArrow && shown === shownTextOf(measurement) ? textOf(measurement) : shown;
     if (samePoints(imagePointsOf(measurement), imagePoints) && (!isArrow || text === textOf(measurement))) {
       return;
     }

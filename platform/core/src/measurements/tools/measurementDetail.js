@@ -15,6 +15,7 @@ import { angleBetweenLines } from '../../DICOMSR/utils/angleGeometry';
 import { classicToolName } from '../../DICOMSR/utils/circleGeometry';
 import { bidirectionalDisplayValues } from '../../DICOMSR/utils/bidirectionalGeometry';
 import { circleDetailItems, circleDisplayValues } from './circleDisplay';
+import { arrowText } from './arrowAnnotate';
 
 const DEGREE = String.fromCharCode(176);
 
@@ -202,7 +203,7 @@ const TOOLS = {
   ArrowAnnotate: {
     toolName: 'Arrow', descriptor: 'Text annotation', icon: 'measure-non-target',
     build: (measurement) => {
-      const text = sectionsOf(measurement).map(section => section.text).find(value => typeof value === 'string' && value);
+      const text = sectionsOf(measurement).map(arrowText).find(Boolean);
       return { primary: text ? { key: 'text', value: text, unit: '', text } : null, sections: [] };
     },
   },

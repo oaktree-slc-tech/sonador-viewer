@@ -53,9 +53,9 @@ jest.mock('@cornerstonejs/adapters', () => {
     }
   }
 
-  // Stand-ins for the library Length, angle, circle and Bidirectional adapters the Sonador set extends
-  // (angleRoundTrip.test.js, circleRoundTrip.test.js and bidirectionalRoundTrip.test.js cover them
-  // with the real ones)
+  // Stand-ins for the library Length, angle, circle, Bidirectional and arrow adapters the Sonador set
+  // extends (angleRoundTrip.test.js, circleRoundTrip.test.js, bidirectionalRoundTrip.test.js and
+  // arrowRoundTrip.test.js cover them with the real ones)
   class Angle extends BaseAdapter3D {}
   Angle.init('Angle');
   class CobbAngle extends BaseAdapter3D {}
@@ -66,6 +66,8 @@ jest.mock('@cornerstonejs/adapters', () => {
   CircleROI.init('CircleROI');
   class Bidirectional extends BaseAdapter3D {}
   Bidirectional.init('Bidirectional');
+  class ArrowAnnotate extends BaseAdapter3D {}
+  ArrowAnnotate.init('ArrowAnnotate');
 
   return {
     adaptersSR: {
@@ -83,6 +85,7 @@ jest.mock('@cornerstonejs/adapters', () => {
         Length,
         CircleROI,
         Bidirectional,
+        ArrowAnnotate,
       },
     },
     // As in the pinned package

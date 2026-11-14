@@ -1,6 +1,6 @@
-// Out-of-plane measurements: a Length, Angle, Cobb angle, circle or Bidirectional held in the patient
-// domain, with no image. Drawn on a view that is not an acquired image, or read from a report whose
-// points no loaded image holds (or whose Drawing-Plane says so), it is a Cornerstone3D-source
+// Out-of-plane measurements: a Length, Angle, Cobb angle, circle, Bidirectional or arrow held in the
+// patient domain, with no image. Drawn on a view that is not an acquired image, or read from a report
+// whose points no loaded image holds (or whose Drawing-Plane says so), it is a Cornerstone3D-source
 // measurement-service record that holds its patient points:
 //
 //   { uid, toolName, points: [[x, y, z], ...] (handle order), FrameOfReferenceUID,
@@ -18,9 +18,10 @@
 
 import { circleStatisticsOf } from './circleGeometry';
 import { BIDIRECTIONAL_TOOL, CLASSIC_VALUE_NAMES } from './bidirectionalGeometry';
+import { ARROW_TOOL } from './arrowGeometry';
 
 // The circle's records carry its Cornerstone3D name (circleGeometry.js); the writer knows it too
-const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI', BIDIRECTIONAL_TOOL];
+const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI', BIDIRECTIONAL_TOOL, ARROW_TOOL];
 
 // The tool name the Cornerstone3D annotation of a Cobb angle whose lines lie in no common plane is
 // kept under: no slice tool draws it (no slice view contains it), the 3D display draws it as a Cobb
@@ -39,13 +40,15 @@ function isOutOfPlaneMeasurement(measurement) {
 }
 
 /**
- * The writer's tool data of an out-of-plane record: its patient points in handle order, and a
- * circle's pixel statistics (the record's `cachedStats`, or its statistics by target)
+ * The writer's tool data of an out-of-plane record: its patient points in handle order, a circle's
+ * pixel statistics (the record's `cachedStats`, or its statistics by target), and an arrow's text
+ * (its label)
  */
 function patientToolData(measurement) {
   const metadata = measurement.metadata || {};
   const data = measurement.data || {};
   return {
+    ...(measurement.toolName === ARROW_TOOL ? { text: measurement.label || '' } : {}),
     statistics: circleStatisticsOf(data.cachedStats, ...Object.values(data).filter(value => value && typeof value === 'object')),
     uid: measurement.uid,
     _id: measurement.uid,
@@ -101,6 +104,8 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
   // A circle's values (radius, area, perimeter) and a Bidirectional's lengths, as read
   const isCircle = annotationType === 'CircleROI';
   const isBidirectional = annotationType === BIDIRECTIONAL_TOOL;
+  // An arrow has no value: its text is its label (none for a coded finding, whose meaning is shown)
+  const isArrow = annotationType === ARROW_TOOL;
   const read = sourceGeometry.values || {};
   let values = isLength ? { length: value } : { rAngle: value };
   if (isCircle) {
@@ -110,6 +115,8 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
       [CLASSIC_VALUE_NAMES.long]: read.length, [CLASSIC_VALUE_NAMES.short]: read.width,
       unit: read.unit || 'mm', widthUnit: read.widthUnit || read.unit || 'mm',
     };
+  } else if (isArrow) {
+    values = { text: data.text || '' };
   }
   const locked = Boolean(metadata.isLocked);
   const record = {
@@ -119,13 +126,16 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
     referenceStudyUID: StudyInstanceUID,
     referenceSeriesUID: metadata.sourceSeries,
     description: toolData.description || annotation.description,
-    label: '',
+    label: isArrow && !metadata.codedFinding ? data.text || '' : '',
     isLocked: locked,
-    ...(isCircle ? { unit: 'mm' } : isBidirectional ? { unit: values.unit }
+    ...(isArrow ? {} : isCircle ? { unit: 'mm' } : isBidirectional ? { unit: values.unit }
       : isLength ? { length: value, unit: 'mm' } : { value, unit: 'deg' }),
     data: { ...values, displayAttributes: data.displayAttributes },
     metadata: {
-      ...pick(metadata, ['TrackingIdentifier', 'sourceSeries', 'drawingPlane', 'views', 'text', 'location', 'numItems', 'sourceGeometry']),
+      ...pick(metadata, [
+        'TrackingIdentifier', 'sourceSeries', 'drawingPlane', 'views', 'text', 'measurementText', 'location', 'numItems', 'sourceGeometry',
+        'finding', 'codedFinding',
+      ]),
       outOfPlane: true,
       toolName: annotationType,
       FrameOfReferenceUID: sourceGeometry.FrameOfReferenceUID,

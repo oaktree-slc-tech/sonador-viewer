@@ -28,11 +28,15 @@ import {
 	BIDIRECTIONAL_AXES, BIDIRECTIONAL_TOOL, HANDLE_NAMES as BIDIRECTIONAL_HANDLES, MILLIMETRE, MIN_AXIS_LENGTH, axisConcept, axisGeometryOf,
 	axisLength, bidirectionalNumItems, inMillimetres,
 } from '../utils/bidirectionalGeometry';
+import {
+	ARROW_TOOL, HANDLE_NAMES as ARROW_HANDLES, MIN_ARROW_LENGTH, arrowGeometryOf, arrowLength, freeTextCode, isFreeTextCode,
+} from '../utils/arrowGeometry';
 
 
 const { CORNERSTONE_TOOLS_SR_TAG, CORNERSTONE_3D_TAG } = SREnums;
 const {
 	DICOMReferencedSOPInstanceFinding: TID300DICOMReferencedSOPInstanceFinding,
+	ArrowAnnotation: TID300ArrowAnnotation,
 	BidirectionalMeasurement: TID300BidirectionalMeasurement,
 	CircleMeasurement: TID300CircleMeasurement,
 	CobbAngleMeasurement: TID300CobbAngleMeasurement,
@@ -124,7 +128,7 @@ const UNCHANGED_TOLERANCE = 1e-3;
 // Reasons a tool is not written; parseMeasurementsData turns them into the save result
 const REFUSAL = Object.freeze({
 	INCOMPLETE: 'incomplete', DEGENERATE: 'degenerate', UNCALIBRATED: 'uncalibrated', FRAME_OF_REFERENCE: 'frame-of-reference',
-	PLANE: 'plane',
+	PLANE: 'plane', TEXT: 'text',
 });
 const refusal = (code, message) => Object.assign(new Error(message), { code });
 
@@ -836,11 +840,215 @@ Bidirectional.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAng
 CornerstoneLegacyMeasurementReport.registerTool(Bidirectional);
 
 
+// Arrow annotation (cornerstone-tools `ArrowAnnotate`: `start` the tip, `end` the tail, the text in
+// `text`; utils/arrowGeometry.js), written as a Finding carrying its geometry, tip then tail, and no
+// NUM item:
+// * the Finding's code: the free-text code of the arrow's text, its code value in LongCodeValue (the
+//   text verbatim, the meaning of a free-text code read from an SR included); a coded finding read
+//   from an SR is written back verbatim while the arrow has no text of its own (it shows the coded
+//   meaning). An arrow without a text is refused, unless it is written back with the empty text it
+//   was read with;
+// * the geometry: an arrow hydrated from an SR whose tip and tail, image and frame did not change
+//   (for a patient-domain group: the image and frame it was placed on) is written with the geometry
+//   it was read with: a POINT read with a tip only stays a POINT while the tail shown is the one
+//   derived for it. Otherwise a two-point POLYLINE of the handles: in the patient domain for an arrow
+//   read in it (the patient points of the image's plane), in the image domain for any other. An
+//   out-of-plane arrow (utils/outOfPlane.js) is written from its patient points;
+// * a tip and tail closer than MIN_ARROW_LENGTH are refused, unchanged or not: in millimetres in the
+//   patient domain and through the image plane, in pixels on an image without one. An arrow read in
+//   the patient domain is refused when its image gives no plane or Frame of Reference to write it in.
+// * The code value read in either attribute (arrowGeometry.js `isFreeTextCode`).
+
+const arrowTrackingIdentifier = (tool) => {
+	const readIdentifier = tool.TrackingIdentifier || (tool.metadata || {}).TrackingIdentifier;
+	return isAngleTrackingIdentifier(ARROW_TOOL, readIdentifier) ? readIdentifier : [CORNERSTONE_TOOLS_SR_TAG, ARROW_TOOL].join(':');
+};
+
+// The text of an arrow's tool data: cornerstone-tools keeps it in `text`, a measurement record as its label
+const arrowTextOf = tool => [tool.text, tool.label].find(value => _.isString(value)) || '';
+
+function arrowCode(tool) {
+	// The Finding code an arrow is written with; throws a REFUSAL error for an arrow without a text
+	const meta = tool.metadata || {};
+	const read = meta.finding || tool.finding;
+	const text = arrowTextOf(tool);
+	if (read && isFreeTextCode(read) && text === (_.isString(read.CodeMeaning) ? read.CodeMeaning : '')) {
+		return freeTextCode(read.CodeMeaning);
+	}
+	if (read && !isFreeTextCode(read) && (text === '' || text === read.CodeMeaning)) {
+		return _.cloneDeep(read);
+	}
+	if (!text) {
+		throw refusal(REFUSAL.TEXT, 'Arrow has no text');
+	}
+	return freeTextCode(text);
+}
+
+function storedArrowOf(source) {
+	// The geometry a hydrated arrow was read with: { valueType, graphicType, points, derivedTail }, or undefined
+	if (!source || !['POINT', 'POLYLINE'].includes(source.graphicType)) {
+		return undefined;
+	}
+	const points = sourcePoints(source);
+	const expected = source.graphicType === 'POINT' ? 1 : 2;
+	if (points.length !== expected || (expected === 1 && !source.derivedTail)) {
+		return undefined;
+	}
+	return { valueType: source.valueType, graphicType: source.graphicType, points, derivedTail: source.derivedTail };
+}
+
+// The tip and tail an unchanged arrow still shows: its POLYLINE, or its POINT and the derived tail
+const shownPoints = stored => (stored.graphicType === 'POINT' ? [stored.points[0], stored.derivedTail] : stored.points);
+
+function arrowArguments(tool, { geometry, FrameOfReferenceUID }) {
+	const meta = tool.metadata || {};
+	const findingSites = (tool.findingSites || meta.findingSites || []).filter(site => !isFreeTextCode(site));
+	return {
+		arrowFinding: arrowCode(tool),
+		geometry,
+		ReferencedFrameOfReferenceUID: geometry.valueType === 'SCOORD3D' ? FrameOfReferenceUID : undefined,
+		trackingIdentifierTextValue: arrowTrackingIdentifier(tool),
+		trackingUniqueIdentifier: tool.TrackingUniqueIdentifier || meta.TrackingUniqueIdentifier,
+		findingSites,
+	};
+}
+
+function checkedArrowLength(points, lengthOf, unit) {
+	// Tip and tail at least MIN_ARROW_LENGTH apart, in `unit`; refused otherwise
+	if (!(lengthOf(points[0], points[1]) >= MIN_ARROW_LENGTH)) {
+		throw refusal(REFUSAL.DEGENERATE, `Arrow tip and tail are closer than ${MIN_ARROW_LENGTH} ${unit}`);
+	}
+}
+
+function newArrowGeometry(valueType, points, lengthOf, unit = 'mm') {
+	// The POLYLINE of a drawn or edited arrow; refused when its tip and tail are too close
+	checkedArrowLength(points, lengthOf, unit);
+	return { valueType, graphicType: 'POLYLINE', points: points.map(point => Array.from(point, Number)) };
+}
+
+function storedArrowGeometry(stored, lengthOf, unit) {
+	// The geometry an unchanged arrow was read with; a POLYLINE whose tip and tail are too close is refused
+	if (stored.graphicType === 'POLYLINE') {
+		checkedArrowLength(stored.points, lengthOf, unit);
+	}
+	return _.pick(stored, 'valueType', 'graphicType', 'points');
+}
+
+function arrowToolArguments(tool, context) {
+	// TID 300 arguments of an arrow; throws an error with a REFUSAL `code` when it cannot be written
+	const meta = tool.metadata || {};
+	const source = tool.sourceGeometry || meta.sourceGeometry;
+	const stored = storedArrowOf(source);
+
+	if (tool.patientPoints) {
+		const points = tool.patientPoints;
+		if (points.length !== 2 || points.some(point => point.length !== 3 || !point.every(_.isFinite))) {
+			throw refusal(REFUSAL.INCOMPLETE, 'Arrow is incomplete: its tip and tail are required');
+		}
+		if (!tool.FrameOfReferenceUID) {
+			throw refusal(REFUSAL.FRAME_OF_REFERENCE, 'Arrow has no Frame of Reference');
+		}
+		const unchanged = stored && stored.valueType === 'SCOORD3D' && source.FrameOfReferenceUID === tool.FrameOfReferenceUID
+			&& shownPoints(stored).every((point, i) => samePoint(point, points[i], UNCHANGED_PATIENT_TOLERANCE));
+		const geometry = unchanged ? storedArrowGeometry(stored, arrowLength, 'mm') : newArrowGeometry('SCOORD3D', points, arrowLength);
+		return arrowArguments(tool, { geometry, FrameOfReferenceUID: tool.FrameOfReferenceUID });
+	}
+
+	const { imageId, metadataProvider } = context || {};
+	const handles = tool.handles || {};
+	if (ARROW_HANDLES.some(name => !handles[name] || !_.isFinite(handles[name].x) || !_.isFinite(handles[name].y))) {
+		throw refusal(REFUSAL.INCOMPLETE, 'Arrow is incomplete: handles start, end are required');
+	}
+	const imagePoints = ARROW_HANDLES.map(name => [handles[name].x, handles[name].y]);
+	const module = metadataOf(metadataProvider, 'imagePlaneModule', imageId);
+	const sopCommon = metadataOf(metadataProvider, 'sopCommonModule', imageId) || {};
+	const frameNumber = metadataOf(metadataProvider, 'frameNumber', imageId);
+
+	if (stored) {
+		// Read in the image domain on this image and frame, or in the patient domain on the plane of this
+		// image (where it was placed), with the tip and tail it shows
+		const onImage = stored.valueType === 'SCOORD'
+			&& source.ReferencedSOPInstanceUID === sopCommon.sopInstanceUID
+			&& Number(source.ReferencedFrameNumber || 1) === Number(frameNumber || 1)
+			&& shownPoints(stored).every((point, i) => samePoint(point, imagePoints[i], UNCHANGED_TOLERANCE));
+		const placement = source.placement || {};
+		const onPlane = stored.valueType === 'SCOORD3D' && isPlane(module)
+			&& module.frameOfReferenceUID === source.FrameOfReferenceUID
+			&& placement.SOPInstanceUID === sopCommon.sopInstanceUID && Number(placement.frameNumber || 1) === Number(frameNumber || 1)
+			&& shownPoints(stored).every((point, i) => samePoint(patientToImage(module, point), imagePoints[i], UNCHANGED_TOLERANCE));
+		if (onPlane) {
+			return arrowArguments(tool, { geometry: storedArrowGeometry(stored, arrowLength, 'mm'), FrameOfReferenceUID: source.FrameOfReferenceUID });
+		}
+		if (onImage) {
+			const imageLength = isPlane(module) ? [(a, b) => arrowLength(imageToPatient(module, a), imageToPatient(module, b)), 'mm'] : [arrowLength, 'pixels'];
+			return arrowArguments(tool, { geometry: storedArrowGeometry(stored, ...imageLength), FrameOfReferenceUID: source.FrameOfReferenceUID });
+		}
+	}
+
+	// An arrow read in the patient domain is written in it, through the plane of its image
+	const domain = (source && source.valueType === 'SCOORD3D') ? 'patient' : (tool.coordinateDomain || meta.coordinateDomain);
+	if (domain === 'patient') {
+		if (!isPlane(module)) {
+			throw refusal(REFUSAL.UNCALIBRATED, `Arrow read in patient coordinates is on an image without a plane (imageId=${imageId})`);
+		}
+		if (!module.frameOfReferenceUID) {
+			throw refusal(REFUSAL.FRAME_OF_REFERENCE, 'Arrow read in patient coordinates is on an image without a Frame of Reference');
+		}
+		const patientPoints = imagePoints.map(point => imageToPatient(module, point));
+		return arrowArguments(tool, {
+			geometry: newArrowGeometry('SCOORD3D', patientPoints, arrowLength), FrameOfReferenceUID: module.frameOfReferenceUID,
+		});
+	}
+	const lengthOf = isPlane(module) ? (a, b) => arrowLength(imageToPatient(module, a), imageToPatient(module, b)) : arrowLength;
+	return arrowArguments(tool, { geometry: newArrowGeometry('SCOORD', imagePoints, lengthOf, isPlane(module) ? 'mm' : 'pixels') });
+}
+
+function arrowMeasurementData(MeasurementGroup) {
+	// cornerstone-tools state of an image-domain arrow group: the tip and the tail (the derived one of
+	// an arrow read with a tip only), the text of a free-text Finding
+	const { item } = arrowGeometryOf(_.castArray(MeasurementGroup.ContentSequence)) || {};
+	if (!item || item.ValueType !== 'SCOORD') {
+		throw new Error('Arrow group without an image-domain geometry');
+	}
+	const [tip, tail] = _.chunk(Array.from(item.GraphicData, Number), 2);
+	const end = tail || [tip[0] + 10, tip[1] + 10];
+	return {
+		toolType: ARROW_TOOL,
+		visible: true,
+		active: false,
+		invalidated: true,
+		handles: {
+			start: { x: tip[0], y: tip[1], highlight: true, active: false },
+			end: { x: end[0], y: end[1], highlight: true, active: false },
+			textBox: { hasMoved: false, movesIndependently: false, drawnIndependently: true, allowedOutsideImage: true, hasBoundingBox: true },
+		},
+	};
+}
+
+class ArrowAnnotate {
+	static getMeasurementData(MeasurementGroup) {
+		return arrowMeasurementData(MeasurementGroup);
+	}
+
+	static getTID300RepresentationArguments(tool, context) {
+		return arrowToolArguments(tool, context);
+	}
+}
+ArrowAnnotate.toolType = ARROW_TOOL;
+ArrowAnnotate.utilityToolType = ARROW_TOOL;
+ArrowAnnotate.TID300Representation = TID300ArrowAnnotation;
+ArrowAnnotate.isValidCornerstoneTrackingIdentifier = TrackingIdentifier => isAngleTrackingIdentifier(ARROW_TOOL, TrackingIdentifier);
+
+// Replaces the library adapter of the same tool type, as Length does
+CornerstoneLegacyMeasurementReport.registerTool(ArrowAnnotate);
+
+
 // Adapter Module
 
 const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 	DICOMSRSeriesTagTool,
 	Angle,
+	ArrowAnnotate,
 	Bidirectional,
 	CircleRoi,
 	CobbAngle,
@@ -850,6 +1058,6 @@ const sonadorAdaptersSR = _.extend(c3dAdaptersSR.Cornerstone, {
 
 export default sonadorAdaptersSR;
 export {
-	sonadorAdaptersSR, angleToolArguments, bidirectionalToolArguments, circleToolArguments, lengthToolArguments, Angle, Bidirectional,
-	CircleRoi, CobbAngle, Length, REFUSAL,
+	sonadorAdaptersSR, angleToolArguments, arrowToolArguments, bidirectionalToolArguments, circleToolArguments, lengthToolArguments, Angle,
+	ArrowAnnotate, Bidirectional, CircleRoi, CobbAngle, Length, REFUSAL,
 }

@@ -18,4 +18,11 @@ describe('applyLabellingAttrs', () => {
     applyLabellingAttrs(measurement, undefined);
     expect(measurement).toEqual({ location: '', description: '' });
   });
+
+  it("leaves an arrow's text and Sonador-Measurement.Text as they are", () => {
+    const arrow = { toolType: 'ArrowAnnotate', text: 'Lesion margin', label: 'Lesion margin', metadata: { measurementText: 'Text' } };
+    applyLabellingAttrs(arrow, { location: 'Lung', description: 'Arrow description' });
+    expect(arrow).toMatchObject({ text: 'Lesion margin', label: 'Lesion margin', location: 'Lung', description: 'Arrow description' });
+    expect(arrow.metadata.measurementText).toBe('Text');
+  });
 });

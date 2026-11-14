@@ -1,4 +1,5 @@
 import measurementDetail, { cobbArcs, toolIcon, toolDisplayName } from './measurementDetail';
+import { arrowAnnotate } from './arrowAnnotate';
 
 const labelsOf = detail => detail.sections.flatMap(section => section.items.map(entry => entry.label));
 const shownOf = detail => detail.sections.flatMap(section => section.items.filter(entry => entry.inViewport).map(entry => entry.key));
@@ -95,6 +96,12 @@ describe('the detail of each tool', () => {
     const detail = measurementDetail('ArrowAnnotate', { text: 'Osteophyte' });
     expect(detail.primary.text).toBe('Osteophyte');
     expect(detail.extraCount).toBe(0);
+    // An out-of-plane record holds it as its label; a coded finding shows its meaning
+    expect(measurementDetail('ArrowAnnotate', { label: 'Margin', metadata: { text: 'Margin' } }).primary.text).toBe('Margin');
+    const coded = { label: '', metadata: { text: '', codedFinding: { CodeValue: '52988006', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Lesion' } } };
+    expect(measurementDetail('ArrowAnnotate', coded).primary.text).toBe('Lesion');
+    expect(arrowAnnotate.options.measurementTable.displayFunction(coded)).toBe('Lesion');
+    expect(arrowAnnotate.options.measurementTable.displayFunction({ text: '', label: 'Margin' })).toBe('Margin');
   });
 
   it('a value not yet computed: no primary value and no sections', () => {

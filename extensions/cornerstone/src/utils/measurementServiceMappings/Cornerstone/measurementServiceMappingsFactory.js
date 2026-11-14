@@ -13,8 +13,12 @@ import { Length as LengthMapping } from './Length'
 import { Angle as AngleMapping, CobbAngle as CobbAngleMapping } from './Angle';
 import { Bidirectional as BidirectionalMapping } from './Bidirectional';
 import { CircleRoi as CircleRoiMapping } from './CircleRoi';
+import { ArrowAnnotate as ArrowAnnotateMapping } from './ArrowAnnotate';
 import { DICOMSRSeriesTagTool as DICOMSRSeriesTagToolMapping } from './DICOMSRSeriesTagTool';
 
+
+const isArrowAnnotation = csToolsAnnotation => !!csToolsAnnotation
+  && [csToolsAnnotation.toolName, csToolsAnnotation.toolType].includes(ArrowAnnotateMapping.toolName);
 
 const measurementServiceMappingsFactory = (measurementService, measurementSource) => {
   // Create mappings for the measurement service. This method generates the mapping structures
@@ -61,16 +65,10 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
     Bidirectional: _.extend(angleFactory(BidirectionalMapping), {
       matchingCriteria: { valueType: measurementService.VALUE_TYPES.BIDIRECTIONAL },
     }),
-    ArrowAnnotateTool: {
-      toolName: 'ArrowAnnotate',
-      toAnnotation: commonToAnnotation,
-      toMeasurement: commonToMeasurement,
-      cleanAnnotation: commonCleanAnnotation,
-      matchingCriteria: {
-        valueType: measurementService.VALUE_TYPES.POINT,
-        points: 1,
-      }
-    },
+    // The arrow's text, description, Sonador-Measurement.Text and location as four fields
+    ArrowAnnotateTool: _.extend(angleFactory(ArrowAnnotateMapping), {
+      matchingCriteria: { valueType: measurementService.VALUE_TYPES.POINT, points: 2 },
+    }),
     DICOMSRSeriesTag: _.extend(_.pick(DICOMSRSeriesTagToolMapping, 'toolName', 'cleanAnnotation'), {
       toAnnotation: (measurement, definition) => {
         return DICOMSRSeriesTagToolMapping.toAnnotation(measurementService, measurement, definition);
@@ -157,6 +155,14 @@ const measurementServiceMappingsFactory = (measurementService, measurementSource
         event.detail.element.addEventListener(csToolsEvtName, ({ detail: csToolsAnnotation }) => {
           addOrUpdateMeasurement(csToolsAnnotation);
         });
+      });
+
+      // cornerstone-tools adds an arrow before its text prompt and sets the text once the prompt is
+      // done, raising MEASUREMENT_COMPLETED: the record takes the text then
+      event.detail.element.addEventListener(csTools.EVENTS.MEASUREMENT_COMPLETED, ({ detail: csToolsAnnotation }) => {
+        if (isArrowAnnotation(csToolsAnnotation)) {
+          addOrUpdateMeasurement(csToolsAnnotation);
+        }
       });
     }
   }

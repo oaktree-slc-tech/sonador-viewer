@@ -24,7 +24,7 @@ import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
-import { numItemsOf, propertyParentOf } from '../utils/propertyParent';
+import { extendedMetaOptions, numItemsOf } from '../utils/propertyParent';
 import { currentSession, registerHydratedReport } from '../utils/srDocument';
 import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
 import {
@@ -168,8 +168,8 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     instanceSR, sopInstanceUIDToImageId, options.metaData, undefined, {
       imageIdsForToolState,
       onContentItemParse: (toolType, annotation, srItem) => {
-        const propertyParent = propertyParentOf(toolType);
-        parseExtendedMeta(srItem, annotation, { propertyParent });
+        const { propertyParent, textField } = extendedMetaOptions(toolType);
+        parseExtendedMeta(srItem, annotation, { propertyParent, textField });
         parseDisplayAttributes(srItem, annotation, { propertyParent });
         // The group's NUM items as the report holds them, each with its own children (content the
         // Viewer does not model included): kept with their NUM, never moved or flattened
@@ -486,9 +486,8 @@ function isPatientDomainState(annotationType, toolData) {
 
 function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }) {
   // Hold a hydrated patient-domain group as an out-of-plane measurement-service record, once; true
-  // when it was added. One
-  // whose Frame of Reference no loaded series shares keeps the report's evidence for its series, so
-  // that a save writes it again.
+  // when it was added. One whose Frame of Reference no loaded series shares keeps the report's
+  // evidence for its series, so that a save writes it again.
   const record = heldOutOfPlaneRecord(annotationType, toolData, instanceSR.StudyInstanceUID);
   const { TrackingUniqueIdentifier } = record.metadata;
 

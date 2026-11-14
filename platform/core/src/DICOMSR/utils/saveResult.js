@@ -5,9 +5,12 @@
 
 import { MIN_RADIUS } from './circleGeometry';
 import { MIN_AXIS_LENGTH } from './bidirectionalGeometry';
+import { ARROW_TOOL } from './arrowGeometry';
 import { asArray, conceptNameValue } from './codedConcept';
 
-const TOOL_LABELS = { Angle: 'Angle', CobbAngle: 'Cobb angle', CircleRoi: 'Circle', CircleROI: 'Circle', Bidirectional: 'Bidirectional' };
+const TOOL_LABELS = {
+  Angle: 'Angle', CobbAngle: 'Cobb angle', CircleRoi: 'Circle', CircleROI: 'Circle', Bidirectional: 'Bidirectional', ArrowAnnotate: 'Arrow',
+};
 
 const ACTIONS = {
   incomplete: 'complete it, or delete it and draw it again',
@@ -30,14 +33,26 @@ const BIDIRECTIONAL_ACTIONS = {
   degenerate: `move the endpoints of each axis apart so that both axes are at least ${MIN_AXIS_LENGTH} mm long`,
   uncalibrated: 'its image calibration is missing or invalid, so its axes cannot be measured in millimetres; draw it on a calibrated image',
 };
-const TOOL_ACTIONS = { CircleRoi: CIRCLE_ACTIONS, CircleROI: CIRCLE_ACTIONS, Bidirectional: BIDIRECTIONAL_ACTIONS };
+// What to do about an arrow, where it differs from an angle. Its tip and tail are measured in
+// millimetres, or in pixels on an image without spacing: the guidance names neither.
+const ARROW_ACTIONS = {
+  incomplete: 'draw it again with its tip and tail',
+  degenerate: 'move its tip and tail farther apart',
+  text: 'type its label, the text shown at the arrow (not its Text property)',
+  uncalibrated: 'it was read in patient coordinates and its image has no calibration to save it in them; draw it again',
+};
+const TOOL_ACTIONS = {
+  CircleRoi: CIRCLE_ACTIONS, CircleROI: CIRCLE_ACTIONS, Bidirectional: BIDIRECTIONAL_ACTIONS, ArrowAnnotate: ARROW_ACTIONS,
+};
 
 
 /** A measurement the writer left out: the tool, its label, and the refusal code of the error */
 function omittedMeasurement(toolType, tool, error) {
+  // An arrow's label is its text (cornerstone-tools keeps it in `text`)
+  const text = toolType === ARROW_TOOL && tool && tool.text;
   return {
     toolType,
-    label: (tool && (tool.label || tool.description || (tool.metadata && tool.metadata.description))) || '',
+    label: (tool && (text || tool.label || tool.description || (tool.metadata && tool.metadata.description))) || '',
     reason: (error && error.code) || 'invalid',
   };
 }

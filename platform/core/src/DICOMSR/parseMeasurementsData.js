@@ -9,8 +9,8 @@ import measurements from '../measurements';
 import MeasurementReport from './SCOORD3D/MeasurementReport';
 import { encodeExtendedMeta } from './utils/dcmsrExtendedMeta';
 import { encodeDisplayAttributes } from './utils/dcmsrDisplayAttributes';
-import { currentSession, documentSettings, isApplicationMeasurement, saveParent } from './utils/srDocument';
-import { propertyParentOf } from './utils/propertyParent';
+import { applyCharacterSet, currentSession, documentSettings, isApplicationMeasurement, saveParent } from './utils/srDocument';
+import { extendedMetaOptions } from './utils/propertyParent';
 import { drawnViewOf } from './utils/measurementView';
 import { measurementVersion, omittedMeasurement } from './utils/saveResult';
 import { isOutOfPlaneMeasurement, patientKeyOf, patientToolData } from './utils/outOfPlane';
@@ -193,8 +193,8 @@ const parseMeasurementsData = (measurementsData, options) => {
 
         // Encoded extended attributes from measurement instance and broadcast via measurement service
         // to allow plugins to modify sequence data.
-        const propertyParent = propertyParentOf(toolType);
-        encodeExtendedMeta(measurement, srItem, { propertyParent });
+        const { propertyParent, textField } = extendedMetaOptions(toolType);
+        encodeExtendedMeta(measurement, srItem, { propertyParent, textField });
         encodeDisplayAttributes(measurement, srItem, { ...encoding, propertyParent });
         measurementApi.measurementService._broadcastEvent(measurementApi.measurementService.EVENTS.MEASUREMENTS_DATASYNC, {
           apiEvent: measurements.Enums.EVENTS.MEASUREMENT_DCMSR_ENCODE_MEASUREMENT, measurement, srItem,
@@ -203,6 +203,7 @@ const parseMeasurementsData = (measurementsData, options) => {
     }
   }));
   _.extend(report.dataset, options.headers);
+  applyCharacterSet(report.dataset);
 
   // Broadcast DCM-SR encoding success with report instance
   measurementApi.measurementService._broadcastEvent(measurementApi.measurementService.EVENTS.MEASUREMENTS_DATASYNC, {

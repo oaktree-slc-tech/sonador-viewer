@@ -39,6 +39,7 @@ import initDisplaySetMeasurements from './utils/initDisplaySetMeasurements';
 import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
 import { currentSession } from './utils/srDocument';
+import { readDicomFile } from '../utils/dicomCharacterSet';
 
 import { Cornerstone3D as Cornerstone3dDcmSrParse } from './Cornerstone3d';
 import { Cornerstone as CornerstoneDcmSrParse } from './SCOORD3D';
@@ -90,7 +91,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   } catch(err) {
 
     // Parse DICOM-SR document to retrieve details for error
-    const dicomData = dcmjs.data.DicomMessage.readFile(part10SRArrayBuffer);
+    const dicomData = readDicomFile(part10SRArrayBuffer);
     const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
     const seriesDescription = dataset.SeriesDescription || '';
     

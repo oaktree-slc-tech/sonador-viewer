@@ -233,7 +233,39 @@ const confirmReport = SOPInstanceUID => unconfirmedReports.delete(SOPInstanceUID
 const isUnconfirmedReport = SOPInstanceUID => unconfirmedReports.has(SOPInstanceUID);
 
 
+// The character set of a document with text outside ASCII (dcmjs writes every text value as UTF-8)
+const UTF8_CHARACTER_SET = 'ISO_IR 192';
+
+function hasNonAsciiText(value) {
+  if (_.isString(value)) {
+    return Array.from(value).some(character => character.charCodeAt(0) > 0x7f);
+  }
+  if (_.isArray(value)) {
+    return value.some(hasNonAsciiText);
+  }
+  if (_.isPlainObject(value) || (_.isObject(value) && !ArrayBuffer.isView(value) && !(value instanceof ArrayBuffer))) {
+    return Object.keys(value).some(key => !key.startsWith('_') && hasNonAsciiText(value[key]));
+  }
+  return false;
+}
+
+/**
+ * Set Specific Character Set to ISO_IR 192 when any text value of a naturalized document is outside
+ * ASCII, whatever tool or header it belongs to. A document of ASCII text only is left as it is.
+ *
+ * @returns {object} the dataset
+ */
+function applyCharacterSet(dataset) {
+  if (dataset && hasNonAsciiText(_.omit(dataset, 'SpecificCharacterSet'))) {
+    dataset.SpecificCharacterSet = UTF8_CHARACTER_SET;
+  }
+  return dataset;
+}
+
+
 export {
+  UTF8_CHARACTER_SET,
+  applyCharacterSet,
   applyRootContent,
   clearHydratedReports,
   confirmReport,
