@@ -70,8 +70,8 @@ const row = (outOfPlane, extra = {}) => ({
   outOfPlane: { view: 'Sagittal', viewName: 'sagittal', frameOfReferenceLoaded: true, inClassicViewport: false, ...outOfPlane },
   ...extra,
 });
-const render = (measurementData, onOpenInMpr = jest.fn()) => {
-  act(() => root.render(<MeasurementTableItem itemIndex={12} onItemClick={() => {}} onOpenInMpr={onOpenInMpr} measurementData={measurementData} />));
+const render = (measurementData, onOpenInMpr = jest.fn(), onItemClick = () => {}) => {
+  act(() => root.render(<MeasurementTableItem itemIndex={12} onItemClick={onItemClick} onOpenInMpr={onOpenInMpr} measurementData={measurementData} />));
   return onOpenInMpr;
 };
 const text = selector => [...container.querySelectorAll(selector)].map(node => node.textContent);
@@ -83,6 +83,24 @@ it('marks the index cell with a cube named "3D measurement", in the blue of the 
   expect(item.className).not.toContain('hasWarnings');
   expect(container.querySelector('.itemIndex .outOfPlaneIcon svg').getAttribute('aria-label')).toBe('3D measurement');
   expect(container.querySelector('.itemIndex .tableitem-index').textContent).toBe('12');
+});
+
+it('activates the row from its focused index cell with Enter or Space, leaving its other controls', () => {
+  const measurementData = row({ inClassicViewport: true });
+  const onItemClick = jest.fn();
+  const onOpenInMpr = render(measurementData, jest.fn(), onItemClick);
+  const index = container.querySelector('.itemIndex');
+  expect(index.getAttribute('tabindex')).toBe('0');
+  act(() => index.focus());
+  ['Enter', ' '].forEach(key => act(() => {
+    index.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  }));
+  expect(onItemClick).toHaveBeenCalledTimes(2);
+  expect(onItemClick).toHaveBeenCalledWith(expect.anything(), measurementData);
+  // Another key does not; the note's Open in MPR stays its own action
+  act(() => index.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true })));
+  expect(onItemClick).toHaveBeenCalledTimes(2);
+  expect(onOpenInMpr).not.toHaveBeenCalled();
 });
 
 it('shows the view in place of the image on the detail line', () => {

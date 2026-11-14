@@ -17,6 +17,7 @@
  * @property {Object} contentProps The dialog content props.
  * @property {boolean} [isDraggable=true] Controls if dialog content is draggable or not.
  * @property {boolean} [showOverlay=false] Controls dialog overlay.
+ * @property {boolean} [aboveModal=false] Stack the dialog (and its overlay) above an open modal.
  * @property {boolean} [centralize=false] Center the dialog on the screen.
  * @property {boolean} [preservePosition=true] Use last position instead of default.
  * @property {ElementPosition} defaultPosition Specifies the `x` and `y` that the dragged item should start at.
@@ -55,12 +56,13 @@ function _create({
   preservePosition = true,
   isDraggable = true,
   showOverlay = false,
+  aboveModal = false,
   defaultPosition,
 }) {
   /**
   * Show a new UI dialog;
   *
-  * @param {DialogProps} props { id, content, contentProps, onStart, onDrag, onStop, centralize, isDraggable, showOverlay, preservePosition, defaultPosition }
+  * @param {DialogProps} props { id, content, contentProps, onStart, onDrag, onStop, centralize, isDraggable, showOverlay, aboveModal, preservePosition, defaultPosition }
   */
 
   return serviceImplementation._create({
@@ -74,6 +76,7 @@ function _create({
     preservePosition,
     isDraggable,
     showOverlay,
+    aboveModal,
     defaultPosition,
   });
 }

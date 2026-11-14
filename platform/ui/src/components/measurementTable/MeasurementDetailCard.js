@@ -2,7 +2,6 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
 
-import { displayAttributes } from '@ohif/core';
 import { Icons } from '@ohif/ui-next';
 
 import { Icon } from './../../elements/Icon';
@@ -26,12 +25,6 @@ const EyeOffIcon = () => (
     <path d="M3 3l18 18M10 6a10 10 0 0 1 2-.5c6.4 0 10 6.5 10 6.5a17 17 0 0 1-3 3.7M6.5 7.6A17 17 0 0 0 2 12s3.6 6.5 10 6.5a10 10 0 0 0 4-.9" />
   </svg>
 );
-
-/** A color's name in the annotation palette, else its hex value */
-function colorName(hex) {
-  const match = (displayAttributes.ANNOTATION_PALETTE || []).find(color => String(color.hex).toUpperCase() === String(hex).toUpperCase());
-  return match ? match.name : String(hex).toUpperCase();
-}
 
 const ReferenceRow = ({ label, children }) => (
   <div className="detailRef">
@@ -152,12 +145,14 @@ const MeasurementDetailCard = ({
           <div className="detailSectionHeader">{t('Appearance')}</div>
           {appearance.line && (
             <ReferenceRow label={t('Line')}>
-              <span className="detailSwatch" style={{ backgroundColor: appearance.line }} />{colorName(appearance.line)}
+              <span className="detailSwatch" style={{ backgroundColor: appearance.line }} />
+              <span className="visuallyHidden">{String(appearance.line).toUpperCase()}</span>
             </ReferenceRow>
           )}
           {appearance.text && (
             <ReferenceRow label={t('Text')}>
-              <span className="detailSwatch" style={{ backgroundColor: appearance.text }} />{colorName(appearance.text)}
+              <span className="detailSwatch" style={{ backgroundColor: appearance.text }} />
+              <span className="visuallyHidden">{String(appearance.text).toUpperCase()}</span>
             </ReferenceRow>
           )}
         </div>

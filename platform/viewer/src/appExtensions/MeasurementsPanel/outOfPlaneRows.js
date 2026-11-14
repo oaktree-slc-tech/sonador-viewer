@@ -161,6 +161,31 @@ function navigateToOutOfPlane({ measurementData, viewportsState, commandsManager
 }
 
 /**
+ * Bring the classic viewport to the slice of its source series nearest an out-of-plane arrow's tip:
+ * an arrow labels a point, which the series' slices show (extensions/cornerstone ArrowMarkerTool).
+ * Returns 'shown', or 'unavailable' for another tool, in the MPR view, or with no image of the series.
+ */
+function navigateArrowInStack({ measurementData, viewportsState, commandsManager }) {
+  const record = outOfPlaneRecordOf(measurementData);
+  if (!record || record.toolName !== 'ArrowAnnotate' || isMprActive(viewportsState)) {
+    return 'unavailable';
+  }
+  const tip = Array.from((record.points || [])[0] || [], Number);
+  if (tip.length !== 3 || !tip.every(Number.isFinite)) {
+    return 'unavailable';
+  }
+  const metadata = record.metadata || {};
+  const shown = (viewportsState.viewportSpecificData || {})[viewportsState.activeViewportIndex || 0] || {};
+  const outcome = commandsManager.runCommand('jumpToNearestSlice', {
+    worldPoint: tip,
+    StudyInstanceUID: record.referenceStudyUID || metadata.StudyInstanceUID || shown.StudyInstanceUID,
+    SeriesInstanceUID: metadata.sourceSeries || record.referenceSeriesUID,
+    activeViewportIndex: viewportsState.activeViewportIndex || 0,
+  });
+  return outcome === 'shown' ? 'shown' : 'unavailable';
+}
+
+/**
  * Open the MPR view of the measurement's source series (or another loaded series of its Frame of
  * Reference) and navigate to it there. Resolves the outcome.
  */
@@ -191,6 +216,6 @@ async function openOutOfPlaneInMpr({ measurementData, commandsManager, studyMeta
 
 
 export {
-  navigateToOutOfPlane, navigationTargetOf, openOutOfPlaneInMpr, outOfPlaneMeasurements, outOfPlaneRecordOf, outOfPlaneRows,
+  navigateArrowInStack, navigateToOutOfPlane, navigationTargetOf, openOutOfPlaneInMpr, outOfPlaneMeasurements, outOfPlaneRecordOf, outOfPlaneRows,
   outOfPlaneTableItem,
 };

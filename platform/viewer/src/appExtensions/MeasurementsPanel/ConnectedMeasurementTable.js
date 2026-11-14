@@ -13,7 +13,7 @@ import { MeasurementTable } from '@ohif/ui';
 import { commandsManager } from '../../App';
 import jumpToRowItem from './jumpToRowItem.js';
 import navigateToMeasurementInMpr, { isMprActive } from './mprMeasurementNavigation.js';
-import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
+import { navigateArrowInStack, navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRecordOf, outOfPlaneRows } from './outOfPlaneRows.js';
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
 import measurementDetailSource from './measurementDetailSource.js';
@@ -607,9 +607,12 @@ const mapDispatchToProps = (dispatch, ownProps) => {
       };
 
       // An out-of-plane measurement is shown in the MPR view only; from the classic viewport its row
-      // offers to open it
+      // offers to open it. An arrow is a point every slice can show: the classic viewport goes to the
+      // slice nearest its tip.
       if (measurementData.outOfPlane) {
-        navigateToOutOfPlane({ measurementData, viewportsState, commandsManager });
+        if (navigateArrowInStack({ measurementData, viewportsState, commandsManager }) !== 'shown') {
+          navigateToOutOfPlane({ measurementData, viewportsState, commandsManager });
+        }
         return;
       }
 

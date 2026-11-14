@@ -28,6 +28,7 @@ jest.mock('@ohif/ui', () => ({ SaveDicomSeriesDialog: () => null, workflow: { La
 jest.mock('./utils/setCornerstoneLayout', () => jest.fn());
 jest.mock('./CornerstoneViewportDownloadForm', () => () => null);
 jest.mock('./state', () => ({ getEnabledElement: () => undefined }));
+jest.mock('./tools/imagePlaneOf', () => ({ __esModule: true, default: () => undefined }));
 
 import commandsModule from './commandsModule';
 

@@ -7,6 +7,11 @@
 // `ArrowAnnotate`, points[0] the tip and points[1] the tail in world coordinates) also carries its
 // tracking identity, coordinate domain, source geometry and the code read, which the SR writer
 // reuses; a coded finding is shown by its meaning and has no text of its own.
+//
+// A record rebuilt from tool data that holds no text (the Measurements API's copy of an arrow taken
+// before its label was typed, as a location edit sends it) keeps the label of the service's record,
+// and the fields only the record holds: a text the tool data holds, an empty one included, is the
+// arrow's label.
 
 import _ from 'lodash';
 
@@ -122,12 +127,20 @@ const ArrowAnnotate = {
     }
     measurement.points = pointsOf(measurement.data.handles);
 
-    const annotation = csToolsAnnotation.measurementData || csToolsAnnotation;
-    _.extend(measurement.metadata, srAttributes(measurement.metadata, annotation, annotation.metadata, csToolsAnnotation.metadata));
+    // The service's record, for what tool data without the arrow's text lacks
+    const record = measurement.uid && _.isFunction(measurementService.getMeasurement)
+      ? measurementService.getMeasurement(measurement.uid) : undefined;
 
-    // The text the tool holds, its label; the meaning of a coded finding it shows is not one
-    const liveText = live.map(section => section.text).find(_.isString);
-    let text = _.isString(liveText) ? liveText : textOf(measurement);
+    const annotation = csToolsAnnotation.measurementData || csToolsAnnotation;
+    _.extend(measurement.metadata, srAttributes(measurement.metadata, annotation, annotation.metadata, csToolsAnnotation.metadata,
+      record && record.metadata));
+
+    // The text the tool data holds, its label; the meaning of a coded finding it shows is not one
+    const held = live.map(section => section.text).find(_.isString);
+    let text = _.isString(held) ? held : textOf(measurement);
+    if (!_.isString(held) && !text && record) {
+      text = textOf(record);
+    }
     const coded = measurement.metadata.codedFinding;
     if (coded && text === coded.CodeMeaning) {
       text = '';

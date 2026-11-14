@@ -58,8 +58,11 @@ function alignToPlane(viewport, normal, { anyAngle = false } = {}) {
   const { focalPoint, position, viewPlaneNormal, viewUp } = viewport.getCamera();
   const side = dot(viewPlaneNormal, normal) < 0 ? -1 : 1;
   const nextNormal = scale(unit(normal), side);
-  const up = sub(viewUp || [0, 0, 1], scale(nextNormal, dot(viewUp || [0, 0, 1], nextNormal)));
-  if (!norm(up)) {
+  // The screen up in the new plane: the old one, else (it is along the new normal) the old normal,
+  // else an axis
+  const inPlane = vector => sub(vector, scale(nextNormal, dot(vector, nextNormal)));
+  const up = [viewUp || [0, 0, 1], viewPlaneNormal, [0, 0, 1], [0, 1, 0]].map(inPlane).find(vector => norm(vector) > 1e-6);
+  if (!up) {
     return false;
   }
   const distance = norm(sub(position, focalPoint));

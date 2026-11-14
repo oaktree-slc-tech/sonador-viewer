@@ -50,6 +50,7 @@ import {
 const { selection: c3dAnnotationSelection } = c3dAnnotations;
 
 import OHIF from '@ohif/core';
+import { utils as cextUtils } from '@ohif/extension-cornerstone';
 import { OHIFModal } from '@ohif/ui';
 import { Icon, ToolbarButton } from '@ohif/ui';
 
@@ -64,6 +65,7 @@ import styles from './Cornerstone3DInspectionView.css';
 
 import ViewportGridOverlayTool from './tools/ViewportGridOverlayTool.js';
 import { addSRDisplayToolToGroup } from './tools/DICOMSRDisplayTool';
+import { addArrowMarkerToolToGroup, turnViewOntoArrow } from './tools/ArrowMarkerTool';
 import { applyCameraPlacement, snapToNearestSlice } from '../utils/inspectionCamera';
 import { isDecimatedVolumeId } from '../utils/cornerstone3d';
 
@@ -263,7 +265,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
       component.imgTools.addTool(ViewportGridOverlayTool.toolName);
       component.imgTools.addTool(C3dCobbAngleTool.toolName);
       component.imgTools.addTool(C3dCircleROITool.toolName);
-      component.imgTools.addTool(C3dArrowAnnotateTool.toolName);
+      // The arrow's label is typed in the classic labelling dialog, stacked above the Inspector's modal
+      const { UIDialogService } = component.props.servicesManager.services;
+      component.imgTools.addTool(C3dArrowAnnotateTool.toolName, cextUtils.annotationTextCallbacks(UIDialogService, { aboveModal: true }));
       BUTTON_TOOLS.forEach(({ tool }) => component.imgTools.addTool(tool.toolName));
 
       // Add viewports to tool group
@@ -280,6 +284,12 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
       // Read-only DICOM-SR measurements
       addSRDisplayToolToGroup(component.imgTools);
+
+      // The arrows the view does not draw near its slice, as rings at their tips: a press turns the
+      // view onto the arrow's plane (within ALIGN_LIMIT_DEGREES) at the tip, where it is drawn
+      addArrowMarkerToolToGroup(component.imgTools, {
+        onActivate: turnViewOntoArrow,
+      });
 
       // Re-render viewports and udpate state
       component.renderEngine.render();

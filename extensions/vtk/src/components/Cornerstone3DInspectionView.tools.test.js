@@ -44,6 +44,7 @@ jest.mock('@ohif/core', () => ({
   default: { display: { DisplaySetApi: {} }, DICOMSR: { outOfPlane: { registerDrawingVolume: (...args) => mockRegisterDrawingVolume(...args) } } },
 }), { virtual: true });
 jest.mock('@ohif/ui', () => ({ OHIFModal: () => null, Icon: () => null, ToolbarButton: () => null }), { virtual: true });
+jest.mock('@ohif/extension-cornerstone', () => ({ utils: { annotationTextCallbacks: () => ({}) } }), { virtual: true });
 jest.mock('../utils/cornerstone3d.js', () => ({
   getVolumeIdForDisplaySet: jest.fn(), inspectVtkLabelmapImage: jest.fn(), isDecimatedVolumeId: id => id.endsWith('#decimated'),
 }));
@@ -57,6 +58,7 @@ jest.mock('./Cornerstone3DLabelmapBaseView.js', () => {
 });
 jest.mock('./tools/ViewportGridOverlayTool.js', () => ({ __esModule: true, default: { toolName: 'ViewportGridOverlay' } }));
 jest.mock('./tools/DICOMSRDisplayTool', () => ({ addSRDisplayToolToGroup: jest.fn() }));
+jest.mock('./tools/ArrowMarkerTool', () => ({ addArrowMarkerToolToGroup: jest.fn(), turnViewOntoArrow: jest.fn() }));
 
 import Cornerstone3DInspectionView from './Cornerstone3DInspectionView';
 

@@ -39,6 +39,7 @@ jest.mock('./utils/setCornerstoneLayout', () => jest.fn());
 jest.mock('./CornerstoneViewportDownloadForm', () => () => null);
 const mockState = { element: undefined };
 jest.mock('./state', () => ({ getEnabledElement: () => mockState.element }));
+jest.mock('./tools/imagePlaneOf', () => ({ __esModule: true, default: () => undefined }));
 
 import CommandsManager from '../../../platform/core/src/classes/CommandsManager';
 import ExtensionManager from '../../../platform/core/src/extensions/ExtensionManager';

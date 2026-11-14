@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ../../platform/viewer/src/__tests__/jsdomEnvironment.js
+ */
 // The classic arrow and its measurement: the tool's text, the description, Sonador-Measurement.Text and
 // the location are four fields; the record takes the text once the tool's prompt is done
 // (MEASUREMENT_COMPLETED); a Cornerstone3D arrow hydrated from a report reaches the
@@ -42,6 +45,8 @@ jest.mock('@ohif/core', () => ({
     },
   },
 }), { virtual: true });
+
+import _ from 'lodash';
 
 import { ArrowAnnotate } from './ArrowAnnotate';
 import measurementServiceMappingsFactory from './measurementServiceMappingsFactory';
@@ -159,5 +164,51 @@ describe('the record of a classic arrow', () => {
     source.annotationToMeasurement.mockClear();
     listeners.cornerstonetoolsmeasurementcompleted({ detail: { toolName: 'Length', measurementData: { _id: 'l-1' } } });
     expect(source.annotationToMeasurement).not.toHaveBeenCalled();
+  });
+});
+
+describe('a location set from the Measurements panel (through the measurement service)', () => {
+  const MeasurementService = jest.requireActual('../../../../../../platform/core/src/services/MeasurementService/MeasurementService').default;
+
+  function serviceWithArrowMapping() {
+    const service = new MeasurementService();
+    const source = service.createSource('CornerstoneTools', '4');
+    service.addMapping(source, 'ArrowAnnotate', {},
+      (measurement, definition) => ArrowAnnotate.toAnnotation(service, measurement, definition),
+      detail => ArrowAnnotate.toMeasurement(service, detail));
+    return { service, source };
+  }
+
+  // The arrow as cornerstone-tools raises it: added before its label is typed, completed with it
+  const drawn = text => ({ uid: 'arrow-uid', ...toolData({ text, uid: 'arrow-uid' }) });
+
+  it('keeps the label when the record is rebuilt from a copy taken before the label was typed', () => {
+    const { service, source } = serviceWithArrowMapping();
+    const added = drawn(undefined);
+    // The Measurements API's copy of the arrow, as MEASUREMENT_ADDED made it: no text
+    const staleCopy = _.cloneDeep(added);
+    service.annotationToMeasurement(source, 'ArrowAnnotate', added);
+    service.annotationToMeasurement(source, 'ArrowAnnotate', drawn('Lesion margin'), true);
+    expect(service.getMeasurement('arrow-uid')).toMatchObject({ label: 'Lesion margin', metadata: { text: 'Lesion margin' } });
+
+    // The panel's location edit: the copy with the location, rebuilt and stored over the record
+    staleCopy.measurementData.location = 'Femoral neck';
+    staleCopy.location = 'Femoral neck';
+    service.update('arrow-uid', ArrowAnnotate.toMeasurement(service, staleCopy), true);
+
+    const record = service.getMeasurement('arrow-uid');
+    expect(record).toMatchObject({ label: 'Lesion margin', description: 'Arrow description' });
+    expect(record.metadata).toMatchObject({
+      text: 'Lesion margin', location: 'Femoral neck', measurementText: 'Arrow measurement text',
+    });
+    // What the tool is given back: its label as typed
+    expect(service.getAnnotation(source, 'ArrowAnnotate', 'arrow-uid').measurementData.text).toBe('Lesion margin');
+  });
+
+  it('keeps a label the tool data clears', () => {
+    const { service, source } = serviceWithArrowMapping();
+    service.annotationToMeasurement(source, 'ArrowAnnotate', drawn('Lesion margin'));
+    service.annotationToMeasurement(source, 'ArrowAnnotate', drawn(''), true);
+    expect(service.getMeasurement('arrow-uid')).toMatchObject({ label: '', metadata: { text: '' } });
   });
 });

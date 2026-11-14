@@ -397,11 +397,16 @@ describe('the detail card', () => {
     expect(card().textContent).not.toContain('Not set');
   });
 
-  it('shows the custom colors last, by name', () => {
+  it('shows the custom colors last, as swatches without a visible name or value (palette names carry no meaning)', () => {
     render(circleRow({ customColor: { line: '#348CFD', text: '#AABBCC' } }));
     act(() => $('[data-cy="measurement-tool-icon"]').focus());
     expect($$('.detailSectionHeader').map(node => node.firstChild.textContent).pop()).toBe('Appearance');
-    expect($$('.detailRef').slice(-2).map(node => node.textContent)).toEqual(['LinePrimary', 'Text#AABBCC']);
+    const rows = $$('.detailRef').slice(-2);
+    expect(rows.map(node => node.querySelector('.detailSwatch').style.backgroundColor)).toEqual(['rgb(52, 140, 253)', 'rgb(170, 187, 204)']);
+    // Its value for assistive technology only; the visible row is the label and the swatch
+    expect(rows.map(node => node.querySelector('.visuallyHidden').textContent)).toEqual(['#348CFD', '#AABBCC']);
+    expect(rows.map(node => node.querySelector('.detailLabel').textContent)).toEqual(['Line', 'Text']);
+    expect(card().textContent).not.toContain('Primary');
   });
 
   it('is not offered on a row with a warning', () => {
