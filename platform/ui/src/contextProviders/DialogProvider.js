@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
 import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
@@ -8,6 +9,19 @@ import { utils } from '@ohif/core';
 import './DialogProvider.styl';
 
 const DialogContext = createContext(null);
+
+// The stacking order of a dialog, and of one opened over a modal (OHIFModal's overlay is at 1071)
+const DIALOG_Z_INDEX = 999;
+const ABOVE_MODAL_Z_INDEX = 1072;
+
+// A dialog opened over a modal (`aboveModal`) is placed inside the open modal's content: the modal
+// hides the rest of the page from assistive technology and keeps keyboard focus within itself. It
+// takes the focus when it opens, and gives it back when it closes.
+const openModalContent = () => {
+  const contents = typeof document !== 'undefined' ? document.querySelectorAll('.ReactModal__Content') : [];
+  return contents.length ? contents[contents.length - 1] : null;
+};
+const FOCUSABLE = 'input, textarea, select, button, [tabindex]:not([tabindex="-1"])';
 
 export const useDialog = () => useContext(DialogContext);
 
@@ -45,15 +59,23 @@ const DialogProvider = ({ children, service = null }) => {
    * @param {DialogProps} props The dialog props.
    * @returns The new dialog id.
    */
-  const create = useCallback((props) => {
-    const { id } = props;
+  const create = useCallback((dialogProps) => {
+    const { id, aboveModal } = dialogProps;
 
     let dialogId = id;
     if (!dialogId) {
       dialogId = utils.guid();
     }
 
-    setDialogs((dialogs) => [...dialogs, { ...props, id: dialogId }]);
+    // Over a modal, the focus goes back where it was in the modal (else to the modal) on close
+    let returnFocus;
+    if (aboveModal) {
+      const modal = openModalContent();
+      const active = typeof document !== 'undefined' ? document.activeElement : null;
+      returnFocus = modal && active && modal.contains(active) ? active : modal;
+    }
+
+    setDialogs((dialogs) => [...dialogs, { ...dialogProps, id: dialogId, returnFocus }]);
     setLastDialogId(dialogId);
 
     return dialogId;
@@ -66,7 +88,26 @@ const DialogProvider = ({ children, service = null }) => {
    * @property {string} props.id The dialog id.
    * @returns void
    */
-  const dismiss = useCallback(({ id }) => setDialogs((dialogs) => dialogs.filter((dialog) => dialog.id !== id)), []);
+  const dismiss = useCallback(({ id }) => setDialogs((dialogs) => {
+    const closed = dialogs.find((dialog) => dialog.id === id);
+    if (closed && closed.returnFocus) {
+      setTimeout(() => closed.returnFocus.isConnected && closed.returnFocus.focus());
+    }
+    return dialogs.filter((dialog) => dialog.id !== id);
+  }), []);
+
+  // A dialog over a modal takes the focus, once, on its first field
+  const focused = useRef(new Set());
+  useEffect(() => {
+    dialogs.filter((dialog) => dialog.aboveModal && !focused.current.has(dialog.id)).forEach((dialog) => {
+      const item = document.querySelector(`#draggableItem-${dialog.id}`);
+      const field = item && item.querySelector(FOCUSABLE);
+      if (field) {
+        focused.current.add(dialog.id);
+        field.focus();
+      }
+    });
+  }, [dialogs]);
 
   /**
    * Sets the implementation of a dialog service that can be used by extensions.
@@ -101,6 +142,7 @@ const DialogProvider = ({ children, service = null }) => {
    * @property {Object} contentProps The dialog content props.
    * @property {boolean} isDraggable Controls if dialog content is draggable or not.
    * @property {boolean} showOverlay Controls dialog overlay.
+   * @property {boolean} aboveModal Stack the dialog (and its overlay) above an open modal.
    * @property {boolean} centralize Center the dialog on the screen.
    * @property {boolean} preservePosition Use last position instead of default.
    * @property {ElementPosition} defaultPosition Specifies the `x` and `y` that the dragged item should start at.
@@ -141,7 +183,9 @@ const DialogProvider = ({ children, service = null }) => {
         onStop,
         onDrag,
         showOverlay,
+        aboveModal = false,
       } = dialog;
+      const zIndex = aboveModal ? ABOVE_MODAL_Z_INDEX : DIALOG_Z_INDEX;
 
       let position = (preservePosition && lastDialogPosition) || defaultPosition;
       if (centralize) {
@@ -187,7 +231,7 @@ const DialogProvider = ({ children, service = null }) => {
           <div
             id={`draggableItem-${id}`}
             className={classNames('DraggableItem', isDragging && 'dragging', isDraggable && 'draggable')}
-            style={{ zIndex: '999', position: 'absolute' }}
+            style={{ zIndex, position: 'absolute' }}
             onClick={() => _bringToFront(id)}
           >
             <DialogContent {...dialog} {...contentProps} />
@@ -195,13 +239,15 @@ const DialogProvider = ({ children, service = null }) => {
         </Draggable>
       );
 
-      return showOverlay ? (
-        <div className="Overlay" key={id}>
+      const node = showOverlay ? (
+        <div className="Overlay" key={id} style={{ zIndex }}>
           {dragableItem()}
         </div>
       ) : (
         dragableItem()
       );
+      const modal = aboveModal && openModalContent();
+      return modal ? ReactDOM.createPortal(<div className="DraggableArea">{node}</div>, modal, id) : node;
     });
 
   /**

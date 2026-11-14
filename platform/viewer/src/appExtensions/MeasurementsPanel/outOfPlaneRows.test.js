@@ -2,7 +2,8 @@
 // and with the saved measurements once locked; the view in place of the image; in the MPR view the
 // pane nearest its plane turns onto it at any angle and the panes move to its centroid; points in
 // no common plane are centred on without turning a pane; from the classic viewport the MPR of its
-// source series opens at it; no navigation without a loaded series of its Frame of Reference.
+// source series opens at it, except an arrow (a point every slice shows), which goes to the classic
+// slice of its series nearest its tip; no navigation without a loaded series of its Frame of Reference.
 
 jest.mock('@cornerstonejs/adapters', () => ({
   adaptersSR: { Cornerstone3D: { CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} } } },
@@ -36,14 +37,15 @@ jest.mock('@ohif/core', () => {
 });
 
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
-import { navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRows } from './outOfPlaneRows';
+import { navigateArrowInStack, navigateToOutOfPlane, openOutOfPlaneInMpr, outOfPlaneRows } from './outOfPlaneRows';
 
 const LENGTH_TOOL = { id: 'Length', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.length.toFixed(2)} mm` } } };
 const COBB_TOOL = { id: 'CobbAngle', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.rAngle.toFixed(2)}°` } } };
 const CIRCLE_TOOL = { id: 'CircleRoi', toolGroup: 'allTools', options: { measurementTable: { displayFunction: m => `${m.data.cachedStats.radius.toFixed(2)} mm` } } };
 // The Bidirectional's own configuration (Target, `L x W mm`)
 const { bidirectional: BIDIRECTIONAL_TOOL } = jest.requireActual('../../../../core/src/measurements/tools/bidirectional');
-const TOOLS = [LENGTH_TOOL, COBB_TOOL, CIRCLE_TOOL, BIDIRECTIONAL_TOOL];
+const { arrowAnnotate: ARROW_TOOL } = jest.requireActual('../../../../core/src/measurements/tools/arrowAnnotate');
+const TOOLS = [LENGTH_TOOL, COBB_TOOL, CIRCLE_TOOL, BIDIRECTIONAL_TOOL, ARROW_TOOL];
 // A sagittal Bidirectional (x = 12): long axis along y, short axis along z, crossing at (12, 10, 0)
 const BIDIRECTIONAL_POINTS = [[12, 0, 0], [12, 20, 0], [12, 10, -6], [12, 10, 6]];
 // The MPR view of series 2.25.2 (Frame of Reference 2.25.7001)
@@ -227,6 +229,25 @@ describe('navigation', () => {
     const [, target] = commandsManager.runCommand.mock.calls[0];
     expect(target.viewPlaneNormal).toBeUndefined();
     close(target.worldPoint, [2.5, 7.5, 5]);
+  });
+
+  it("from the classic viewport, takes an arrow to the slice of its series nearest its tip; other tools and the MPR view keep theirs", () => {
+    mockRecords.set('arrow', record('arrow', { toolName: 'ArrowAnnotate', label: 'Lesion margin', points: [[12, 0, 7], [12, 30, 7]],
+      metadata: { text: 'Lesion margin' } }));
+    mockRecords.set('a', record('a'));
+    const commandsManager = { runCommand: jest.fn(() => 'shown') };
+    expect(navigateArrowInStack({ measurementData: rowOf('arrow', CLASSIC), viewportsState: CLASSIC, commandsManager })).toBe('shown');
+    expect(commandsManager.runCommand).toHaveBeenCalledWith('jumpToNearestSlice', {
+      worldPoint: [12, 0, 7], StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.2', activeViewportIndex: 0,
+    });
+
+    commandsManager.runCommand.mockClear();
+    expect(navigateArrowInStack({ measurementData: rowOf('a', CLASSIC), viewportsState: CLASSIC, commandsManager })).toBe('unavailable');
+    expect(navigateArrowInStack({ measurementData: rowOf('arrow'), viewportsState: MPR, commandsManager })).toBe('unavailable');
+    expect(commandsManager.runCommand).not.toHaveBeenCalled();
+    // The series has no image to go to
+    commandsManager.runCommand.mockReturnValue('unavailable');
+    expect(navigateArrowInStack({ measurementData: rowOf('arrow', CLASSIC), viewportsState: CLASSIC, commandsManager })).toBe('unavailable');
   });
 
   it('does not navigate from the classic viewport, nor without a loaded series of its Frame of Reference', () => {

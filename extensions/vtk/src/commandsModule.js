@@ -45,6 +45,7 @@ import jumpToWorldPoint, {
 
 import { Enums as vtkEnums } from './enums';
 import { addSRDisplayToolToGroup } from './components/tools/DICOMSRDisplayTool';
+import { addArrowMarkerToolToGroup } from './components/tools/ArrowMarkerTool';
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -128,13 +129,20 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         mprTools.addTool(C3dWindowLevelTool.toolName);
         mprTools.addTool(C3dPanTool.toolName);
         mprTools.addTool(C3dStackScrollTool.toolName);
+        // An arrow's label is edited in the classic labelling dialog
+        const { UIDialogService } = servicesManager.services;
         MPR_MEASUREMENT_TOOLS.forEach(tool => {
-          mprTools.addTool(tool.toolName);
+          mprTools.addTool(tool.toolName, tool === C3dArrowAnnotateTool ? cextUtils.annotationTextCallbacks(UIDialogService) : {});
           mprTools.setToolPassive(tool.toolName);
         });
 
         // Read-only DICOM-SR measurements
         addSRDisplayToolToGroup(mprTools);
+
+        // The arrows a pane does not draw, as rings at their tips: a press brings every pane to the tip
+        addArrowMarkerToolToGroup(mprTools, {
+          onActivate: ({ worldPoint, viewPlaneNormal }) => actions.jumpToMprWorldPoint({ worldPoint, viewPlaneNormal }),
+        });
 
         // Add viewport to the tool
         mprTools.addViewport(viewportId);

@@ -59,6 +59,31 @@ function _textLines(labels) {
 }
 
 
+/** The view an annotation must belong to in a viewport (srDisplayAnnotations.isViewable) */
+function srViewOf(viewport) {
+  if (viewport.type === c3dEnums.ViewportType.VOLUME_3D) {
+    return { is3D: true };
+  }
+
+  const camera = viewport.getCamera();
+  let halfSpacing = 0.5;
+
+  try {
+    if (viewport instanceof VolumeViewport) {
+      const { spacingInNormalDirection } = c3dUtils.getTargetVolumeAndSpacingInNormalDir(viewport, camera);
+      halfSpacing = (Number(spacingInNormalDirection) || 1) / 2;
+    } else if (viewport instanceof StackViewport) {
+      const imagePlane = c3dMetaData.get('imagePlaneModule', viewport.getCurrentImageId());
+      halfSpacing = (Number(imagePlane?.sliceThickness) || 1) / 2;
+    }
+  } catch (error) {
+    // A viewport without its volume yet: keep the default
+  }
+
+  return { viewPlaneNormal: camera.viewPlaneNormal, focalPoint: camera.focalPoint, halfSpacing };
+}
+
+
 class DICOMSRDisplayTool extends AnnotationTool {
 
   static toolName = srDisplayAnnotations.TOOL_NAME;
@@ -81,28 +106,7 @@ class DICOMSRDisplayTool extends AnnotationTool {
   getHandleNearImagePoint = () => undefined;
 
   _view(viewport) {
-    // The view an annotation must belong to (srDisplayAnnotations.isViewable)
-
-    if (viewport.type === c3dEnums.ViewportType.VOLUME_3D) {
-      return { is3D: true };
-    }
-
-    const camera = viewport.getCamera();
-    let halfSpacing = 0.5;
-
-    try {
-      if (viewport instanceof VolumeViewport) {
-        const { spacingInNormalDirection } = c3dUtils.getTargetVolumeAndSpacingInNormalDir(viewport, camera);
-        halfSpacing = (Number(spacingInNormalDirection) || 1) / 2;
-      } else if (viewport instanceof StackViewport) {
-        const imagePlane = c3dMetaData.get('imagePlaneModule', viewport.getCurrentImageId());
-        halfSpacing = (Number(imagePlane?.sliceThickness) || 1) / 2;
-      }
-    } catch (error) {
-      // A viewport without its volume yet: keep the default
-    }
-
-    return { viewPlaneNormal: camera.viewPlaneNormal, focalPoint: camera.focalPoint, halfSpacing };
+    return srViewOf(viewport);
   }
 
   renderAnnotation = (enabledElement, svgDrawingHelper) => {
@@ -255,4 +259,4 @@ function setSRDisplayToolEnabled(toolGroup, enabled) {
 
 
 export default DICOMSRDisplayTool;
-export { DICOMSRDisplayTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled };
+export { DICOMSRDisplayTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled, srViewOf };

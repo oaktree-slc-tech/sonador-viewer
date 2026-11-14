@@ -13,6 +13,8 @@ import setCornerstoneLayout from './utils/setCornerstoneLayout';
 import CornerstoneViewportDownloadForm from './CornerstoneViewportDownloadForm';
 import { getEnabledElement } from './state';
 import activeSeriesImageId from './utils/activeSeriesImageId';
+import imagePlaneOf from './tools/imagePlaneOf';
+import { nearestImageIndex } from './utils/arrowMarkers';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
@@ -27,7 +29,7 @@ const {
   notifyStudiesQueued,
   notifyArchivesQueued,
 } = OHIF;
-const { studyMetadataManager, cornerstoneUtils } = OHIF.utils;
+const { studyMetadataManager, cornerstoneUtils, StackManager } = OHIF.utils;
 const { setViewportSpecificData } = OHIF.redux.actions;
 
 
@@ -754,6 +756,50 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       }
     },
     
+    jumpToNearestSlice: ({ worldPoint, StudyInstanceUID, SeriesInstanceUID, activeViewportIndex = 0 }) => {
+      // Bring a classic viewport to the slice of a series nearest a patient point (an arrow's tip),
+      // over every display set of the series and every frame of a multi-frame instance: the
+      // viewport's stack is scrolled when it holds that slice, else the slice's display set is shown
+      // at it (its stack index as the viewport's `frameIndex`, with no SOP instance to override it).
+      // Returns 'shown', or 'unavailable' when the series has no image plane.
+      const study = studyMetadataManager.get(StudyInstanceUID);
+      const displaySets = ((study && study.getDisplaySets()) || [])
+        .filter(ds => ds.SeriesInstanceUID === SeriesInstanceUID && ds.images && ds.images.length);
+      const slices = displaySets.flatMap((displaySet) => {
+        const { imageIds: stackIds = [] } = StackManager.findOrCreateStack(study, displaySet) || {};
+        return stackIds.map((imageId, stackIndex) => ({ displaySet, imageId, stackIndex }));
+      });
+
+      // The viewport's own stack, when the series has no display set to compare
+      const element = getEnabledElement(activeViewportIndex);
+      const stack = element && ((cornerstoneTools.getToolState(element, 'stack') || {}).data || [])[0];
+      const shownIds = (stack && stack.imageIds) || [];
+      const isShownSeries = (imageId) => {
+        const module = imageId && cornerstone.metaData.get('generalSeriesModule', imageId);
+        return Boolean(module) && module.seriesInstanceUID === SeriesInstanceUID;
+      };
+      const candidates = slices.length || !isShownSeries(shownIds[0])
+        ? slices : shownIds.map((imageId, stackIndex) => ({ imageId, stackIndex }));
+      const nearest = nearestImageIndex(candidates.map(({ imageId }) => imagePlaneOf(imageId)), worldPoint);
+      if (nearest < 0) {
+        return 'unavailable';
+      }
+
+      const { displaySet, imageId, stackIndex } = candidates[nearest];
+      const shownIndex = shownIds.indexOf(imageId);
+      if (shownIndex >= 0) {
+        if (shownIndex !== stack.currentImageIdIndex) {
+          cornerstoneTools.import('util/scrollToIndex')(element, shownIndex);
+        }
+        return 'shown';
+      }
+      displaySet.SOPInstanceUID = undefined;
+      displaySet.frameIndex = stackIndex;
+      window.store.dispatch(setViewportSpecificData(activeViewportIndex, displaySet));
+      cornerstoneUtils.refreshCornerstoneViewports();
+      return 'shown';
+    },
+
     jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, activeViewportIndex, refreshViewports = true }) => {
       
       // Jump to a specific study/DICOM instance UID
@@ -779,6 +825,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
   const definitions = {
     jumpToImage: {
       commandFn: actions.jumpToImage,
+      storeContexts: [],
+      options: {},
+    },
+    jumpToNearestSlice: {
+      commandFn: actions.jumpToNearestSlice,
       storeContexts: [],
       options: {},
     },

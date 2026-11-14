@@ -27,9 +27,17 @@ const MEASUREMENT_ACTION_MAP = {
 export default function init({ servicesManager, commandsManager }) {
   const { UIDialogService } = servicesManager.services;
 
-  // TODO: MEASUREMENT_COMPLETED (not present in initial implementation)
   const onMeasurementsChanged = (action, event) => {
     return MEASUREMENT_ACTION_MAP[action](event);
+  };
+
+  // cornerstone-tools adds an arrow before its label is typed, and sets the label when the
+  // measurement completes: the panel's copy takes it then, as it takes a later edit
+  const onMeasurementCompleted = (event) => {
+    const { toolName, toolType } = (event && event.detail) || {};
+    if ((toolName || toolType) === 'ArrowAnnotate') {
+      onModified(event);
+    }
   };
   const onMeasurementAdded = onMeasurementsChanged.bind(this, 'added');
   const onMeasurementRemoved = onMeasurementsChanged.bind(this, 'removed');
@@ -165,6 +173,7 @@ export default function init({ servicesManager, commandsManager }) {
     element.addEventListener(csTools.EVENTS.MEASUREMENT_ADDED, onMeasurementAdded);
     element.addEventListener(csTools.EVENTS.MEASUREMENT_REMOVED, onMeasurementRemoved);
     element.addEventListener(csTools.EVENTS.MEASUREMENT_MODIFIED, onMeasurementModified);
+    element.addEventListener(csTools.EVENTS.MEASUREMENT_COMPLETED, onMeasurementCompleted);
     element.addEventListener(csTools.EVENTS.LABELMAP_MODIFIED, onLabelmapModified);
 
     element.addEventListener(csTools.EVENTS.TOUCH_PRESS, onTouchPress);
@@ -181,6 +190,7 @@ export default function init({ servicesManager, commandsManager }) {
     element.removeEventListener(csTools.EVENTS.MEASUREMENT_ADDED, onMeasurementAdded);
     element.removeEventListener(csTools.EVENTS.MEASUREMENT_REMOVED, onMeasurementRemoved);
     element.removeEventListener(csTools.EVENTS.MEASUREMENT_MODIFIED, onMeasurementModified);
+    element.removeEventListener(csTools.EVENTS.MEASUREMENT_COMPLETED, onMeasurementCompleted);
     element.removeEventListener(csTools.EVENTS.LABELMAP_MODIFIED, onLabelmapModified);
 
     element.removeEventListener(csTools.EVENTS.TOUCH_PRESS, onTouchPress);

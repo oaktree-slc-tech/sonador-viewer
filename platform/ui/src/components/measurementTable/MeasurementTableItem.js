@@ -403,6 +403,15 @@ const MeasurementTableItem = ({
     onItemClick(event, measurementData);
   };
 
+  // The focusable index cell of an out-of-plane row: Enter or Space activates the row, as a click on
+  // it does (an arrow goes to its nearest slice in the classic viewport)
+  const onIndexKeyDown = (event) => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
+      event.preventDefault();
+      handleItemClick(event);
+    }
+  };
+
   const onOpenInMprClick = (event) => {
     // Open the MPR view at an out-of-plane measurement
 
@@ -467,7 +476,7 @@ const MeasurementTableItem = ({
         itemIndex={itemIndex}
         itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
         itemMeta={outOfPlane ? <OutOfPlaneIcon /> : null}
-        itemIndexProps={outOfPlane ? { tabIndex: 0 } : undefined}
+        itemIndexProps={outOfPlane ? { tabIndex: 0, onKeyDown: onIndexKeyDown } : undefined}
         renderItemIndex={outOfPlane ? renderOutOfPlaneNote : undefined}
         onItemClick={handleItemClick}
       >

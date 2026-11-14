@@ -8,7 +8,6 @@ import cornerstone from 'cornerstone-core';
 import csTools from 'cornerstone-tools';
 
 import OHIF from '@ohif/core';
-import { InputDialog } from '@ohif/ui';
 
 import srModuleId from './tools/id';
 import dicomSRModule from './tools/modules/dicomSRModule';
@@ -16,11 +15,13 @@ import DICOMSRSeriesTagTool from './tools/DICOMSRSeriesTag';
 import BidirectionalTool from './tools/BidirectionalTool';
 import CircleRoiTool from './tools/CircleRoiTool';
 import CobbAngleTool from './tools/CobbAngleTool';
+import ArrowMarkerTool, { ARROW_MARKER_TOOL } from './tools/ArrowMarkerTool';
 import lockable from './tools/lockableMeasurementTool';
 import initCornerstoneTools from './initCornerstoneTools.js';
 import { connectToolsToMeasurementService } from './initMeasurementService.js';
 import { initDataServiceIntegration } from './initDataIntegrations.js';
 import { registerSonadorLocalImageLoader } from './loaders/sonadorLocalImageLoader.js';
+import { annotationTextCallbacks } from './utils/annotationTextDialog';
 
 
 export default function init({ servicesManager, commandsManager, configuration }) {
@@ -42,28 +43,6 @@ export default function init({ servicesManager, commandsManager, configuration }
   console.warn('Cornerstone services: ', servicesManager.services);
 
   csTools.register('module', srModuleId, dicomSRModule);
-
-  const callInputDialog = (data, event, callback) => {
-    if (UIDialogService) {
-      let dialogId = UIDialogService.create({
-        centralize: true,
-        isDraggable: false,
-        content: InputDialog,
-        useLastPosition: false,
-        showOverlay: true,
-        contentProps: {
-          title: 'Enter your annotation',
-          label: 'New label',
-          measurementData: data ? { description: data.text } : {},
-          onClose: () => UIDialogService.dismiss({ id: dialogId }),
-          onSubmit: (value) => {
-            callback(value);
-            UIDialogService.dismiss({ id: dialogId });
-          },
-        },
-      });
-    }
-  };
 
   const {
     csToolsConfig,
@@ -118,6 +97,7 @@ export default function init({ servicesManager, commandsManager, configuration }
       csTools.StackScrollTool,
       csTools.StackScrollMouseWheelTool,
       csTools.OverlayTool,
+      ArrowMarkerTool,
     ],
   };
 
@@ -133,10 +113,7 @@ export default function init({ servicesManager, commandsManager, configuration }
   /* Add extension tools configuration here. */
   const internalToolsConfig = {
     ArrowAnnotate: {
-      configuration: {
-        getTextCallback: (callback, eventDetails) => callInputDialog(null, eventDetails, callback),
-        changeTextCallback: (data, eventDetails, callback) => callInputDialog(data, eventDetails, callback),
-      },
+      configuration: annotationTextCallbacks(UIDialogService),
     },
   };
 
@@ -199,5 +176,7 @@ export default function init({ servicesManager, commandsManager, configuration }
   csTools.setToolActive('ZoomTouchPinch', {});
   csTools.setToolEnabled('Overlay', {});
   csTools.setToolEnabled(OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {});
+  // The rings of the arrows an image does not draw (tools/ArrowMarkerTool)
+  csTools.setToolEnabled(ARROW_MARKER_TOOL, {});
 }
 

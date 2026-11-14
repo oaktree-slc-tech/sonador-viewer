@@ -46,10 +46,14 @@ jest.mock('@cornerstonejs/tools', () => {
 jest.mock('@cornerstonejs/tools/enums', () => ({ SegmentationRepresentations: {} }), { virtual: true });
 jest.mock('@cornerstonejs/tools/synchronizers', () => ({ createVOISynchronizer: jest.fn() }), { virtual: true });
 jest.mock('@ohif/core', () => ({ __esModule: true, default: { display: { DisplaySetApi: {} } } }), { virtual: true });
-jest.mock('@ohif/extension-cornerstone', () => ({ utils: {} }), { virtual: true });
+// The arrow's labelling dialog callbacks, as the cornerstone extension makes them
+const mockArrowTextCallbacks = { getTextCallback: jest.fn(), changeTextCallback: jest.fn() };
+jest.mock('@ohif/extension-cornerstone', () => ({ utils: { annotationTextCallbacks: () => mockArrowTextCallbacks } }), { virtual: true });
 jest.mock('./utils/setMPRLayout.js', () => ({ __esModule: true, default: jest.fn() }));
 jest.mock('./utils/cornerstone3d.js', () => ({ getCornerstone3dViewport: jest.fn() }));
 jest.mock('./components/tools/DICOMSRDisplayTool', () => ({ addSRDisplayToolToGroup: jest.fn() }));
+const mockAddArrowMarkers = jest.fn();
+jest.mock('./components/tools/ArrowMarkerTool', () => ({ addArrowMarkerToolToGroup: (...args) => mockAddArrowMarkers(...args) }));
 jest.mock('./enums', () => ({
   Enums: { MPR: { VTK_MPRSLICE_RENDER_ID: 'vtk-mprslice', VTK_MPRSLICE_TOOLGROUP_ID: 'vtk-mprslice', TOOLS: {} }, VIEWPORT: 'VIEWPORT' },
 }));
@@ -78,7 +82,29 @@ it('gives the MPR panes every measurement tool type, passive', () => {
   actions.initMprTools.commandFn({ toolGroupId: 'vtk-mprslice', component });
 
   MEASUREMENT_TOOLS.forEach(name => expect(mockGroup.tools[name]).toBe('Passive'));
-  MEASUREMENT_TOOLS.forEach(name => expect(mockRegistered[name]).toBeDefined());
+  MEASUREMENT_TOOLS.forEach(name => expect(mockRegistered[name]).toBeDefined());  // An arrow's label is edited in the classic labelling dialog, never the browser prompt
+  expect(mockGroup.addTool).toHaveBeenCalledWith('ArrowAnnotate', mockArrowTextCallbacks);
+});
+
+it('rings the arrows a pane does not draw; a press on a ring brings every pane to the tip', () => {
+  mockAddArrowMarkers.mockClear();
+  const component = { state: { toolMode: 'crosshairs' }, _checkViewportActive: () => ({ viewportId: 'axial', viewport: pane() }) };
+  actions.initMprTools.commandFn({ toolGroupId: 'vtk-mprslice', component });
+  const [[group, { onActivate }]] = mockAddArrowMarkers.mock.calls;
+  expect(group).toBe(mockGroup);
+
+  const panes = [0, 1, 2].map(() => {
+    const viewport = pane();
+    viewport.camera = { focalPoint: [0, 0, 0], position: [0, 0, -100], viewPlaneNormal: [0, 0, 1] };
+    viewport.getCamera = () => ({ ...viewport.camera });
+    viewport.setCamera = camera => Object.assign(viewport.camera, camera);
+    viewport.worldToCanvas = () => [10, 10];
+    viewport.canvas = { clientWidth: 100, clientHeight: 100 };
+    return viewport;
+  });
+  mockPanes.push(...panes);
+  expect(onActivate({ worldPoint: [5, 5, 30], viewPlaneNormal: [0, 0, 1] })).toMatchObject({ panes: 3, drawn: true });
+  panes.forEach(viewport => expect(viewport.camera.focalPoint).toEqual([0, 0, 30]));
 });
 
 it('registers a tool only when no other view has (the exchange angle tools stay registered)', () => {
