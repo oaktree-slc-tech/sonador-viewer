@@ -53,10 +53,11 @@ const initLegacyMeasurementServiceMappings = (measurementService) => {
     mapping.toolName, mapping.matchingCriteria,
     mapping.toAnnotation, mapping.toMeasurement, mapping.cleanAnnotation, mapping.toAltSourceMeasurementSchema));
 
-  // Arrow Annotation Tool
-  measurementService.addMapping(measurementSource, 
-    ArrowAnnotateTool.toolName, ArrowAnnotateTool.matchingCriteria, 
-    ArrowAnnotateTool.toAnnotation, ArrowAnnotateTool.toMeasurement, ArrowAnnotateTool.cleanAnnotation);
+  // Arrow Annotation Tool: hydrated arrows reach the classic tool through its alternate-source schema
+  measurementService.addMapping(measurementSource,
+    ArrowAnnotateTool.toolName, ArrowAnnotateTool.matchingCriteria,
+    ArrowAnnotateTool.toAnnotation, ArrowAnnotateTool.toMeasurement, ArrowAnnotateTool.cleanAnnotation,
+    ArrowAnnotateTool.toAltSourceMeasurementSchema);
 
   // DICOM SR Series Tag Tool
   measurementService.addMapping(measurementSource,

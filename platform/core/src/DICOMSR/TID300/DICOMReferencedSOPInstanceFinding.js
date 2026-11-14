@@ -21,6 +21,21 @@ export default class DICOMReferencedSOPInstanceFinding extends TID300Measurement
     return keepTrackingUID(super.getTrackingGroups(), this.props.trackingUniqueIdentifier);
   }
 
+  findingItem(ConceptCodeSequence, ContentSequence) {
+    // The Finding CODE item, CONTAINS from the measurement group, with its value and children
+    return {
+      RelationshipType: SREnums.RELATIONSHIP_TYPE.CONTAINS,
+      ValueType: SREnums.SCOORD_TYPES.CODE,
+      ConceptNameCodeSequence: codedConcept({
+        value: SREnums.CodeNameCodeSequenceValues.Finding,
+        meaning: 'Finding',
+        schemeDesignator: SREnums.CodeNameCodeSequenceValues.DCM,
+      }),
+      ConceptCodeSequence,
+      ContentSequence,
+    };
+  }
+
   contentItem() {
     const {
       value, text, scheme, schemeVersion, ReferencedSOPSequence,
@@ -28,25 +43,16 @@ export default class DICOMReferencedSOPInstanceFinding extends TID300Measurement
 
     // The finding is CONTAINS from the measurement group; the image it was made on is the
     // evidence it is INFERRED FROM (SELECTED FROM is only valid from an SCOORD/TCOORD source).
-    const contentItem = this.getMeasurement([
-      {
-        RelationshipType: SREnums.RELATIONSHIP_TYPE.CONTAINS,
-        ValueType: SREnums.SCOORD_TYPES.CODE,
-        ConceptNameCodeSequence: codedConcept({
-          value: SREnums.CodeNameCodeSequenceValues.Finding,
-          meaning: 'Finding',
-          schemeDesignator: SREnums.CodeNameCodeSequenceValues.DCM,
-        }),
-        ConceptCodeSequence: codedConcept({ value, meaning: text, schemeDesignator: scheme, schemeVersion }),
-        ContentSequence: !ReferencedSOPSequence ? undefined : {
+    return this.getMeasurement([
+      this.findingItem(
+        codedConcept({ value, meaning: text, schemeDesignator: scheme, schemeVersion }),
+        !ReferencedSOPSequence ? undefined : {
           RelationshipType: SREnums.RELATIONSHIP_TYPE.INFERRED_FROM,
           ValueType: SREnums.DCMSR_IMAGE,
           ReferencedSOPSequence,
-        }
-      }
+        },
+      ),
     ]);
-
-    return contentItem;
   }
 };
 

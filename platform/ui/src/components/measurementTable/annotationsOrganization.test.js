@@ -58,6 +58,18 @@ it('finds a Bidirectional by its configured name and its tool name, drawn, out-o
   expect(matchesQuery(reported, 'bidirectional')).toBe(true);
 });
 
+it('finds an arrow by "arrow" and "annotation", by its text, drawn, out-of-plane or read from a report', () => {
+  const drawn = row('a2', { toolType: 'ArrowAnnotate', label: 'Lesion margin', description: 'Arrow description' });
+  expect(matchesQuery(drawn, 'arrow')).toBe(true);
+  expect(matchesQuery(drawn, 'annotation lesion')).toBe(true);
+  expect(matchesQuery(drawn, 'arrow description')).toBe(true);
+  const outOfPlane = row('a3', { toolType: 'ArrowAnnotate', label: 'Margin', outOfPlane: { view: 'sagittal' } });
+  expect(matchesQuery(outOfPlane, 'arrow sagittal')).toBe(true);
+  const reported = row('a4', { toolType: 'DICOMSRDisplayTool', trackingIdentifier: 'Cornerstone3DTools@^0.1.0:ArrowAnnotate' });
+  expect(rowToolType(reported)).toBe('ArrowAnnotate');
+  expect(matchesQuery(reported, 'arrow annotation')).toBe(true);
+});
+
 it('searches the type, label, location, description, modality and series description', () => {
   const text = rowSearchText(cobb);
   ['cobb angle', 'lumbar spine', 'pre-op', 'mr', 'sag t2 fse'].forEach(field => expect(text).toContain(field));

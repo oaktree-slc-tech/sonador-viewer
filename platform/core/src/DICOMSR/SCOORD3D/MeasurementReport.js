@@ -10,7 +10,7 @@ import { normalizers, data as dcmjsData, utilities, sr } from "dcmjs";
 
 import { DISPLAY_LAYOUT, SONADOR_MANUFACTURER, SR_DOCUMENT_CLASS } from '../enums';
 import TID1500MeasurementReport from '../utils/TID1500';
-import { applyRootContent, equipment } from '../utils/srDocument';
+import { applyCharacterSet, applyRootContent, equipment } from '../utils/srDocument';
 import { isPatientKey, PERTINENT_OTHER_EVIDENCE } from '../utils/outOfPlane';
 
 const { TID1500, addAccessors } = utilities;
@@ -161,6 +161,8 @@ export default class SonadorCornerstoneMeasurementReport extends csMeasurementRe
     }
 
     Object.assign(dataset, equipment());
+    // ISO_IR 192 when any text of the document (every tool's, the headers') is outside ASCII
+    applyCharacterSet(dataset);
     dataset._meta = fileMeta();
     dataset._vrMap = { PixelData: "OW" };
     return { dataset, documentClass };

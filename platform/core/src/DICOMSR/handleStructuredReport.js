@@ -12,6 +12,7 @@ import DICOMWeb from '../DICOMWeb';
 import errorHandler from '../errorHandler';
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
 import { isUsablePart10 } from '../utils/dicomPart10';
+import { readDicomFile } from '../utils/dicomCharacterSet';
 import getXHRRetryRequestHook from '../utils/xhrRetryRequestHook';
 
 import getAllDisplaySets from './Cornerstone3d/utils/getAllDisplaySets';
@@ -139,7 +140,7 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
   if (srDisplaySet && !srDisplaySet.naturalizedSrInstance) {
 
     // Parse dataset to dict and naturalize
-    srDisplaySet.srInstanceDicomData = dcmjs.data.DicomMessage.readFile(part10SRArrayBuffer);
+    srDisplaySet.srInstanceDicomData = readDicomFile(part10SRArrayBuffer);
     srDisplaySet.srInstanceDataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(
       srDisplaySet.srInstanceDicomData.dict)
 

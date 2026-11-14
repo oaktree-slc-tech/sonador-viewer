@@ -83,6 +83,7 @@ jest.mock('@ohif/core', () => ({
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
       circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
       bidirectionalGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/bidirectionalGeometry'),
+      arrowGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/arrowGeometry'),
       outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
       drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
       measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
@@ -700,6 +701,22 @@ describe('arrow annotations', () => {
     expect(service.update).toHaveBeenCalledTimes(2);
   });
 
+  it('show a coded finding read from a report by its meaning, and do not take it as a text', async () => {
+    const codedFinding = { CodeValue: '52988006', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Lesion' };
+    const coded = arrow('r-2');
+    // As the classic mapping makes it: no text of its own (label, metadata.text), none in its data
+    coded.label = '';
+    delete coded.data.text;
+    coded.metadata = { text: '', codedFinding, TrackingUniqueIdentifier: '2.25.8301' };
+    service.add(coded);
+    const annotation = mirror('r-2');
+    expect(annotation.data.label).toBe('Lesion');
+    // A moved tail keeps the arrow without a text of its own
+    annotation.data.handles.points[1] = [12, 12, 0];
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation } });
+    expect(service.getMeasurement('r-2')).toMatchObject({ label: '', metadata: { text: '' } });
+  });
+
   it('drawn on an acquired image become classic arrows with their text', async () => {
     disconnect();
     disconnect = connectMeasurementAnnotationSync(service, classicSource, { notify: () => {} });
@@ -885,6 +902,37 @@ describe('a measurement drawn in the 3D Inspector', () => {
     expect(record.data.cachedStats.area).toBeCloseTo(25 * Math.PI, 9);
     expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
     expect(mirror(record.uid).metadata.toolName).toBe('CircleROI');
+  });
+
+  it('off the acquired plane, an arrow becomes a pending out-of-plane measurement with its text and no value, its text edited in the view', async () => {
+    count += 1;
+    const annotation = {
+      annotationUID: `native-ArrowAnnotate-${count}`,
+      metadata: { toolName: 'ArrowAnnotate', FrameOfReferenceUID: '2.25.7001', referencedImageId: null, volumeId: 'volume::inspection', ...SAGITTAL },
+      data: { label: 'Lesion margin', handles: { points: [[12, 0, 0], [12, 30, -40]] }, cachedStats: {} },
+    };
+    mockAnnotations.set(annotation.annotationUID, annotation);
+    mockListeners.ANNOTATION_COMPLETED({ detail: { annotation } });
+    await flush();
+
+    const [record] = records();
+    expect(record).toMatchObject({
+      toolName: 'ArrowAnnotate', points: [[12, 0, 0], [12, 30, -40]], label: 'Lesion margin',
+      metadata: { outOfPlane: true, sourceSeries: '2.25.1002', drawingPlane: '0,1,0,0,0,-1', views: ['sagittal'] },
+    });
+    expect(record.value).toBeUndefined();
+    expect(record.length).toBeUndefined();
+    expect(mockClassic.toAnnotationSchema).not.toHaveBeenCalled();
+    const shown = mirror(record.uid);
+    expect(shown.metadata.toolName).toBe('ArrowAnnotate');
+    expect(shown.data.label).toBe('Lesion margin');
+
+    // Its text edited in the Inspector reaches the record; its points stay
+    shown.data.label = 'Lesion margin, revised';
+    mockListeners.ANNOTATION_MODIFIED({ detail: { annotation: shown } });
+    expect(service.getMeasurement(record.uid)).toMatchObject({
+      label: 'Lesion margin, revised', metadata: { text: 'Lesion margin, revised' }, points: [[12, 0, 0], [12, 30, -40]],
+    });
   });
 
   it('off the acquired plane, a Bidirectional becomes a pending out-of-plane measurement with both lengths, its Drawing-Plane holding all four points', async () => {

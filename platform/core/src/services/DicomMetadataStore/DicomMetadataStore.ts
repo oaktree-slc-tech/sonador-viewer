@@ -3,6 +3,7 @@ import dcmjs from 'dcmjs';
 
 import pubSubServiceInterface from '../_shared/pubSubServiceInterface';
 import createStudyMetadata from './createStudyMetadata';
+import { readDicomFile } from '../../utils/dicomCharacterSet';
 
 const EVENTS = {
   STUDY_ADDED: 'event::dicomMetadataStore:studyAdded',
@@ -188,7 +189,7 @@ const BaseImplementation = {
 
     // If Arraybuffer, parse to DICOMJSON before naturalizing.
     if (dicomJSONDatasetOrP10ArrayBuffer instanceof ArrayBuffer) {
-      const dicomData = dcmjs.data.DicomMessage.readFile(dicomJSONDatasetOrP10ArrayBuffer);
+      const dicomData = readDicomFile(dicomJSONDatasetOrP10ArrayBuffer);
 
       dicomJSONDataset = dicomData.dict;
     } else {

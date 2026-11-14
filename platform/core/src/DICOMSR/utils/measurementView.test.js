@@ -75,7 +75,9 @@ describe('the view of a drawing view', () => {
     expect(drawnViewOf('Length', { metadata: { viewPlaneNormal: [1, 0, 0] } }, axialImage)).toBe('sagittal');
     expect(drawnViewOf('Angle', { metadata: {} }, axialImage)).toBe('axial');
     expect(drawnViewOf('CobbAngle', { metadata: { viewPlaneNormal: tiltedFromZ(30) } }, axialImage)).toBe('oblique');
-    expect(drawnViewOf('ArrowAnnotate', { metadata: {} }, axialImage)).toBeUndefined();
+    expect(drawnViewOf('ArrowAnnotate', { metadata: {} }, axialImage)).toBe('axial');
+    expect(drawnViewOf('ArrowAnnotate', { metadata: { viewPlaneNormal: [0, 1, 0] } }, axialImage)).toBe('coronal');
+    expect(drawnViewOf('EllipticalRoi', { metadata: {} }, axialImage)).toBeUndefined();
     expect(drawnViewOf('Length', { metadata: {} }, undefined)).toBeUndefined();
   });
 });

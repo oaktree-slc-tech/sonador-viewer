@@ -281,3 +281,53 @@ describe('properties under the NUM item', () => {
     expect(circle.numItems[1].ContentSequence.map(item => item.ValueType)).toEqual(['SCOORD3D', 'TEXT']);
   });
 });
+
+
+describe('an arrow in the Sonador form (geometry under its Finding, no NUM)', () => {
+  const arrowGroup = (uid, code, description) => ({
+    RelationshipType: 'CONTAINS', ValueType: 'CONTAINER', ConceptNameCodeSequence: dcm('125007', 'Measurement Group'),
+    ContentSequence: [
+      { RelationshipType: 'HAS OBS CONTEXT', ValueType: 'TEXT', ConceptNameCodeSequence: dcm('112039', 'Tracking Identifier'),
+        TextValue: 'cornerstoneTools@^4.0.0:ArrowAnnotate' },
+      { RelationshipType: 'HAS OBS CONTEXT', ValueType: 'UIDREF', ConceptNameCodeSequence: dcm('112040', 'Tracking Unique Identifier'), UID: uid },
+      {
+        RelationshipType: 'CONTAINS', ValueType: 'CODE', ConceptNameCodeSequence: dcm('121071', 'Finding'), ConceptCodeSequence: [code],
+        ContentSequence: [
+          {
+            RelationshipType: 'INFERRED FROM', ValueType: 'SCOORD', GraphicType: 'POLYLINE', GraphicData: [10.5, 20.5, 30.5, 40.5],
+            ContentSequence: [{ RelationshipType: 'SELECTED FROM', ValueType: 'IMAGE', ReferencedSOPSequence: [{ ReferencedSOPInstanceUID: '2.25.900' }] }],
+          },
+          ...(description ? [text('HAS PROPERTIES', 'Sonador-Measurement.Description', description)] : []),
+        ],
+      },
+    ],
+  });
+
+  it('is drawn tip then tail on its image, labelled with its text, its description when it has one', () => {
+    const [plain, described] = getMeasurements(report([
+      arrowGroup('2.25.31', { CodeValue: 'CST', CodingSchemeDesignator: 'CST4', CodeMeaning: 'Lesion margin' }),
+      arrowGroup('2.25.32', { CodeValue: 'CST', CodingSchemeDesignator: 'CST4', CodeMeaning: 'Lesion margin' }, 'Arrow description'),
+    ]));
+    expect(plain.coords).toEqual([expect.objectContaining({
+      ValueType: 'SCOORD', GraphicType: 'POLYLINE', GraphicData: [10.5, 20.5, 30.5, 40.5],
+      ReferencedSOPSequence: { ReferencedSOPInstanceUID: '2.25.900' },
+    })]);
+    expect(plain.labels).toEqual([{ label: 'CST', value: 'Lesion margin' }]);
+    expect(described.description).toBe('Arrow description');
+  });
+
+  it('reads the free-text code in LongCodeValue (Sonador writers) as in CodeValue (stock writers)', () => {
+    const [long, short] = getMeasurements(report([
+      arrowGroup('2.25.34', { LongCodeValue: 'CST', CodingSchemeDesignator: 'CST4', CodeMeaning: 'Lesion margin' }),
+      arrowGroup('2.25.35', { CodeValue: 'CST', CodingSchemeDesignator: 'CST4', CodeMeaning: 'Lesion margin' }),
+    ]));
+    [long, short].forEach(measurement => expect(measurement.labels).toEqual([{ label: 'CST', value: 'Lesion margin' }]));
+    expect(long.coords).toEqual(short.coords);
+  });
+
+  it('labels a coded finding with its meaning', () => {
+    const [coded] = getMeasurements(report([arrowGroup('2.25.33', { CodeValue: '52988006', CodingSchemeDesignator: 'SCT', CodeMeaning: 'Lesion' })]));
+    expect(coded.coords).toHaveLength(1);
+    expect(coded.labels).toEqual([expect.objectContaining({ label: 'Finding', value: 'Lesion' })]);
+  });
+});

@@ -27,7 +27,7 @@ const ArrowAnnotate = {
     const isLocked = getIsLocked(annotationUID);
     const isVisible = getIsVisible(annotationUID);
     if (!metadata || !data) {
-      console.warn('Length tool: Missing metadata or data');
+      console.warn('ArrowAnnotate tool: Missing metadata or data');
       return null;
     }
 
@@ -70,7 +70,9 @@ const ArrowAnnotate = {
       frameNumber: mappedAnnotations[0]?.frameNumber || 1,
       toolName: metadata.toolName,
       displaySetInstanceUID: displaySet.displaySetInstanceUID,
-      label: data.text,
+      // The arrow's text (the tool keeps it as its label); a coded finding read from a report shows its
+      // meaning and has no text of its own
+      label: metadata.codedFinding && textOf(data) === metadata.codedFinding.CodeMeaning ? '' : textOf(data),
       displayText: displayText,
       data: data.cachedStats,
       type: getValueTypeFromToolType(toolName),
@@ -80,9 +82,12 @@ const ArrowAnnotate = {
 };
 
 
+// The text of an arrow annotation: the tool's label, else the text the adapters read it into
+const textOf = data => (typeof data.label === 'string' ? data.label : data.text);
+
 function getMappedAnnotations(annotation, displaySetService) {
   const { metadata, data } = annotation;
-  const { text } = data;
+  const text = textOf(data);
   const { referencedImageId } = metadata;
 
   const annotations = [];

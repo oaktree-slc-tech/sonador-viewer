@@ -416,20 +416,30 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     }
   }
 
+  const addGraphic = (graphicItem) => {
+    // A circle's NUM items each carry a copy of the same geometry, drawn once
+    const coords = _getCoordsFromSCOORDOrSCOORD3D(graphicItem);
+    const graphicData = Array.from(coords.GraphicData || []);
+    const same = measurement.coords.some(drawn => drawn.ValueType === coords.ValueType && drawn.GraphicType === coords.GraphicType
+      && Array.from(drawn.GraphicData || []).join(',') === graphicData.join(','));
+    if (!same) {
+      measurement.coords.push(coords);
+    }
+  };
+
+  // The graphic a Finding is inferred from: an arrow carries its geometry under its Finding, no NUM
+  const findingGraphic = finding && _inferredGraphicOf(finding.ContentSequence);
+  if (findingGraphic) {
+    addGraphic(findingGraphic);
+  }
+
   NUMContentItems.forEach(item => {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
-    // The graphic the value is inferred from, when the NUM carries one. A circle's NUM items each
-    // carry a copy of the same geometry, drawn once.
+    // The graphic the value is inferred from, when the NUM carries one
     const graphicItem = _inferredGraphicOf(ContentSequence);
     if (graphicItem) {
-      const coords = _getCoordsFromSCOORDOrSCOORD3D(graphicItem);
-      const graphicData = Array.from(coords.GraphicData || []);
-      const same = measurement.coords.some(drawn => drawn.ValueType === coords.ValueType && drawn.GraphicType === coords.GraphicType
-        && Array.from(drawn.GraphicData || []).join(',') === graphicData.join(','));
-      if (!same) {
-        measurement.coords.push(coords);
-      }
+      addGraphic(graphicItem);
     }
 
     if (MeasuredValueSequence) {
@@ -445,7 +455,7 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
   const isFreeText = item => CodingSchemeDesignators.CornerstoneCodeSchemes.includes(conceptCode(item)?.CodingSchemeDesignator)
     && conceptCodeValue(item) === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT;
   const hasImage = mergedContentSequence.some(item => item.ValueType === 'IMAGE');
-  if (!NUMContentItems.length && hasImage) {
+  if (!NUMContentItems.length && (hasImage || findingGraphic)) {
     mergedContentSequence
       .filter(item => item.ValueType === 'CODE' && conceptName(item) && conceptCode(item) && !isFreeText(item))
       .forEach(item => {

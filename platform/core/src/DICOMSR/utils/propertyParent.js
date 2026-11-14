@@ -12,6 +12,7 @@
 import { ANGLE_TOOLS } from './angleGeometry';
 import { CIRCLE_TOOLS } from './circleGeometry';
 import { BIDIRECTIONAL_TOOL } from './bidirectionalGeometry';
+import { ARROW_TOOL } from './arrowGeometry';
 import {
   DCMSR_MEASUREMENT_DESCRIPTION, DCMSR_MEASUREMENT_DRAWING_PLANE, DCMSR_MEASUREMENT_LOCATION, DCMSR_MEASUREMENT_SOURCE_SERIES,
   DCMSR_MEASUREMENT_TEXT, DCMSR_MEASUREMENT_VIEW, DCMSR_DISPLAY_ATTRIBUTES, DCMSR_DISPLAY_COLOR, DCMSR_DISPLAY_COLOR_ROLES,
@@ -30,6 +31,13 @@ const TYPED_PROPERTY_CODES = [
 
 const propertyParentOf = toolType =>
   (NUM_PARENT_TOOLS.includes(toolType) ? PROPERTY_PARENT.NUM : PROPERTY_PARENT.FINDING);
+
+// The field a measurement's Sonador-Measurement.Text is held in: `text`, except for the arrow, whose
+// `text` is its label (dcmsrExtendedMeta.js)
+const textFieldOf = toolType => (toolType === ARROW_TOOL ? 'measurementText' : 'text');
+
+/** The options of a tool's extended-property encoder and parser (dcmsrExtendedMeta.js) */
+const extendedMetaOptions = toolType => ({ propertyParent: propertyParentOf(toolType), textField: textFieldOf(toolType) });
 
 const numItemsOf = group => asArray(group && group.ContentSequence).filter(item => item.ValueType === 'NUM');
 
@@ -75,4 +83,6 @@ function propertyCandidates(groupItems, parent) {
 }
 
 
-export { NUM_PARENT_TOOLS, numItemsOf, propertyCandidates, propertyCarrier, propertyNumOf, propertyParentOf };
+export {
+  NUM_PARENT_TOOLS, extendedMetaOptions, numItemsOf, propertyCandidates, propertyCarrier, propertyNumOf, propertyParentOf, textFieldOf,
+};

@@ -14,6 +14,9 @@
 //    data from DCM.js. It reads children of the property parent first and, for files written
 //    before the attributes moved there, the group-level items (propertyParent.js: a NUM-parent
 //    tool never reads a Finding's children).
+// The Sonador-Measurement.Text of a measurement is held as `text`, except where a tool keeps its own
+// text there: the arrow's is its label, so its Sonador-Measurement.Text is `measurementText`
+// (propertyParent.js `textFieldOf`). One is never written as the other.
 
 import _ from 'lodash';
 
@@ -39,13 +42,16 @@ function encodeExtendedMeta(measurement, srItem, options) {
   //
   // @input options.propertyParent ('finding' | 'num', default 'finding'): item the properties
   //   are written under (propertyParent.js)
+  // @input options.textField (default 'text'): the field the measurement's Sonador-Measurement.Text
+  //   is held in
   options = options || {};
+  const textField = options.textField || 'text';
 
   // Unpack measurement data and check for extended attributes
   const { measurementData, measurementMeta } = MeasurementApi._unpackMeasurementData(measurement);
   const values = {
     description: measurement.description || measurementMeta.description || measurementData.description,
-    text: measurementMeta.text || measurementData.text || measurement.text,
+    text: measurementMeta[textField] || measurementData[textField] || measurement[textField],
     location: measurementMeta.location || measurementData.location || measurement.location,
   };
   const views = asArray(measurementMeta.views || measurementData.views || measurement.views)
@@ -75,9 +81,10 @@ function parseExtendedMeta(srItem, annotation, options) {
   // text, location, views. (Refer to SR enums module for additional information on the fields and their use.)
   //
   // @input options.propertyParent ('finding' | 'num', default 'finding'): item searched first
+  // @input options.textField (default 'text'): the field Sonador-Measurement.Text is read into
   options = options || {}
   _.defaults(options, {
-    textPath: 'annotation.metadata.text',
+    textPath: `annotation.metadata.${options.textField || 'text'}`,
     locationPath: 'annotation.metadata.location',
     viewsPath: 'annotation.metadata.views',
     sourceSeriesPath: 'annotation.metadata.sourceSeries',
@@ -99,7 +106,7 @@ function parseExtendedMeta(srItem, annotation, options) {
   }
 
   const text = textOf(SonadorCodeValues.DCMSR_MEASUREMENT_TEXT);
-  if (text && !annotation.annotation?.metadata?.text) {
+  if (text && !_.get(annotation, options.textPath)) {
     _.set(annotation, options.textPath, text);
   }
 

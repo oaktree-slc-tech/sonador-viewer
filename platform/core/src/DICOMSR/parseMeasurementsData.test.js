@@ -157,8 +157,11 @@ describe('Sonador-Measurement.View of a measurement drawn in this session', () =
     expect(viewsWritten()).toEqual([undefined, ['coronal-ish']]);
   });
 
-  it('is not written for another tool', () => {
-    parseMeasurementsData({ ArrowAnnotate: [drawn('f', 'ArrowAnnotate')] });
+  it('is written for an arrow, and not for a tool that is not saved with one', () => {
+    parseMeasurementsData({ ArrowAnnotate: [drawn('f', 'ArrowAnnotate', { viewPlaneNormal: [0, 1, 0] })] });
+    expect(viewsWritten()).toEqual([['coronal']]);
+    mockEncoded.length = 0;
+    parseMeasurementsData({ EllipticalRoi: [drawn('g', 'EllipticalRoi')] });
     expect(viewsWritten()).toEqual([undefined]);
   });
 });

@@ -1,6 +1,7 @@
 import dcmjs from 'dcmjs';
 import dicomImageLoader from '@cornerstonejs/dicom-image-loader';
 import FileLoader from './base';
+import { readDicomFile } from '../../utils/dicomCharacterSet';
 
 
 const DICOMFileLoader = new (class extends FileLoader {
@@ -24,7 +25,7 @@ const DICOMFileLoader = new (class extends FileLoader {
     //  @returns dicomDataset
 
     // Parse data inst
-    const dicomData = dcmjs.data.DicomMessage.readFile(dcm);
+    const dicomData = readDicomFile(dcm);
     const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
 
     // Attach imageId to dataset via url property

@@ -1,8 +1,11 @@
-// The display draws every visible Length, Angle, Cobb angle, circle and Bidirectional annotation of a 3D
-// viewport's Frame of Reference, whatever the camera orientation, with its value; it can be shown and hidden.
+// The display draws every visible Length, Angle, Cobb angle, circle, Bidirectional and arrow annotation of a
+// 3D viewport's Frame of Reference, whatever the camera orientation, with its value or text; it can be shown
+// and hidden.
 // Cornerstone3D is stubbed: annotations come from an in-memory store and drawing calls are recorded.
 
-const mockAnnotations = { Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [], CircleROI: [], Bidirectional: [] };
+const mockAnnotations = {
+  Length: [], Angle: [], CobbAngle: [], SonadorNonPlanarCobbAngle: [], CircleROI: [], Bidirectional: [], ArrowAnnotate: [],
+};
 const mockHidden = new Set();
 const mockDrawn = [];
 const mockRegisteredTools = {};
@@ -32,6 +35,7 @@ jest.mock('@cornerstonejs/tools', () => {
       visibility: { isAnnotationVisible: uid => !mockHidden.has(uid) },
     },
     drawing: {
+      drawArrow: record('arrow'),
       drawHandles: record('handles'),
       drawLine: record('line'),
       drawPolyline: record('polyline'),
@@ -73,7 +77,27 @@ afterEach(() => {
   mockAnnotations.CobbAngle = [];
   mockAnnotations.CircleROI = [];
   mockAnnotations.Bidirectional = [];
+  mockAnnotations.ArrowAnnotate = [];
   mockHidden.clear();
+});
+
+
+it('draws an arrow from its tail to its tip with its text at the tail, and follows its visibility', () => {
+  const arrow = (uid, extra = {}) => ({
+    annotationUID: uid, metadata: { toolName: 'ArrowAnnotate', FrameOfReferenceUID: FOR },
+    data: { label: 'Lesion margin', handles: { points: [[1, 2, 3], [11, 12, 13]] } }, ...extra,
+  });
+  mockAnnotations.ArrowAnnotate = [arrow('a-1'), arrow('a-other', { metadata: { toolName: 'ArrowAnnotate', FrameOfReferenceUID: '2.25.9999' } })];
+  expect(render()).toBe(true);
+  const [drawn] = mockDrawn.filter(d => d.kind === 'arrow');
+  expect(drawn).toMatchObject({ uid: 'a-1', args: [[24, 12], [4, 2], { color: 'rgb(255, 255, 0)' }] });
+  expect(mockDrawn.some(d => d.uid === 'a-other')).toBe(false);
+  expect(textOf('a-1')).toEqual([['Lesion margin']]);
+  expect(mockDrawn.find(d => d.kind === 'textBox').args[2]).toEqual([[24, 12]]);
+
+  mockHidden.add('a-1');
+  render();
+  expect(mockDrawn.some(d => d.uid === 'a-1')).toBe(false);
 });
 
 

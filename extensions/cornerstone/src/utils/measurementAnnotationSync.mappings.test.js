@@ -69,6 +69,7 @@ jest.mock('@ohif/core', () => ({
       angleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/angleGeometry'),
       circleGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/circleGeometry'),
       bidirectionalGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/bidirectionalGeometry'),
+      arrowGeometry: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/arrowGeometry'),
       outOfPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/outOfPlane'),
       drawingPlane: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/drawingPlane'),
       measurementView: jest.requireActual('../../../../platform/core/src/DICOMSR/utils/measurementView'),
