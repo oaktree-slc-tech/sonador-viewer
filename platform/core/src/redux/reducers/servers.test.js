@@ -1,3 +1,13 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
+// The Cornerstone3D packages are ESM builds jest cannot load here; the exports under test do not use them
+jest.mock('@cornerstonejs/dicom-image-loader', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/core', () => ({ utilities: {}, cache: {}, metaData: {}, Enums: {} }), { virtual: true });
+jest.mock('@cornerstonejs/tools', () => ({ utilities: {}, Enums: {}, segmentation: {} }), { virtual: true });
+jest.mock('@cornerstonejs/core/utilities/textureSupport', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({}), { virtual: true });
+
 import { Reducer } from 'redux-testkit';
 
 import * as types from './../constants/ActionTypes.js';
@@ -8,54 +18,38 @@ describe('viewports reducer', () => {
     expect(reducer(undefined, {})).toEqual(defaultState);
   });
 
-  it('should result in one server when there were no servers before on ADD_SERVER', () => {
-    const initialState = defaultState;
-
-    const action = { type: types.ADD_SERVER, server: { id: 'some-server-id' } };
-
-    const expectedState = { servers: [action.server] };
-
-    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
-  });
-
-  it('should add to servers list on ADD_SERVER', () => {
-    const initialState = {
-      servers: [
-        { id: 'one', active: true },
-        { id: 'two', active: true },
-        { id: 'three', active: true },
-        { id: 'four', active: true },
+  it('replaces the servers with those of ADD_SERVER, the default one active', () => {
+    const initialState = { servers: [{ id: 'old', rootUrl: 'https://old.example' }] };
+    const action = {
+      type: types.ADD_SERVER,
+      serversWithTypes: [
+        { id: 'one', rootUrl: 'https://one.example' },
+        { id: 'two', rootUrl: 'https://two.example', default: true },
       ],
     };
 
-    const action = {
-      type: types.ADD_SERVER,
-      server: { id: 'five', active: true },
-    };
-
-    const expectedState = {
-      servers: [...initialState.servers, action.server],
-    };
-
-    Reducer(reducer).withState(initialState).expect(action).toReturnState(expectedState);
+    const state = reducer(initialState, action);
+    expect(state.servers.map(server => [server.id, Boolean(server.active)])).toEqual([['one', false], ['two', true]]);
   });
 
-  it('should not add duplicated servers on ADD_SERVER', () => {
-    const initialState = {
-      servers: [
-        { id: 'one', active: true },
-        { id: 'two', active: true },
-        { id: 'three', active: true },
-        { id: 'four', active: true },
-      ],
-    };
-
+  it('marks the first server active when none is the default', () => {
     const action = {
       type: types.ADD_SERVER,
-      server: { id: 'two', active: true },
+      serversWithTypes: [{ id: 'one', rootUrl: 'https://one.example' }, { id: 'two', rootUrl: 'https://two.example' }],
     };
 
-    Reducer(reducer).withState(initialState).expect(action).toReturnState(initialState);
+    const state = reducer(defaultState, action);
+    expect(state.servers.map(server => [server.id, Boolean(server.active)])).toEqual([['one', true], ['two', false]]);
+  });
+
+  it('gives a server without a rootUrl the scheme, host and port of its DICOMweb root', () => {
+    const action = {
+      type: types.ADD_SERVER,
+      serversWithTypes: [{ id: 'one', wadoRoot: 'https://pacs.example:8042/dicom-web' }],
+    };
+
+    const [server] = reducer(defaultState, action).servers;
+    expect(server.rootUrl).toBe('https://pacs.example:8042');
   });
 
   it('should replace servers on SET_SERVERS', () => {

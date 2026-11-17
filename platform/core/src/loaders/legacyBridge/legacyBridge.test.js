@@ -51,7 +51,7 @@ jest.mock('@cornerstonejs/core', () => ({
       IMAGE_CACHE_IMAGE_REMOVED: 'CORNERSTONE_IMAGE_CACHE_IMAGE_REMOVED',
     },
   },
-}));
+}), { virtual: true });
 
 import { createBridgeLoader, registerLegacyBridgeLoaders, toRequestType, BRIDGED_SCHEMES } from './bridgeImageLoader';
 import toLegacyImage from './toLegacyImage';

@@ -121,6 +121,43 @@ it('writes a new document, not against an application document, when that is the
   expect(document).toMatchObject({ documentClass: 'Comprehensive3DSR', template: { TemplateIdentifier: 'Sonador-SR.1500' } });
 });
 
+it('writes a new document, not against an exchange document that holds a landmark set', () => {
+  const group = (trackingIdentifier, trackingUid) => ({
+    ValueType: 'CONTAINER', ConceptNameCodeSequence: [{ CodeValue: '125007', CodingSchemeDesignator: 'DCM' }],
+    ContentSequence: [
+      { ValueType: 'TEXT', ConceptNameCodeSequence: [{ CodeValue: '112039', CodingSchemeDesignator: 'DCM' }], TextValue: trackingIdentifier },
+      { ValueType: 'UIDREF', ConceptNameCodeSequence: [{ CodeValue: '112040', CodingSchemeDesignator: 'DCM' }], UID: trackingUid },
+    ],
+  });
+  const exchange = (...groups) => ({
+    StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.4', SOPInstanceUID: '2.25.40',
+    SOPClassUID: '1.2.840.10008.5.1.4.1.1.88.34',
+    ConceptNameCodeSequence: [{ CodeValue: '126000', CodingSchemeDesignator: 'DCM' }],
+    ContentTemplateSequence: [{ TemplateIdentifier: '1500', MappingResource: 'DCMR' }],
+    ContentSequence: [{ ValueType: 'CONTAINER', ConceptNameCodeSequence: [{ CodeValue: '126010', CodingSchemeDesignator: 'DCM' }], ContentSequence: groups }],
+  });
+
+  registerHydratedReport(exchange(group('cornerstoneTools@^4.0.0:Length', '2.25.41'), group('cornerstoneTools@^4.0.0:SonadorLandmarkSet', '2.25.42')));
+  parseMeasurementsData({ Length: [length('len-3')] });
+  // The path of a save with no parent: a new document with the Sonador root template
+  expect(mockWritten[0].document).toMatchObject({ documentClass: 'Comprehensive3DSR', template: { TemplateIdentifier: 'Sonador-SR.1500' } });
+
+  // The control: the same document without the set is the parent, and its template is kept
+  clearHydratedReports();
+  mockWritten.length = 0;
+  registerHydratedReport(exchange(group('cornerstoneTools@^4.0.0:Length', '2.25.41')));
+  parseMeasurementsData({ Length: [length('len-4')] });
+  expect(mockWritten[0].document).toMatchObject({ template: { TemplateIdentifier: '1500', MappingResource: 'DCMR' } });
+});
+
+it("leaves out a placed measurement whose annotation carries its application document, marked or not", () => {
+  const appLength = length('len-app');
+  mockAnnotations['len-app'].metadata = { applicationDocument: { order: { SOPInstanceUID: '2.25.40' } } };
+  parseMeasurementsData({ Length: [appLength, length('len-own')] });
+  const [{ toolState }] = mockWritten;
+  expect(toolState['wadors:1'].Length.data.map(data => data._id)).toEqual(['len-own-cs']);
+});
+
 it('writes nothing for a save holding only application-document measurements', () => {
   markApplicationMeasurement('2.25.702');
   const { saved } = parseMeasurementsData({ DICOMSRSeriesTagTool: [tag('tag-only', '2.25.702')] });
@@ -200,6 +237,21 @@ describe('an out-of-plane measurement', () => {
     const [{ toolState }] = mockWritten;
     expect(toolState['patient:2.25.2001'].Length.data.map(tool => tool.uid)).toEqual(['oop-3']);
     expect(mockEncoded.map(metadata => metadata.views)).toEqual([['sagittal']]);
+  });
+
+  it('read from an application document, is not written even without a tracking UID; an exchange record is (control)', () => {
+    // A held record with carried evidence is otherwise written, locked or not
+    const carriedEvidence = {
+      StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.5001',
+      instances: [{ SOPClassUID: '1.2.840.10008.5.1.4.1.1.2', SOPInstanceUID: '2.25.5001.1' }],
+    };
+    const fromApplication = record('oop-app', { TrackingUniqueIdentifier: undefined, carriedEvidence, isLocked: true,
+      applicationDocument: { order: { SOPInstanceUID: '2.25.40' } } });
+    const fromExchange = record('oop-exchange', { TrackingUniqueIdentifier: undefined, carriedEvidence, isLocked: true });
+    parseMeasurementsData({ Length: [fromApplication, fromExchange] });
+    const [{ toolState }] = mockWritten;
+    const written = Object.values(toolState).flatMap(byType => Object.values(byType)).flatMap(({ data }) => data).map(tool => tool.uid);
+    expect(written).toEqual(['oop-exchange']);
   });
 
   it('held with the evidence of the report it was read from, is written with that evidence under its series', () => {

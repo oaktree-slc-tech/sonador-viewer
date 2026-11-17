@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
  */
 import referenceIdentifiers from './referenceIdentifiers';
 import utils from './index';

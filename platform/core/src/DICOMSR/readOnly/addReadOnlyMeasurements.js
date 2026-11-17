@@ -5,15 +5,16 @@
 // coordinates, in the Cornerstone3D viewports. SCOORD3D content in no image plane is drawn in the
 // Cornerstone3D viewports of its Frame of Reference only.
 //
-// A supported-tool measurement is never displayed here, even when hydration placed nothing, and a
-// measurement whose tracking UID the MeasurementApi already holds (placed by an earlier load) is
-// skipped, so hydration always wins and a measurement is never shown twice.
+// A supported-tool measurement is never displayed here, even when hydration placed nothing. A tracking
+// UID another document's copy already shows is decided by precedence (utils/measurementCopies.js): an
+// exchange document's copy stays, and a copy of an application document gives way to a later current
+// one, so a measurement is never shown twice.
 //
-// An application document (utils/srDocument.js) is displayed, never hydrated. Of its groups, only
-// those with a Cornerstone tracking identifier and coordinates of a graphic type the read-only
-// layer draws are drawn; the others are ignored. Its measurements are drawn in the viewports and
-// are not listed in the Measurements panel. One log line per document names the groups drawn and
-// the groups ignored.
+// An application document (utils/srDocument.js) is never written to. The groups of its supported
+// tools are hydrated read-only; of the others, only those with a Cornerstone tracking identifier and
+// coordinates of a graphic type the read-only layer draws are drawn here, in the viewports only and
+// not listed in the Measurements panel. One log line per document names the groups drawn here and the
+// groups ignored.
 
 import log from '../../log';
 import MeasurementApi from '../../measurements/classes/MeasurementApi';
@@ -23,6 +24,8 @@ import { findImageForPoints, planeFromInstance } from './imagePlane';
 import { patientPoints } from './renderableData';
 import { addSRDisplayAnnotation, renderSRDisplayAnnotations } from './srDisplayAnnotations';
 import { CIRCLE_TRACKING_TOOL } from '../utils/circleGeometry';
+import { showCopy } from '../utils/measurementCopies';
+import { documentOrderOf } from '../utils/srDocument';
 
 
 const _instanceOf = image => {
@@ -228,12 +231,20 @@ export default function addReadOnlyMeasurements({
   /** Add one measurement of a report, counting it in the summary; true when it is drawn */
   function addOne(srDisplaySet, measurement, { listed }) {
     const { TrackingUniqueIdentifier } = measurement || {};
-    if (!TrackingUniqueIdentifier || excludeTrackingUIDs.has(TrackingUniqueIdentifier)
-        || measurementApi.getMeasurementByTrackingUid(TrackingUniqueIdentifier)) {
+    if (!TrackingUniqueIdentifier || excludeTrackingUIDs.has(TrackingUniqueIdentifier)) {
       return false;
     }
-
     measurement.labels = _displayLabels(measurement);
+
+    const application = srDisplaySet.isApplicationDocument
+      ? { order: documentOrderOf(srDisplaySet.instance || { SOPInstanceUID: srDisplaySet.SOPInstanceUID }) } : undefined;
+    return showCopy(TrackingUniqueIdentifier, {
+      application, overlay: true, importer: () => draw(srDisplaySet, measurement, { listed }),
+    }, { measurementApi, measurementService: measurementApi.measurementService });
+  }
+
+  /** Draw one measurement of a report, counting it in the summary; true when it is drawn */
+  function draw(srDisplaySet, measurement, { listed }) {
     const placement = _place(measurement, candidates);
 
     if (placement) {

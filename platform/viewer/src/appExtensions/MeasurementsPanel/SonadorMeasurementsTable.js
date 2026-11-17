@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
 import ConnectedMeasurementTable from './ConnectedMeasurementTable.js';
-import { DICOMSR, measurements, utils } from '@ohif/core';
+import { DICOMSR, DicomMetadataStore, measurements, utils } from '@ohif/core';
 
 const { MeasurementApi } = measurements;
 const isOutOfPlane = measurement => DICOMSR.outOfPlane.isOutOfPlaneMeasurement(measurement);
@@ -18,11 +18,16 @@ const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}
   //    of table measurements.
   // @signal-handler MeasurementService.EVENTS.MEASUREMENTS_DATASYNC: re-render table components after
   //    the measurements service has been cleared.
+  // @signal-handler landmark sets listed or cleared; series and instance metadata added and display
+  //    sets added or removed while a landmark set or an out-of-plane measurement is listed (both are
+  //    placed while a display set shows a series of their frame). A burst of these events reads the
+  //    rows once.
 
   const measurementApi = MeasurementApi.Instance;
 
   // State properties
   const [version, setVersion] = useState(utils.guid());
+  const landmarkRefresh = useRef(null);
 
   useEffect(() => {
     // Manage subscriptions to services and external events
@@ -67,8 +72,34 @@ const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}
         }
       });
     
+    // Landmark sets, and the metadata and display sets their placement reads
+    const rerender = () => {
+      if (landmarkRefresh.current === null) {
+        landmarkRefresh.current = setTimeout(() => {
+          landmarkRefresh.current = null;
+          setVersion(utils.guid());
+        }, renderTimeout);
+      }
+    };
+    // Rows whose placement reads the displayed series: landmark sets and out-of-plane measurements
+    const placementChanged = () => (DICOMSR.landmarks.getLandmarkSets().length > 0
+      || measurementApi.measurementService.getMeasurements().some(isOutOfPlane)) && rerender();
+    const landmark_subscription = DICOMSR.landmarks.subscribe(rerender);
+    const subscribeAll = (service, names) => (service && service.EVENTS && typeof service.subscribe === 'function'
+      ? names.map(name => service.EVENTS[name]).filter(Boolean).map(name => service.subscribe(name, placementChanged))
+      : []);
+    const displaySetService = servicesManager && servicesManager.services && servicesManager.services.displaySetService;
+    const placement_subscriptions = [
+      ...subscribeAll(DicomMetadataStore, ['SERIES_ADDED', 'INSTANCES_ADDED', 'INSTANCE_ADDED']),
+      ...subscribeAll(displaySetService, ['DISPLAY_SETS_ADDED', 'DISPLAY_SETS_REMOVED', 'DISPLAY_SETS_CHANGED']),
+    ];
+
     return () => {
       // Unsubscribe from external service subscriptions
+      landmark_subscription.unsubscribe();
+      placement_subscriptions.forEach(subscription => subscription && subscription.unsubscribe && subscription.unsubscribe());
+      clearTimeout(landmarkRefresh.current);
+      landmarkRefresh.current = null;
 
       measurement_updated_subscription.unsubscribe();
       measurement_datasync_subscription.unsubscribe();

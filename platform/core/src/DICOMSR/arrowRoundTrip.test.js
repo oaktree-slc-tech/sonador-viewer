@@ -764,16 +764,16 @@ describe('patient domain and out-of-plane', () => {
 
 
 describe('document kinds', () => {
-  it('hydrates an exchange document\'s arrow; leaves an application document\'s to the read-only display', () => {
+  it('hydrates an exchange document\'s arrow, and an application document\'s read-only and locked', () => {
     const exchange = written();
     expect(firstItem(exchange.ConceptNameCodeSequence)).toMatchObject({ CodeValue: '126000', CodingSchemeDesignator: 'DCM' });
     expect(hydrate(exchange).byType.ArrowAnnotate).toHaveLength(1);
 
     const application = written();
     application.ConceptNameCodeSequence = [{ CodeValue: 'Sonador-SR.Report', CodingSchemeDesignator: 'Sonador-SR', CodeMeaning: 'Sonador report' }];
-    const { byType, infos } = hydrate(application);
-    expect(byType.ArrowAnnotate).toBeUndefined();
-    expect(infos.some(message => /application document, ArrowAnnotate group not hydrated/.test(message))).toBe(true);
+    const { byType } = hydrate(application);
+    expect(byType.ArrowAnnotate).toHaveLength(1);
+    expect(byType.ArrowAnnotate[0].annotation.metadata).toMatchObject({ isReadOnly: true, isLocked: true });
   });
 });
 

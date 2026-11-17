@@ -9,6 +9,8 @@ describe('Top level exports', () => {
       'getName',
       'getNumber',
       'getString',
+      // Sonador additions
+      'dcmStudyTags',
     ].sort();
 
     const exports = Object.keys(DICOMWeb.default).sort();

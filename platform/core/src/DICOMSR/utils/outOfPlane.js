@@ -19,6 +19,7 @@
 import { circleStatisticsOf } from './circleGeometry';
 import { BIDIRECTIONAL_TOOL, CLASSIC_VALUE_NAMES } from './bidirectionalGeometry';
 import { ARROW_TOOL } from './arrowGeometry';
+import { isImage } from '../../utils/isImage';
 
 // The circle's records carry its Cornerstone3D name (circleGeometry.js); the writer knows it too
 const OUT_OF_PLANE_TOOLS = ['Length', 'Angle', 'CobbAngle', 'CircleROI', BIDIRECTIONAL_TOOL, ARROW_TOOL];
@@ -66,11 +67,13 @@ function patientToolData(measurement) {
 
 /**
  * The loaded image series of a Frame of Reference, from a metadata store (DicomMetadataStore): an
- * out-of-plane measurement can be drawn in, and navigated to on, any of them.
+ * out-of-plane measurement can be drawn in, and navigated to on, any of them. With `displaySets` (the
+ * active display sets), only the image series one of them shows: a series whose display set was
+ * removed keeps its metadata in the store, and a series of no image SOP class has no volume to show.
  *
  * @returns {object[]} the store's series ({ SeriesInstanceUID, SeriesNumber, Modality, instances })
  */
-function seriesOfFrameOfReference(FrameOfReferenceUID, store) {
+function seriesOfFrameOfReference(FrameOfReferenceUID, store, { displaySets } = {}) {
   if (!FrameOfReferenceUID || !store) {
     return [];
   }
@@ -78,6 +81,8 @@ function seriesOfFrameOfReference(FrameOfReferenceUID, store) {
     .map(StudyInstanceUID => store.getStudy(StudyInstanceUID))
     .filter(Boolean)
     .flatMap(study => (study.series || []).map(series => ({ ...series, StudyInstanceUID: study.StudyInstanceUID })))
+    .filter(series => !displaySets || (displaySets.some(displaySet => displaySet && displaySet.SeriesInstanceUID === series.SeriesInstanceUID)
+      && (series.instances || []).some(instance => instance && isImage(instance.SOPClassUID))))
     .filter((series) => {
       // A series has one Frame of Reference: its first instance that names one
       const instance = (series.instances || []).find(candidate => candidate && candidate.FrameOfReferenceUID);
@@ -134,7 +139,7 @@ function heldOutOfPlaneRecord(annotationType, toolData, StudyInstanceUID) {
     metadata: {
       ...pick(metadata, [
         'TrackingIdentifier', 'sourceSeries', 'drawingPlane', 'views', 'text', 'measurementText', 'location', 'numItems', 'sourceGeometry',
-        'finding', 'codedFinding',
+        'finding', 'codedFinding', 'applicationDocument',
       ]),
       outOfPlane: true,
       toolName: annotationType,

@@ -141,6 +141,11 @@ describe('CommandsManager', () => {
       expect(log.warn.mock.calls[0][0]).toEqual(
         'Command "CommandThatDoesNotExistInAnyContext" not found in current context'
       );
+
+      commandsManager.runCommand('CommandThatDoesNotExistInAnyContext', {}, 'VIEWER');
+      expect(log.warn.mock.calls[1][0]).toEqual(
+        'Command "CommandThatDoesNotExistInAnyContext" not found in context "VIEWER"'
+      );
     });
 
     it('Logs a warning if command definition does not have a commandFn', () => {

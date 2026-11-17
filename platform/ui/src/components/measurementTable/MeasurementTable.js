@@ -63,6 +63,9 @@ const seriesLabel = (series, t) => (series.labelKey ? t(series.labelKey, series.
 
 /** The rows of a group collection */
 const rowsOf = groups => (groups || []).flatMap(group => (group && group.measurements) || []);
+// The rows whose visibility the all-annotations toggle and the search filter set: a landmark set's
+// visibility is its own
+const annotationRowsOf = groups => rowsOf(groups).filter(row => !(row && row.landmarkSet));
 
 
 /** The series glyph: two stacked squares, as the series thumbnail's instance count */
@@ -222,8 +225,8 @@ const MeasurementTable = ({
   // they stay hidden when the filter goes. Show All while the filter applies shows the matching
   // annotations only: the filter hides the others again.
   const hiddenBySearch = useRef(new Set());
-  const allRows = rowsOf(measurementCollection);
-  const matchingIds = rowsOf(listedGroups).map(row => row.measurementId);
+  const allRows = annotationRowsOf(measurementCollection);
+  const matchingIds = annotationRowsOf(listedGroups).map(row => row.measurementId);
   const latest = useRef({});
   const filterActive = isOpen && applySearchToViews && searching;
   latest.current = { allRows, matchingIds, filterActive };
@@ -631,7 +634,7 @@ const MeasurementTable = ({
               onToggleAllVisibility={(visible) => {
                 if (searching) {
                   // The matching annotations only
-                  rowsOf(listedGroups).forEach(row => measurementApi.toggleVisibilityMeasurement(row.measurementId, visible));
+                  annotationRowsOf(listedGroups).forEach(row => measurementApi.toggleVisibilityMeasurement(row.measurementId, visible));
                 } else {
                   measurementApi.setAllMeasurementsVisibility(visible);
                 }

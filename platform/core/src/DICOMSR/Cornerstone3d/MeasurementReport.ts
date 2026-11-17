@@ -14,9 +14,8 @@ import { Enums as MeasurementEnums } from '../../measurements/enums';
 import TID1500MeasurementReport from '../utils/TID1500';
 import { findReferencedSOPSequence } from './utils/findReferencedSOP';
 import { asArray, conceptNameMatches, firstItem } from '../utils/codedConcept';
-import TOOL_NAMES from '../constants/toolNames';
 import frameImageIds from './utils/frameImageIds';
-import { isApplicationDocument, isUnconfirmedReport, markApplicationMeasurement } from '../utils/srDocument';
+import { documentOrderOf, isApplicationDocument, isUnconfirmedReport } from '../utils/srDocument';
 
 const { MeasurementReport: c3dMeasurementReport } = c3dAdaptersSR.Cornerstone3D;
 const { DicomMetaDictionary } = dcmData;
@@ -59,13 +58,17 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
     const measurementData = {};
     const imageIds = frameImageIds(sopInstanceUIDToImageIdMap, options.imageIdsForToolState);
 
-    // The measurement groups of an application document (Sonador-SR root title) are not hydrated:
-    // the read-only display shows them. Its Series Tags are the exception, hydrated read-only and
-    // locked as from any document.
+    // The measurement groups of an application document (Sonador-SR root title) with a Cornerstone
+    // tracking identifier are hydrated read-only and locked, and carry the document they were read
+    // from (`applicationDocument`), which the parser records once it imports them; its other groups
+    // are left to the read-only display
     const applicationDocument = isApplicationDocument(dataset);
+    const applicationSource = applicationDocument ? { order: documentOrderOf(dataset) } : undefined;
+    const cornerstonePrefixes = [MeasurementEnums.SREnums.CORNERSTONE_TOOLS_SR_TAG, MeasurementEnums.SREnums.CORNERSTONE_3D_TAG]
+      .map(prefix => `${prefix}:`);
 
     // A report the upload has not confirmed as stored holds no saved measurements yet
-    const locked = !isUnconfirmedReport(dataset.SOPInstanceUID);
+    const locked = applicationDocument || !isUnconfirmedReport(dataset.SOPInstanceUID);
 
     measurementGroups.forEach(measurementGroup => {
       try {
@@ -84,9 +87,15 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
         const toolAdapter = hooks?.getToolClass?.(measurementGroup, dataset, this.measurementAdapterByToolType) 
           || this.getAdapterForTrackingIdentifier(trackingIdentifierValue);
 
-        if (toolAdapter && applicationDocument && toolAdapter.toolType !== TOOL_NAMES.DICOM_SR_SERIES_TAG) {
+        const cornerstoneTracked = typeof trackingIdentifierValue === 'string'
+          && cornerstonePrefixes.some(prefix => trackingIdentifierValue.startsWith(prefix));
+        if (toolAdapter && applicationDocument && !cornerstoneTracked) {
           console.info('[DICOMSR:MeasurementReport:generateToolState] application document, '
-            + `${toolAdapter.toolType} group not hydrated trackingUID=${trackingUniqueIdentifierValue}`);
+            + `${toolAdapter.toolType} group not hydrated (not a Cornerstone tracking identifier) trackingUID=${trackingUniqueIdentifierValue}`);
+        } else if (toolAdapter && applicationDocument && !trackingUniqueIdentifierValue) {
+          // Without a tracking UID its copies in other documents cannot be matched to it: not shown
+          console.warn('[DICOMSR:MeasurementReport:generateToolState] application document, '
+            + `${toolAdapter.toolType} group not hydrated (no Tracking Unique Identifier)`);
         } else if (toolAdapter) {
           // The per-frame image ids go to the Sonador adapters; the library ones ignore them
           const measurement = toolAdapter.getMeasurementData(
@@ -95,7 +104,10 @@ export default class SonadorCornerstone3dMeasurementReport extends c3dMeasuremen
 
           measurement.TrackingUniqueIdentifier = trackingUniqueIdentifierValue;
           if (applicationDocument) {
-            markApplicationMeasurement(trackingUniqueIdentifierValue);
+            // Read-only whatever the adapter does with `locked`
+            _.set(measurement, 'annotation.metadata.isReadOnly', true);
+            _.set(measurement, 'annotation.metadata.isLocked', true);
+            _.set(measurement, 'annotation.metadata.applicationDocument', applicationSource);
           }
 
           // Trigger content parse callback

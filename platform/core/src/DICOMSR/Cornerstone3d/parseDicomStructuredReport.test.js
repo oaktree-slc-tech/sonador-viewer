@@ -19,13 +19,14 @@ jest.mock('@cornerstonejs/adapters', () => {
 }, { virtual: true });
 jest.mock('@cornerstonejs/core', () => ({ utilities: {}, metaData: { get: () => undefined } }), { virtual: true });
 jest.mock('cornerstone-core', () => ({ metaData: { get: () => undefined } }), { virtual: true });
-jest.mock('../../log', () => ({ __esModule: true, default: { info: () => {}, warn: () => {}, error: () => {} } }));
+const mockLogWarn = jest.fn();
+jest.mock('../../log', () => ({ __esModule: true, default: { info: () => {}, warn: (...args) => mockLogWarn(...args), error: () => {} } }));
 jest.mock('../../utils', () => ({ __esModule: true, dataProc: {}, default: { getImageId: instance => instance.imageId } }));
 jest.mock('../../measurements/lib/getImagePath', () => ({ __esModule: true, default: () => '' }));
 jest.mock('../utils/initDisplaySetMeasurements', () => ({
   __esModule: true, default: () => ({ imageDisplaySets: [], srDisplaySets: [] }),
 }));
-jest.mock('./initDisplaySetMeasurements', () => ({ linkMeasurementsToDisplaySets: () => {} }));
+jest.mock('./initDisplaySetMeasurements', () => ({ linkMeasurementsToDisplaySets: () => {}, getMeasurements: () => [] }));
 // Image ids of the study: an instance, and a multiframe instance with two frames
 const mockImageIds = () => ({
   sopInstanceUIDToImageId: { '2.25.900': 'wadors:image', '2.25.906': 'wadors:multiframe/1' },
@@ -57,6 +58,7 @@ jest.mock('./utils/getAllDisplaySets', () => ({ __esModule: true, default: () =>
 jest.mock('../parseMeasurementsData', () => ({ __esModule: true, default: () => ({}) }));
 // The read-only pass is recorded, not run
 const mockReadOnly = jest.fn();
+jest.mock('../readOnly/srDisplayAnnotations', () => ({ hasSRDisplayAnnotation: () => false, removeSRDisplayAnnotation: () => false }));
 jest.mock('../readOnly/addReadOnlyMeasurements', () => ({
   __esModule: true, default: (...args) => mockReadOnly(...args),
 }));
@@ -102,7 +104,14 @@ const mockMeasurementApi = {
       mockRaw.push({ source, toolName, record: { ...toSchema(data), uid: data.id } });
       return data.id;
     }),
+    remove: jest.fn((uid) => {
+      const index = mockRaw.findIndex(({ record }) => record.uid === uid);
+      if (index >= 0) {
+        mockRaw.splice(index, 1);
+      }
+    }),
   },
+  syncMeasurementsAndToolData: () => {},
   _serviceSourceMappings: () => ({ source: {}, mappings: [{}], mappingDefinitions: ['DICOMSRSeriesTagTool', 'Angle', 'Length'] }),
   _serviceManagedTool: () => ({ toolServiceManaged: true, source: { annotationToMeasurement: mockImport } }),
   getMeasurementByTrackingUid: () => undefined,
@@ -140,7 +149,7 @@ jest.mock('../../measurements/enums', () => {
 
 import parseDicomStructuredReport from './parseDicomStructuredReport';
 import { retrieveMeasurementFromSR } from '../handleStructuredReport';
-import { clearHydratedReports, saveParent } from '../utils/srDocument';
+import { clearHydratedReports, documentOrderOf, isApplicationMeasurement, saveParent } from '../utils/srDocument';
 
 const CT_IMAGE = '1.2.840.10008.5.1.4.1.1.2';
 const STUDY = '2.25.1001';
@@ -488,6 +497,24 @@ describe('a patient-domain measurement on no loaded image', () => {
       expect(mockRaw[0].record.metadata.carriedEvidence).toEqual({ ...SERIES_EVIDENCE, instances: tagged(SERIES_EVIDENCE) });
     });
 
+    it('warns of a held measurement with no evidence only when a save would write it', async () => {
+      const noEvidence = (SOPInstanceUID, metadata) => {
+        const key = heldReport(SOPInstanceUID, { sourceSeries: '2.25.5001', ...metadata });
+        delete mockDatasets[key].CurrentRequestedProcedureEvidenceSequence;
+        return key;
+      };
+      const warned = () => mockLogWarn.mock.calls.filter(([message]) => /lists no evidence for a held measurement/.test(message)).length;
+      mockLogWarn.mockClear();
+      await parse(noEvidence('2.25.80'));
+      expect(warned()).toBe(1);
+      clearHydratedReports();
+      const added = mockRaw.length;
+      await parse(noEvidence('2.25.81', { applicationDocument: { order: { SOPInstanceUID: '2.25.81' } } }));
+      // Held, never written by a save: no warning
+      expect(mockRaw.length).toBe(added + 1);
+      expect(warned()).toBe(1);
+    });
+
     const REQUESTED = 'CurrentRequestedProcedureEvidenceSequence';
     const OTHER = 'PertinentOtherEvidenceSequence';
     const tagged = ({ StudyInstanceUID, SeriesInstanceUID, instances }, evidenceContainer = REQUESTED) =>
@@ -556,3 +583,109 @@ describe('a patient-domain measurement on no loaded image', () => {
   });
 });
 
+
+
+describe('one copy per tracking UID across documents', () => {
+  // The same patient-domain Length in several documents: an application document's copy is hydrated
+  // read-only and carries its document; the reader marks it so (MeasurementReport.ts)
+  const APPLICATION_ROOT = [{ CodeValue: 'Clinical-Report', CodingSchemeDesignator: 'Sonador-SR', CodeMeaning: 'Clinical Report' }];
+  const SHARED = '2.25.900.tracking';
+  const copyIn = (key, { application = false, content, predecessor, description = key } = {}) => {
+    report(key, COMPREHENSIVE_3D_SR, '1500');
+    const dataset = mockDatasets[key];
+    if (application) {
+      dataset.ConceptNameCodeSequence = APPLICATION_ROOT;
+    }
+    if (content) {
+      [dataset.ContentDate, dataset.ContentTime] = content;
+    }
+    if (predecessor) {
+      dataset.PredecessorDocumentsSequence = [{ ReferencedSeriesSequence: [{ ReferencedSOPSequence: [{ ReferencedSOPInstanceUID: predecessor }] }] }];
+    }
+    mockToolStates[key] = {
+      Length: [{
+        description,
+        annotation: {
+          data: { handles: { points: [[5, 2, 0], [5, 20, 0]] } },
+          metadata: {
+            TrackingUniqueIdentifier: SHARED, TrackingIdentifier: 'cornerstoneTools@^4.0.0:Length',
+            coordinateDomain: 'patient', outOfPlane: true, sourceSeries: '2.25.2', isLocked: true, isReadOnly: true,
+            sourceGeometry: { valueType: 'SCOORD3D', graphicData: [5, 2, 0, 5, 20, 0], FrameOfReferenceUID: '2.25.7001', value: 18 },
+            ...(application ? { applicationDocument: { order: documentOrderOf(dataset) } } : {}),
+          },
+        },
+      }],
+    };
+    return key;
+  };
+  const held = () => mockRaw.map(({ record }) => record.description);
+
+  beforeEach(() => {
+    mockRaw.length = 0;
+  });
+
+  describe('without a tracking UID', () => {
+    const withoutUid = (key, application) => {
+      delete mockToolStates[key].Length[0].annotation.metadata.TrackingUniqueIdentifier;
+      return key;
+    };
+    const placedWithoutUid = (key, application) => {
+      report(key, ENHANCED_SR, '1500');
+      mockToolStates[key] = { DICOMSRSeriesTagTool: [{
+        sopInstanceUid: '2.25.900',
+        annotation: { data: { value: 'img-qc.reject' }, metadata: application ? { applicationDocument: { order: { SOPInstanceUID: key } } } : {} },
+      }] };
+      return key;
+    };
+
+    it('held: an exchange copy is imported, as it always was; an application copy is not', async () => {
+      await parse(withoutUid(copyIn('2.25.930', { description: 'exchange' })));
+      await parse(withoutUid(copyIn('2.25.931', { application: true, description: 'plan' })));
+      expect(held()).toEqual(['exchange']);
+    });
+
+    it('placed: an exchange copy is imported, as it always was; an application copy is not', async () => {
+      await parse(placedWithoutUid('2.25.932'));
+      expect(mockImport).toHaveBeenCalledTimes(1);
+      await parse(placedWithoutUid('2.25.933', true));
+      expect(mockImport).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('an exchange copy replaces the read-only copy of an application document loaded before it', async () => {
+    await parse(copyIn('2.25.901', { application: true, description: 'plan' }));
+    expect(held()).toEqual(['plan']);
+    expect(isApplicationMeasurement(SHARED)).toBe(true);
+
+    await parse(copyIn('2.25.902', { description: 'exchange' }));
+    expect(held()).toEqual(['exchange']);
+    // Saved again as the exchange document's measurement
+    expect(isApplicationMeasurement(SHARED)).toBe(false);
+  });
+
+  it('an application copy loaded after an exchange copy is not imported', async () => {
+    await parse(copyIn('2.25.903', { description: 'exchange' }));
+    await parse(copyIn('2.25.904', { application: true, description: 'plan' }));
+    expect(held()).toEqual(['exchange']);
+    expect(isApplicationMeasurement(SHARED)).toBe(false);
+  });
+
+  it('of two application documents, the current one wins, whichever loads first', async () => {
+    await parse(copyIn('2.25.905', { application: true, content: ['20261101', '090000'], description: 'older' }));
+    await parse(copyIn('2.25.906', { application: true, content: ['20261102', '090000'], description: 'newer' }));
+    expect(held()).toEqual(['newer']);
+
+    clearHydratedReports();
+    mockRaw.length = 0;
+    await parse(copyIn('2.25.908', { application: true, content: ['20261102', '090000'], description: 'newer' }));
+    await parse(copyIn('2.25.907', { application: true, content: ['20261101', '090000'], description: 'older' }));
+    expect(held()).toEqual(['newer']);
+    expect(isApplicationMeasurement(SHARED)).toBe(true);
+  });
+
+  it('a document that names the other as its predecessor is current, whatever its content date', async () => {
+    await parse(copyIn('2.25.909', { application: true, content: ['20261105', '090000'], description: 'replaced' }));
+    await parse(copyIn('2.25.910', { application: true, content: ['20261101', '090000'], predecessor: '2.25.909', description: 'successor' }));
+    expect(held()).toEqual(['successor']);
+  });
+});

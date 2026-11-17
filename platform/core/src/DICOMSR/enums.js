@@ -115,7 +115,8 @@ export const DCMSR_SONADOR_SR = {
 }
 
 
-// Sonador Spatial Data Types
+// Sonador Spatial Data Types (0.2): the concept names of the coordinate items of a legacy point
+// group (template Sonador-SR.1002), each naming a type of point
 
 export const SONADOR_SCOORD3D = `${SONADOR_MANUFACTURER}-Coord3D`;
 export const SONADOR_SCOORD3D_DESCRIPTION = '3D spatial point (x,y,z)';
@@ -126,7 +127,7 @@ export const DCMSR_SCOORD3D = {
   schemeVersion: SONADOR_SCHEME_VERSION_02,
 }
 
-export const SONADOR_SCOORD3D_ANTOMIC  = `${SONADOR_MANUFACTURER}-Anatomic`;
+export const SONADOR_SCOORD3D_ANTOMIC  = `${SONADOR_SCOORD3D}-Anatomic`;
 export const SONADOR_SCOORD3D_ANTOMIC_DESCRIPTION = '3D coordinate (x,y,z) describing an antomic landmark (or landmarks).';
 export const DCMSR_SCOORD3D_ANATOMIC = {
   value: SONADOR_SCOORD3D_ANTOMIC,
@@ -135,8 +136,8 @@ export const DCMSR_SCOORD3D_ANATOMIC = {
   schemeVersion: SONADOR_SCHEME_VERSION_02,
 }
 
-export const SONADOR_SCOORD3D_LANDMARK = `${SONADOR_MANUFACTURER}-Landmark`;
-export const SONAODR_SCOORD3D_LANDMARK_DESCRIPTION = '3D coordinate describing a registration point (or points).';
+export const SONADOR_SCOORD3D_LANDMARK = `${SONADOR_SCOORD3D}-Landmark`;
+export const SONAODR_SCOORD3D_LANDMARK_DESCRIPTION = '3D coordinate (x,y,z) describing a non-anatomic landmark (or landmarks)';
 export const DCMSR_SCOORD3D_LANDMARK = {
   value: SONADOR_SCOORD3D_LANDMARK,
   schemeDesignator: DCMSR_SONADOR_SR.value,
@@ -144,7 +145,7 @@ export const DCMSR_SCOORD3D_LANDMARK = {
   schemeVersion: SONADOR_SCHEME_VERSION_02,
 }
 
-export const SONADOR_SCOORD3D_REGISTRATION = `${SONADOR_MANUFACTURER}-Registration`;
+export const SONADOR_SCOORD3D_REGISTRATION = `${SONADOR_SCOORD3D}-Registration`;
 export const SONADOR_SCOORD3D_REGISTRATION_DESCRIPTION = '3D coordinate describing a registration point (or points).';
 export const DCMSR_SCOORD3D_REGISTRATION = {
   value: SONADOR_SCOORD3D_REGISTRATION,
@@ -152,6 +153,30 @@ export const DCMSR_SCOORD3D_REGISTRATION = {
   meaning: SONADOR_SCOORD3D_REGISTRATION_DESCRIPTION,
   schemeVersion: SONADOR_SCHEME_VERSION_02,
 }
+
+// Root container of the legacy point groups, and their template identifier. The same identifier
+// under another parent (the report metadata) is not a point group.
+export const DCMSR_VOLUME_MEASUREMENTS = Object.freeze({
+  value: 'Clinical-Report.Volume-Measurements', schemeDesignator: DCMSR_SONADOR_SR.value, meaning: 'Imaging Volume Meaurements',
+});
+export const SONADOR_POINT_GROUP_TEMPLATE = `${SONADOR_SR}.1002`;
+
+
+// Landmark sets (0.3): a measurement group whose tracking identifier names the tool
+// `SonadorLandmarkSet`, with one Finding (the set) and one `Landmark` CODE item per landmark, in
+// order. The concept name of a landmark's coordinate item is its landmark type; the `Point` code is
+// also the value of a landmark with no concept and no label.
+
+export const LANDMARK_SET_TOOL = 'SonadorLandmarkSet';
+
+const landmarkCode = (value, meaning) => Object.freeze({
+  value, schemeDesignator: DCMSR_SONADOR_SR.value, meaning, schemeVersion: SONADOR_SCHEME_VERSION_03,
+});
+
+export const DCMSR_LANDMARK = landmarkCode(`${SONADOR_MANUFACTURER}-Landmark`, 'Landmark');
+export const DCMSR_LANDMARK_POINT = landmarkCode(`${DCMSR_LANDMARK.value}.Point`, 'Point');
+export const DCMSR_LANDMARK_ANATOMIC = landmarkCode(`${DCMSR_LANDMARK.value}.Anatomic`, 'Anatomic');
+export const DCMSR_LANDMARK_REGISTRATION = landmarkCode(`${DCMSR_LANDMARK.value}.Registration`, 'Registration');
 
 
 // Sonador Viewer Extended Metadata Attributes
@@ -318,6 +343,11 @@ export const SonadorCodeValues = {
   DCMSR_SCOORD3D_ANATOMIC,
   DCMSR_SCOORD3D_LANDMARK,
   DCMSR_SCOORD3D_REGISTRATION,
+  DCMSR_VOLUME_MEASUREMENTS,
+  DCMSR_LANDMARK,
+  DCMSR_LANDMARK_POINT,
+  DCMSR_LANDMARK_ANATOMIC,
+  DCMSR_LANDMARK_REGISTRATION,
   DCMSR_MEASUREMENT_DESCRIPTION,
   DCMSR_MEASUREMENT_TEXT,
   DCMSR_MEASUREMENT_LOCATION,
@@ -435,6 +465,8 @@ const Enums = {
   SONADOR_SR_TEMPLATE,
   DCMR_SR_TEMPLATE,
   SR_TEMPLATE_IDENTIFIERS,
+  SONADOR_POINT_GROUP_TEMPLATE,
+  LANDMARK_SET_TOOL,
   SONADOR_MANUFACTURER,
   SONADOR_VIEWER_MODEL_NAME,
   ObserverContextCodes,

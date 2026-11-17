@@ -2505,7 +2505,8 @@ export default class MeasurementApi {
           const toolData = toolState[imageId][_tool];
 
           // Retrieve Cornerstone Tools measurement representation
-          const measurementEntries = toolData && toolData.data;
+          // An image without this tool's state no longer holds the representation
+          const measurementEntries = (toolData && toolData.data) || [];
           const measurementEntry = measurementEntries.find((mEntry) => mEntry._id === entry._id);
           if (measurementEntry) {
             const index = measurementEntries.indexOf(measurementEntry);

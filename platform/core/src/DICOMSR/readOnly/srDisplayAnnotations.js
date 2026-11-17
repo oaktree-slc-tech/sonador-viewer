@@ -158,6 +158,12 @@ export function addSRDisplayAnnotation({
 }
 
 
+/** Whether a measurement has a read-only annotation */
+export function hasSRDisplayAnnotation(TrackingUniqueIdentifier) {
+  return Boolean(TrackingUniqueIdentifier && c3dAnnotation.state.getAnnotation(annotationUIDFor(TrackingUniqueIdentifier)));
+}
+
+
 /** Remove the read-only annotation of a measurement */
 export function removeSRDisplayAnnotation(TrackingUniqueIdentifier, { render = true } = {}) {
   const annotationUID = annotationUIDFor(TrackingUniqueIdentifier);

@@ -20,7 +20,7 @@ jest.mock('@cornerstonejs/core', () => ({
   // What the resolver imports; unused here (it is given the provider's `get`)
   cache: {},
   metaData: {},
-}));
+}), { virtual: true });
 // The helper's one import from the enums (the values at 4.22.13; the package's exports map hides
 // the subpath, so the files are reached by their paths)
 jest.mock('../../../../node_modules/@cornerstonejs/core/dist/esm/enums/index.js', () => ({

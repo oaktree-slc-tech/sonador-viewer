@@ -12,6 +12,8 @@ jest.mock('@cornerstonejs/core', () => ({ metaData: { get: () => undefined } }),
 
 const mockRecords = new Map();
 const mockStudies = [];
+// The active display sets; none means the display set service is not available
+const mockDisplaySets = { active: undefined };
 jest.mock('@ohif/core', () => {
   const outOfPlane = jest.requireActual('../../../../core/src/DICOMSR/utils/outOfPlane');
   const drawingPlane = jest.requireActual('../../../../core/src/DICOMSR/utils/drawingPlane');
@@ -32,7 +34,19 @@ jest.mock('@ohif/core', () => {
   return {
     __esModule: true,
     DicomMetadataStore,
-    default: { measurements: { MeasurementApi }, DICOMSR: { outOfPlane, drawingPlane }, DicomMetadataStore },
+    default: {
+      measurements: { MeasurementApi },
+      // A measurement read from an application document: its tracking UID
+      DICOMSR: { outOfPlane, drawingPlane, isApplicationMeasurement: uid => uid === '2.25.555' },
+      DicomMetadataStore,
+      display: {
+        DisplaySetApi: {
+          get Instance() {
+            return mockDisplaySets.active ? { displaySetService: { activeDisplaySets: mockDisplaySets.active } } : undefined;
+          },
+        },
+      },
+    },
   };
 });
 
@@ -54,6 +68,9 @@ const MPR = {
   viewportSpecificData: { 0: { StudyInstanceUID: '2.25.1', SeriesInstanceUID: '2.25.2' } },
 };
 const CLASSIC = { activeViewportIndex: 0, layout: { viewports: [{}] } };
+const CT_IMAGE = '1.2.840.10008.5.1.4.1.1.2';
+const MR_IMAGE = '1.2.840.10008.5.1.4.1.1.4';
+const MR_SPECTROSCOPY = '1.2.840.10008.5.1.4.1.1.4.2';
 
 const record = (uid, extra = {}) => ({
   uid, toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], length: 50, FrameOfReferenceUID: '2.25.7001',
@@ -63,15 +80,18 @@ const record = (uid, extra = {}) => ({
 });
 
 beforeEach(() => {
+  mockDisplaySets.active = undefined;
   mockRecords.clear();
   mockStudies.length = 0;
   mockStudies.push({
     StudyInstanceUID: '2.25.1',
     series: [
-      { SeriesInstanceUID: '2.25.2', instances: [{ SOPInstanceUID: '2.25.2.1', FrameOfReferenceUID: '2.25.7001' }] },
+      { SeriesInstanceUID: '2.25.2', instances: [{ SOPInstanceUID: '2.25.2.1', SOPClassUID: CT_IMAGE, FrameOfReferenceUID: '2.25.7001' }] },
       // A series of another Frame of Reference, and a second series of the measurement's
-      { SeriesInstanceUID: '2.25.3', instances: [{ SOPInstanceUID: '2.25.3.1', FrameOfReferenceUID: '2.25.8888' }] },
-      { SeriesInstanceUID: '2.25.4', instances: [{ SOPInstanceUID: '2.25.4.1', FrameOfReferenceUID: '2.25.7001' }] },
+      { SeriesInstanceUID: '2.25.3', instances: [{ SOPInstanceUID: '2.25.3.1', SOPClassUID: CT_IMAGE, FrameOfReferenceUID: '2.25.8888' }] },
+      { SeriesInstanceUID: '2.25.4', instances: [{ SOPInstanceUID: '2.25.4.1', SOPClassUID: MR_IMAGE, FrameOfReferenceUID: '2.25.7001' }] },
+      // Spectroscopy of the measurement's frame: no image to show
+      { SeriesInstanceUID: '2.25.5', instances: [{ SOPInstanceUID: '2.25.5.1', SOPClassUID: MR_SPECTROSCOPY, FrameOfReferenceUID: '2.25.7001' }] },
     ],
   });
 });
@@ -141,6 +161,52 @@ describe('the rows', () => {
       expect.objectContaining({ inClassicViewport: true, frameOfReferenceLoaded: true }),
       expect.objectContaining({ inClassicViewport: true, frameOfReferenceLoaded: false }),
     ]);
+  });
+
+  it('lists one read from an application document with the saved measurements, marked and never pending', () => {
+    mockRecords.set('plan', record('plan', { isLocked: true, metadata: { isReadOnly: true, TrackingUniqueIdentifier: '2.25.555' } }));
+    mockRecords.set('report', record('report', { isLocked: true, metadata: { isReadOnly: true, TrackingUniqueIdentifier: '2.25.556' } }));
+    const { pending, saved } = rowsOf(CLASSIC);
+    expect(pending).toEqual([]);
+    expect(saved.map(({ row }) => [row.measurementId, row.fromApplicationDocument, row.isPending])).toEqual([
+      ['plan', true, false], ['report', false, false],
+    ]);
+    // In the classic viewport, the out-of-plane convention: shown in the MPR and 3D views
+    expect(saved[0].row.outOfPlane).toMatchObject({ inClassicViewport: true, frameOfReferenceLoaded: true });
+  });
+
+  it('places a row while a display set shows a series of its Frame of Reference, its metadata cached or not', () => {
+    mockRecords.set('a', record('a'));
+    const loaded = () => rowsOf(MPR).pending[0].row.outOfPlane.frameOfReferenceLoaded;
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.2' }, { SeriesInstanceUID: '2.25.3' }];
+    expect(loaded()).toBe(true);
+    // Its series' display set removed: the series metadata stays cached, and the row is not placed
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.3' }];
+    expect(loaded()).toBe(false);
+    // Spectroscopy of its frame displayed: no image series to show it on
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.3' }, { SeriesInstanceUID: '2.25.5' }];
+    expect(loaded()).toBe(false);
+    // An MR image series of its Frame of Reference added
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.3' }, { SeriesInstanceUID: '2.25.4' }];
+    expect(loaded()).toBe(true);
+  });
+
+  it('opens the MPR of a displayed series of its Frame of Reference only', async () => {
+    mockRecords.set('a', record('a'));
+    const studyMetadataManager = { get: () => ({ findDisplaySet: match => ['2.25.2', '2.25.4', '2.25.5'].map(SeriesInstanceUID => ({ SeriesInstanceUID })).find(match) }) };
+    const open = async () => {
+      const commandsManager = { runCommand: jest.fn(() => ({ panes: 3 })) };
+      const result = await openOutOfPlaneInMpr({ measurementData: rowsOf(CLASSIC).pending[0].row, commandsManager, studyMetadataManager });
+      return [result, commandsManager.runCommand.mock.calls.map(([, { displaySet }]) => displaySet.SeriesInstanceUID)];
+    };
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.3' }];
+    expect(await open()).toEqual(['unavailable', []]);
+    // Spectroscopy of its frame only
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.5' }];
+    expect(await open()).toEqual(['unavailable', []]);
+    // Its source series not displayed, another series of its Frame of Reference displayed
+    mockDisplaySets.active = [{ SeriesInstanceUID: '2.25.4' }];
+    expect(await open()).toEqual(['shown', ['2.25.4']]);
   });
 
   it('lists only out-of-plane records, and not one drawn in the viewports only', () => {

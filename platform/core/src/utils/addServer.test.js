@@ -29,33 +29,19 @@ describe('addServers', () => {
     dispatch: jest.fn(),
   };
 
-  test('should be able to add a server and dispatch to the store successfuly', () => {
+  test('dispatches the servers of each type, each marked with its type', () => {
     addServers(servers, store);
+    expect(store.dispatch).toHaveBeenCalledTimes(2);
     expect(store.dispatch).toBeCalledWith({
-      server: {
-        authority: 'http://127.0.0.1/auth/realms/ohif',
-        client_id: 'ohif-viewer',
-        post_logout_redirect_uri: '/logout-redirect.html',
-        redirect_uri: 'http://127.0.0.1/callback',
-        response_type: 'code',
-        scope: 'openid',
-        type: 'oidc',
-      },
       type: 'ADD_SERVER',
+      serversWithTypes: [{ ...servers.dicomWeb[0], type: 'dicomWeb' }],
     });
     expect(store.dispatch).toBeCalledWith({
-      server: {
-        imageRendering: 'wadors',
-        name: 'DCM4CHEE',
-        qidoRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/rs',
-        qidoSupportsIncludeField: true,
-        thumbnailRendering: 'wadors',
-        type: 'dicomWeb',
-        wadoRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/rs',
-        wadoUriRoot: 'https://server.dcmjs.org/dcm4chee-arc/aets/DCM4CHEE/wado',
-      },
       type: 'ADD_SERVER',
+      serversWithTypes: [{ ...servers.oidc[0], type: 'oidc' }],
     });
+    // The configuration is not changed
+    expect(servers.dicomWeb[0].type).toBeUndefined();
   });
 
   test('should throw an error if servers list is not defined', () => {

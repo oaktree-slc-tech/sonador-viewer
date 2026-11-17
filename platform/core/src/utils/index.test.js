@@ -1,3 +1,13 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
+// The Cornerstone3D packages are ESM builds jest cannot load here; the exports under test do not use them
+jest.mock('@cornerstonejs/dicom-image-loader', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/core', () => ({ utilities: {}, cache: {}, metaData: {}, Enums: {} }), { virtual: true });
+jest.mock('@cornerstonejs/tools', () => ({ utilities: {}, Enums: {}, segmentation: {} }), { virtual: true });
+jest.mock('@cornerstonejs/core/utilities/textureSupport', () => ({}), { virtual: true });
+jest.mock('@cornerstonejs/polymorphic-segmentation', () => ({}), { virtual: true });
+
 import * as utils from './index.js';
 
 describe('Top level exports', () => {
@@ -24,6 +34,32 @@ describe('Top level exports', () => {
       'hierarchicalListUtils',
       'progressTrackingUtils',
       'xhrRetryRequestHook',
+      // Sonador additions
+      'buildButtonCommands',
+      'color',
+      'cornerstone3dUtils',
+      'cornerstoneUtils',
+      'createEncapsulatedDocumentFileUrl',
+      'dataProc',
+      'describeSeries',
+      'describeSeriesFilename',
+      'describeStudy',
+      'describeStudyFilename',
+      'formatBytes',
+      'formatDate',
+      'formatPN',
+      'formatTime',
+      'getImageId',
+      'gpuCapabilities',
+      'imageIdToURI',
+      'instancesSortCriteria',
+      'referenceIdentifiers',
+      'roundNumber',
+      'seriesSortCriteria',
+      'sortStudy',
+      'sortStudyInstances',
+      'sortStudySeries',
+      'sortingCriteria',
     ].sort();
 
     const exports = Object.keys(utils.default).sort();

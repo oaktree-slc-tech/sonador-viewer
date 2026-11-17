@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
 import log from './../log.js';
 import hotkeys from './../utils/hotkeys';
 import CommandsManager from './CommandsManager.js';

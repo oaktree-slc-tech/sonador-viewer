@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
 // File: CustomizationService.registrationAndOperations.test.js
 import CustomizationService, { CustomizationScope } from './CustomizationService';
 
