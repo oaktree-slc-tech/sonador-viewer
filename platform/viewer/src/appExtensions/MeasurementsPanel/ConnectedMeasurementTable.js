@@ -18,6 +18,7 @@ import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callCon
 import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
 import measurementDetailSource from './measurementDetailSource.js';
 import { isLandmarkSetRow, landmarksGroup } from './landmarkSetRows.js';
+import { chooseLandmark, stepLandmarkRow } from './landmarkNavigation.js';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -594,8 +595,9 @@ const mapDispatchToProps = (dispatch, ownProps) => {
 
     
     dispatchJumpToRowItem: (measurementData, viewportsState, timepointManagerState, options) => {
-      // A landmark set's row has no measurement to jump to
+      // A landmark set's row steps through its landmarks (landmarkNavigation.js)
       if (isLandmarkSetRow(measurementData)) {
+        stepLandmarkRow(measurementData, { viewportsState, commandsManager });
         return;
       }
 
@@ -744,6 +746,11 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
       // Open the MPR view at an out-of-plane measurement
       openOutOfPlaneInMpr({ measurementData, commandsManager, studyMetadataManager: OHIF.utils.studyMetadataManager })
         .catch(error => OHIF.log.error('[viewer:measurementTable] unable to open the MPR view at the measurement', error));
+    },
+
+    onLandmarkClick: (event, measurementData, index) => {
+      // A named landmark chosen from its set's card
+      chooseLandmark(measurementData, index, { viewportsState: propsFromState.viewports, commandsManager });
     },
 
     onToggleLockClick: (event, measurementData) => {

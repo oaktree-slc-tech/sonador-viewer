@@ -15,6 +15,7 @@ import { getEnabledElement } from './state';
 import activeSeriesImageId from './utils/activeSeriesImageId';
 import imagePlaneOf from './tools/imagePlaneOf';
 import { nearestImageIndex } from './utils/arrowMarkers';
+import { imageHoldingPoint } from './utils/landmarkStack';
 
 const scroll = cornerstoneTools.import('util/scroll');
 
@@ -800,9 +801,58 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       return 'shown';
     },
 
-    jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, activeViewportIndex, refreshViewports = true }) => {
-      
-      // Jump to a specific study/DICOM instance UID
+    jumpToLandmark: ({ worldPoint, series = [], activeViewportIndex = 0 }) => {
+      // Bring a classic viewport to the image that holds a landmark: an image whose plane passes
+      // within half a slice spacing of it. The stack the viewport shows is tried first when it is one
+      // of `series` (the loaded series of the landmark's frame, the set's own series first), then each
+      // stack of those series in turn. A stack that holds no such image is never shown in its place:
+      // the viewport stays where it is. Returns 'shown', or 'none' when no stack holds the landmark.
+      const element = getEnabledElement(activeViewportIndex);
+      const stack = element && ((cornerstoneTools.getToolState(element, 'stack') || {}).data || [])[0];
+      const shownIds = (stack && stack.imageIds) || [];
+      const seriesOfImage = (imageId) => {
+        const module = imageId && cornerstone.metaData.get('generalSeriesModule', imageId);
+        return module ? module.seriesInstanceUID : undefined;
+      };
+      const shownSeries = seriesOfImage(shownIds[0]);
+      const candidates = (series || []).filter(entry => entry && entry.SeriesInstanceUID);
+
+      if (shownIds.length && candidates.some(entry => entry.SeriesInstanceUID === shownSeries)) {
+        const index = imageHoldingPoint(shownIds.map(imageId => imagePlaneOf(imageId)), worldPoint);
+        if (index >= 0) {
+          if (index !== stack.currentImageIdIndex) {
+            cornerstoneTools.import('util/scrollToIndex')(element, index);
+          }
+          return 'shown';
+        }
+      }
+
+      for (const { StudyInstanceUID, SeriesInstanceUID } of candidates) {
+        const study = studyMetadataManager.get(StudyInstanceUID);
+        const displaySets = ((study && study.getDisplaySets()) || [])
+          .filter(ds => ds.SeriesInstanceUID === SeriesInstanceUID && ds.images && ds.images.length);
+        for (const displaySet of displaySets) {
+          const { imageIds: stackIds = [] } = StackManager.findOrCreateStack(study, displaySet) || {};
+          if (shownIds.length && stackIds.length === shownIds.length && stackIds.every((imageId, i) => imageId === shownIds[i])) {
+            continue;
+          }
+          const index = imageHoldingPoint(stackIds.map(imageId => imagePlaneOf(imageId)), worldPoint);
+          if (index >= 0) {
+            displaySet.SOPInstanceUID = undefined;
+            displaySet.frameIndex = index;
+            window.store.dispatch(setViewportSpecificData(activeViewportIndex, displaySet));
+            cornerstoneUtils.refreshCornerstoneViewports();
+            return 'shown';
+          }
+        }
+      }
+      return 'none';
+    },
+
+    jumpToImage: ({ StudyInstanceUID, SOPInstanceUID, frameIndex, frameNumber, activeViewportIndex, refreshViewports = true }) => {
+      // Jump to a specific study/DICOM instance UID. With `frameNumber` (1-based, a frame of a
+      // multi-frame instance), the frame is resolved here to its index in the display set's stack and
+      // shown by that index alone: the viewport would otherwise take the instance's first image.
       const study = studyMetadataManager.get(StudyInstanceUID);
       const displaySet = study?.findDisplaySet((ds) => {
         return ds.images && ds.images.find((i) => i.getSOPInstanceUID() === SOPInstanceUID);
@@ -812,8 +862,21 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         return;
       }
 
-      displaySet.SOPInstanceUID = SOPInstanceUID;
-      displaySet.frameIndex = frameIndex;
+      const frame = Number(frameNumber);
+      if (Number.isInteger(frame) && frame >= 1) {
+        const { imageIds = [] } = StackManager.findOrCreateStack(study, displaySet) || {};
+        const ofInstance = imageIds.map((imageId, index) => (cornerstone.metaData.get('SOPInstanceUID', imageId) === SOPInstanceUID ? index : -1))
+          .filter(index => index >= 0);
+        const stackIndex = ofInstance[frame - 1];
+        if (stackIndex === undefined) {
+          return;
+        }
+        displaySet.SOPInstanceUID = undefined;
+        displaySet.frameIndex = stackIndex;
+      } else {
+        displaySet.SOPInstanceUID = SOPInstanceUID;
+        displaySet.frameIndex = frameIndex;
+      }
       window.store.dispatch(setViewportSpecificData(activeViewportIndex, displaySet));
 
       if (refreshViewports) {
@@ -830,6 +893,11 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     jumpToNearestSlice: {
       commandFn: actions.jumpToNearestSlice,
+      storeContexts: [],
+      options: {},
+    },
+    jumpToLandmark: {
+      commandFn: actions.jumpToLandmark,
       storeContexts: [],
       options: {},
     },

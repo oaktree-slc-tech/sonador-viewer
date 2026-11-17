@@ -16,6 +16,7 @@ import { Tooltip } from '../tooltip';
 import { Icon } from './../../elements/Icon';
 
 import { MeasurementDetailCard } from './MeasurementDetailCard';
+import { HeldSetMark, LandmarkSetCard, LandmarkSetIcon, LandmarkShape, LandmarkTypeMark } from './LandmarkSetCard';
 import { subscribeSeriesMetadata } from './metadataEventConcerns';
 import './MeasurementTableItem.styl';
 import './VisibilityToggle.styl';
@@ -35,7 +36,7 @@ ColoredCircle.propTypes = {
 
 
 // Label line clipped with an ellipsis; hovering shows the full text when it does not fit
-const TruncatedLabel = ({ text }) => {
+const TruncatedLabel = ({ text, className = 'measurementLabel' }) => {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
 
@@ -43,7 +44,7 @@ const TruncatedLabel = ({ text }) => {
     <TooltipProvider delayDuration={300}>
       <HoverTooltip open={open} onOpenChange={next => setOpen(next && ref.current && ref.current.scrollWidth > ref.current.clientWidth)}>
         <TooltipTrigger asChild>
-          <div ref={ref} className="measurementLabel">{text}</div>
+          <div ref={ref} className={className}>{text}</div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start" className="measurementLabelTooltip">{text}</TooltipContent>
       </HoverTooltip>
@@ -54,6 +55,7 @@ const TruncatedLabel = ({ text }) => {
 
 TruncatedLabel.propTypes = {
   text: PropTypes.string.isRequired,
+  className: PropTypes.string,
 };
 
 
@@ -77,18 +79,16 @@ const OutOfPlaneIcon = () => (
 
 
 // A row read from an application document, which the Viewer shows read-only and never writes to,
-// is marked by a document in place of the lock
-const ApplicationDocumentIcon = ({ label }) => (
-  <svg role="img" aria-label={label} data-cy="measurement-application-document" className="measurementDocumentIcon"
+// keeps the lock; the lock's hover says where the row comes from, beside a document
+const ApplicationDocumentIcon = () => (
+  <svg aria-hidden="true" data-cy="measurement-application-document-icon" className="measurementDocumentIcon"
     viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
     <path d="M6 3h8l4 4v14H6z" />
     <path d="M14 3v4h4M9 12h6M9 16h6" />
   </svg>
 );
 
-ApplicationDocumentIcon.propTypes = {
-  label: PropTypes.string.isRequired,
-};
+const APPLICATION_DOCUMENT_NOTE = 'Read-only: from an application document';
 
 
 /**
@@ -127,8 +127,9 @@ const tabbablesIn = root => [...root.querySelectorAll(TABBABLE)]
  * moves into the card, Shift+Tab from its first control returns to the icon, and Tab from its last
  * control continues after the icon. Escape in the card closes it and returns focus to the icon.
  */
-function useDetailCard(enabled) {
+function useDetailCard(enabled, { keepOnRow = false } = {}) {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
   const timers = useRef({});
   const press = useRef(null);
   const quietFocus = useRef(false);
@@ -163,7 +164,7 @@ function useDetailCard(enabled) {
     timers.current.open = setTimeout(() => setOpen(true), CARD_OPEN_DELAY);
   };
   const scheduleClose = () => {
-    clearTimeout(timers.current.open);
+    clear();
     timers.current.close = setTimeout(() => setOpen(false), CARD_CLOSE_DELAY);
   };
   // Focus returned to the icon by the card does not open it again
@@ -187,7 +188,7 @@ function useDetailCard(enabled) {
   };
 
   if (!enabled) {
-    return { open: false, hoverProps: {}, iconProps: {}, cardProps: {}, setOpen: () => {} };
+    return { open: false, hoverProps: {}, rowProps: {}, iconProps: {}, cardProps: {}, anchorRef, setOpen: () => {} };
   }
 
   const isMouse = event => event.pointerType === 'mouse';
@@ -195,6 +196,12 @@ function useDetailCard(enabled) {
   const hoverProps = {
     onPointerEnter: event => isMouse(event) && scheduleOpen(),
     onPointerLeave: event => isMouse(event) && scheduleClose(),
+  };
+  // An open card stays open while the pointer is anywhere over its row, and closes a moment after
+  // the pointer leaves the row and the card
+  const rowProps = {
+    onPointerOver: event => isMouse(event) && open && clearTimeout(timers.current.close),
+    onPointerLeave: event => isMouse(event) && open && scheduleClose(),
   };
   const iconProps = {
     ref: iconRef,
@@ -268,9 +275,12 @@ function useDetailCard(enabled) {
         focusIcon();
       }
     },
-    // A tap outside closes it; a tap on the icon toggles it itself
+    // A tap outside closes it; a tap on the icon toggles it itself. With `keepOnRow` a press on the
+    // card's own row leaves it open, so selecting the row again does not close and reopen it.
     onInteractOutside: (event) => {
-      if (iconRef.current && iconRef.current.contains(event.target)) {
+      const inIcon = iconRef.current && iconRef.current.contains(event.target);
+      const inRow = keepOnRow && anchorRef.current && anchorRef.current.contains(event.target);
+      if (inIcon || inRow) {
         event.preventDefault();
         return;
       }
@@ -280,7 +290,7 @@ function useDetailCard(enabled) {
     onOpenAutoFocus: event => event.preventDefault(),
     onCloseAutoFocus: event => event.preventDefault(),
   };
-  return { open, hoverProps, iconProps, cardProps, setOpen };
+  return { open, hoverProps, rowProps, iconProps, cardProps, anchorRef, setOpen };
 }
 
 
@@ -297,6 +307,8 @@ const MeasurementTableItem = ({
   onToggleLock,
   onLineTextColor,
   onViewportValuesChange,
+  onLandmarkClick,
+  landmarkMatch,
   regionLeadValue,
   itemClass,
   tagBtnLabel = 'Location',
@@ -324,6 +336,7 @@ const MeasurementTableItem = ({
   // that cannot be shown is held, with a note on its index cell.
   const { landmarkSet } = measurementData;
   const heldSet = Boolean(landmarkSet && !landmarkSet.placed);
+  const placedSet = Boolean(landmarkSet && landmarkSet.placed);
 
   // Measurement reference metadata, recomputed when the reference or the series metadata changes
   const { refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID } = measurementData;
@@ -361,9 +374,10 @@ const MeasurementTableItem = ({
   const icon = toolIcon(isSeriesTag ? 'DICOMSRSeriesTagTool' : toolType);
   const extraCount = detail && detail.primary ? detail.extraCount : 0;
 
-  // The card is suppressed on a row whose warning note covers it
-  const cardEnabled = Boolean(detail) && !(measurementData.hasWarnings && !isReadOnly);
-  const card = useDetailCard(cardEnabled);
+  // The card is suppressed on a row whose warning note covers it. A landmark set's card lists its
+  // landmarks and its details (LandmarkSetCard).
+  const cardEnabled = Boolean(detail || landmarkSet) && !(measurementData.hasWarnings && !isReadOnly);
+  const card = useDetailCard(cardEnabled, { keepOnRow: Boolean(landmarkSet) });
 
   const getActionButton = (btnLabel, onClickCallback, hint) => {
     const button = (
@@ -409,26 +423,35 @@ const MeasurementTableItem = ({
   };
 
   const onToggleVisibility = (evt) => {
-    // Set visibility of the measurement
+    // Set visibility of the measurement; a landmark set's is the session's (core DICOMSR/landmarks)
     
     evt.stopPropagation();
+    if (landmarkSet) {
+      OHIF.DICOMSR.landmarks.setLandmarkSetVisible(landmarkSet.key, !measurementData.isVisible);
+      return;
+    }
     measurements.MeasurementApi.Instance.toggleVisibilityMeasurement(
       measurementData.measurementId, !measurementData.isVisible);
     measurements.refreshCornerstoneViewports();
   }
 
   const handleItemClick = (event) => {
-    // Activate the measurement and jumpt to the associated image viewport
+    // Activate the measurement and jumpt to the associated image viewport. A click on a landmark
+    // set's row also opens its card: one click opens it and steps once.
 
+    if (landmarkSet && cardEnabled) {
+      card.setOpen(true);
+    }
     onItemClick(event, measurementData);
   };
 
-  // The focusable index cell of an out-of-plane row: Enter or Space activates the row, as a click on
-  // it does (an arrow goes to its nearest slice in the classic viewport)
+  // The focusable index cell of an out-of-plane row, or of a placed landmark set: Enter or Space
+  // activates the row, as a click on it does (an arrow goes to its nearest slice in the classic
+  // viewport; a set steps to its next landmark). The card belongs to the set icon's keys.
   const onIndexKeyDown = (event) => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
       event.preventDefault();
-      handleItemClick(event);
+      onItemClick(event, measurementData);
     }
   };
 
@@ -471,7 +494,7 @@ const MeasurementTableItem = ({
     // Retrieve the table list component
 
     const hasWarningClass = measurementData.hasWarnings && !isReadOnly ? 'hasWarnings' : '';
-    const outOfPlaneClass = outOfPlane ? 'isOutOfPlane' : '';
+    const outOfPlaneClass = outOfPlane ? 'isOutOfPlane' : heldSet ? 'isOutOfPlane isHeldLandmarkSet' : '';
 
     const actionButtons = [];
 
@@ -495,8 +518,16 @@ const MeasurementTableItem = ({
         itemClass={`measurementItem group ${itemClass} ${hasWarningClass} ${outOfPlaneClass}`}
         itemIndex={itemIndex}
         itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
-        itemMeta={outOfPlane ? <OutOfPlaneIcon /> : null}
-        itemIndexProps={outOfPlane ? { tabIndex: 0, onKeyDown: onIndexKeyDown } : heldSet ? { tabIndex: 0 } : undefined}
+        itemMeta={outOfPlane ? <OutOfPlaneIcon /> : heldSet ? <HeldSetMark label={t('Not shown')} /> : null}
+        itemIndexProps={outOfPlane ? { tabIndex: 0, onKeyDown: onIndexKeyDown }
+          : placedSet ? {
+            tabIndex: 0,
+            role: 'button',
+            'aria-label': t('{{number}}. Next landmark of {{name}}', { number: itemIndex, name: landmarkSet.name || t('Landmark set') }),
+            onKeyDown: onIndexKeyDown,
+            'data-cy': 'landmark-set-index',
+          }
+          : heldSet ? { tabIndex: 0 } : undefined}
         renderItemIndex={outOfPlane ? renderOutOfPlaneNote : heldSet ? renderHeldSetNote : undefined}
         onItemClick={handleItemClick}
       >
@@ -506,7 +537,7 @@ const MeasurementTableItem = ({
             {/* The Segmentations panel's row controls (ui-next DataRow), packed to the right: the
                 visibility toggle, the lock while locked, then the actions menu when there is one */}
             <div className="measurementStatus">
-              {!landmarkSet && (<TooltipProvider delayDuration={500}>
+              {!heldSet && (<TooltipProvider delayDuration={500}>
                 <HoverTooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -529,12 +560,18 @@ const MeasurementTableItem = ({
                 <TooltipProvider delayDuration={300}>
                   <HoverTooltip>
                     <TooltipTrigger asChild>
-                      <span className="measurementLock" tabIndex={0}>
-                        <ApplicationDocumentIcon label={t('Read-only: from an application document')} />
+                      <span
+                        className="measurementLock"
+                        tabIndex={0}
+                        aria-label={t(APPLICATION_DOCUMENT_NOTE)}
+                        data-cy="measurement-application-document"
+                      >
+                        <Icons.Lock data-cy="measurement-locked" aria-hidden="true" />
                       </span>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" data-cy="measurement-application-document-tooltip">
-                      {t('Read-only: from an application document')}
+                    <TooltipContent side="bottom" className="measurementApplicationDocumentNote" data-cy="measurement-application-document-tooltip">
+                      <ApplicationDocumentIcon />
+                      <span>{t(APPLICATION_DOCUMENT_NOTE)}</span>
                     </TooltipContent>
                   </HoverTooltip>
                 </TooltipProvider>
@@ -564,27 +601,33 @@ const MeasurementTableItem = ({
             {refMeta && (
               <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
             )}
-            {refMeta && !isSeriesTag && !outOfPlane && !landmarkSet && (
+            {refMeta && !isSeriesTag && !outOfPlane && (!landmarkSet || (placedSet && landmarkSet.domain === 'image')) && refMeta.InstanceNumber !== undefined && (
               <span className="refItem refImgNum"><span className="refLabel">I:</span><span className="refValue">{refMeta.InstanceNumber}</span></span>
             )}
             {refMeta && outOfPlane && outOfPlane.view && (
               <span className="refItem refView"><span className="refLabel">View:</span><span className="refValue">{outOfPlane.view}</span></span>
             )}
-            {refMeta && (
+            {refMeta && !heldSet && (
               <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
             )}
-            {landmarkSet && (
-              <span className="refItem refLandmarkCount" data-cy="landmark-set-count">
-                {landmarkSet.count === 1 ? t('1 landmark') : t('{{count}} landmarks', { count: landmarkSet.count })}
-              </span>
-            )}
+            {heldSet && <span className="refItem landmarkNotShown" data-cy="landmark-set-not-shown">{t('Not shown')}</span>}
+            {landmarkSet && landmarkCountPill()}
             {refMeta && extraCount > 0 && (
               <span className="refMore" aria-hidden="true" data-cy="measurement-detail-count">+{extraCount}</span>
             )}
           </div>)}
-          {measurementData && Boolean((measurementData.label || '').replace('...', '')) && (
-            <TruncatedLabel text={t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })} />
+          {landmarkSet && landmarkMatch ? (
+            <div className="measurementLabel landmarkMatches" data-cy="landmark-set-matches" {...card.hoverProps}>
+              <span className="landmarkMatchesLabel">{t('Matches:')}</span> {landmarkMatch}
+            </div>
+          ) : measurementData && Boolean((measurementData.label || '').replace('...', '')) && (
+            landmarkSet ? (
+              <div {...card.hoverProps}><TruncatedLabel text={measurementData.label} /></div>
+            ) : (
+              <TruncatedLabel text={t(measurementData.label, { keySeparator: '>', nsSeparator: '|', })} />
+            )
           )}
+          {placedSet && landmarkSet.position !== null && landmarkSet.position !== undefined && currentLandmarkLine()}
           {isSelected && measurementData.isVisible && !Boolean(isReadOnly) && <div className="rowActions">{actionButtons}</div>}
         </div>
       </TableListItem>
@@ -596,7 +639,7 @@ const MeasurementTableItem = ({
     return (
       <Popover open={card.open} onOpenChange={card.setOpen}>
         <PopoverAnchor asChild>
-          <div className="measurementDetailAnchor">{tableListItem}</div>
+          <div className="measurementDetailAnchor" ref={card.anchorRef} {...(landmarkSet ? card.rowProps : {})}>{tableListItem}</div>
         </PopoverAnchor>
         <PopoverPortal>
           <PopoverContent
@@ -616,6 +659,9 @@ const MeasurementTableItem = ({
   };
 
   const getDetailCard = () => {
+    if (landmarkSet) {
+      return getLandmarkSetCard();
+    }
     // The detail card's content: the row's measurement in full
     const series = refMeta && [refMeta.SeriesNumber, refMeta.SeriesDescription].filter(value => value !== undefined && value !== '').join(' \u00B7 ');
     const study = DicomMetadataStore && refSeriesInstanceUID
@@ -647,9 +693,128 @@ const MeasurementTableItem = ({
     );
   };
 
+  // A landmark set's count pill: the number of its landmarks, or the current landmark's position while
+  // the set holds it
+  const landmarkCountPill = () => {
+    const position = placedSet && landmarkSet.position !== null && landmarkSet.position !== undefined ? landmarkSet.position : null;
+    if (position === null) {
+      return (
+        <span className="refItem refLandmarkCount" data-cy="landmark-set-count">
+          {landmarkSet.count === 1 ? t('1 landmark') : t('{{count}} landmarks', { count: landmarkSet.count })}
+        </span>
+      );
+    }
+    const help = t('Landmark {{position}} of {{count}}. Select the row again for the next.', { position: position + 1, count: landmarkSet.count });
+    return (
+      <TooltipProvider delayDuration={300}>
+        <HoverTooltip>
+          <TooltipTrigger asChild>
+            <span className="refItem refLandmarkCount isPosition" data-cy="landmark-set-count" aria-label={help}>
+              {t('{{position}} of {{count}}', { position: position + 1, count: landmarkSet.count })}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="measurementLabelTooltip" data-cy="landmark-set-position-help">{help}</TooltipContent>
+        </HoverTooltip>
+      </TooltipProvider>
+    );
+  };
+
+  // The line under a set that holds the current landmark, docked in the row as its actions are: its
+  // marker shape in its colour, then its name (the whole name and its second line on hover when it
+  // does not fit), or its type alone (an outlined mark) when it has none; then the control that
+  // clears it
+  const currentLandmarkLine = () => {
+    const landmark = landmarkSet.landmarks[landmarkSet.position];
+    if (!landmark) {
+      return null;
+    }
+    const full = [landmark.name, landmark.detail].filter(Boolean).join(' \u00B7 ');
+    const clear = (event) => {
+      event.stopPropagation();
+      // The control goes with the line: focus it held moves to the row's step control first, so the
+      // keyboard keeps its place in the panel
+      const button = event.currentTarget;
+      if (button.ownerDocument.activeElement === button) {
+        const step = button.closest('.tableListItem') && button.closest('.tableListItem').querySelector('[data-cy="landmark-set-index"]');
+        if (step) {
+          step.focus();
+        }
+      }
+      OHIF.DICOMSR.landmarks.clearCurrentLandmark();
+    };
+    return (
+      <div className="landmarkCurrent" data-cy="landmark-set-current">
+        <LandmarkShape shape={landmark.shape} color={landmark.line} />
+        {landmark.name
+          ? <TruncatedLabel text={full} className="landmarkCurrentName" />
+          : <LandmarkTypeMark text={t(landmark.typeText)} />}
+        <button
+          type="button"
+          className="landmarkCurrentClear"
+          aria-label={t('Clear the current landmark')}
+          title={t('Clear the current landmark')}
+          data-cy="landmark-set-current-clear"
+          onClick={clear}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
+
+  // The series line of a set's card: its series with the series' image count; a set listed under
+  // no series names the series it stores, else none
+  const landmarkSeriesLine = () => {
+    const identifiers = refMeta || (landmarkSet.sourceSeries && OHIF.utils.referenceIdentifiers(DicomMetadataStore, {
+      StudyInstanceUID: refStudyInstanceUID, SeriesInstanceUID: landmarkSet.sourceSeries,
+    }));
+    if (!identifiers) {
+      return undefined;
+    }
+    const seriesUID = refMeta ? refSeriesInstanceUID : landmarkSet.sourceSeries;
+    const series = DicomMetadataStore && typeof DicomMetadataStore.getSeries === 'function' && seriesUID
+      ? DicomMetadataStore.getSeries(refStudyInstanceUID, seriesUID) : undefined;
+    const count = series && series.instances ? series.instances.length : undefined;
+    return [identifiers.SeriesNumber, identifiers.SeriesDescription, count ? t('{{count}} images', { count }) : '']
+      .filter(value => value !== undefined && value !== null && value !== '').join(' \u00B7 ');
+  };
+
+  const getLandmarkSetCard = () => {
+    const image = landmarkSet.domain === 'image' && refMeta && refMeta.InstanceNumber !== undefined
+      ? [String(refMeta.InstanceNumber), Number(landmarkSet.frameNumber) > 1 ? t('frame {{number}}', { number: landmarkSet.frameNumber }) : '']
+        .filter(Boolean).join(' \u00B7 ')
+      : undefined;
+    return (
+      <LandmarkSetCard
+        measurementData={measurementData}
+        rowNumber={itemIndex}
+        series={landmarkSeriesLine()}
+        image={image}
+        heldNote={landmarkSet.note ? t(landmarkSet.note) : undefined}
+        onChoose={(event, index) => onLandmarkClick && onLandmarkClick(event, measurementData, index)}
+      />
+    );
+  };
+
   const toolIconElement = () => {
     // The icon of the tool that drew the measurement, as on its toolbar button; with a detail card,
-    // it opens the card (focus, or a tap)
+    // it opens the card (focus, or a tap). A landmark set's is the set icon.
+    if (landmarkSet) {
+      return (
+        <span
+          key="toolIcon"
+          className="measurementToolIcon landmarkSetIcon"
+          role="button"
+          aria-label={t('Landmark set')}
+          data-cy="measurement-tool-icon"
+          {...card.iconProps}
+        >
+          <LandmarkSetIcon />
+        </span>
+      );
+    }
     if (!icon) {
       return null;
     }
@@ -687,6 +852,23 @@ const MeasurementTableItem = ({
           {meaning && (
             <span className="seriesTagMeaning" style={color.Meaning ? { color: color.Meaning } : undefined}>{meaning}</span>
           )}
+        </div>
+      );
+    }
+
+    // A landmark set: its icon, its swatch (its Line colour, then its Text colour) and its name, which
+    // takes up to two lines
+    if (landmarkSet) {
+      return (
+        <div className="landmarkSetValue">
+          {toolIconElement()}
+          <span className="measurementColorIndicator" data-cy="landmark-set-swatch">
+            <span className="measurementColorIndicatorLine" style={{ backgroundColor: landmarkSet.colors.line }} />
+            <span className="measurementColorIndicatorText" style={{ backgroundColor: landmarkSet.colors.text }} />
+          </span>
+          <span className={`measurementDisplayText landmarkSetName ${landmarkSet.name ? '' : 'isUnnamed'}`}>
+            {landmarkSet.name || t('Landmark set')}
+          </span>
         </div>
       );
     }
@@ -828,6 +1010,10 @@ MeasurementTableItem.propTypes = {
   onLineTextColor: PropTypes.func,
   /** Set the values a pending measurement's viewport label shows: (measurementData, keys) */
   onViewportValuesChange: PropTypes.func,
+  /** Choose a named landmark of a landmark set's row from its card: (event, measurementData, index) */
+  onLandmarkClick: PropTypes.func,
+  /** What a search matched among a landmark set's landmarks ("Tear drop (2)") */
+  landmarkMatch: PropTypes.string,
   /** The region tools' lead value ('area' or 'mean') */
   regionLeadValue: PropTypes.string,
   itemClass: PropTypes.string,

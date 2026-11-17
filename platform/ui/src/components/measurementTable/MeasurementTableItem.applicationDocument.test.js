@@ -36,6 +36,11 @@ jest.mock('@ohif/ui-next', () => ({
   HoverCardTrigger: ({ children }) => <div data-hover-trigger>{children}</div>,
   HoverCardPortal: ({ children }) => children,
   HoverCardContent: ({ children, side, align, ...props }) => <div data-side={side} {...props}>{children}</div>,
+  // A landmark set's card, closed
+  Popover: ({ children }) => children,
+  PopoverAnchor: ({ children }) => children,
+  PopoverPortal: () => null,
+  PopoverContent: () => null,
   Tooltip: ({ children }) => children,
   TooltipContent: ({ children, ...props }) => <div {...props}>{children}</div>,
   TooltipProvider: ({ children }) => children,
@@ -71,15 +76,16 @@ const render = (measurementData, props = {}) => act(() => root.render(
   <MeasurementTableItem itemIndex={1} onItemClick={() => {}} onToggleLock={jest.fn()} onLineTextColor={jest.fn()}
     measurementData={measurementData} {...props} />));
 
-it('shows a document in place of the lock, named for assistive technology', () => {
+it('keeps the lock, named for assistive technology, with a hover that shows a document and says where the row comes from', () => {
   render(row({ fromApplicationDocument: true }));
-  const glyph = container.querySelector('[data-cy="measurement-application-document"]');
-  expect(glyph.getAttribute('aria-label')).toBe('Read-only: from an application document');
-  // A visible tooltip with the same text, reached by the pointer and the keyboard
-  expect(container.querySelector('[data-cy="measurement-application-document-tooltip"]').textContent)
-    .toBe('Read-only: from an application document');
-  expect(glyph.parentElement.getAttribute('tabindex')).toBe('0');
-  expect(container.querySelector('[data-cy="measurement-locked"]')).toBeNull();
+  const lock = container.querySelector('[data-cy="measurement-application-document"]');
+  expect(lock.querySelector('[data-cy="measurement-locked"]')).not.toBeNull();
+  expect(lock.getAttribute('aria-label')).toBe('Read-only: from an application document');
+  // Reached by the pointer and the keyboard
+  expect(lock.getAttribute('tabindex')).toBe('0');
+  const hover = container.querySelector('[data-cy="measurement-application-document-tooltip"]');
+  expect(hover.querySelector('[data-cy="measurement-application-document-icon"]')).not.toBeNull();
+  expect(hover.textContent).toBe('Read-only: from an application document');
 });
 
 it('has no actions menu or row actions, selected or not', () => {
@@ -92,10 +98,15 @@ it('a measurement read from an exchange report keeps its lock (control)', () => 
   render(row());
   expect(container.querySelector('[data-cy="measurement-locked"]')).not.toBeNull();
   expect(container.querySelector('[data-cy="measurement-application-document"]')).toBeNull();
+  expect(container.querySelector('[data-cy="measurement-application-document-tooltip"]')).toBeNull();
 });
 
 it('a landmark set of an application document is marked the same way', () => {
   render(row({ toolType: 'SonadorLandmarkSet', fromApplicationDocument: true, data: [{ displayText: 'Pelvic landmarks' }],
-    landmarkSet: { key: 'doc::set', count: 10, domain: 'patient', documentKind: 'application', placed: true } }));
-  expect(container.querySelector('[data-cy="measurement-application-document"]')).not.toBeNull();
+    landmarkSet: {
+      key: 'doc::set', name: 'Pelvic landmarks', count: 1, domain: 'patient', documentKind: 'application', placed: true,
+      colors: { line: '#FFFF00', text: '#FFFF00' }, landmarks: [], position: null, types: [], appearance: null,
+    } }));
+  expect(container.querySelector('[data-cy="measurement-application-document"] [data-cy="measurement-locked"]')).not.toBeNull();
+  expect(container.querySelector('[data-cy="measurement-application-document-icon"]')).not.toBeNull();
 });

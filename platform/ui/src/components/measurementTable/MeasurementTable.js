@@ -22,7 +22,7 @@ import { Tooltip } from '../tooltip';
 
 import { MeasurementTableItem } from './MeasurementTableItem';
 import { AnnotationsVisibilityRow } from './AnnotationsVisibilityRow';
-import { filterGroups, groupRowsBySeries, queryWords, seriesAnnotationTypes, seriesEntries } from './annotationsOrganization';
+import { filterGroups, groupRowsBySeries, landmarkMatchOf, queryWords, seriesAnnotationTypes, seriesEntries } from './annotationsOrganization';
 import reconcileSearchVisibility from './searchVisibility';
 
 const { measurements, log } = OHIF;
@@ -155,6 +155,7 @@ const MeasurementTable = ({
   onToggleLockClick,
   onLineTextColorClick,
   onViewportValuesChangeClick,
+  onLandmarkClick,
   selectedMeasurementId,
   saveFunction,
   onSaveComplete,
@@ -392,6 +393,8 @@ const MeasurementTable = ({
           onToggleLock={onToggleLockClick}
           onLineTextColor={onLineTextColorClick}
           onViewportValuesChange={onViewportValuesChangeClick}
+          onLandmarkClick={onLandmarkClick}
+          landmarkMatch={searching && measurement.landmarkSet ? landmarkMatchOf(measurement, query) : null}
           regionLeadValue={regionLeadValue}
           isSelected={isSelected}
           isActive={isActive}
@@ -417,6 +420,7 @@ const MeasurementTable = ({
       </>
     );
   };
+
 
   const groupKey = (measureGroup, idx) => measureGroup.groupId || `group-${idx}`;
 
@@ -633,8 +637,10 @@ const MeasurementTable = ({
               searching={searching}
               onToggleAllVisibility={(visible) => {
                 if (searching) {
-                  // The matching annotations only
-                  annotationRowsOf(listedGroups).forEach(row => measurementApi.toggleVisibilityMeasurement(row.measurementId, visible));
+                  // The matching annotations only, landmark sets among them
+                  rowsOf(listedGroups).forEach(row => (row.landmarkSet
+                    ? OHIF.DICOMSR.landmarks.setLandmarkSetVisible(row.landmarkSet.key, visible)
+                    : measurementApi.toggleVisibilityMeasurement(row.measurementId, visible)));
                 } else {
                   measurementApi.setAllMeasurementsVisibility(visible);
                 }
@@ -678,6 +684,8 @@ MeasurementTable.propTypes = {
   onLineTextColorClick: PropTypes.func,
   /** Set the values a pending measurement's viewport label shows: (measurementData, keys) */
   onViewportValuesChangeClick: PropTypes.func,
+  /** Choose a named landmark from a landmark set's card: (event, measurementData, index) */
+  onLandmarkClick: PropTypes.func,
   saveFunction: PropTypes.func,
   onSaveComplete: PropTypes.func,
   eventTimeout: PropTypes.number,

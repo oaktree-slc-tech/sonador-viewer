@@ -3,8 +3,10 @@ import { holdsLandmarkSets, isLandmarkSetTrackingIdentifier } from './landmarkGr
 import { landmarkColors, ownColorRoles, setColors } from './landmarkColors';
 import { attributionOf, HELD_NOTES, placementOf, seriesOfFrame } from './landmarkPlacement';
 import {
-  addLandmarkSetsOf, clearLandmarkSets, EVENTS, getLandmarkSet, getLandmarkSets, subscribe,
+  addLandmarkSetsOf, areLandmarkSetsVisible, clearCurrentLandmark, clearLandmarkSets, EVENTS, getCurrentLandmark, getLandmarkSet, getLandmarkSets,
+  isLandmarkSetVisible, selectLandmark, setLandmarkSetsVisible, setLandmarkSetVisible, stepLandmarkSet, subscribe,
 } from './landmarkSetStore';
+import { landmarkDetailOf, markerShapeOf, setNameOf, typeBreakdownOf, typeTextOf } from './landmarkText';
 
 const landmarks = {
   LANDMARK_TYPES,
@@ -24,6 +26,19 @@ const landmarks = {
   getLandmarkSet,
   getLandmarkSets,
   subscribe,
+  isLandmarkSetVisible,
+  setLandmarkSetVisible,
+  setLandmarkSetsVisible,
+  areLandmarkSetsVisible,
+  getCurrentLandmark,
+  clearCurrentLandmark,
+  selectLandmark,
+  stepLandmarkSet,
+  setNameOf,
+  markerShapeOf,
+  typeTextOf,
+  landmarkDetailOf,
+  typeBreakdownOf,
 };
 
 export default landmarks;

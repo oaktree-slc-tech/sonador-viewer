@@ -26,12 +26,13 @@ import {
   RELATIONSHIP_TYPE,
 } from '../enums';
 import { landmarkSetGroupsOf, legacyGroupsOf, trackingIdentifierOf, trackingUidOf } from './landmarkGroups';
+import { LANDMARK_TYPES } from './landmarkTypes';
 
 const FINDING = { value: CodeNameCodeSequenceValues.Finding, schemeDesignator: DCM };
 // The value of a free-text name: the meaning is the label
 const FREE_TEXT = { value: CodeNameCodeSequenceValues.CornerstoneFreeText, schemeDesignator: 'CST4' };
 
-export const LANDMARK_TYPES = Object.freeze({ POINT: 'Point', ANATOMIC: 'Anatomic', REGISTRATION: 'Registration', UNKNOWN: 'unknown' });
+export { LANDMARK_TYPES };
 
 const TYPE_CODES = [
   [DCMSR_LANDMARK_POINT, LANDMARK_TYPES.POINT],

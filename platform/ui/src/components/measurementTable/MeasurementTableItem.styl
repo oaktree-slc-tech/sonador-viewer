@@ -511,3 +511,273 @@
   clip: rect(0, 0, 0, 0)
   white-space: nowrap
   border: 0
+
+// A landmark set's row: its name takes up to two lines; the count pill on the reference line turns
+// into the current landmark's position; a held set's index cell has the out-of-plane blue with a
+// ring struck through, and its reference line a "Not shown" chip in place of the modality.
+.measurementItem .landmarkSetValue
+  display: flex
+  align-items: flex-start
+  min-width: 0
+
+  .measurementToolIcon
+    top: 3px
+
+  .measurementColorIndicator
+    flex: 0 0 auto
+    top: 7px
+
+.measurementItem .landmarkSetName
+  display: -webkit-box
+  -webkit-box-orient: vertical
+  -webkit-line-clamp: 2
+  overflow: hidden
+  overflow-wrap: anywhere
+  min-width: 0
+  padding-left: 0
+  margin-left: 0
+  border-left: 0
+
+  &.isUnnamed
+    color: var(--text-secondary-color)
+
+.measurementItem .referenceMeta .refLandmarkCount,
+.measurementItem .referenceMeta .landmarkNotShown
+  font-size: 10px
+  font-weight: 700
+  line-height: 14px
+  color: #9fd0f7
+  border: 1px solid var(--ui-border-color)
+  border-radius: 9px
+  padding: 0 6px
+
+.measurementItem .referenceMeta .refLandmarkCount
+  margin-left: auto
+
+.measurementItem .referenceMeta .landmarkNotShown,
+.measurementItem:hover .referenceMeta .refLandmarkCount,
+.measurementItem.selected .referenceMeta .refLandmarkCount,
+.measurementItem .referenceMeta .refLandmarkCount.isPosition
+  background-color: #1d3a57
+  border-color: #3f8fd0
+
+.measurementItem.isHeldLandmarkSet .landmarkHeldMark
+  display: block
+  margin: 6px auto 0
+  color: #9fd0f7
+
+  svg
+    width: 17px
+    height: 17px
+
+.measurementItem .landmarkMatches
+  .landmarkMatchesLabel
+    color: var(--text-primary-color)
+
+// The line under a set that holds the current landmark, docked in the row card as the row's actions
+// are: the marker, the name (clipped, whole on hover) or the type, and the control that clears it
+.measurementItem .landmarkCurrent
+  display: flex
+  align-items: center
+  gap: 7px
+  height: 28px
+  margin-top: 5px
+  margin-left: -6px
+  padding-left: 3px
+  padding-right: 4px
+  background-color: var(--ui-gray-darker)
+  font-size: 12.5px
+  color: var(--text-primary-color)
+  white-space: nowrap
+  overflow: hidden
+
+  .landmarkShape
+    flex: 0 0 auto
+
+  .landmarkCurrentName
+    flex: 1 1 auto
+    min-width: 0
+    overflow: hidden
+    text-overflow: ellipsis
+    white-space: nowrap
+
+  .landmarkCurrentClear
+    margin-left: auto
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    flex: 0 0 auto
+    width: 22px
+    height: 22px
+    padding: 0
+    border: 0
+    border-radius: 4px
+    background: transparent
+    color: var(--text-secondary-color)
+    cursor: pointer
+    appearance: none
+
+    &:hover,
+    &:focus-visible
+      color: var(--text-primary-color)
+      background-color: var(--ui-gray)
+      outline: none
+
+// An unnamed landmark's type: an outlined mark, as the count pill, so that it never reads as a name
+.landmarkTypeMark
+  font-size: 10px
+  font-weight: 700
+  line-height: 15px
+  padding: 0 6px
+  border-radius: 8px
+  border: 1px solid var(--ui-border-color)
+  color: var(--text-primary-color)
+
+// A landmark set's card (the measurement detail card's shell and sections)
+.measurementDetailCard .landmarkSetCardBody
+  .detailName.isUnnamed
+    color: var(--text-secondary-color)
+
+  .landmarkSetDescription
+    padding: 2px 16px 10px
+    font-size: 12.5px
+    line-height: 17px
+    overflow-wrap: anywhere
+
+  .landmarkEntries
+    display: flex
+    flex-direction: column
+    margin: 0 -8px
+
+    // Eight entries show; the list scrolls beyond that (LandmarkSetCard sets the height of the first
+    // eight as laid out; this is the height of eight one-line entries until it does)
+    &.isScrolling
+      max-height: 8 * 28px
+      overflow-y: auto
+      // The list scrolls on its own: its end does not hand the wheel on to the card or the panel
+      overscroll-behavior: contain
+
+  .landmarkEntry
+    flex: 0 0 auto
+    display: grid
+    grid-template-columns: 16px 16px minmax(0, 1fr) auto
+    column-gap: 7px
+    align-items: start
+    padding: 5px 8px
+    border: 0
+    border-radius: 6px
+    background: transparent
+    color: var(--text-primary-color)
+    font: inherit
+    font-size: 13px
+    line-height: 18px
+    text-align: left
+    appearance: none
+
+  button.landmarkEntry
+    cursor: pointer
+
+    &:hover,
+    &:focus-visible
+      background-color: var(--ui-gray)
+      outline: none
+
+      .landmarkEntryText
+        text-decoration: underline
+
+  .landmarkEntry.isCurrent
+    background-color: #1d3a57
+
+  .landmarkEntryOrdinal
+    font-size: 11px
+    color: var(--text-secondary-color)
+    text-align: right
+    font-variant-numeric: tabular-nums
+
+  .landmarkEntryShape,
+  .landmarkEntryColor
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    height: 18px
+
+  .landmarkEntryName
+    min-width: 0
+    overflow-wrap: anywhere
+
+  .landmarkEntryDetail
+    display: block
+    font-size: 12px
+    line-height: 16px
+    color: var(--text-secondary-color)
+
+  .landmarkEntriesFooter
+    margin-top: 7px
+    font-size: 12px
+    line-height: 17px
+    color: var(--text-secondary-color)
+
+  // The landmark count and its breakdown by type: boxes of one line height centred on it, so the count
+  // and each type (its shape, then its text) share a centreline; the breakdown wraps under itself
+  .landmarkCountLine
+    display: flex
+    align-items: flex-start
+    column-gap: 10px
+
+  .landmarkCount,
+  .landmarkType
+    display: inline-flex
+    align-items: center
+    height: 20px
+
+  .landmarkTypes
+    display: flex
+    flex-wrap: wrap
+    column-gap: 10px
+
+  .landmarkType
+    gap: 4px
+    white-space: nowrap
+
+    svg
+      flex: 0 0 auto
+
+// A landmark's own colour: one colour for Line, split for Line and Text, the left half empty for Text
+.landmarkOwnColor
+  display: inline-block
+  width: 9px
+  height: 9px
+  border-radius: 50%
+  box-sizing: border-box
+
+  &.isTextOnly
+    border: 1px solid
+
+// The hover of an application document's lock: a document, then where the row comes from
+.measurementApplicationDocumentNote
+  display: inline-flex
+  align-items: center
+  gap: 6px
+
+  .measurementDocumentIcon
+    flex: 0 0 auto
+
+// The Category label of a landmark set's card, which has a hover saying what it is
+.landmarkCategoryLabel
+  cursor: help
+  text-decoration: underline dotted
+  text-underline-offset: 3px
+  outline: none
+
+  &:focus-visible
+    box-shadow: 0 0 0 1px #3f8fd0
+    border-radius: 2px
+
+.landmarkCategoryHelp.landmarkCategoryHelp
+  max-width: 260px
+  line-height: 1.4
+
+// A hover inside a landmark set's card is drawn above the card (.annotationHoverCard, 1060)
+.landmarkCardTooltip.landmarkCardTooltip
+  z-index: 1070
+

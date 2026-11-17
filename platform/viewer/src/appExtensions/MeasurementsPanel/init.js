@@ -6,6 +6,7 @@ import OHIF from '@ohif/core';
 import { workflow } from '@ohif/ui';
 
 import ToolContextMenu from '../../connectedComponents/ToolContextMenu';
+import { registerLandmarkVisibilitySource } from './landmarkSetRows.js';
 
 const { onAdded, onRemoved, onModified } = OHIF.measurements.MeasurementHandlers;
 
@@ -26,6 +27,9 @@ const MEASUREMENT_ACTION_MAP = {
  */
 export default function init({ servicesManager, commandsManager }) {
   const { UIDialogService } = servicesManager.services;
+
+  // Landmark sets answer the global visibility from the start, the panel opened or not
+  registerLandmarkVisibilitySource();
 
   const onMeasurementsChanged = (action, event) => {
     return MEASUREMENT_ACTION_MAP[action](event);
