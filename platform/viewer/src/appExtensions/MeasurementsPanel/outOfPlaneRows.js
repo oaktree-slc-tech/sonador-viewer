@@ -24,6 +24,13 @@ const measurementApiClass = () => OHIF.measurements.MeasurementApi;
 const outOfPlane = () => OHIF.DICOMSR.outOfPlane;
 const drawingPlanes = () => OHIF.DICOMSR.drawingPlane;
 
+/** The active display sets, or undefined when the display set service is not available */
+function activeDisplaySets() {
+  const api = OHIF.display && OHIF.display.DisplaySetApi && OHIF.display.DisplaySetApi.Instance;
+  const service = api && api.displaySetService;
+  return service ? service.activeDisplaySets || [] : undefined;
+}
+
 const capitalised = text => (text ? text.charAt(0).toUpperCase() + text.slice(1) : '');
 
 
@@ -46,7 +53,8 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
   const metadata = measurement.metadata || {};
   const { isLocked, isReadOnly, isDirty, isVisible } = MeasurementApi._unpackMeasurementLifecycleAttrs(measurement);
   const { displayFunction } = tool.options.measurementTable;
-  const series = outOfPlane().seriesOfFrameOfReference(measurement.FrameOfReferenceUID || metadata.FrameOfReferenceUID, DicomMetadataStore);
+  const series = outOfPlane().seriesOfFrameOfReference(measurement.FrameOfReferenceUID || metadata.FrameOfReferenceUID, DicomMetadataStore,
+    { displaySets: activeDisplaySets() });
   const view = _.first(metadata.views);
   // Points in no common plane are drawn in the 3D views only: no slice contains them
   const planar = drawingPlanes().navigationPlaneOf(planePointsOf(measurement), metadata.drawingPlane).kind !== 'none';
@@ -61,6 +69,8 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
     isReadOnly: Boolean(isReadOnly),
     isLocked: Boolean(isLocked || isReadOnly),
     isPending: !isReadOnly,
+    fromApplicationDocument: typeof OHIF.DICOMSR.isApplicationMeasurement === 'function'
+      && OHIF.DICOMSR.isApplicationMeasurement(metadata.TrackingUniqueIdentifier),
     customColor: MeasurementApi.customLineTextColor(measurement),
     detailSource: measurementDetailSource(measurement, { patient: true }),
     isDirty,
@@ -199,7 +209,7 @@ async function openOutOfPlaneInMpr({ measurementData, commandsManager, studyMeta
   const metadata = record.metadata || {};
   const sourceSeries = metadata.sourceSeries || record.referenceSeriesUID;
   const candidates = _.sortBy(
-    outOfPlane().seriesOfFrameOfReference(frameOfReferenceOf(record), DicomMetadataStore),
+    outOfPlane().seriesOfFrameOfReference(frameOfReferenceOf(record), DicomMetadataStore, { displaySets: activeDisplaySets() }),
     series => (series.SeriesInstanceUID === sourceSeries ? 0 : 1));
   const displaySet = candidates.map(({ StudyInstanceUID, SeriesInstanceUID }) => {
     const study = StudyInstanceUID && studyMetadataManager.get(StudyInstanceUID);

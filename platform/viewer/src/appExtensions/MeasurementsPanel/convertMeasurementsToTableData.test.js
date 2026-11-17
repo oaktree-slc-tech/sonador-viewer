@@ -48,7 +48,11 @@ jest.mock('@ohif/core', () => {
         drawingPlane: jest.requireActual('../../../../core/src/DICOMSR/utils/drawingPlane'),
       },
     },
-    DICOMSR: { isToolSupported: () => true, Enums: { TOOL_NAMES: {} }, SREnums: { TOOL_NAMES: { DICOM_SR_SERIES_TAG: 'DICOMSRSeriesTagTool' } } },
+    DICOMSR: {
+      isToolSupported: () => true, Enums: { TOOL_NAMES: {} }, SREnums: { TOOL_NAMES: { DICOM_SR_SERIES_TAG: 'DICOMSRSeriesTagTool' } },
+      // Measurements read from an application document
+      isApplicationMeasurement: uid => uid === '2.25.555',
+    },
     DicomMetadataStore: { getStudyInstanceUIDs: () => [], getStudy: () => undefined },
     displayAttributes: {},
   };
@@ -141,4 +145,18 @@ it("carries a measurement's custom colors to its row, for the indicator", () => 
     Angle: [drawn('Angle', { mockCustomColor: { line: '#FF8800', text: null } }), drawn('Angle', { _id: 'Angle-2', measurementNumber: 2 })],
   }, timepoints);
   expect(group.measurements.map(row => row.customColor)).toEqual([{ line: '#FF8800', text: null }, null]);
+});
+
+
+it('marks the row of a measurement read from an application document, read-only and never pending', () => {
+  const [group] = convertMeasurementsToTableData({
+    Length: [drawn('Length', { isReadOnly: true, isLocked: true, metadata: { TrackingUniqueIdentifier: '2.25.555' } })],
+  }, timepoints);
+  expect(group.groupName).toBe('Measurements');
+  expect(group.measurements[0]).toMatchObject({ fromApplicationDocument: true, isReadOnly: true, isLocked: true, isPending: false });
+
+  const [other] = convertMeasurementsToTableData({
+    Length: [drawn('Length', { isReadOnly: true, isLocked: true, metadata: { TrackingUniqueIdentifier: '2.25.556' } })],
+  }, timepoints);
+  expect(other.measurements[0].fromApplicationDocument).toBe(false);
 });

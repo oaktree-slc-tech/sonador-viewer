@@ -1,7 +1,11 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
 import MeasurementService from './MeasurementService';
 import log from '../../log';
 
 jest.mock('../../log', () => ({
+  debug: jest.fn(),
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),

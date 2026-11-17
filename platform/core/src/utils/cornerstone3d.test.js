@@ -30,7 +30,7 @@ jest.mock('@cornerstonejs/core', () => ({
     },
   },
   getShouldUseCPURendering: (...args) => mockGetShouldUseCPURendering(...args),
-}));
+}), { virtual: true });
 
 // The norm16 probe lives on a subpath because the memoised `getCanUseNorm16Texture` is not
 // exported from the package entry point at all (see the note in cornerstone3d.js).

@@ -11,9 +11,14 @@
 // * documentKind classifies a document by its root concept name (enums SR_DOCUMENT_KIND): an
 //   exchange document, `(126000, DCM)`, or an application document, a root concept in the
 //   `Sonador-SR` scheme that also carries content the Viewer does not model. A save regenerates the
-//   whole document from tool state, so the Viewer never writes to an application document: its
-//   measurement groups are displayed, not hydrated (its Series Tags excepted, hydrated read-only),
-//   and it is never a save parent.
+//   whole document from tool state, so the Viewer never writes to an application document: the
+//   measurements of its supported tools are hydrated read-only and never written by a save, and it is
+//   never a save parent.
+// * A tracking UID held by several documents is shown once: a copy from an exchange document (which
+//   can be edited) takes precedence over one from an application document, and of application
+//   documents the current one's does (currentDocument; measurementCopies.js).
+// * An exchange document that holds a landmark set is not a save parent either: the set is listed
+//   and drawn, not held as tool state, so a save regenerated from tool state would drop it.
 
 import _ from 'lodash';
 
@@ -33,6 +38,7 @@ import {
 } from '../enums';
 import log from '../../log';
 import { asArray, codeValueOf, codedConcept, conceptNameValue, firstItem } from './codedConcept';
+import { holdsLandmarkSets } from '../landmarks/landmarkGroups';
 
 const { DicomMetaDictionary } = dcmjsData;
 
@@ -187,6 +193,10 @@ function registerHydratedReport(dataset, loadSession = session) {
     log.info('[DICOM-SR:srDocument] application document, not a save parent', dataset.SOPInstanceUID);
     return;
   }
+  if (holdsLandmarkSets(dataset)) {
+    log.info('[DICOM-SR:srDocument] document holds a landmark set, not a save parent', dataset.SOPInstanceUID);
+    return;
+  }
   const template = firstItem(dataset.ContentTemplateSequence) || {};
   hydratedReports.set(dataset.SOPInstanceUID, {
     StudyInstanceUID: dataset.StudyInstanceUID,
@@ -204,23 +214,79 @@ function saveParent(StudyInstanceUID) {
   return reports.length === 1 ? reports[0] : null;
 }
 
+// Other session state (the landmark sets) is emptied with the registry
+const sessionClearedListeners = new Set();
+
+function subscribeSessionCleared(listener) {
+  sessionClearedListeners.add(listener);
+  return () => sessionClearedListeners.delete(listener);
+}
+
 function clearHydratedReports() {
   hydratedReports.clear();
   applicationMeasurements.clear();
   session += 1;
+  sessionClearedListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      log.error('[DICOM-SR:srDocument] session cleared listener failed', error);
+    }
+  });
 }
 
 
-// Measurements hydrated from an application document (its Series Tags), by tracking UID: shown
-// read-only and never written by a save, which would copy them into another document
+// Measurements read from an application document (hydrated, or drawn by the read-only display), by
+// tracking UID, with the document they were read from: shown read-only and never written by a save,
+// which would copy them into another document. Which copy is shown is decided by measurementCopies.js.
 
-const applicationMeasurements = new Set();
+const applicationMeasurements = new Map();
 
-const markApplicationMeasurement = TrackingUniqueIdentifier =>
-  TrackingUniqueIdentifier && applicationMeasurements.add(TrackingUniqueIdentifier);
+const markApplicationMeasurement = (TrackingUniqueIdentifier, source = {}) =>
+  TrackingUniqueIdentifier && applicationMeasurements.set(TrackingUniqueIdentifier, source);
+const unmarkApplicationMeasurement = TrackingUniqueIdentifier => applicationMeasurements.delete(TrackingUniqueIdentifier);
 const isApplicationMeasurement = TrackingUniqueIdentifier =>
   !!TrackingUniqueIdentifier && applicationMeasurements.has(TrackingUniqueIdentifier);
+const applicationMeasurementSource = TrackingUniqueIdentifier => applicationMeasurements.get(TrackingUniqueIdentifier);
 
+
+// The current document, in the order the Sonador IO client applies (its `current_instance`): every
+// document another candidate names in Predecessor Documents Sequence is set aside; of the others, the
+// latest Content Date and Time, then Instance Creation Date and Time, then the greatest SOP Instance UID.
+
+// A DICOM date and time as text that sorts in time order: HHMMSS and six fractional digits, a shorter
+// time or fraction read at its own scale
+const dateTimeOf = (date, time) => {
+  const [whole, fraction] = String(time || '').split('.');
+  return `${date || ''}${(whole || '').padEnd(6, '0')}${(fraction || '').padEnd(6, '0')}`;
+};
+
+/** The fields the current-document choice reads, of a naturalized document */
+function documentOrderOf(dataset) {
+  const predecessors = asArray(dataset && dataset.PredecessorDocumentsSequence)
+    .flatMap(study => asArray(study.ReferencedSeriesSequence))
+    .flatMap(series => asArray(series.ReferencedSOPSequence))
+    .map(sop => sop.ReferencedSOPInstanceUID)
+    .filter(Boolean);
+  return {
+    SOPInstanceUID: dataset && dataset.SOPInstanceUID,
+    predecessors,
+    content: dataset && dataset.ContentDate ? dateTimeOf(dataset.ContentDate, dataset.ContentTime) : '',
+    creation: dataset && dataset.InstanceCreationDate ? dateTimeOf(dataset.InstanceCreationDate, dataset.InstanceCreationTime) : '',
+  };
+}
+
+const compareText = (a, b) => (a === b ? 0 : (a > b ? 1 : -1));
+const compareTimestamps = (a, b) => compareText(a.content, b.content) || compareText(a.creation, b.creation)
+  || compareText(String(a.SOPInstanceUID || ''), String(b.SOPInstanceUID || ''));
+
+/** The current one of several document orders (documentOrderOf) */
+function currentDocument(orders) {
+  const candidates = asArray(orders);
+  const superseded = new Set(candidates.flatMap(order => order.predecessors));
+  const remaining = candidates.filter(order => !superseded.has(order.SOPInstanceUID));
+  return (remaining.length ? remaining : candidates).reduce((best, order) => (!best || compareTimestamps(order, best) > 0 ? order : best), null);
+}
 
 // Reports written by this Viewer and shown before the upload confirms they are stored. Their
 // measurements hydrate unlocked: until the report is stored they are not saved, and a failed
@@ -274,8 +340,12 @@ export {
   equipment,
   documentKind,
   isApplicationDocument,
+  applicationMeasurementSource,
+  currentDocument,
+  documentOrderOf,
   isApplicationMeasurement,
   markApplicationMeasurement,
+  unmarkApplicationMeasurement,
   isUnconfirmedReport,
   markReportUnconfirmed,
   observerContextItems,
@@ -284,4 +354,5 @@ export {
   resolvePersonObserverName,
   saveParent,
   softwareVersion,
+  subscribeSessionCleared,
 };

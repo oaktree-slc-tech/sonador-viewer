@@ -20,9 +20,10 @@ import './VisibilityToggle.styl';
 // The search runs once typing pauses for this long; the box shows each key at once
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** The table rows of the panel's measurement groups */
+/** The table rows of the panel's measurement groups; a landmark set's visibility is its own */
 const rowsOf = measurementCollection => (measurementCollection || [])
-  .flatMap(group => (group && group.measurements) || []);
+  .flatMap(group => (group && group.measurements) || [])
+  .filter(row => !(row && row.landmarkSet));
 
 /** Whether every annotation of the panel is shown */
 function allAnnotationsVisible(measurementCollection) {

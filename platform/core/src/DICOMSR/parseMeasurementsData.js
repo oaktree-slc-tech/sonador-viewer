@@ -66,7 +66,7 @@ const parseMeasurementsData = (measurementsData, options) => {
 
       // An out-of-plane measurement holds its patient points; it has no image
       if (isOutOfPlaneMeasurement(measurement)) {
-        if (isApplicationMeasurement(measurement.metadata.TrackingUniqueIdentifier)) {
+        if (measurement.metadata.applicationDocument || isApplicationMeasurement(measurement.metadata.TrackingUniqueIdentifier)) {
           log.info('[DICOM-SR:parseMeasurementsData] measurement of an application document not written',
             measurement.metadata.TrackingUniqueIdentifier);
           return;
@@ -107,7 +107,9 @@ const parseMeasurementsData = (measurementsData, options) => {
         // copy it into another document
         const trackingUID = annotationData && (annotationData.TrackingUniqueIdentifier
           || (annotationData.metadata && annotationData.metadata.TrackingUniqueIdentifier));
-        if (isApplicationMeasurement(trackingUID)) {
+        const fromApplication = (annotation.metadata && annotation.metadata.applicationDocument)
+          || (annotationData && annotationData.metadata && annotationData.metadata.applicationDocument);
+        if (fromApplication || isApplicationMeasurement(trackingUID)) {
           log.info('[DICOM-SR:parseMeasurementsData] measurement of an application document not written', trackingUID);
           return;
         }

@@ -16,6 +16,9 @@ describe('actions', () => {
       'setMeasurements',
       'setServers',
       'setStudyData',
+      // Sonador additions
+      'clearEntireViewportSpecificData',
+      'setActiveServer',
     ].sort();
 
     const exports = Object.keys(actions).sort();

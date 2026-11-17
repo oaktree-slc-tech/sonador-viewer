@@ -1,3 +1,6 @@
+/**
+ * @jest-environment ../viewer/src/__tests__/jsdomEnvironment.js
+ */
 import absoluteUrl from './absoluteUrl';
 
 describe('absoluteUrl', () => {

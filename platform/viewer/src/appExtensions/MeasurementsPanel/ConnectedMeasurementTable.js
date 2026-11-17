@@ -17,6 +17,7 @@ import { navigateArrowInStack, navigateToOutOfPlane, openOutOfPlaneInMpr, outOfP
 import { callConfirmDialog } from '@ohif/extension-cornerstone/src/utils/callConfirmDialog';
 import { callColorPickerDialog } from '@ohif/extension-cornerstone/src/utils/colorPickerDialog';
 import measurementDetailSource from './measurementDetailSource.js';
+import { isLandmarkSetRow, landmarksGroup } from './landmarkSetRows.js';
 
 const { setViewportSpecificData } = OHIF.redux.actions;
 const { MeasurementApi } = OHIF.measurements;
@@ -168,6 +169,16 @@ function getWarningsForMeasurement(toolName, options) {
 }
 
 
+/** Whether a measurement was read from an application document: shown read-only, marked by its row */
+export function fromApplicationDocument(measurement) {
+  const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(measurement);
+  const trackingUid = measurementMeta.TrackingUniqueIdentifier || measurementData.TrackingUniqueIdentifier
+    || measurement.TrackingUniqueIdentifier;
+  return Boolean(trackingUid) && typeof DICOMSR.isApplicationMeasurement === 'function'
+    && DICOMSR.isApplicationMeasurement(trackingUid);
+}
+
+
 export function seriesTagDisplay(toolType, measurement, measurementMeta, measurementData) {
   // Custom colors of a Series Tag finding for the measurements table: those that differ from the
   // default display profile. Value and Meaning color the text, Background marks the index cell;
@@ -240,6 +251,7 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
       hasWarnings,
       isReadOnly: Boolean(isReadOnly),
       isLocked: Boolean(isLocked || isReadOnly),
+      fromApplicationDocument: fromApplicationDocument(measurement),
       // Saved with the others and edited through its service record (a tool without a service
       // mapping, such as the rectangle, is neither)
       isPending: Boolean(toolServiceManaged && uid) && !isReadOnly,
@@ -409,6 +421,15 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
     itemNumber += 1;
     row.itemNumber = itemNumber;
   }));
+
+  // The landmark sets, after the measurement groups, numbered within their group
+  const landmarks = landmarksGroup();
+  if (landmarks) {
+    landmarks.measurements.forEach((row, index) => {
+      row.itemNumber = index + 1;
+    });
+    groups.push(landmarks);
+  }
   return groups;
 }
 
@@ -573,6 +594,11 @@ const mapDispatchToProps = (dispatch, ownProps) => {
 
     
     dispatchJumpToRowItem: (measurementData, viewportsState, timepointManagerState, options) => {
+      // A landmark set's row has no measurement to jump to
+      if (isLandmarkSetRow(measurementData)) {
+        return;
+      }
+
       // Dispath a "jump to row item" event. Navigating to a row item loads the image the measurement
       // is associated with and renders (or re-loads) annotations active measurements. While the MPR
       // view is open, a measurement of its series is shown in the MPR panes; one of another series

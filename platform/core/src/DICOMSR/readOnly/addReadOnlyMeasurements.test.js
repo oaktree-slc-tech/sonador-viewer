@@ -3,6 +3,9 @@
 // that holds them, and patient content in no image plane goes to the Cornerstone3D viewports only.
 
 jest.mock('@cornerstonejs/core', () => ({ metaData: { get: () => undefined } }), { virtual: true });
+jest.mock('@cornerstonejs/adapters', () => ({
+  adaptersSR: { Cornerstone3D: { CodeScheme: { CodingSchemeDesignator: 'CORNERSTONEJS', codeValues: {} } } },
+}), { virtual: true });
 const mockInfo = jest.fn();
 jest.mock('../../log', () => ({ __esModule: true, default: { info: (...args) => mockInfo(...args), warn: () => {}, error: () => {} } }));
 
@@ -40,6 +43,8 @@ jest.mock('./srDisplayAnnotations', () => ({
     return drawable ? {} : null;
   },
   renderSRDisplayAnnotations: jest.fn(),
+  hasSRDisplayAnnotation: () => false,
+  removeSRDisplayAnnotation: () => false,
 }));
 
 import addReadOnlyMeasurements from './addReadOnlyMeasurements';

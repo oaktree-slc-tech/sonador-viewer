@@ -12,7 +12,7 @@ jest.mock('@cornerstonejs/core', () => ({
     calibratedPixelSpacingMetadataProvider: { add: () => {} },
     getPixelSpacingInformation: instance => ({ PixelSpacing: instance.PixelSpacing, type: null }),
   },
-}));
+}), { virtual: true });
 
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
 import DicomMetadataStore from '../services/DicomMetadataStore';

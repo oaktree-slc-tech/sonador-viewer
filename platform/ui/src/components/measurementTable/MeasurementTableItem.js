@@ -76,6 +76,21 @@ const OutOfPlaneIcon = () => (
 );
 
 
+// A row read from an application document, which the Viewer shows read-only and never writes to,
+// is marked by a document in place of the lock
+const ApplicationDocumentIcon = ({ label }) => (
+  <svg role="img" aria-label={label} data-cy="measurement-application-document" className="measurementDocumentIcon"
+    viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+    <path d="M6 3h8l4 4v14H6z" />
+    <path d="M14 3v4h4M9 12h6M9 16h6" />
+  </svg>
+);
+
+ApplicationDocumentIcon.propTypes = {
+  label: PropTypes.string.isRequired,
+};
+
+
 /**
  * Where an out-of-plane measurement is shown: the view it was drawn in when it records one (nothing
  * is inferred without it); points in no common plane are drawn in the 3D views only, and the MPR
@@ -305,6 +320,11 @@ const MeasurementTableItem = ({
   // An out-of-plane measurement (on no image) shows its view in place of the image
   const { outOfPlane } = measurementData;
 
+  // A landmark set (one row per set, read-only): its series and the number of its landmarks. A set
+  // that cannot be shown is held, with a note on its index cell.
+  const { landmarkSet } = measurementData;
+  const heldSet = Boolean(landmarkSet && !landmarkSet.placed);
+
   // Measurement reference metadata, recomputed when the reference or the series metadata changes
   const { refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID } = measurementData;
   const [metadataVersion, setMetadataVersion] = useState(0);
@@ -321,11 +341,11 @@ const MeasurementTableItem = ({
 
     // A measurement's line includes its image, so it needs the instance; a Series Tag and an
     // out-of-plane measurement need only their series
-    if (!identifiers || (!isSeriesTag && !outOfPlane && identifiers.InstanceNumber === undefined)) {
+    if (!identifiers || (!isSeriesTag && !outOfPlane && !landmarkSet && identifiers.InstanceNumber === undefined)) {
       return null;
     }
     return identifiers;
-  }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, outOfPlane, metadataVersion]);
+  }, [refStudyInstanceUID, refSeriesInstanceUID, refSOPInstanceUID, isSeriesTag, outOfPlane, landmarkSet, metadataVersion]);
 
   // The measurement's detail (core measurements/tools/measurementDetail): the value line, the
   // reference line's +N and the detail card. A Series Tag has its tool icon and no card.
@@ -476,8 +496,8 @@ const MeasurementTableItem = ({
         itemIndex={itemIndex}
         itemIndexStyle={seriesTagBand(measurementData.seriesTagDisplay)}
         itemMeta={outOfPlane ? <OutOfPlaneIcon /> : null}
-        itemIndexProps={outOfPlane ? { tabIndex: 0, onKeyDown: onIndexKeyDown } : undefined}
-        renderItemIndex={outOfPlane ? renderOutOfPlaneNote : undefined}
+        itemIndexProps={outOfPlane ? { tabIndex: 0, onKeyDown: onIndexKeyDown } : heldSet ? { tabIndex: 0 } : undefined}
+        renderItemIndex={outOfPlane ? renderOutOfPlaneNote : heldSet ? renderHeldSetNote : undefined}
         onItemClick={handleItemClick}
       >
         <div>
@@ -486,7 +506,7 @@ const MeasurementTableItem = ({
             {/* The Segmentations panel's row controls (ui-next DataRow), packed to the right: the
                 visibility toggle, the lock while locked, then the actions menu when there is one */}
             <div className="measurementStatus">
-              <TooltipProvider delayDuration={500}>
+              {!landmarkSet && (<TooltipProvider delayDuration={500}>
                 <HoverTooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -504,10 +524,23 @@ const MeasurementTableItem = ({
                     {measurementData.isVisible ? t('Hide') : t('Show')}
                   </TooltipContent>
                 </HoverTooltip>
-              </TooltipProvider>
-              {Boolean(measurementData.isLocked) && (
+              </TooltipProvider>)}
+              {Boolean(measurementData.isLocked) && (measurementData.fromApplicationDocument ? (
+                <TooltipProvider delayDuration={300}>
+                  <HoverTooltip>
+                    <TooltipTrigger asChild>
+                      <span className="measurementLock" tabIndex={0}>
+                        <ApplicationDocumentIcon label={t('Read-only: from an application document')} />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" data-cy="measurement-application-document-tooltip">
+                      {t('Read-only: from an application document')}
+                    </TooltipContent>
+                  </HoverTooltip>
+                </TooltipProvider>
+              ) : (
                 <span className="measurementLock"><Icons.Lock data-cy="measurement-locked" /></span>
-              )}
+              ))}
               {rowActions().length > 0 && (
                 // The panel has no ui-next theme scope: the trigger is reset as the visibility toggle
                 // is, and the menu (portalled to the body) takes the Segmentations panel theme's
@@ -526,16 +559,26 @@ const MeasurementTableItem = ({
               )}
             </div>
           </div>
-          {refMeta && (<div className="referenceMeta" {...card.hoverProps}>
-            <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
-            {!isSeriesTag && !outOfPlane && (
+          {/* A landmark set keeps its count when its series is unavailable */}
+          {(refMeta || landmarkSet) && (<div className="referenceMeta" {...card.hoverProps}>
+            {refMeta && (
+              <span className="refItem refSxNum"><span className="refLabel">S:</span><span className="refValue">{refMeta.SeriesNumber}</span></span>
+            )}
+            {refMeta && !isSeriesTag && !outOfPlane && !landmarkSet && (
               <span className="refItem refImgNum"><span className="refLabel">I:</span><span className="refValue">{refMeta.InstanceNumber}</span></span>
             )}
-            {outOfPlane && outOfPlane.view && (
+            {refMeta && outOfPlane && outOfPlane.view && (
               <span className="refItem refView"><span className="refLabel">View:</span><span className="refValue">{outOfPlane.view}</span></span>
             )}
-            <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
-            {extraCount > 0 && (
+            {refMeta && (
+              <span className="refItem refSxModality"><span className="refLabel">Modality:</span><span className="refValue">{refMeta.Modality}</span></span>
+            )}
+            {landmarkSet && (
+              <span className="refItem refLandmarkCount" data-cy="landmark-set-count">
+                {landmarkSet.count === 1 ? t('1 landmark') : t('{{count}} landmarks', { count: landmarkSet.count })}
+              </span>
+            )}
+            {refMeta && extraCount > 0 && (
               <span className="refMore" aria-hidden="true" data-cy="measurement-detail-count">+{extraCount}</span>
             )}
           </div>)}
@@ -716,6 +759,35 @@ const MeasurementTableItem = ({
           <Tooltip placement="left" className="in tooltip-warning tooltip-outOfPlane" id="tooltip-left">
             <div className="warningTitle">{t('3D measurement')}</div>
             {getOutOfPlaneNote()}
+          </Tooltip>
+        </HoverCardContent>
+      </HoverCardPortal>
+    </HoverCard>
+  );
+
+  // The note of a held landmark set, in the form of the out-of-plane note: why it is not shown, and the
+  // series it was made on (Unknown when it records none)
+  const getHeldSetNote = () => {
+    const stored = landmarkSet.sourceSeries && OHIF.utils.referenceIdentifiers(DicomMetadataStore, {
+      StudyInstanceUID: refStudyInstanceUID, SeriesInstanceUID: landmarkSet.sourceSeries,
+    });
+    const series = stored && [stored.SeriesNumber, stored.SeriesDescription].filter(value => value !== undefined && value !== '').join(' ');
+    return (
+      <div className="warningContent">
+        <p>{t(landmarkSet.note)}</p>
+        <div className="outOfPlaneNoteItem"><span className="refLabel">{t('Series')}:</span> {series || t('Unknown')}</div>
+      </div>
+    );
+  };
+
+  const renderHeldSetNote = indexCell => (
+    <HoverCard openDelay={150} closeDelay={150}>
+      <HoverCardTrigger asChild>{indexCell}</HoverCardTrigger>
+      <HoverCardPortal>
+        <HoverCardContent side="left" align="center" sideOffset={0} className="outOfPlaneNoteCard" data-cy="landmark-set-held-note">
+          <Tooltip placement="left" className="in tooltip-warning tooltip-outOfPlane" id="tooltip-left">
+            <div className="warningTitle">{t('Landmark set not shown')}</div>
+            {getHeldSetNote()}
           </Tooltip>
         </HoverCardContent>
       </HoverCardPortal>

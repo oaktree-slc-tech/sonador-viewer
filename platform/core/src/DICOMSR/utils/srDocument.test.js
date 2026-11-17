@@ -5,7 +5,9 @@ jest.mock('@cornerstonejs/adapters', () => ({
 import {
   applyRootContent,
   clearHydratedReports,
+  currentDocument,
   documentKind,
+  documentOrderOf,
   documentSettings,
   isApplicationDocument,
   personObserverName,
@@ -159,5 +161,35 @@ describe('applyRootContent', () => {
     const root = applyRootContent(content(), { template: { TemplateIdentifier: '1500', MappingResource: 'DCMR' } });
     expect(root.ContentTemplateSequence).toEqual([{ MappingResource: 'DCMR', TemplateIdentifier: '1500' }]);
     expect(root.ContentSequence.map(conceptNameValue)).not.toContain('121008');
+  });
+});
+
+
+describe('currentDocument', () => {
+  const order = (SOPInstanceUID, ContentTime, extra = {}) => documentOrderOf({
+    SOPInstanceUID, ContentDate: '20261101', ContentTime, InstanceCreationDate: '20261101', InstanceCreationTime: '090000', ...extra,
+  });
+
+  it('compares fractional seconds of the Content Time, the earlier holding the greater SOP Instance UID', () => {
+    const earlier = order('2.25.9', '090000.100000');
+    const later = order('2.25.1', '090000.900000');
+    expect(currentDocument([earlier, later]).SOPInstanceUID).toBe('2.25.1');
+    expect(currentDocument([later, earlier]).SOPInstanceUID).toBe('2.25.1');
+  });
+
+  it('reads a shorter fraction at its own scale', () => {
+    // .9 is later than .1234
+    expect(currentDocument([order('2.25.9', '090000.1234'), order('2.25.1', '090000.9')]).SOPInstanceUID).toBe('2.25.1');
+    expect(currentDocument([order('2.25.9', '090000.5'), order('2.25.1', '090000.500000')]).SOPInstanceUID).toBe('2.25.9');
+  });
+
+  it('compares fractional seconds of the Instance Creation Time when the Content Times tie', () => {
+    const earlier = order('2.25.9', '090000', { InstanceCreationTime: '100000.1' });
+    const later = order('2.25.1', '090000', { InstanceCreationTime: '100000.2' });
+    expect(currentDocument([earlier, later]).SOPInstanceUID).toBe('2.25.1');
+  });
+
+  it('breaks a tie by the SOP Instance UID only when both times tie', () => {
+    expect(currentDocument([order('2.25.1', '090000.5'), order('2.25.9', '090000.5')]).SOPInstanceUID).toBe('2.25.9');
   });
 });

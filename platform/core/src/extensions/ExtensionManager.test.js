@@ -1,3 +1,6 @@
+// The module uses the lodash global webpack provides
+global._ = require('lodash');
+
 import { Exception } from 'handlebars';
 
 import log from './../log.js';
@@ -199,6 +202,12 @@ describe('ExtensionManager.js', () => {
         },
         getCommandsModule: () => {
           return {};
+        },
+        getCustomizationModule: () => {
+          return [];
+        },
+        getUtilityModule: () => {
+          return [];
         },
       };
 

@@ -39,7 +39,7 @@ jest.mock('cornerstone-core', () => ({
 
 jest.mock('@cornerstonejs/core', () => ({
   cache: { getBytesAvailable: (...args) => mockGetBytesAvailable(...args) },
-}));
+}), { virtual: true });
 
 import { StudyPrefetcher } from './StudyPrefetcher';
 

@@ -18,6 +18,7 @@ import { propertyParentOf } from '../utils/propertyParent';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 import { displayCoordsOf } from '../utils/angleGeometry';
 import { documentKind } from '../utils/srDocument';
+import { isLandmarkSetGroup } from '../landmarks/landmarkGroups';
 import { DCMSR_MEASUREMENT_CONSTRUCTION_POINTS, SR_DOCUMENT_KIND } from '../enums';
 
 const { Enums: MeasurementEnums, SREnums } = measurements;
@@ -34,7 +35,7 @@ type InstanceMetadata = Types.InstanceMetadata;
 
 // Bumped when the report parsing below changes: a display set parsed by an older version of this
 // module (kept alive across a hot reload) is parsed again
-const PARSER_VERSION = 6;
+const PARSER_VERSION = 7;
 
 const sopClassUids = [
   sopClassDictionary.BasicTextSR,
@@ -157,6 +158,11 @@ function _getMeasurements(ImagingMeasurementReportContentSequence) {
     trackingUniqueIdentifier => {
       const mergedContentSequence =
         mergedContentSequencesByTrackingUniqueIdentifiers[trackingUniqueIdentifier];
+
+      // A landmark set is listed as a set (DICOMSR/landmarks), never as a measurement
+      if (isLandmarkSetGroup(mergedContentSequence)) {
+        return;
+      }
 
       const measurement = _processMeasurement(mergedContentSequence);
       if (measurement) {

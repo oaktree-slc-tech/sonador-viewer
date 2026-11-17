@@ -20,15 +20,19 @@ import MeasurementApi from '../../measurements/classes/MeasurementApi';
 import getImagePath from '../../measurements/lib/getImagePath';
 
 import initDisplaySetMeasurements from '../utils/initDisplaySetMeasurements';
-import { linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
+import { getMeasurements, linkMeasurementsToDisplaySets } from './initDisplaySetMeasurements';
 import { buildSopInstanceImageIds } from './utils/sopInstanceImageIds';
 import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 import { extendedMetaOptions, numItemsOf } from '../utils/propertyParent';
-import { currentSession, registerHydratedReport } from '../utils/srDocument';
+import { currentSession, documentKind, registerHydratedReport } from '../utils/srDocument';
+import { SR_DOCUMENT_KIND } from '../enums';
+import { showCopy } from '../utils/measurementCopies';
 import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
+import { addLandmarkSetsOf } from '../landmarks/landmarkSetStore';
+import { readDicomFile } from '../../utils/dicomCharacterSet';
 import {
-  carriedEvidenceOf, heldOutOfPlaneRecord, isOutOfPlaneMeasurement, OUT_OF_PLANE_TOOLS, seriesOfFrameOfReference,
+  carriedEvidenceOf, heldOutOfPlaneRecord, OUT_OF_PLANE_TOOLS, seriesOfFrameOfReference,
 } from '../utils/outOfPlane';
 import guid from '../../utils/guid';
 
@@ -52,6 +56,9 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   // @input options (object): parsing options
   //   - metaData (module, default='@cornerstonejs/core/metaData'): metadata module to be used by the
   //     measurementReport instance for parsing of DICOM-SR metadata.
+  //   - dataset (object): the naturalized report, already read, in place of the array buffer
+  //   - sibling (bool): the report is another instance of a series being parsed; its own siblings
+  //     are not looked for
 
   options = options || {};
   _.defaults(options, {
@@ -85,19 +92,22 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
     throw new Error('Attempting to initialize measurements service when no mappings are present. Invalid configuration.');
   }
 
-  // Import data to the DicomMetadataStore
-  const dcm = await fileLoader.Local.fileToStudy(part10SRArrayBuffer);
-  if (!dcm) {
-    throw new Error('Unable to parse provided DICOM data. Invalid byte-stream or file.');
-  }
-
-  // Retrieve instance for DICOM-SR parsing
-  const instanceSR = DicomMetadataStore.getInstance(
-    dcm.StudyInstanceUID, dcm.SeriesInstanceUID, dcm.SOPInstanceUID);
+  // Import data to the DicomMetadataStore, unless the report has been read already
+  let instanceSR = options.dataset;
   if (!instanceSR) {
-    throw new Error('Unable to load DICOM-SR, no instance available in DicomMetadataStore or '
-      + 'matching instance not registered with displaySets');
-  };
+    const dcm = await fileLoader.Local.fileToStudy(part10SRArrayBuffer);
+    if (!dcm) {
+      throw new Error('Unable to parse provided DICOM data. Invalid byte-stream or file.');
+    }
+
+    // Retrieve instance for DICOM-SR parsing
+    instanceSR = DicomMetadataStore.getInstance(
+      dcm.StudyInstanceUID, dcm.SeriesInstanceUID, dcm.SOPInstanceUID);
+    if (!instanceSR) {
+      throw new Error('Unable to load DICOM-SR, no instance available in DicomMetadataStore or '
+        + 'matching instance not registered with displaySets');
+    };
+  }
 
   // Image ids for every image the study holds, keyed by SOP instance: the ids the viewports use,
   // so a hydrated annotation keys the tool state the viewport reads. Independent of the SR
@@ -298,9 +308,18 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       // A patient-domain Length, Angle or Cobb angle on no image (its Drawing-Plane says it was
       // drawn off the acquired images, no loaded image holds its points, or no loaded series
       // shares its Frame of Reference) is held as an out-of-plane measurement
+      const applicationSource = toolData.annotation && toolData.annotation.metadata && toolData.annotation.metadata.applicationDocument;
       if (!imageId && isPatientDomainState(annotationType, toolData)) {
-        if (addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR })) {
+        const heldUid = (toolData.annotation && toolData.annotation.metadata && toolData.annotation.metadata.TrackingUniqueIdentifier)
+          || toolData.TrackingUniqueIdentifier;
+        const shown = showCopy(heldUid, {
+          application: applicationSource,
+          importer: () => addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }),
+        }, { measurementApi, measurementService });
+        if (shown) {
           imported += 1;
+        } else {
+          log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] out-of-plane measurement already held', heldUid);
         }
         return;
       }
@@ -360,75 +379,91 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       } = measurementApi._serviceManagedTool(annotationType, {
         sourceName: Cornerstone3dSR.sr.name, sourceVersion: Cornerstone3dSR.sr.version,
       });
-
-      // Check if the measurement has already been imported to the UID
-      const _apiMeasurement = measurementApi.getMeasurementByTrackingUid(trackingUid)
-
-      if (parserToolServiceManaged && !_apiMeasurement) {
-
-        console.debug('[DICOM-SR:parseDicomStructuredReport:parser-source] process annotation via parser source mapping',
-          'annotationType='+annotationType, annotation);
-
-        if (!measurementApi._apiSourceServiceMeasurement(annotation, parserSource)) {
-          
-          // For measurements which are added via a source different than that being used
-          // by the measurementApi, they will need to be converted to a schema compatible with the 
-          // viewer before they can be rendered.
-          annotation.metadata.createRenderVersion = true;
-        }
-
-        // Create measurement via the parser source and trigger EVENTS.MEASUREMENT_ADDED. A measurement
-        // that cannot be mapped is left out with a warning; the report's others are still read.
-        let measurement_uid;
-        try {
-          measurement_uid = parserSource.annotationToMeasurement(annotationType, { annotation, });
-        } catch (error) {
-          notMapped.push(annotationType);
-          log.warn('[DICOM-SR:parseDicomStructuredReport:not-mapped] measurement left out of the report read: '
-            + 'annotationType='+annotationType+' trackingUid='+trackingUid, error);
-          return;
-        }
-        const measurement = measurement_uid && measurementService.getMeasurement(measurement_uid);
-        if (!measurement) {
-          notMapped.push(annotationType);
-          return;
-        }
-        imported += 1;
-        measurementService._broadcastEvent(measurementService.EVENTS.MEASUREMENT_ADDED, {
-          source: parserSource, measurement, data: annotation,
-        });
-
-        console.log('[DICOM-SR:parseDicomStructuredReport:parser-source] import measurement to service',
-          'annotationType='+annotationType, 'uid='+measurement_uid, measurement)
-
-      } else if (_apiMeasurement) {
-
-        // Measurement already imported to measurement service
-        log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] duplicate measurement,'
-          +' skip import: annotationType='+annotationType, annotation);
-        return;
-
-      } else {
+      if (!parserToolServiceManaged) {
 
         // Measurement not managed via measurement service, skip import of annotation data
         log.warn('[DICOM-SR:parseDicomStructuredReport:invalid-tool] unable to import via measurement service '
           +'annotationType='+annotationType, annotation);
         return;
-
       }
+
+      // Import through the parser source and trigger EVENTS.MEASUREMENT_ADDED; false when the measurement
+      // cannot be mapped (left out with a warning; the report's others are still read). Each call
+      // imports a fresh copy of the annotation.
+      const importPlaced = () => {
+        const copy = _.cloneDeep(annotation);
+        if (!measurementApi._apiSourceServiceMeasurement(copy, parserSource)) {
+
+          // For measurements which are added via a source different than that being used
+          // by the measurementApi, they will need to be converted to a schema compatible with the
+          // viewer before they can be rendered.
+          copy.metadata.createRenderVersion = true;
+        }
+        let measurement_uid;
+        try {
+          measurement_uid = parserSource.annotationToMeasurement(annotationType, { annotation: copy, });
+        } catch (error) {
+          notMapped.push(annotationType);
+          log.warn('[DICOM-SR:parseDicomStructuredReport:not-mapped] measurement left out of the report read: '
+            + 'annotationType='+annotationType+' trackingUid='+trackingUid, error);
+          return false;
+        }
+        const measurement = measurement_uid && measurementService.getMeasurement(measurement_uid);
+        if (!measurement) {
+          notMapped.push(annotationType);
+          return false;
+        }
+        measurementService._broadcastEvent(measurementService.EVENTS.MEASUREMENT_ADDED, {
+          source: parserSource, measurement, data: copy,
+        });
+        console.log('[DICOM-SR:parseDicomStructuredReport:parser-source] import measurement to service',
+          'annotationType='+annotationType, 'uid='+measurement_uid, measurement);
+        return true;
+      };
+
+      // Shown unless a copy of higher precedence is held (utils/measurementCopies.js)
+      if (!showCopy(trackingUid, { application: applicationSource, importer: importPlaced }, { measurementApi, measurementService })) {
+        log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] measurement not imported (a copy is held, or it could not be '
+          + 'mapped): annotationType='+annotationType, trackingUid);
+        return;
+      }
+      imported += 1;
 
       // Incremenet measurement number
       ++measurementNumber;
     });
   });
 
-  // Display the measurements of THIS report outside the supported tools, read-only. The study's other
-  // reports are parsed by their own loads: displaying them here would claim their tracking UIDs
-  // before their hydration runs, and hydration would skip them as duplicates.
+  // The report's landmark sets, listed whatever kind of document holds them. A set that cannot be read
+  // never stops the report from loading.
   try {
+    addLandmarkSetsOf(instanceSR, DicomMetadataStore);
+  } catch (error) {
+    log.warn('[DICOM-SR:parseDicomStructuredReport:landmark-sets] landmark sets of the report not listed', error);
+  }
+
+  // The other instances of the report's series whose content is already cached: each is parsed as a
+  // report of its own once this one is registered
+  const siblings = options.sibling ? [] : cachedSiblingReports(instanceSR, displaySetService);
+  const siblingSOPs = new Set(siblings.map(sibling => sibling.SOPInstanceUID));
+
+  // Display the measurements of THIS report outside the supported tools, read-only. The study's other
+  // reports, and the siblings parsed below, display their own: displaying them here would claim their
+  // tracking UIDs before their hydration runs, and hydration would give way to the read-only copy.
+  try {
+    const sopOf = ds => ds.SOPInstanceUID || (ds.instance && ds.instance.SOPInstanceUID);
     const reportSrDisplaySets = srDisplaySets
       .map(ds => displaySetService.getDisplaySetByUID(ds.displaySetInstanceUID))
-      .filter(ds => ds && ds.SeriesInstanceUID === instanceSR.SeriesInstanceUID);
+      .filter(ds => ds && ds.SeriesInstanceUID === instanceSR.SeriesInstanceUID
+        && (sopOf(ds) === instanceSR.SOPInstanceUID || (!options.sibling && !siblingSOPs.has(sopOf(ds)))));
+    // A report without a display set of its own (a series' display set shows its newest instance)
+    // displays its own content
+    if (!reportSrDisplaySets.some(ds => sopOf(ds) === instanceSR.SOPInstanceUID)) {
+      const ownDisplay = reportDisplayOf(instanceSR);
+      if (ownDisplay) {
+        reportSrDisplaySets.push(ownDisplay);
+      }
+    }
     addReadOnlyMeasurements({
       srDisplaySets: reportSrDisplaySets,
       imageDisplaySets,
@@ -471,11 +506,89 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   // Hydrated: a later save keeps this report's document class and template (srDocument.js). A
   // load that fails before this point, or whose session was cleared meanwhile, is not a parent.
   registerHydratedReport(instanceSR, loadSession);
+
+  // Each cached sibling is parsed as this report was, from the cache, with no request
+  for (const sibling of siblings) {
+    try {
+      await parseDicomStructuredReport(null, displaySets, external, { ...options, loadSession, dataset: sibling, sibling: true });
+    } catch (error) {
+      log.warn('[DICOM-SR:parseDicomStructuredReport:sibling] report instance not read', sibling.SOPInstanceUID, error);
+    }
+  }
 }
 
 
 export default parseDicomStructuredReport;
 
+
+/**
+ * The other instances of a report's series with their content cached, naturalized: from the metadata
+ * store, from the series' display sets (an instance, or its naturalized report), and from Part 10
+ * bytes a display set keeps, read here. An instance known by its header only is left out.
+ */
+function cachedSiblingReports(instanceSR, displaySetService) {
+  const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = instanceSR;
+  const bySOP = new Map();
+  const add = (dataset) => {
+    if (!dataset || !dataset.SOPInstanceUID || dataset.SOPInstanceUID === SOPInstanceUID || bySOP.has(dataset.SOPInstanceUID)
+        || !dataset.ContentSequence || (dataset.SeriesInstanceUID && dataset.SeriesInstanceUID !== SeriesInstanceUID)) {
+      return;
+    }
+    bySOP.set(dataset.SOPInstanceUID, { StudyInstanceUID, SeriesInstanceUID, ...dataset });
+  };
+  const readBytes = (buffer) => {
+    try {
+      return dcmjs.data.DicomMetaDictionary.naturalizeDataset(readDicomFile(buffer).dict);
+    } catch (error) {
+      log.warn('[DICOM-SR:parseDicomStructuredReport:sibling] cached report bytes not read', error);
+      return undefined;
+    }
+  };
+
+  const series = typeof DicomMetadataStore.getSeries === 'function' ? DicomMetadataStore.getSeries(StudyInstanceUID, SeriesInstanceUID) : undefined;
+  ((series && series.instances) || []).forEach(add);
+  const seriesDisplaySets = displaySetService && typeof displaySetService.getDisplaySetsForSeries === 'function'
+    ? displaySetService.getDisplaySetsForSeries(SeriesInstanceUID) || [] : [];
+  seriesDisplaySets.forEach((displaySet) => {
+    add(displaySet.instance);
+    add(displaySet.srInstanceDataset);
+    add(displaySet.naturalizedSrInstance);
+    if (displaySet.cachePart10SRArrayBuffer) {
+      add(readBytes(displaySet.cachePart10SRArrayBuffer));
+    }
+  });
+  return [...bySOP.values()];
+}
+
+
+/**
+ * The read-only display's view of a report with no display set of its own: its measurements as the
+ * SR display set reads them. None for a document whose measurements are not displayed.
+ */
+function reportDisplayOf(instanceSR) {
+  const kind = documentKind(instanceSR);
+  if ((kind !== SR_DOCUMENT_KIND.EXCHANGE && kind !== SR_DOCUMENT_KIND.APPLICATION) || !instanceSR.ContentSequence) {
+    return undefined;
+  }
+  const ContentSequence = Array.isArray(instanceSR.ContentSequence) ? instanceSR.ContentSequence : [instanceSR.ContentSequence];
+  let measurements;
+  try {
+    measurements = getMeasurements(ContentSequence);
+  } catch (error) {
+    // Its content cannot be read for display: the report's other paths are unaffected
+    log.warn('[DICOM-SR:parseDicomStructuredReport:read-only] content of the report not read for display', instanceSR.SOPInstanceUID, error);
+    return undefined;
+  }
+  return {
+    StudyInstanceUID: instanceSR.StudyInstanceUID,
+    SeriesInstanceUID: instanceSR.SeriesInstanceUID,
+    SOPInstanceUID: instanceSR.SOPInstanceUID,
+    SOPClassUID: instanceSR.SOPClassUID,
+    instance: instanceSR,
+    isApplicationDocument: kind === SR_DOCUMENT_KIND.APPLICATION,
+    measurements,
+  };
+}
 
 /** Whether a hydrated tool state is a patient-domain Length, Angle or Cobb angle */
 function isPatientDomainState(annotationType, toolData) {
@@ -485,25 +598,20 @@ function isPatientDomainState(annotationType, toolData) {
 }
 
 function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }) {
-  // Hold a hydrated patient-domain group as an out-of-plane measurement-service record, once; true
-  // when it was added. One whose Frame of Reference no loaded series shares keeps the report's
-  // evidence for its series, so that a save writes it again.
+  // Hold a hydrated patient-domain group as an out-of-plane measurement-service record; true when it
+  // was added. One whose Frame of Reference no loaded series shares keeps the report's evidence for its
+  // series, so that a save writes it again (one read from an application document is never saved).
   const record = heldOutOfPlaneRecord(annotationType, toolData, instanceSR.StudyInstanceUID);
   const { TrackingUniqueIdentifier } = record.metadata;
 
   if (!seriesOfFrameOfReference(record.FrameOfReferenceUID, DicomMetadataStore).length) {
     record.metadata.carriedEvidence = carriedEvidenceOf(instanceSR, record);
-    if (!record.metadata.carriedEvidence.instances.length) {
+    if (!record.metadata.carriedEvidence.instances.length && !record.metadata.applicationDocument) {
       log.warn('[DICOM-SR:parseDicomStructuredReport:out-of-plane] the report lists no evidence for a held measurement;'
         + ' a save writes it again with none', TrackingUniqueIdentifier);
     }
   }
 
-  if (measurementService.getMeasurements().some(m => isOutOfPlaneMeasurement(m)
-      && m.metadata.TrackingUniqueIdentifier === TrackingUniqueIdentifier)) {
-    log.info('[DICOM-SR:parseDicomStructuredReport:duplicate] out-of-plane measurement already held', TrackingUniqueIdentifier);
-    return;
-  }
   const { source } = measurementApi._serviceManagedTool(annotationType, {
     sourceName: Cornerstone3dSR.sr.name, sourceVersion: Cornerstone3dSR.sr.version,
   });

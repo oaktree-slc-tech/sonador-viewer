@@ -106,3 +106,13 @@ it('keeps the search box without annotations, and has no toggle then', () => {
   render(undefined);
   expect(toggle()).toBeNull();
 });
+
+it('leaves landmark sets out: their visibility is their own', () => {
+  const landmarks = { groupName: 'Landmarks', measurements: [{ isVisible: true, landmarkSet: { count: 3 } }] };
+  const onToggle = render([...groups(false, false), landmarks]);
+  expect(toggle().getAttribute('aria-label')).toBe('Show All Annotations');
+  act(() => toggle().click());
+  expect(onToggle).toHaveBeenCalledWith(true);
+  render([...groups(true), landmarks], { searching: true });
+  expect(toggle().getAttribute('aria-label')).toBe('Hide 1 Matching Annotations');
+});
