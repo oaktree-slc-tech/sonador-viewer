@@ -4,6 +4,7 @@
 
 const mockEventTarget = { listeners: {} };
 const mockOnModified = jest.fn();
+const mockSources = [];
 jest.mock('cornerstone-core', () => ({
   EVENTS: { ELEMENT_ENABLED: 'enabled', ELEMENT_DISABLED: 'disabled' },
   events: { addEventListener: (name, fn) => { mockEventTarget.listeners[name] = fn; } },
@@ -16,8 +17,14 @@ jest.mock('cornerstone-tools', () => ({
 }), { virtual: true });
 jest.mock('@ohif/core', () => ({
   __esModule: true,
-  default: { measurements: { MeasurementHandlers: { onAdded: () => {}, onRemoved: () => {}, onModified: (...args) => mockOnModified(...args) } } },
-}), { virtual: true });
+  default: {
+    measurements: {
+      MeasurementHandlers: { onAdded: () => {}, onRemoved: () => {}, onModified: (...args) => mockOnModified(...args) },
+      MeasurementApi: { addAnnotationVisibilitySource: (source) => { mockSources.push(source); return () => {}; } },
+    },
+    DICOMSR: { landmarks: { getLandmarkSets: () => [], isLandmarkSetVisible: () => true, setLandmarkSetsVisible: () => {} } },
+  },
+}));
 jest.mock('@ohif/ui', () => ({ workflow: {} }), { virtual: true });
 jest.mock('../../connectedComponents/ToolContextMenu', () => () => null);
 
@@ -54,3 +61,9 @@ it('stops listening when the element is disabled', () => {
   mockEventTarget.listeners.disabled({ detail: { element } });
   expect(listeners.completed).toBeUndefined();
 });
+
+it('registers the landmark sets with the global visibility when the panel is initialised, before any panel is built', () => {
+  expect(mockSources).toHaveLength(1);
+  expect(typeof mockSources[0].setVisibility).toBe('function');
+});
+

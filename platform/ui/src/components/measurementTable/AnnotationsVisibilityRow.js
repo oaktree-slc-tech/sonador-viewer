@@ -4,9 +4,9 @@
 //
 // The toggle's icon gives the state: the Hide icon while every listed annotation is shown, the
 // Show icon (blue) while any is hidden. Clicking hides them unless all are already hidden, then
-// shows them all, in every view. Without a search it acts on every annotation
-// (MeasurementApi.setAllMeasurementsVisibility); while a search is active, on the matching ones
-// only. Its help tag names the action, and while only some are hidden also the state, since the
+// shows them all, in every view. Without a search it acts on every annotation, landmark sets
+// included (MeasurementApi.setAllMeasurementsVisibility, which the sets follow); while a search is
+// active, on the matching ones only. Its help tag names the action, and while only some are hidden also the state, since the
 // icon then marks the state, not the action.
 
 import React from 'react';
@@ -20,10 +20,9 @@ import './VisibilityToggle.styl';
 // The search runs once typing pauses for this long; the box shows each key at once
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** The table rows of the panel's measurement groups; a landmark set's visibility is its own */
+/** The table rows of the panel's groups, landmark sets included */
 const rowsOf = measurementCollection => (measurementCollection || [])
-  .flatMap(group => (group && group.measurements) || [])
-  .filter(row => !(row && row.landmarkSet));
+  .flatMap(group => (group && group.measurements) || []);
 
 /** Whether every annotation of the panel is shown */
 function allAnnotationsVisible(measurementCollection) {

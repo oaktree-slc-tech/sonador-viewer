@@ -107,12 +107,13 @@ it('keeps the search box without annotations, and has no toggle then', () => {
   expect(toggle()).toBeNull();
 });
 
-it('leaves landmark sets out: their visibility is their own', () => {
-  const landmarks = { groupName: 'Landmarks', measurements: [{ isVisible: true, landmarkSet: { count: 3 } }] };
-  const onToggle = render([...groups(false, false), landmarks]);
-  expect(toggle().getAttribute('aria-label')).toBe('Show All Annotations');
+it('reads landmark sets as annotations: a hidden set is a hidden annotation, and a matching set is counted', () => {
+  const landmarks = { groupName: 'Landmarks', measurements: [{ isVisible: false, landmarkSet: { count: 3 } }] };
+  const onToggle = render([...groups(true), landmarks]);
+  // Every measurement shown, a set hidden: some annotations are hidden
+  expect(toggle().getAttribute('aria-label')).toBe('Some annotations are hidden. Hide All Annotations');
   act(() => toggle().click());
-  expect(onToggle).toHaveBeenCalledWith(true);
-  render([...groups(true), landmarks], { searching: true });
-  expect(toggle().getAttribute('aria-label')).toBe('Hide 1 Matching Annotations');
+  expect(onToggle).toHaveBeenCalledWith(false);
+  render([...groups(true), { ...landmarks, measurements: [{ isVisible: true, landmarkSet: { count: 3 } }] }], { searching: true });
+  expect(toggle().getAttribute('aria-label')).toBe('Hide 2 Matching Annotations');
 });

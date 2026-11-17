@@ -82,9 +82,17 @@ function seriesOf(row) {
   }
 }
 
-/** The text a row is searched in */
-function rowSearchText(row, series = seriesOf(row)) {
+/** The names of a landmark set row's landmarks that have one */
+const landmarkNamesOf = row => (row && row.landmarkSet && row.landmarkSet.landmarks ? row.landmarkSet.landmarks : [])
+  .map(landmark => landmark.name).filter(Boolean);
+
+/**
+ * The text a row is searched in. A landmark set's is its name, its description and the names of
+ * its landmarks besides the fields of every row; without `landmarkNames`, its landmarks are left out.
+ */
+function rowSearchText(row, series = seriesOf(row), { landmarkNames = true } = {}) {
   const tag = row.seriesTagDisplay || {};
+  const set = row.landmarkSet;
   return [
     ...toolTypeNames(rowToolType(row)),
     ...(rowToolType(row) !== row.toolType ? toolTypeNames(row.toolType) : []),
@@ -92,6 +100,8 @@ function rowSearchText(row, series = seriesOf(row)) {
     tag.value, tag.meaning,
     row.outOfPlane && row.outOfPlane.view,
     series && series.Modality, series && series.SeriesDescription,
+    set && set.name, set && set.description,
+    ...(set && landmarkNames ? landmarkNamesOf(row) : []),
   ].filter(value => value !== undefined && value !== null && value !== '')
     .join(' ').toLowerCase();
 }
@@ -107,6 +117,27 @@ function matchesQuery(row, query, series) {
   }
   const text = rowSearchText(row, series);
   return words.every(word => text.includes(word));
+}
+
+/**
+ * What a search matched among a landmark set's landmarks, for a set found only through the names of
+ * its landmarks: the names that hold a word of the search, each once, with how many landmarks bear it
+ * when several do ("Tear drop (2)"). Null when the set matches without them, or matches not at all.
+ */
+function landmarkMatchOf(row, query, series = seriesOf(row)) {
+  const words = queryWords(query);
+  if (!words.length || !row || !row.landmarkSet || !matchesQuery(row, query, series)) {
+    return null;
+  }
+  const own = rowSearchText(row, series, { landmarkNames: false });
+  if (words.every(word => own.includes(word))) {
+    return null;
+  }
+  const counts = new Map();
+  landmarkNamesOf(row)
+    .filter(name => words.some(word => name.toLowerCase().includes(word)))
+    .forEach(name => counts.set(name, (counts.get(name) || 0) + 1));
+  return [...counts].map(([name, count]) => (count > 1 ? `${name} (${count})` : name)).join(', ') || null;
 }
 
 /**
@@ -255,7 +286,7 @@ function groupRowsBySeries(rows, seriesFor = seriesOf) {
 }
 
 export {
-  filterGroups, groupRowsBySeries, matchesQuery, queryWords, rowSearchText, rowToolName, rowToolType,
+  filterGroups, groupRowsBySeries, landmarkMatchOf, matchesQuery, queryWords, rowSearchText, rowToolName, rowToolType,
   seriesAnnotationTypes, seriesAvailable, seriesEntries, seriesHeading, seriesInstanceCount, seriesOf, seriesTitle, toolTypeName, toolTypeNames,
   trackedToolType,
   UNAVAILABLE_HELP, UNAVAILABLE_KEY, UNAVAILABLE_LABEL,

@@ -21,7 +21,10 @@ jest.mock('../../log', () => ({ __esModule: true, get default() { return mockLog
 
 import { readDicomFile } from '../../utils/dicomCharacterSet';
 import { clearHydratedReports } from '../utils/srDocument';
-import { addLandmarkSetsOf, getLandmarkSets, subscribe } from './landmarkSetStore';
+import {
+  addLandmarkSetsOf, areLandmarkSetsVisible, clearCurrentLandmark, EVENTS, getCurrentLandmark, getLandmarkSets, isLandmarkSetVisible, selectLandmark,
+  setLandmarkSetsVisible, setLandmarkSetVisible, stepLandmarkSet, subscribe,
+} from './landmarkSetStore';
 import { attributionOf, HELD_NOTES, placementOf } from './landmarkPlacement';
 
 const FIXTURES = path.join(__dirname, '..', '__fixtures__');
@@ -292,3 +295,112 @@ describe('image series and display sets', () => {
     expect(getLandmarkSets()[0].set.landmarks.map(landmark => landmark.point)).toEqual([[30.25, 40], [5, 6]]);
   });
 });
+
+
+describe("the session's view of the sets", () => {
+  // The same set read from the application and the exchange document: two rows
+  const load = () => {
+    const store = metadataStore([P, S]);
+    addLandmarkSetsOf(fixture('landmarks-patient'), store);
+    addLandmarkSetsOf(fixture('landmarks-exchange'), store);
+    return getLandmarkSets().map(entry => entry.key);
+  };
+
+  it('shows every set until it is hidden; each of two rows of one tracking UID has its own visibility', () => {
+    const [application, exchange] = load();
+    const listener = jest.fn();
+    subscribe(listener);
+    expect(isLandmarkSetVisible(application)).toBe(true);
+    expect(areLandmarkSetsVisible()).toBe(true);
+
+    setLandmarkSetVisible(application, false);
+    expect(isLandmarkSetVisible(application)).toBe(false);
+    expect(isLandmarkSetVisible(exchange)).toBe(true);
+    expect(areLandmarkSetsVisible()).toBe(false);
+    expect(listener).toHaveBeenLastCalledWith({ type: EVENTS.VISIBILITY_CHANGED });
+
+    // Unchanged: no event
+    listener.mockClear();
+    setLandmarkSetVisible(application, false);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('shows or hides every set at once', () => {
+    const keys = load();
+    setLandmarkSetsVisible(false);
+    expect(keys.map(isLandmarkSetVisible)).toEqual([false, false]);
+    setLandmarkSetVisible(keys[0], true);
+    setLandmarkSetsVisible(true);
+    expect(keys.map(isLandmarkSetVisible)).toEqual([true, true]);
+  });
+
+  it('steps through a set: the first landmark, then the next, the first again after the last', () => {
+    const [key] = load();
+    const count = getLandmarkSets()[0].set.landmarks.length;
+    expect(getCurrentLandmark()).toBeNull();
+    const indices = Array.from({ length: count + 1 }, () => stepLandmarkSet(key).index);
+    expect(indices).toEqual([...Array.from({ length: count }, (_, index) => index), 0]);
+    expect(getCurrentLandmark()).toMatchObject({ key, index: 0, landmark: getLandmarkSets()[0].set.landmarks[0] });
+  });
+
+  it('a landmark chosen directly is the current one; stepping another set starts at its first', () => {
+    const [application, exchange] = load();
+    const listener = jest.fn();
+    subscribe(listener);
+    expect(selectLandmark(application, 7)).toMatchObject({ key: application, index: 7 });
+    expect(listener).toHaveBeenLastCalledWith({ type: EVENTS.SELECTION_CHANGED });
+    expect(stepLandmarkSet(application).index).toBe(8);
+    expect(stepLandmarkSet(exchange)).toMatchObject({ key: exchange, index: 0 });
+    // Out of range or not listed: nothing changes
+    expect(selectLandmark(application, 99)).toBeNull();
+    expect(selectLandmark('2.25.9::2.25.9', 0)).toBeNull();
+    expect(getCurrentLandmark()).toMatchObject({ key: exchange, index: 0 });
+  });
+
+  it('reports every explicit choice to a subscriber, a repeat of the current landmark included', () => {
+    const [key] = load();
+    const listener = jest.fn();
+    subscribe(listener);
+    selectLandmark(key, 7);
+    selectLandmark(key, 7);
+    expect(listener.mock.calls.filter(([event]) => event.type === EVENTS.SELECTION_CHANGED)).toHaveLength(2);
+    expect(getCurrentLandmark()).toMatchObject({ key, index: 7 });
+  });
+
+  it('clears the current landmark: none until one is chosen or stepped again', () => {
+    const [key] = load();
+    const listener = jest.fn();
+    subscribe(listener);
+    stepLandmarkSet(key);
+    stepLandmarkSet(key);
+    listener.mockClear();
+    clearCurrentLandmark();
+    expect(getCurrentLandmark()).toBeNull();
+    expect(listener).toHaveBeenCalledWith({ type: EVENTS.SELECTION_CHANGED });
+    // Nothing to clear: no event
+    listener.mockClear();
+    clearCurrentLandmark();
+    expect(listener).not.toHaveBeenCalled();
+    // Stepping starts at the first landmark again
+    expect(stepLandmarkSet(key).index).toBe(0);
+  });
+
+  it('a hidden set still steps', () => {
+    const [key] = load();
+    setLandmarkSetVisible(key, false);
+    expect(stepLandmarkSet(key).index).toBe(0);
+    expect(stepLandmarkSet(key).index).toBe(1);
+  });
+
+  it('is reset with the session: every set shown and no current landmark', () => {
+    const [key] = load();
+    setLandmarkSetVisible(key, false);
+    stepLandmarkSet(key);
+    clearHydratedReports();
+    const [again] = load();
+    expect(again).toBe(key);
+    expect(isLandmarkSetVisible(key)).toBe(true);
+    expect(getCurrentLandmark()).toBeNull();
+  });
+});
+

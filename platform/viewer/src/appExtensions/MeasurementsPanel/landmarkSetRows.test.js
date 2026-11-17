@@ -24,10 +24,16 @@ jest.mock('../../../../core/src/log', () => ({ __esModule: true, default: { info
 
 // The synthetic study: series P (frame P) loaded, and the report series
 const mockStore = { series: [], displaySets: [] };
+// The annotation visibility sources registered with the Measurements API
+const mockSources = [];
 jest.mock('@ohif/core', () => {
   const landmarks = jest.requireActual('../../../../core/src/DICOMSR/landmarks').default;
   const MeasurementApi = {
     getConfiguration: () => ({ measurementTools: [{ id: 'allTools', name: 'Measurements', childTools: [] }] }),
+    addAnnotationVisibilitySource: (source) => {
+      mockSources.push(source);
+      return () => {};
+    },
     Instance: { _serviceManagedTool: () => ({ toolServiceManaged: false }), measurementService: { getMeasurements: () => [] } },
   };
   const DicomMetadataStore = {
@@ -136,3 +142,85 @@ it('an unnamed set reads "Landmark set"', () => {
 it('lists no Landmarks group without a set', () => {
   expect(landmarkGroup()).toBeUndefined();
 });
+
+
+describe('what the row and its card read', () => {
+  it('the landmarks in set order, with their names, second lines, shapes, colours by role and own colours', () => {
+    list('landmarks-mixed');
+    const set = landmarkGroup().measurements[0].landmarkSet;
+    expect(set).toMatchObject({ name: 'Pelvic landmarks', count: 10, namedCount: 8, colors: { line: '#00C0FF', text: '#FFFFFF' } });
+    expect(set.landmarks.map(landmark => [landmark.ordinal, landmark.name, landmark.shape, landmark.line])).toEqual([
+      [1, 'Left anterior superior iliac spine', 'Anatomic', '#FF0000'],
+      [2, 'Label only', 'Point', '#00C0FF'],
+      [3, 'Pubic symphysis', 'Point', '#00C0FF'],
+      [4, 'Left anterior superior iliac spine', 'Point', '#00C0FF'],
+      [5, null, 'Point', '#00C0FF'],
+      [6, 'Line override', 'Point', '#FF8000'],
+      [7, 'Épine iliaque antérieure', 'Point', '#00C0FF'],
+      [8, 'Tear drop', 'Point', '#00C0FF'],
+      [9, 'Tear drop', 'Point', '#00C0FF'],
+      [10, null, 'Registration', '#00C0FF'],
+    ]);
+    expect(set.landmarks[0]).toMatchObject({ detail: 'ASIS (left) · Every attribute set', own: { Line: '#FF0000', Text: '#00FF00' } });
+    expect(set.landmarks[3].detail).toBe('Concept and label');
+    expect(set.landmarks[5].own).toEqual({ Line: '#FF8000', Text: null });
+  });
+
+  it('the meta, the frame, the breakdown by type and the appearance', () => {
+    mockStore.series = [{ ...P, SeriesNumber: 2 }];
+    list('landmarks-mixed');
+    const set = landmarkGroup().measurements[0].landmarkSet;
+    expect(set).toMatchObject({
+      concept: { meaning: 'Pelvic landmarks', value: 'PELVIS-SET', scheme: '99EXAMPLE' },
+      label: 'Pelvis (planning)',
+      description: 'Points picked on the planning model',
+      frame: 'Imaging frame of series 2',
+      types: [{ text: 'Point', shape: 'Point', count: 8 }, { text: 'Anatomic', shape: 'Anatomic', count: 1 }, { text: 'Registration', shape: 'Registration', count: 1 }],
+      appearance: { line: '#00C0FF', text: '#FFFFFF', overrides: [{ ordinal: 1, line: '#FF0000', text: '#00FF00' }, { ordinal: 6, line: '#FF8000', text: null }] },
+    });
+  });
+
+  it("the Viewer's default for a set that stores no colour, with no appearance; an image-domain set's image", () => {
+    list('landmarks-image');
+    const [row] = landmarkGroup().measurements;
+    expect(row.landmarkSet).toMatchObject({ domain: 'image', colors: { line: '#FFFF00', text: '#FFFF00' }, appearance: null });
+    expect(row.landmarkSet.landmarks.map(landmark => landmark.line)).toEqual(['#FFFF00', '#FFFF00', '#FFFF00']);
+    expect(row.refSOPInstanceUID).toBe('2.25.1003');
+    // A held set names no frame
+    list('landmarks-application-frame');
+    expect(landmarkGroup().measurements.filter(entry => !entry.landmarkSet.placed).every(entry => entry.landmarkSet.frame === undefined)).toBe(true);
+  });
+
+  it("the session's visibility of the set, and the position of the current landmark while the set holds it", () => {
+    list('landmarks-patient', 'landmarks-exchange');
+    const rows = () => landmarkGroup().measurements;
+    const [application, exchange] = rows().map(row => row.measurementId);
+    OHIF.DICOMSR.landmarks.setLandmarkSetVisible(application, false);
+    expect(rows().map(row => row.isVisible)).toEqual([false, true]);
+
+    OHIF.DICOMSR.landmarks.stepLandmarkSet(application);
+    OHIF.DICOMSR.landmarks.stepLandmarkSet(application);
+    expect(rows().map(row => row.landmarkSet.position)).toEqual([1, null]);
+    OHIF.DICOMSR.landmarks.selectLandmark(exchange, 8);
+    expect(rows().map(row => row.landmarkSet.position)).toEqual([null, 8]);
+  });
+});
+
+
+describe('the global visibility', () => {
+  it('covers the sets: registered once with the Measurements API, which shows or hides every set through it', () => {
+    list('landmarks-patient', 'landmarks-exchange');
+    landmarkGroup();
+    landmarkGroup();
+    expect(mockSources).toHaveLength(1);
+    const [source] = mockSources;
+    expect(source.visibilities()).toEqual([true, true]);
+
+    source.setVisibility(false);
+    expect(landmarkGroup().measurements.map(row => row.isVisible)).toEqual([false, false]);
+    expect(source.visibilities()).toEqual([false, false]);
+    source.setVisibility(true);
+    expect(landmarkGroup().measurements.map(row => row.isVisible)).toEqual([true, true]);
+  });
+});
+
