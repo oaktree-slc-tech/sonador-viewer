@@ -16,6 +16,7 @@ import BidirectionalTool from './tools/BidirectionalTool';
 import CircleRoiTool from './tools/CircleRoiTool';
 import CobbAngleTool from './tools/CobbAngleTool';
 import ArrowMarkerTool, { ARROW_MARKER_TOOL } from './tools/ArrowMarkerTool';
+import LandmarkMarkerTool, { LANDMARK_MARKER_TOOL } from './tools/LandmarkMarkerTool';
 import lockable from './tools/lockableMeasurementTool';
 import initCornerstoneTools from './initCornerstoneTools.js';
 import { connectToolsToMeasurementService } from './initMeasurementService.js';
@@ -98,6 +99,7 @@ export default function init({ servicesManager, commandsManager, configuration }
       csTools.StackScrollMouseWheelTool,
       csTools.OverlayTool,
       ArrowMarkerTool,
+      LandmarkMarkerTool,
     ],
   };
 
@@ -178,5 +180,7 @@ export default function init({ servicesManager, commandsManager, configuration }
   csTools.setToolEnabled(OHIF.DICOMSR.SREnums.TOOL_NAMES.DICOM_SR_SERIES_TAG, {});
   // The rings of the arrows an image does not draw (tools/ArrowMarkerTool)
   csTools.setToolEnabled(ARROW_MARKER_TOOL, {});
+  // The markers of the landmark sets (tools/LandmarkMarkerTool)
+  csTools.setToolEnabled(LANDMARK_MARKER_TOOL, {});
 }
 

@@ -54,6 +54,8 @@ jest.mock('./utils/cornerstone3d.js', () => ({ getCornerstone3dViewport: jest.fn
 jest.mock('./components/tools/DICOMSRDisplayTool', () => ({ addSRDisplayToolToGroup: jest.fn() }));
 const mockAddArrowMarkers = jest.fn();
 jest.mock('./components/tools/ArrowMarkerTool', () => ({ addArrowMarkerToolToGroup: (...args) => mockAddArrowMarkers(...args) }));
+const mockAddLandmarkMarkers = jest.fn();
+jest.mock('./components/tools/LandmarkMarkerTool', () => ({ addLandmarkMarkerToolToGroup: (...args) => mockAddLandmarkMarkers(...args) }));
 jest.mock('./enums', () => ({
   Enums: { MPR: { VTK_MPRSLICE_RENDER_ID: 'vtk-mprslice', VTK_MPRSLICE_TOOLGROUP_ID: 'vtk-mprslice', TOOLS: {} }, VIEWPORT: 'VIEWPORT' },
 }));
@@ -105,6 +107,13 @@ it('rings the arrows a pane does not draw; a press on a ring brings every pane t
   mockPanes.push(...panes);
   expect(onActivate({ worldPoint: [5, 5, 30], viewPlaneNormal: [0, 0, 1] })).toMatchObject({ panes: 3, drawn: true });
   panes.forEach(viewport => expect(viewport.camera.focalPoint).toEqual([0, 0, 30]));
+});
+
+it('draws the landmark markers in the MPR panes', () => {
+  mockAddLandmarkMarkers.mockClear();
+  const component = { state: { toolMode: 'crosshairs' }, _checkViewportActive: () => ({ viewportId: 'axial', viewport: pane() }) };
+  actions.initMprTools.commandFn({ toolGroupId: 'vtk-mprslice', component });
+  expect(mockAddLandmarkMarkers).toHaveBeenCalledWith(mockGroup);
 });
 
 it('registers a tool only when no other view has (the exchange angle tools stay registered)', () => {
