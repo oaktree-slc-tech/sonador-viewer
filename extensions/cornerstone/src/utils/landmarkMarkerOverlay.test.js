@@ -134,6 +134,21 @@ describe('in an SVG layer', () => {
     expect(owners(layer)).toEqual(['#000000', '#00BB00']);
   });
 
+  it("keeps the 3D view's edge mark below the hovered name plate, also when it appears on a later render", () => {
+    const { layer, render } = layerHelper();
+    const hoveredMarker = { landmark: { key: 'a', shape: 'Point', line: '#AA0000', text: '#FFFFFF', name: 'Tear drop', current: false }, x: 330, y: 200, slice: { kind: 'full' } };
+    const options = { markers, hovered: 'a', bracketSize: 26 };
+    render(landmarkLayers([hoveredMarker], options).layers);
+    // The chosen landmark leaves the view: its edge mark is drawn from now on
+    const edge = [['b::edge', [{ type: 'polyline', points: [[376, 175], [382, 180], [376, 185]], stroke: '#00BB00', width: 2 }]]];
+    const { layers } = landmarkLayers([hoveredMarker], { ...options, marks: edge });
+    expect(layers.map(([owner]) => owner)).toEqual(['a', 'b::edge', 'a::plate']);
+    render(layers);
+    expect(owners(layer)).toEqual(['#000000', '#AA0000', '#00BB00', 'none', 'text:Tear drop']);
+    render(layers);
+    expect(owners(layer).slice(-1)).toEqual(['text:Tear drop']);
+  });
+
   it('draws a plate as a rect and a text node', () => {
     const svg = helper();
     drawAsSvg(svg, 'vp::a::plate', markers.platePrimitives({ x: 0, y: 0 }, 'Tear drop', '#FFFFFF', () => 50));

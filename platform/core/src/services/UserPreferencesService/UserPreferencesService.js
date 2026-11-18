@@ -91,6 +91,12 @@ export const SEG_EDITOR_MESH_COLOR_DEFAULT = SEG_EDITOR_MESH_COLOR_AUTO;
 export const SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY = 'segEditorFollowSelection';
 export const SEG_EDITOR_FOLLOW_SELECTION_DEFAULT = false;
 
+// Whether the 3D volume view follows the landmark chosen from the Annotations panel: when it is on,
+// each landmark chosen by a list entry or a step turns the 3D camera to face it. Off by default;
+// set from the Annotations panel's settings drawer.
+export const LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY = 'landmarksFollowSelection';
+export const LANDMARKS_FOLLOW_SELECTION_DEFAULT = false;
+
 // The value the Annotations panel leads with for the region tools (Ellipse, Rectangle, Freehand):
 // 'area' (the default) or 'mean'. A display preference, set from the panel's settings drawer.
 export const ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY = 'annotationsRegionLeadValue';
@@ -103,6 +109,7 @@ const GENERAL_DEFAULTS = Object.freeze({
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: SEG_EDITOR_MESH_COLOR_DEFAULT,
   [SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
+  [LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY]: LANDMARKS_FOLLOW_SELECTION_DEFAULT,
   [ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY]: ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT,
 });
 
@@ -117,7 +124,7 @@ const VALIDATORS = Object.freeze({
 // Keys the server does not accept yet (see above): kept in this browser, not in the section POST
 const LOCAL_ONLY_KEYS = new Set([
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY, SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY, SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY,
-  ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY,
+  ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY, LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY,
 ]);
 
 // Where a local-only value is kept in the browser's storage
