@@ -8,6 +8,8 @@ import {
 } from './landmarkSetStore';
 import { landmarkDetailOf, markerShapeOf, setNameOf, typeBreakdownOf, typeTextOf } from './landmarkText';
 import * as markers from './landmarkMarkers';
+import * as volumeView from './landmarkVolumeView';
+import { getFollowSelectedLandmark, setFollowSelectedLandmark, subscribeFollowSelectedLandmark } from './landmarkFollow';
 
 const landmarks = {
   LANDMARK_TYPES,
@@ -40,8 +42,14 @@ const landmarks = {
   typeTextOf,
   landmarkDetailOf,
   typeBreakdownOf,
-  // The markers of the slice views (landmarkMarkers.js)
+  // The markers of the slice views (landmarkMarkers.js) and the 3D volume view's geometry
+  // (landmarkVolumeView.js)
   markers,
+  volumeView,
+  // "Follow selected landmark" (landmarkFollow.js)
+  getFollowSelectedLandmark,
+  setFollowSelectedLandmark,
+  subscribeFollowSelectedLandmark,
 };
 
 export default landmarks;

@@ -145,6 +145,7 @@ import DICOMSRDisplayTool, { addSRDisplayToolToGroup, setSRDisplayToolEnabled } 
 import AngleDisplay3DTool, {
   addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
 } from './components/tools/AngleDisplay3DTool';
+import { addLandmarkMarkerToolToGroup } from './components/tools/LandmarkMarkerTool';
 
 import Enums from './enums';
 
@@ -153,6 +154,7 @@ const cornerstone3dViewportTools = {
   ViewportGridOverlayTool, SonadorZoomTool, SonadorTrackballRotateTool, getCornerstone3dViewport, removeVolumeActors,
   DICOMSRDisplayTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled,
   AngleDisplay3DTool, addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
+  addLandmarkMarkerToolToGroup,
 }
 
 

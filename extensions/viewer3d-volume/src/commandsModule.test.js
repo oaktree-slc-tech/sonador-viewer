@@ -46,6 +46,7 @@ jest.mock('@ohif/core', () => ({
 
 const mockAngleDisplay = { add: jest.fn(), set: jest.fn() };
 const mockSRDisplay = { set: jest.fn() };
+const mockLandmarkMarkers = { add: jest.fn() };
 jest.mock('@ohif/extension-vtk', () => ({
   createViewportToggleFeatureCommand: property => jest.fn(() => property),
   cornerstone3dUtils: {
@@ -55,6 +56,7 @@ jest.mock('@ohif/extension-vtk', () => ({
       setSRDisplayToolEnabled: (...args) => mockSRDisplay.set(...args),
       addAngleDisplay3DToolToGroup: (...args) => mockAngleDisplay.add(...args),
       setAngleDisplay3DEnabled: (...args) => mockAngleDisplay.set(...args),
+      addLandmarkMarkerToolToGroup: (...args) => mockLandmarkMarkers.add(...args),
     },
   },
 }), { virtual: true });
@@ -253,6 +255,7 @@ describe('annotations in the volume viewer (View -> Annotations)', () => {
     mockAngleDisplay.add.mockClear();
     mockAngleDisplay.set.mockClear();
     mockSRDisplay.set.mockClear();
+    mockLandmarkMarkers.add.mockClear();
   });
 
   it('hides every annotation, in every view, unless all are hidden, then shows them all', () => {
@@ -279,9 +282,10 @@ describe('annotations in the volume viewer (View -> Annotations)', () => {
     expect(mockAngleDisplay.add).toHaveBeenCalledWith(reused, true);
     expect(mockAngleDisplay.set).toHaveBeenCalledWith(reused, true);
     expect(mockSRDisplay.set).toHaveBeenCalledWith(reused, true);
+    expect(mockLandmarkMarkers.add).toHaveBeenCalledWith(reused);
   });
 
-  it('adds the annotation displays, on, to a new tool group', () => {
+  it('adds the annotation displays, on, to a new tool group, the landmark markers among them', () => {
     scene.toolGroup = null;
     const created = { addTool: jest.fn(), addViewport: jest.fn() };
     const { ToolGroupManager } = jest.requireMock('@cornerstonejs/tools');
@@ -292,6 +296,7 @@ describe('annotations in the volume viewer (View -> Annotations)', () => {
     expect(component.volumeTools).toBe(created);
     expect(mockAngleDisplay.add).toHaveBeenCalledWith(created, true);
     expect(mockSRDisplay.set).toHaveBeenCalledWith(created, true);
+    expect(mockLandmarkMarkers.add).toHaveBeenCalledWith(created);
     expect(created.addViewport).toHaveBeenCalledWith('v');
   });
 });

@@ -2,6 +2,8 @@
 // the persistence hook the viewer wires in.
 
 import {
+  LANDMARKS_FOLLOW_SELECTION_DEFAULT,
+  LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY,
   LOCKED_MODELS_WARNING_PREFERENCE_KEY as KEY,
   SEG_EDITOR_FOLLOW_SELECTION_DEFAULT as FOLLOW_DEFAULT,
   SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY as FOLLOW_KEY,
@@ -166,6 +168,23 @@ describe('UserPreferencesService: local-only keys (the Seg Editor preview colour
     expect(() => service.setGeneral(FOLLOW_KEY, 'yes')).toThrow('Invalid value');
     const broken = new UserPreferencesServiceClass({ storage: memoryStorage({ [`sonador.preferences.general.${FOLLOW_KEY}`]: '"on"' }) });
     expect(broken.getGeneral(FOLLOW_KEY)).toBe(false);
+  });
+
+  it('keeps Follow selected landmark under its own key: off by default, local-only, a boolean only', async () => {
+    const storage = memoryStorage();
+    const service = new UserPreferencesServiceClass({ storage });
+    const key = LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY;
+    expect(key).not.toBe(FOLLOW_KEY);
+    expect(LANDMARKS_FOLLOW_SELECTION_DEFAULT).toBe(false);
+    expect(service.getGeneral(key)).toBe(false);
+    expect(service.isLocalOnly(key)).toBe(true);
+    expect(service.getGeneralValues()).not.toHaveProperty(key);
+    await service.setGeneral(key, true);
+    expect(storage.items[`sonador.preferences.general.${key}`]).toBe('true');
+    expect(service.getGeneral(FOLLOW_KEY)).toBe(false);
+    // A new session in the same browser
+    expect(new UserPreferencesServiceClass({ storage }).getGeneral(key)).toBe(true);
+    expect(() => service.setGeneral(key, 'yes')).toThrow('Invalid value');
   });
 
   it('is not overridden by hydration, and ignores a malformed stored value', () => {

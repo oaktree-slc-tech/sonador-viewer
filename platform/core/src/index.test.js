@@ -88,6 +88,8 @@ describe('Top level exports', () => {
       'DownloadManagerServiceEvents',
       'IWebApiDataSource',
       'JOB_STATES',
+      'LANDMARKS_FOLLOW_SELECTION_DEFAULT',
+      'LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY',
       'LOCKED_MODELS_WARNING_PREFERENCE_KEY',
       'LocalCacheService',
       'LocalCacheServiceEvents',

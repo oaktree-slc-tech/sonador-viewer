@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import PropTypes from 'prop-types';
 
 import OHIF, {
-  ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT, ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY, UserPreferencesService,
-  UserPreferencesServiceEvents,
+  ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT, ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY, LANDMARKS_FOLLOW_SELECTION_DEFAULT,
+  LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY, UserPreferencesService, UserPreferencesServiceEvents,
 } from '@ohif/core';
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger, Icons, Label, PanelSection, ScrollArea, Switch,
@@ -56,6 +56,13 @@ function readRegionLeadValue() {
   const value = UserPreferencesService && UserPreferencesService.getGeneral
     ? UserPreferencesService.getGeneral(ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY) : undefined;
   return value || ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT;
+}
+
+/** Whether the 3D volume view follows the landmark chosen here, a general user preference */
+function readFollowSelectedLandmark() {
+  const value = UserPreferencesService && UserPreferencesService.getGeneral
+    ? UserPreferencesService.getGeneral(LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY) : undefined;
+  return typeof value === 'boolean' ? value : Boolean(LANDMARKS_FOLLOW_SELECTION_DEFAULT);
 }
 
 /** A series sub-group's heading, translated when it is generated ("Series 4", "Series Unavailable") */
@@ -196,10 +203,21 @@ const MeasurementTable = ({
     const { unsubscribe } = UserPreferencesService.subscribe(UserPreferencesServiceEvents.GENERAL_CHANGED, ({ key, value }) => {
       if (key === ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY) {
         setRegionLeadValueState(value || ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT);
+      } else if (key === LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY) {
+        setFollowSelectedLandmarkState(Boolean(value));
       }
     });
     return unsubscribe;
   }, []);
+  // "Follow selected landmark": the 3D volume view turns to each landmark chosen here (the view
+  // itself acts on the preference)
+  const [followSelectedLandmark, setFollowSelectedLandmarkState] = useState(readFollowSelectedLandmark);
+  const setFollowSelectedLandmark = (on) => {
+    setFollowSelectedLandmarkState(on);
+    if (UserPreferencesService && UserPreferencesService.setGeneral) {
+      UserPreferencesService.setGeneral(LANDMARKS_FOLLOW_SELECTION_PREFERENCE_KEY, Boolean(on));
+    }
+  };
   const setRegionLeadMean = (leadMean) => {
     const value = leadMean ? 'mean' : 'area';
     setRegionLeadValueState(value);
@@ -544,6 +562,17 @@ const MeasurementTable = ({
         />
         <Label htmlFor="annotations-region-lead-mean" className="text-muted-foreground ml-2.5 mr-2 text-xs">
           {t('Lead ellipse, rectangle and freehand rows with the mean')}
+        </Label>
+      </div>
+      <div className="my-2 flex items-center pl-0.5">
+        <Switch
+          id="annotations-follow-selected-landmark"
+          checked={followSelectedLandmark}
+          onCheckedChange={setFollowSelectedLandmark}
+          data-cy="annotations-follow-selected-landmark"
+        />
+        <Label htmlFor="annotations-follow-selected-landmark" className="text-muted-foreground ml-2.5 mr-2 text-xs">
+          {t('Follow selected landmark')}
         </Label>
       </div>
     </div>

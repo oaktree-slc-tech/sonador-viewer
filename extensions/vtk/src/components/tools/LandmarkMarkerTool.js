@@ -1,10 +1,19 @@
-// Landmark markers in the Cornerstone3D MPR slice panes. The landmarks of the visible patient-domain
-// sets of the viewport's Frame of Reference are drawn where they fall against the displayed plane: in full within half the slice spacing, as a ghost up to two spacings
-// off when the volume reaches them, with a caret above for a later slice and below for an earlier one
-// (the slice index grows along the view plane normal). Image-domain sets are never drawn here.
-// Markers are drawn without text: hovering a named one shows its name, and the landmark chosen from
-// the panel has brackets (@ohif/core DICOMSR landmarks.markers; extensions/cornerstone
-// utils/landmarkMarkerOverlay).
+// Landmark markers in the Cornerstone3D views: the MPR slice panes and the 3D volume view. The
+// landmarks of the visible patient-domain sets of the viewport's Frame of Reference are drawn;
+// image-domain sets never are. Markers are drawn without text: hovering a named one shows its name,
+// and the landmark chosen from the panel has brackets (@ohif/core DICOMSR landmarks.markers and
+// landmarks.volumeView; extensions/cornerstone utils/landmarkMarkerOverlay).
+//
+// - A slice pane draws a landmark where it falls against the displayed plane: in full within half the
+//   slice spacing, as a ghost up to two spacings off when the volume reaches it, with a caret above
+//   for a later slice and below for an earlier one (the slice index grows along the view plane normal).
+// - The 3D volume view draws every landmark, on top of the volume, faded by its depth along the
+//   viewing direction (100 % nearest to 50 % farthest, across every landmark in view); the hovered and
+//   the chosen marker are at full strength, and of two overlapping markers the nearer answers. The
+//   chosen landmark outside the view is marked at the nearest edge with its brackets and a chevron
+//   pointing toward it. With "Follow selected landmark" on, each landmark chosen from the panel turns
+//   the camera to face it (an orbit about the focal point, zoom unchanged), and turning it on turns to
+//   the current landmark at once.
 //
 // Display only: it takes no input. Add it to a tool group with `addLandmarkMarkerToolToGroup`.
 
@@ -16,6 +25,7 @@ import {
 } from '@cornerstonejs/core';
 import {
   AnnotationTool,
+  ToolGroupManager as c3dToolGroupManager,
   addTool as c3dAddTool,
   state as c3dToolsState,
   utilities as c3dToolsUtilities,
@@ -77,6 +87,86 @@ function placedLandmarks(viewport) {
   }).filter(placed => placed && Number.isFinite(placed.x) && Number.isFinite(placed.y));
 }
 
+/**
+ * The landmarks a 3D volume view shows: those in view, placed with their depth and strength, the
+ * nearest last so that it is drawn on top; and the edge mark of the chosen landmark when it is
+ * outside the view: { x, y, angle, landmark }, else null.
+ */
+function volumeLandmarks(viewport) {
+  const api = landmarks();
+  const camera = viewport.getCamera();
+  const { volumeView } = api;
+  const canvas = viewport.canvas || {};
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  // A perspective camera projects nothing behind it
+  const perspective = camera.parallelProjection === false;
+  const entries = api.markers.viewLandmarks({ frameOfReferenceUID: viewport.getFrameOfReferenceUID() }).map((landmark) => {
+    const point = landmark.point.map(Number);
+    const depth = volumeView.depthAlong(point, camera);
+    const behind = perspective && !(depth > 0);
+    const [x, y] = behind ? [NaN, NaN] : viewport.worldToCanvas(point);
+    return { landmark, point, x, y, depth, inView: !behind && volumeView.isInView({ x, y }, width, height) };
+  });
+
+  const shown = entries.filter(({ inView }) => inView);
+  const strengths = volumeView.depthStrengths(shown.map(({ depth }) => depth));
+  const placed = shown
+    .map(({ landmark, x, y, depth }, i) => ({ landmark, x, y, depth, strength: strengths[i], slice: { kind: 'full' } }))
+    .sort((a, b) => b.depth - a.depth);
+
+  const chosen = entries.find(({ landmark, inView }) => landmark.current && !inView);
+  const edge = chosen && volumeView.edgePlacement({
+    projected: Number.isFinite(chosen.x) && Number.isFinite(chosen.y) ? { x: chosen.x, y: chosen.y } : null,
+    direction: volumeView.screenDirection(chosen.point, camera),
+    width,
+    height,
+  });
+  return { placed, edge: edge ? { ...edge, landmark: chosen.landmark } : null };
+}
+
+/** Whether a viewport draws the landmark markers: its tool group holds this tool, not disabled */
+function drawsLandmarks(viewport) {
+  const group = c3dToolGroupManager && c3dToolGroupManager.getToolGroupForViewport
+    ? c3dToolGroupManager.getToolGroupForViewport(viewport.id, viewport.renderingEngineId) : undefined;
+  const { toolName } = LandmarkMarkerTool;
+  if (!group || !group.hasTool || !group.hasTool(toolName)) {
+    return false;
+  }
+  const options = group.toolOptions && group.toolOptions[toolName];
+  return !options || options.mode !== 'Disabled';
+}
+
+/**
+ * Turn every 3D volume view that draws the landmarks (the volume viewer's: other features' 3D views,
+ * the Segmentation Editor's among them, keep their cameras) of the current landmark's Frame of
+ * Reference to face it: an orbit about the focal point, zoom and focal point unchanged. A landmark at
+ * the focal point gives no direction and the camera stays; an image-domain landmark turns nothing.
+ * Returns the ids of the views turned.
+ */
+function turnVolumeViewsToLandmark(current) {
+  const api = landmarks();
+  const set = current && current.entry && current.entry.set;
+  if (!api || !api.volumeView || !set || set.domain !== 'patient' || !current.landmark) {
+    return [];
+  }
+  const turned = [];
+  (getRenderingEngines() || []).forEach(engine => engine.getViewports().forEach((viewport) => {
+    if (viewport.type !== c3dEnums.ViewportType.VOLUME_3D || viewport.getFrameOfReferenceUID() !== set.frameOfReferenceUID
+      || !drawsLandmarks(viewport)) {
+      return;
+    }
+    const camera = api.volumeView.orbitToward(viewport.getCamera(), current.landmark.point);
+    if (!camera) {
+      return;
+    }
+    viewport.setCamera(camera);
+    viewport.render();
+    turned.push(viewport.id);
+  }));
+  return turned;
+}
+
 /** Draw the annotation layer of every Cornerstone3D viewport again */
 function renderViewports() {
   const ids = (getRenderingEngines() || []).flatMap(engine => engine.getViewports().map(viewport => viewport.id));
@@ -86,8 +176,9 @@ function renderViewports() {
 }
 
 
-// The views follow the sets, the current landmark and the brackets' frames; a disabled viewport's
-// markers go with it
+// The views follow the sets, the current landmark and the brackets' frames; with "Follow selected
+// landmark" on, the 3D views turn to each landmark chosen, and to the current one when it is turned
+// on (not when it is read at startup); a disabled viewport's markers go with it
 let following = false;
 function follow() {
   const api = landmarks();
@@ -95,7 +186,19 @@ function follow() {
     return;
   }
   following = true;
-  api.subscribe(renderViewports);
+  api.subscribe(({ type } = {}) => {
+    if (type === api.EVENTS.SELECTION_CHANGED && api.getFollowSelectedLandmark && api.getFollowSelectedLandmark()) {
+      turnVolumeViewsToLandmark(api.getCurrentLandmark());
+    }
+    renderViewports();
+  });
+  if (api.subscribeFollowSelectedLandmark) {
+    api.subscribeFollowSelectedLandmark((on, { hydrated }) => {
+      if (on && !hydrated && turnVolumeViewsToLandmark(api.getCurrentLandmark()).length) {
+        renderViewports();
+      }
+    });
+  }
   api.markers.subscribeMarkerFrames(renderViewports);
   if (c3dEventTarget) {
     c3dEventTarget.addEventListener(c3dEnums.Events.ELEMENT_DISABLED,
@@ -124,16 +227,27 @@ class LandmarkMarkerTool extends AnnotationTool {
   renderAnnotation = (enabledElement, svgDrawingHelper) => {
     const { viewport } = enabledElement;
     const api = landmarks();
-    if (!api || !api.markers || viewport.type === c3dEnums.ViewportType.VOLUME_3D) {
+    if (!api || !api.markers) {
+      return false;
+    }
+    const is3D = viewport.type === c3dEnums.ViewportType.VOLUME_3D;
+    if (is3D && !api.volumeView) {
       return false;
     }
     const { drawLayersAsSvg, landmarkLayers, markerRecords, setLandmarkMarkers } = cextUtils.landmarkMarkers;
-    const placed = placedLandmarks(viewport);
+    const { placed, edge } = is3D ? volumeLandmarks(viewport) : { placed: placedLandmarks(viewport), edge: null };
     const hovered = setLandmarkMarkers(viewport.element, viewport.canvas, markerRecords(placed), {
       markerAt: api.markers.markerAt,
       refresh: () => c3dToolsUtilities.triggerAnnotationRenderForViewportIds([viewport.id]),
     });
-    const { layers } = landmarkLayers(placed, { markers: api.markers, hovered, bracketSize: api.markers.currentBracketSize() });
+    const bracketSize = api.markers.currentBracketSize();
+    // The chosen landmark outside the view: its brackets at the nearest edge, the chevron inside,
+    // below a hovered name plate as every marker is
+    const marks = edge ? [[`${edge.landmark.key}::edge`, [
+      ...api.markers.bracketPrimitives(edge, bracketSize),
+      ...api.volumeView.chevronPrimitives(edge, edge.angle, edge.landmark.line),
+    ]]] : [];
+    const { layers } = landmarkLayers(placed, { markers: api.markers, hovered, bracketSize, marks });
     drawLayersAsSvg(svgDrawingHelper, viewport.id, layers);
     return layers.length > 0;
   };
@@ -160,4 +274,6 @@ function addLandmarkMarkerToolToGroup(toolGroup) {
 
 
 export default LandmarkMarkerTool;
-export { LandmarkMarkerTool, addLandmarkMarkerToolToGroup, placedLandmarks, sliceRangeOf };
+export {
+  LandmarkMarkerTool, addLandmarkMarkerToolToGroup, placedLandmarks, sliceRangeOf, turnVolumeViewsToLandmark, volumeLandmarks,
+};

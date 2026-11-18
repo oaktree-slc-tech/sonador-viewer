@@ -149,14 +149,16 @@ function shapeParts(shape, x, y, scale) {
 
 /**
  * The primitives of a marker: its shape over a black casing, in its Line colour; thicker while
- * hovered, a ghost too; smaller, fainter and with a caret as a ghost.
+ * hovered, a ghost too; smaller, fainter and with a caret as a ghost; at a strength below 1 when
+ * faded by its depth in the 3D view.
  *
  * @param {object} marker - { x, y, shape, line }
- * @param {object} [state] - { hovered, ghost: { steps, direction } }
+ * @param {object} [state] - { hovered, ghost: { steps, direction }, strength (0 to 1) }
  */
-function markerPrimitives({ x, y, shape, line }, { hovered = false, ghost = null } = {}) {
+function markerPrimitives({ x, y, shape, line }, { hovered = false, ghost = null, strength = 1 } = {}) {
   const scale = ghost ? MARKER.GHOST_SCALE : 1;
-  const opacity = ghost ? MARKER.GHOST_OPACITY[ghost.steps] || MARKER.GHOST_OPACITY[2] : 1;
+  const opacity = (ghost ? MARKER.GHOST_OPACITY[ghost.steps] || MARKER.GHOST_OPACITY[2] : 1)
+    * (Number.isFinite(strength) ? Math.min(1, Math.max(0, strength)) : 1);
   let stroke = ghost ? MARKER.GHOST_STROKE : MARKER.STROKE;
   let under = ghost ? MARKER.GHOST_CASING : MARKER.CASING;
   if (hovered) {
@@ -275,17 +277,23 @@ const ghostLabel = (name, { steps, direction }) => `${name} · ${steps} ${steps 
 // Hover
 
 /**
- * The marker the pointer answers to: the one whose centre is nearest it, within the hit radius.
+ * The marker the pointer answers to, among those within the hit radius of it: the one nearest the
+ * camera when the markers have a depth (the 3D view), else the one whose centre is nearest the
+ * pointer, which also settles a tie in depth.
  *
- * @param {object[]} markers - { x, y, ... } in CSS pixels
+ * @param {object[]} markers - { x, y, depth?, ... } in CSS pixels, depth in mm along the view
  */
 function markerAt(markers, x, y, radius = MARKER.HIT_RADIUS) {
   let found;
-  let nearest = Infinity;
+  let best = [Infinity, Infinity];
   (markers || []).forEach((marker) => {
     const distance = Math.hypot(marker.x - x, marker.y - y);
-    if (distance <= radius && distance < nearest) {
-      nearest = distance;
+    if (distance > radius) {
+      return;
+    }
+    const rank = [Number.isFinite(marker.depth) ? marker.depth : -Infinity, distance];
+    if (rank[0] < best[0] || (rank[0] === best[0] && rank[1] < best[1])) {
+      best = rank;
       found = marker;
     }
   });

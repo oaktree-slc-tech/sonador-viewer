@@ -1,8 +1,9 @@
-// The drawing and the hover of landmark markers, for the classic viewport (a canvas) and the MPR
-// panes (an SVG layer). The markers' shapes, ghosts, brackets and name plates are primitives in CSS
-// pixels (@ohif/core DICOMSR landmarks.markers); this draws them, and keeps, for each viewport
-// element, the markers it draws and the one the pointer is on. The markers take no input: a press
-// over one reaches the active tool as anywhere else on the image.
+// The drawing and the hover of landmark markers, for the classic viewport (a canvas) and the
+// Cornerstone3D views, the MPR panes and the 3D volume view (an SVG layer). The markers' shapes,
+// ghosts, brackets and name plates are primitives in CSS pixels (@ohif/core DICOMSR
+// landmarks.markers); this draws them, and keeps, for each viewport element, the markers it draws and
+// the one the pointer is on. The markers take no input: a press over one reaches the active tool as
+// anywhere else on the image.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -240,24 +241,30 @@ function drawLayersAsSvg(svgDrawingHelper, prefix, layers) {
 
 // What a view draws
 
-/** The records of the landmarks placed on a view, for hover: { key, x, y } */
-const markerRecords = placed => placed.map(({ landmark, x, y }) => ({ key: landmark.key, x, y }));
+/** The records of the landmarks placed on a view, for hover: { key, x, y }, with their depth in the 3D view */
+const markerRecords = placed => placed.map(({ landmark, x, y, depth }) => (
+  Number.isFinite(depth) ? { key: landmark.key, x, y, depth } : { key: landmark.key, x, y }));
 
 /**
  * The layers a view draws for the landmarks placed on it, in drawing order: every marker, then the
  * chosen landmark's brackets, then the hovered landmark's name plate, on top; and the markers' records
- * for hover.
+ * for hover. A marker at a strength below 1 (the 3D view's depth fade) is drawn at full strength while
+ * hovered or chosen; brackets and plates are never faded. `marks` (the 3D view's edge mark) are drawn
+ * after the brackets and below the plate.
  *
- * @param {object[]} placed - { landmark (a viewLandmarks entry), x, y (CSS pixels), slice (sliceClass: full or ghost) }
- * @param {object} options - { markers (@ohif/core landmarks.markers), hovered (key), bracketSize (px) }
+ * @param {object[]} placed - { landmark (a viewLandmarks entry), x, y (CSS pixels), slice (sliceClass: full or ghost),
+ *   strength?, depth? }
+ * @param {object} options - { markers (@ohif/core landmarks.markers), hovered (key), bracketSize (px),
+ *   marks: Array<[owner, primitives]> }
  * @returns {{ layers: Array<[string, object[]]>, records: object[] }} layers as [owner, primitives]
  */
-function landmarkLayers(placed, { markers, hovered, bracketSize }) {
+function landmarkLayers(placed, { markers, hovered, bracketSize, marks = [] }) {
   const layers = [];
-  placed.forEach(({ landmark, x, y, slice }) => {
+  placed.forEach(({ landmark, x, y, slice, strength = 1 }) => {
     const ghost = slice.kind === 'ghost' ? slice : null;
+    const isHovered = landmark.key === hovered;
     layers.push([landmark.key, markers.markerPrimitives({ x, y, shape: landmark.shape, line: landmark.line }, {
-      hovered: landmark.key === hovered, ghost,
+      hovered: isHovered, ghost, strength: isHovered || landmark.current ? 1 : strength,
     })]);
   });
   placed.forEach(({ landmark, x, y, slice }) => {
@@ -265,6 +272,7 @@ function landmarkLayers(placed, { markers, hovered, bracketSize }) {
       layers.push([`${landmark.key}::brackets`, markers.bracketPrimitives({ x, y }, bracketSize)]);
     }
   });
+  layers.push(...marks);
   const pointed = placed.find(({ landmark }) => landmark.key === hovered && landmark.name);
   if (pointed) {
     const { landmark, x, y, slice } = pointed;

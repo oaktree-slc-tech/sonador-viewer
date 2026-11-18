@@ -23,6 +23,7 @@ import { Enums as VolViewerEnums } from './enums';
 
 const {
   SonadorZoomTool, addSRDisplayToolToGroup, setSRDisplayToolEnabled, addAngleDisplay3DToolToGroup, setAngleDisplay3DEnabled,
+  addLandmarkMarkerToolToGroup,
 } = c3dUtils.viewportTools;
 
 // The volume viewer's annotation displays: the read-only DICOM-SR measurements and the Length,
@@ -185,9 +186,10 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         volumeTools.addTool(C3dTrackballRotateTool.toolName);
 
         // Annotations of the volume's Frame of Reference (display only): read-only DICOM-SR
-        // measurements, and Length, Angle and Cobb angle measurements
+        // measurements, Length, Angle and Cobb angle measurements, and landmark sets
         addSRDisplayToolToGroup(volumeTools);
         addAngleDisplay3DToolToGroup(volumeTools, true);
+        addLandmarkMarkerToolToGroup(volumeTools);
         enableAnnotationDisplay(volumeTools);
 
         // Add viewport to the tool group
@@ -202,6 +204,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
 
         // The group outlives the view: make sure its annotation displays are on
         addAngleDisplay3DToolToGroup(volumeTools, true);
+        addLandmarkMarkerToolToGroup(volumeTools);
         enableAnnotationDisplay(volumeTools);
 
         console.log('[VolViewer] add tools reference for viewportId='+viewportId);
