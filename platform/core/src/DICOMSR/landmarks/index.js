@@ -7,6 +7,7 @@ import {
   isLandmarkSetVisible, selectLandmark, setLandmarkSetsVisible, setLandmarkSetVisible, stepLandmarkSet, subscribe,
 } from './landmarkSetStore';
 import { landmarkDetailOf, markerShapeOf, setNameOf, typeBreakdownOf, typeTextOf } from './landmarkText';
+import * as markers from './landmarkMarkers';
 
 const landmarks = {
   LANDMARK_TYPES,
@@ -39,6 +40,8 @@ const landmarks = {
   typeTextOf,
   landmarkDetailOf,
   typeBreakdownOf,
+  // The markers of the slice views (landmarkMarkers.js)
+  markers,
 };
 
 export default landmarks;

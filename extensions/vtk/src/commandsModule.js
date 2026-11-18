@@ -46,6 +46,7 @@ import jumpToWorldPoint, {
 import { Enums as vtkEnums } from './enums';
 import { addSRDisplayToolToGroup } from './components/tools/DICOMSRDisplayTool';
 import { addArrowMarkerToolToGroup } from './components/tools/ArrowMarkerTool';
+import { addLandmarkMarkerToolToGroup } from './components/tools/LandmarkMarkerTool';
 
 const { DisplaySetApi } = OHIF.display;
 
@@ -143,6 +144,9 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         addArrowMarkerToolToGroup(mprTools, {
           onActivate: ({ worldPoint, viewPlaneNormal }) => actions.jumpToMprWorldPoint({ worldPoint, viewPlaneNormal }),
         });
+
+        // The markers of the landmark sets
+        addLandmarkMarkerToolToGroup(mprTools);
 
         // Add viewport to the tool
         mprTools.addViewport(viewportId);
