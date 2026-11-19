@@ -76,7 +76,7 @@ export default function VtkVolumeColorPresetSelector({ button, toolbarClickCallb
     <div className="vtk-volume-color-preset-selector-container">
       <div className="container">
         <div className="vtk-color-preset-select">
-          <CustomSelect value={selectedColorProfile} options={vtkColorProfileList} />
+          <CustomSelect label="Color preset" value={selectedColorProfile} options={vtkColorProfileList} />
         </div>
       </div>
     </div>

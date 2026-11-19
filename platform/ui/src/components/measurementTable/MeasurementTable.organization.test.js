@@ -21,7 +21,8 @@ const mockBySeries = () => {
   ]);
 };
 const mockApi = {
-  toggleVisibilityMeasurement: jest.fn(), setAllMeasurementsVisibility: jest.fn(), getMeasurementsBySeries: jest.fn(mockBySeries),
+  toggleVisibilityMeasurement: jest.fn(), setAllMeasurementsVisibility: jest.fn(), setSearchVisibility: jest.fn(),
+  getMeasurementsBySeries: jest.fn(mockBySeries),
 };
 const mockRefresh = jest.fn();
 const mockSeries = {
@@ -219,27 +220,35 @@ it('hides only the matching annotations from the global toggle while searching, 
   expect(mockApi.setAllMeasurementsVisibility).toHaveBeenCalledWith(false);
 });
 
-it('with Apply search to views, hides in the views what the search leaves out, and shows it again', () => {
+// The rows last reported to the visibility rule as left out by the search
+const searchHidden = () => {
+  const { calls } = mockApi.setSearchVisibility.mock;
+  return calls.length ? calls[calls.length - 1][0].slice().sort() : undefined;
+};
+
+it('with Apply search to views, reports to the visibility rule what the search leaves out, and clears it again', () => {
   search('femur');
   expect(mockApi.toggleVisibilityMeasurement).not.toHaveBeenCalled();
+  expect(searchHidden() || []).toEqual([]);
 
   openSettings();
   setSwitch('annotations-search-in-views', true);
-  expect(mockApi.toggleVisibilityMeasurement.mock.calls.sort()).toEqual([['a1', false], ['c1', false], ['p1', false], ['t1', false]]);
+  expect(searchHidden()).toEqual(['a1', 'c1', 'p1', 't1']);
   expect(mockRefresh).toHaveBeenCalled();
+  // The rows themselves are written by the rule, not by the table
+  expect(mockApi.toggleVisibilityMeasurement).not.toHaveBeenCalled();
 
-  mockApi.toggleVisibilityMeasurement.mockClear();
   search('');
-  expect(mockApi.toggleVisibilityMeasurement.mock.calls.sort()).toEqual([['a1', true], ['c1', true], ['p1', true], ['t1', true]]);
+  expect(searchHidden()).toEqual([]);
 });
 
-it('shows what the search hid in the views when the table is unmounted', () => {
+it('clears the search reason when the table is unmounted', () => {
   search('femur');
   openSettings();
   setSwitch('annotations-search-in-views', true);
-  mockApi.toggleVisibilityMeasurement.mockClear();
+  expect(searchHidden()).toEqual(['a1', 'c1', 'p1', 't1']);
   act(() => root.unmount());
-  expect(mockApi.toggleVisibilityMeasurement.mock.calls.sort()).toEqual([['a1', true], ['c1', true], ['p1', true], ['t1', true]]);
+  expect(searchHidden()).toEqual([]);
   // afterEach unmounts again
   root = createRoot(container);
 });

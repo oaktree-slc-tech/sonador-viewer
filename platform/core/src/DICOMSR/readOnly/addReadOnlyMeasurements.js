@@ -26,6 +26,7 @@ import { addSRDisplayAnnotation, renderSRDisplayAnnotations } from './srDisplayA
 import { CIRCLE_TRACKING_TOOL } from '../utils/circleGeometry';
 import { showCopy } from '../utils/measurementCopies';
 import { documentOrderOf } from '../utils/srDocument';
+import { timepointOf } from '../utils/timepoint';
 
 
 const _instanceOf = image => {
@@ -190,10 +191,12 @@ function _addTextLabels(measurement, candidate) {
  *   buildSopInstanceImageIds: the ids the classic viewport keys its tool state by
  * @param {Set<string>} [options.excludeTrackingUIDs] - measurements that belong to hydration (a
  *   supported tool), never displayed read-only even when hydration placed nothing
+ * @param {object} [options.documentTimepoints] - the timepoint (utils/timepoint.js) of each document,
+ *   by SOP Instance UID; a document not named is read for its own
  * @returns {{ placed: number, patientOnly: number, skipped: number }}
  */
 export default function addReadOnlyMeasurements({
-  srDisplaySets, imageDisplaySets, imageIds = {}, excludeTrackingUIDs = new Set(),
+  srDisplaySets, imageDisplaySets, imageIds = {}, excludeTrackingUIDs = new Set(), documentTimepoints = {},
 }) {
   const measurementApi = MeasurementApi.Instance;
   const candidates = _imageCandidates(imageDisplaySets);
@@ -228,6 +231,20 @@ export default function addReadOnlyMeasurements({
     }
   });
 
+  /** The document a display set shows, and its timepoint: { srDocument, timepoint } */
+  function documentOf(srDisplaySet) {
+    const instance = srDisplaySet.instance || {};
+    const SOPInstanceUID = srDisplaySet.SOPInstanceUID || instance.SOPInstanceUID;
+    const srDocument = {
+      StudyInstanceUID: srDisplaySet.StudyInstanceUID || instance.StudyInstanceUID,
+      SeriesInstanceUID: srDisplaySet.SeriesInstanceUID || instance.SeriesInstanceUID,
+      SOPInstanceUID,
+    };
+    const timepoint = SOPInstanceUID in documentTimepoints ? documentTimepoints[SOPInstanceUID]
+      : (srDisplaySet.instance ? timepointOf(srDisplaySet.instance) : null);
+    return { srDocument, timepoint };
+  }
+
   /** Add one measurement of a report, counting it in the summary; true when it is drawn */
   function addOne(srDisplaySet, measurement, { listed }) {
     const { TrackingUniqueIdentifier } = measurement || {};
@@ -235,6 +252,11 @@ export default function addReadOnlyMeasurements({
       return false;
     }
     measurement.labels = _displayLabels(measurement);
+    const { srDocument, timepoint } = documentOf(srDisplaySet);
+    measurement.srDocument = srDocument;
+    if (timepoint) {
+      measurement.timepoint = timepoint;
+    }
 
     const application = srDisplaySet.isApplicationDocument
       ? { order: documentOrderOf(srDisplaySet.instance || { SOPInstanceUID: srDisplaySet.SOPInstanceUID }) } : undefined;

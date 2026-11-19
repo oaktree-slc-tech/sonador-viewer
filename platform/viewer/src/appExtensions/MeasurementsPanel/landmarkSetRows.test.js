@@ -208,19 +208,18 @@ describe('what the row and its card read', () => {
 
 
 describe('the global visibility', () => {
-  it('covers the sets: registered once with the Measurements API, which shows or hides every set through it', () => {
+  it('covers the sets through the store registered with the visibility rule in core; the panel registers no source', () => {
+    const { visibilityStores } = require('../../../../core/src/DICOMSR/utils/visibilityStores');
     list('landmarks-patient', 'landmarks-exchange');
     landmarkGroup();
     landmarkGroup();
-    expect(mockSources).toHaveLength(1);
-    const [source] = mockSources;
-    expect(source.visibilities()).toEqual([true, true]);
+    expect(mockSources).toHaveLength(0);
+    const store = visibilityStores().find(candidate => candidate.id === 'landmarkSets');
+    expect(store.entries().map(entry => store.isVisible(entry))).toEqual([true, true]);
 
-    source.setVisibility(false);
+    store.setVisibleMany(store.entries().map(entry => ({ entry, visible: false })));
     expect(landmarkGroup().measurements.map(row => row.isVisible)).toEqual([false, false]);
-    expect(source.visibilities()).toEqual([false, false]);
-    source.setVisibility(true);
+    store.setVisibleMany(store.entries().map(entry => ({ entry, visible: true })));
     expect(landmarkGroup().measurements.map(row => row.isVisible)).toEqual([true, true]);
   });
 });
-

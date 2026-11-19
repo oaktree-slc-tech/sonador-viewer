@@ -26,6 +26,7 @@ import { parseExtendedMeta } from '../utils/dcmsrExtendedMeta';
 import { parseDisplayAttributes } from '../utils/dcmsrDisplayAttributes';
 import { extendedMetaOptions, numItemsOf } from '../utils/propertyParent';
 import { currentSession, documentKind, registerHydratedReport } from '../utils/srDocument';
+import { timepointOf } from '../utils/timepoint';
 import { SR_DOCUMENT_KIND } from '../enums';
 import { showCopy } from '../utils/measurementCopies';
 import addReadOnlyMeasurements from '../readOnly/addReadOnlyMeasurements';
@@ -142,6 +143,14 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
   log.info('[DICOM-SR:parseDicomStructuredReport:link] SR display sets linked to images', linkSummary,
     'imageDisplaySets='+imageDisplaySets.length, 'activeDisplaySets='+(displaySetService.activeDisplaySets?.length ?? 'n/a'));
+
+  // The document's timepoint, and the series membership it decides, before any of its annotations is
+  // imported: every annotation read below carries the document it came from and that timepoint
+  const documentTimepoint = timepointOf(instanceSR);
+  const srDocument = _.pick(instanceSR, 'StudyInstanceUID', 'SeriesInstanceUID', 'SOPInstanceUID');
+  if (typeof measurementApi.registerDocumentTimepoint === 'function') {
+    measurementApi.registerDocumentTimepoint(instanceSR, documentTimepoint);
+  }
 
   displaySets.forEach((ds) => {
 
@@ -314,7 +323,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
           || toolData.TrackingUniqueIdentifier;
         const shown = showCopy(heldUid, {
           application: applicationSource,
-          importer: () => addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }),
+          importer: () => addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR, documentTimepoint }),
         }, { measurementApi, measurementService });
         if (shown) {
           imported += 1;
@@ -361,6 +370,10 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       });
       _.defaults(annotationMeta, { _id, TrackingUniqueIdentifier: trackingUid });
       _.defaults(annotationMeta, _.pick(toolData, 'TrackingUniqueIdentifier', 'description', 'finding', 'findingSites'));
+      annotationMeta.srDocument = { ...srDocument };
+      if (documentTimepoint) {
+        annotationMeta.timepoint = documentTimepoint;
+      }
 
       // Pack annotation structure for measurement service
       const annotation = {
@@ -469,6 +482,7 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
       imageDisplaySets,
       imageIds: { sopInstanceUIDToImageId, imageIdsForToolState },
       excludeTrackingUIDs: hydratableTrackingUIDs,
+      documentTimepoints: { [instanceSR.SOPInstanceUID]: documentTimepoint },
     });
   } catch (error) {
     if (LoggerService) {
@@ -506,6 +520,11 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
   // Hydrated: a later save keeps this report's document class and template (srDocument.js). A
   // load that fails before this point, or whose session was cleared meanwhile, is not a parent.
   registerHydratedReport(instanceSR, loadSession);
+
+  // What the report added is drawn only if its timepoint is the active one
+  if (typeof measurementApi.applyAnnotationVisibility === 'function') {
+    measurementApi.applyAnnotationVisibility();
+  }
 
   // Each cached sibling is parsed as this report was, from the cache, with no request
   for (const sibling of siblings) {
@@ -597,12 +616,16 @@ function isPatientDomainState(annotationType, toolData) {
     && metadata.sourceGeometry.valueType === 'SCOORD3D';
 }
 
-function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR }) {
+function addOutOfPlaneMeasurement(annotationType, toolData, { measurementApi, measurementService, instanceSR, documentTimepoint }) {
   // Hold a hydrated patient-domain group as an out-of-plane measurement-service record; true when it
   // was added. One whose Frame of Reference no loaded series shares keeps the report's evidence for its
   // series, so that a save writes it again (one read from an application document is never saved).
   const record = heldOutOfPlaneRecord(annotationType, toolData, instanceSR.StudyInstanceUID);
   const { TrackingUniqueIdentifier } = record.metadata;
+  record.metadata.srDocument = _.pick(instanceSR, 'StudyInstanceUID', 'SeriesInstanceUID', 'SOPInstanceUID');
+  if (documentTimepoint) {
+    record.metadata.timepoint = documentTimepoint;
+  }
 
   if (!seriesOfFrameOfReference(record.FrameOfReferenceUID, DicomMetadataStore).length) {
     record.metadata.carriedEvidence = carriedEvidenceOf(instanceSR, record);

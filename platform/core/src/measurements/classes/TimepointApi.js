@@ -524,4 +524,57 @@ export default class TimepointApi {
 
     return `${timepointName} ${parenthesisText}`;
   }
+
+
+  // Defined timepoints (the Sonador timepoint contract, DICOMSR/utils/timepoint.js). The session
+  // default, the Study Date/Time timepoint, carries `isDefault`; a defined one has
+  // `timepointType: 'defined'`. The Measurements API registers them and announces every change; the
+  // methods above are not applied to them.
+
+  /** The Study Date/Time timepoint, the session default, or undefined */
+  default() {
+    return this.timepoints.find((tp) => tp.isDefault);
+  }
+
+  /** The timepoint with an id, or undefined */
+  getTimepoint(timepointId) {
+    return this.timepoints.find((tp) => tp.timepointId === timepointId);
+  }
+
+  /** Add a timepoint, or replace the one with its id in place; returns it */
+  registerTimepoint(timepoint) {
+    if (!timepoint || !timepoint.timepointId) {
+      return undefined;
+    }
+    const index = this.timepoints.findIndex((tp) => tp.timepointId === timepoint.timepointId);
+    if (index < 0) {
+      this.timepoints.push(timepoint);
+    } else {
+      this.timepoints[index] = timepoint;
+    }
+    this.onTimepointsUpdated();
+    return timepoint;
+  }
+
+  /** Remove the timepoint with an id; true when one was removed */
+  unregisterTimepoint(timepointId) {
+    const index = this.timepoints.findIndex((tp) => tp.timepointId === timepointId);
+    if (index < 0) {
+      return false;
+    }
+    this.timepoints.splice(index, 1);
+    this.onTimepointsUpdated();
+    return true;
+  }
+
+  /** Remove every defined timepoint; returns the number removed */
+  removeDefinedTimepoints() {
+    const kept = this.timepoints.filter((tp) => tp.timepointType !== 'defined');
+    const removed = this.timepoints.length - kept.length;
+    if (removed) {
+      this.timepoints = kept;
+      this.onTimepointsUpdated();
+    }
+    return removed;
+  }
 }

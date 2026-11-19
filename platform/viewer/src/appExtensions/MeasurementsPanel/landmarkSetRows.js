@@ -84,8 +84,10 @@ export function landmarkSetRow(entry, { store = DicomMetadataStore, displaySets 
   const items = set.landmarks.map((landmark, index) => landmarkItemOf(api, set, landmark, index));
   const current = api.getCurrentLandmark();
   const position = current && current.key === key ? current.index : null;
+  const measurementApi = OHIF.measurements && OHIF.measurements.MeasurementApi && OHIF.measurements.MeasurementApi.Instance;
   return {
     measurementId: key,
+    timepointId: measurementApi && typeof measurementApi.timepointIdOf === 'function' ? measurementApi.timepointIdOf(entry) : undefined,
     toolType: LANDMARK_SET_TOOL,
     trackingIdentifier: set.trackingIdentifier,
     label: labelLineOf(set),
@@ -124,30 +126,25 @@ export function landmarkSetRow(entry, { store = DicomMetadataStore, displaySets 
   };
 }
 
-// Landmark sets answer the global visibility as the other annotations do: showing or hiding every
-// annotation (the panel's toggle, View > Annotations) shows or hides every set, and the query of
-// whether every annotation is hidden reads them. Registered once, when the panel's extension is
-// initialised (init.js), so that it holds whether or not the panel has been opened; the callbacks
-// read the store when they are called.
-let visibilitySource;
-export function registerLandmarkVisibilitySource() {
-  const api = landmarks();
-  const MeasurementApi = OHIF.measurements && OHIF.measurements.MeasurementApi;
-  if (visibilitySource || !api || !MeasurementApi || typeof MeasurementApi.addAnnotationVisibilitySource !== 'function') {
-    return;
-  }
-  visibilitySource = MeasurementApi.addAnnotationVisibilitySource({
-    visibilities: () => api.getLandmarkSets().map(entry => api.isLandmarkSetVisible(entry.key)),
-    setVisibility: visible => api.setLandmarkSetsVisible(visible),
-  });
-}
+// Landmark sets answer the global visibility as the other annotations do: the store registers with
+// the session's visibility rule in core (DICOMSR/landmarks/landmarkSetStore.js), which Show all, Hide
+// all and the all-hidden query read and write through the Measurements API. Kept for callers of the
+// earlier registration; it registers nothing.
+export function registerLandmarkVisibilitySource() {}
 
-/** The Landmarks group of the panel, or null when no document holds a set */
-export function landmarksGroup(options) {
-  // Registered at initialisation; here too, for a panel built without it
-  registerLandmarkVisibilitySource();
+/**
+ * The Landmarks group of the panel, or null when no document holds a set
+ *
+ * @param {object} [options] - { store, displaySets } for the rows; { activeTimepointId }: only the
+ *   sets of this timepoint are listed (every set when absent)
+ */
+export function landmarksGroup(options = {}) {
   const api = landmarks();
-  const entries = api ? api.getLandmarkSets() : [];
+  const { activeTimepointId, ...rowOptions } = options || {};
+  const measurementApi = OHIF.measurements && OHIF.measurements.MeasurementApi && OHIF.measurements.MeasurementApi.Instance;
+  const inTimepoint = entry => !activeTimepointId || !measurementApi || typeof measurementApi.timepointIdOf !== 'function'
+    || measurementApi.timepointIdOf(entry) === activeTimepointId;
+  const entries = api ? api.getLandmarkSets().filter(inTimepoint) : [];
   if (!entries.length) {
     return null;
   }
@@ -155,7 +152,7 @@ export function landmarksGroup(options) {
     groupName: LANDMARKS_GROUP_NAME,
     groupId: LANDMARKS_GROUP_ID,
     toolGroupId: LANDMARKS_GROUP_ID,
-    measurements: entries.map(entry => landmarkSetRow(entry, options)),
+    measurements: entries.map(entry => landmarkSetRow(entry, Object.keys(rowOptions).length ? rowOptions : undefined)),
   };
 }
 

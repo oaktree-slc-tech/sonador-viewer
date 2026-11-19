@@ -115,11 +115,13 @@ export default function Viewer({ studies, studyInstanceUIDs, isStudyLoaded, sele
       });
     }
 
-    // Return a generic timepoint
+    // The Study Date/Time timepoint, the session default: every study loaded in the session, and
+    // every annotation whose SR series has no timepoint
     return Promise.resolve([
       {
         timepointType: 'baseline',
         timepointId: 'TimepointId',
+        isDefault: true,
         studyInstanceUIDs,
         PatientID: filter.PatientID,
         earliestDate,

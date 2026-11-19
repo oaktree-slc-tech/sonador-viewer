@@ -78,6 +78,8 @@ export default function addMeasurement(measurement, imageId, imageMetadata, disp
   _.defaults(measurementData, _.pick(measurement, 'description', 'displayAttributes'));
   measurementData.metadata = _.extend(
     measurementData.metadata || {}, _.defaults(measurement.metadata || {}));
+  // The SR document the measurement was read from, and that document's timepoint
+  _.extend(measurementData.metadata, _.pick(measurement, 'srDocument', 'timepoint'));
 
   toolData.data.push(measurementData);
 

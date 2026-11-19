@@ -1,7 +1,12 @@
 // The routing wrapper: the classic read-only parser runs ahead of the classic route only. The
-// Cornerstone3D route displays what it does not hydrate itself, after hydration.
+// Cornerstone3D route displays what it does not hydrate itself, after hydration. A document with a
+// timepoint is supported by the Cornerstone3D route only: the classic route does not hydrate it.
 
-jest.mock('dcmjs', () => ({ data: {} }), { virtual: true });
+let mockDataset = {};
+jest.mock('dcmjs', () => ({ data: { DicomMetaDictionary: { naturalizeDataset: () => mockDataset } } }), { virtual: true });
+jest.mock('../utils/dicomCharacterSet', () => ({ readDicomFile: () => ({ dict: {} }) }));
+let mockTimepoint = null;
+jest.mock('./utils/timepoint', () => ({ timepointOf: () => mockTimepoint }));
 jest.mock('cornerstone-core', () => ({}), { virtual: true });
 jest.mock('@cornerstonejs/core', () => ({ utilities: {}, metaData: {} }), { virtual: true });
 jest.mock('@cornerstonejs/adapters', () => ({ adaptersSR: {} }), { virtual: true });
@@ -33,10 +38,12 @@ jest.mock('./SCOORD3D', () => ({
 
 import parseDicomStructuredReport from './parseDicomStructuredReport';
 
-const external = { servicesManager: { services: { displaySetService: {}, LoggerService: { error: jest.fn() } } } };
+const external = { servicesManager: { services: { displaySetService: {}, LoggerService: { error: jest.fn(), info: jest.fn() } } } };
 
 beforeEach(() => {
   mockCalls.length = 0;
+  mockTimepoint = null;
+  external.servicesManager.services.LoggerService.info.mockClear();
 });
 
 
@@ -51,5 +58,21 @@ describe('parseDicomStructuredReport routing', () => {
       parserModule: { name: 'CornerstoneTools', version: '4' },
     });
     expect(mockCalls).toEqual(['classic-read-only', 'classic']);
+  });
+
+  it('does not hydrate a document with a timepoint on the classic route, and says so', async () => {
+    mockTimepoint = { uid: '2.25.7' };
+    const result = await parseDicomStructuredReport(new ArrayBuffer(0), [], external, {
+      parserModule: { name: 'CornerstoneTools', version: '4' },
+    });
+    expect(result).toBeUndefined();
+    expect(mockCalls).toEqual([]);
+    expect(external.servicesManager.services.LoggerService.info).toHaveBeenCalledWith(expect.objectContaining({ title: 'Report not loaded', notify: true }));
+  });
+
+  it('leaves a document with a timepoint to the Cornerstone3D route', async () => {
+    mockTimepoint = { uid: '2.25.7' };
+    await parseDicomStructuredReport(new ArrayBuffer(0), [], external);
+    expect(mockCalls).toEqual(['cornerstone3d']);
   });
 });

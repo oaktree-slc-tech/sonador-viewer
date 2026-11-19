@@ -105,6 +105,9 @@ export const DCMSR_SONADOR_SEG = {
   schemeVersion: SONADOR_SCHEME_VERSION,
 }
 
+export { TIMEPOINT_CLASS_UID } from './constants/timepoint';
+import { TIMEPOINT_CLASS_UID } from './constants/timepoint';
+
 export const SONADOR_SR = `${SONADOR_MANUFACTURER}-SR`;
 export const DCM_SR_DCM_DESCRIPTION =  `${SONADOR_SR} implements tools for working with structured reporting data`;
 export const DCMSR_SONADOR_SR = {
@@ -427,6 +430,7 @@ export const CodingSchemeDesignators = {
 
 const Enums = {
   DCM,
+  TIMEPOINT_CLASS_UID,
   DCMSR_FINDING,
   DCMSR_FINDING_SITE,
   DCMSR_FINDING_SITE_OLD,

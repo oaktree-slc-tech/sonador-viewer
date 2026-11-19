@@ -172,15 +172,15 @@ describe('the global toggle', () => {
   it('shows or hides every annotation at once, the sets following the global visibility', () => {
     act(() => $('[data-cy="all-annotations-visibility-toggle"]').click());
     expect(mockApi.setAllMeasurementsVisibility).toHaveBeenCalledWith(false);
-    // The sets follow the global visibility themselves (the Viewer registers them with the API)
+    // The sets follow the global visibility themselves (their store registers with the visibility rule)
     expect(mockSetOne).not.toHaveBeenCalled();
   });
 
-  it('while searching, acts on the matching annotations, matching sets included', () => {
+  it('while searching, acts on the matching annotations, matching sets included, through the one API call', () => {
     search('e');
     act(() => $('[data-cy="all-annotations-visibility-toggle"]').click());
-    expect(mockApi.toggleVisibilityMeasurement.mock.calls).toEqual([['l1', false]]);
-    expect(mockSetOne.mock.calls).toEqual([['s1', false], ['s2', false]]);
+    expect(mockApi.toggleVisibilityMeasurement.mock.calls).toEqual([['l1', false], ['s1', false], ['s2', false]]);
+    expect(mockSetOne).not.toHaveBeenCalled();
     expect(mockApi.setAllMeasurementsVisibility).not.toHaveBeenCalled();
   });
 });

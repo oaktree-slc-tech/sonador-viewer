@@ -7,7 +7,7 @@ import { withTranslation } from 'react-i18next';
 import _ from 'lodash';
 import PropTypes from 'prop-types';
 
-import { MODULE_TYPES } from '@ohif/core';
+import OHIF, { MODULE_TYPES } from '@ohif/core';
 import { ExpandableToolMenu, RoundedButtonGroup, ToolbarButton, withDialog, withModal } from '@ohif/ui';
 import { useLayoutButton } from '@ohif/ui/src/store/useLayoutButton';
 
@@ -58,6 +58,7 @@ class ToolbarRow extends Component {
 
     this.handleBuiltIn = handleBuiltIn.bind(this);
     this.onDerivedDisplaySetsLoadedAndCached = this.onDerivedDisplaySetsLoadedAndCached.bind(this);
+    this.onTimepointsChanged = this.onTimepointsChanged.bind(this);
 
     this.updateButtonGroups();
   }
@@ -115,10 +116,34 @@ class ToolbarRow extends Component {
      * (Implement pubsub for better tracking of derived display sets)
      */
     document.addEventListener('deriveddisplaysetsloadedandcached', this.onDerivedDisplaySetsLoadedAndCached);
+
+    // The annotation buttons follow the active timepoint (a defined one is shown for review only)
+    const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+    const service = measurementApi && measurementApi.measurementService;
+    if (service && service.EVENTS && typeof service.subscribe === 'function') {
+      this.timepointsSubscription = service.subscribe(service.EVENTS.MEASUREMENTS_DATASYNC, this.onTimepointsChanged);
+    }
   }
 
   componentWillUnmount() {
     document.removeEventListener('deriveddisplaysetsloadedandcached', this.onDerivedDisplaySetsLoadedAndCached);
+    if (this.timepointsSubscription) {
+      this.timepointsSubscription.unsubscribe();
+      this.timepointsSubscription = null;
+    }
+  }
+
+  onTimepointsChanged({ apiEvent } = {}) {
+    if (apiEvent !== OHIF.measurements.Enums.EVENTS.TIMEPOINTS_CHANGED) {
+      return;
+    }
+    const toolbarButtons = getVisibleToolbarButtons.call(this);
+    // An annotation button that is active while its tool can no longer create annotations is released
+    const canCreate = canCreateAnnotations();
+    this.setState(state => ({
+      toolbarButtons,
+      activeButtons: canCreate ? state.activeButtons : state.activeButtons.filter(button => !isAnnotationButton(button)),
+    }));
   }
 
   onDerivedDisplaySetsLoadedAndCached() {
@@ -346,9 +371,34 @@ function handleToolbarButtonClick(button, evt) {
 /**
  *
  */
+/** Whether annotations can be created now (MeasurementApi): false while a defined timepoint is active */
+function canCreateAnnotations() {
+  const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+  return !measurementApi || typeof measurementApi.canCreateAnnotations !== 'function' || measurementApi.canCreateAnnotations();
+}
+
+/** Whether a toolbar button creates annotations: an annotation tool, or the Series Tag command */
+function isAnnotationButton(button) {
+  const toolName = button && button.commandOptions && button.commandOptions.toolName;
+  return (toolName && OHIF.measurements.isAnnotationTool(toolName)) || (button && button.commandName === 'seriesTagDialog');
+}
+
+/** A button definition without its annotation buttons, nested buttons included */
+function withoutAnnotationButtons(definition) {
+  if (isAnnotationButton(definition)) {
+    return undefined;
+  }
+  if (Array.isArray(definition.buttons)) {
+    const buttons = definition.buttons.map(withoutAnnotationButtons).filter(Boolean);
+    return buttons.length ? { ...definition, buttons } : undefined;
+  }
+  return definition;
+}
+
 function getVisibleToolbarButtons() {
   const toolbarModules = extensionManager.modules[MODULE_TYPES.TOOLBAR];
   const toolbarButtonDefinitions = [];
+  const reviewOnly = !canCreateAnnotations();
 
   toolbarModules.forEach((extension) => {
     const { definitions, defaultContext } = extension.module;
@@ -362,7 +412,11 @@ function getVisibleToolbarButtons() {
       const context = definition.context || defaultContext;
 
       if (this.props.activeContexts.includes(context)) {
-        toolbarButtonDefinitions.push(definition);
+        // While a defined timepoint is active (shown for review only) the annotation buttons are absent
+        const visible = reviewOnly ? withoutAnnotationButtons(definition) : definition;
+        if (visible) {
+          toolbarButtonDefinitions.push(visible);
+        }
       }
     });
   });

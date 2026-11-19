@@ -120,6 +120,8 @@ export function addSRDisplayAnnotation({
     data: {
       TrackingUniqueIdentifier,
       TrackingIdentifier,
+      // The SR document the measurement was read from (its timepoint decides whether it is drawn)
+      srDocument: measurement.srDocument,
       labels,
       // Stored display colours, by role (displayAttributes); empty for the default style
       displayColor: getDisplayColor(measurement),

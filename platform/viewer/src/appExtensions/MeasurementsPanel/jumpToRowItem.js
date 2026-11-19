@@ -36,10 +36,7 @@ export default function jumpToRowItem(
 
   // Determine number of viewports and display settings
   const numViewports = viewportsState.layout.viewports.length;
-  const numTimepoints = timepointManagerState.timepoints.length;
-  const { measurements, timepoints } = timepointManagerState;
-  
-  const numViewportsToUpdate = Math.min(numTimepoints, numViewports);
+  const { measurements } = timepointManagerState;
   
   // Retrieve tool type
   const toolType = MeasurementApi._getToolType(measurement);
@@ -48,27 +45,19 @@ export default function jumpToRowItem(
   const { measurementMeta, measurementData, uid, _id } = MeasurementApi._unpackMeasurementData(measurement);
   const measurementNumber = measurementData.measurementNumber || measurementMeta.measurementNumber || measurement.measurementNumber;
 
-  if (options.invertViewportTimepointsOrder) {
-    timepoints.reverse();
-  }
+  const measurementsForToolGroup = measurements[toolType] || [];
 
-  const measurementsForToolGroup = measurements[toolType];
-
-  // Retrieve the measurements data
+  // The row's own measurement, by its identity (its _id; a row without one by its number within its
+  // timepoint), shown in the active viewport whatever the number of timepoints and viewports
   const measurementsToJumpTo = [];
+  {
+    const dataAtThisTimepoint = measurementsForToolGroup.find(entry => (measurement.measurementId
+      ? entry._id === measurement.measurementId
+      : entry.measurementNumber === measurementNumber && (!measurement.timepointId || entry.timepointId === measurement.timepointId)));
 
-  for (let i = 0; i < numViewportsToUpdate; i++) {
-    const { timepointId } = timepoints[i];
-
-    // The row's own measurement: by its _id, else (a row without one) by its number
-    const dataAtThisTimepoint = measurementsForToolGroup.find(entry => entry.timepointId === timepointId
-      && (measurement.measurementId ? entry._id === measurement.measurementId : entry.measurementNumber === measurementNumber));
-
-    // Unable to retrieve an entry for the timepoint, move to next measurement in queue
     if (!dataAtThisTimepoint) {
       measurementsToJumpTo.push(null);
-      continue;
-    }
+    } else {
     
     // Retrieve measurement instance to load
     let _measurement;
@@ -98,6 +87,7 @@ export default function jumpToRowItem(
     // Append annotation to measurements to jump to
     if (_measurement) {
       measurementsToJumpTo.push(_measurement);
+    }
     }
   }
 

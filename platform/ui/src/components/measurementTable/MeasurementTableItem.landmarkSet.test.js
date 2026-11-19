@@ -19,7 +19,8 @@ const mockClearCurrent = jest.fn();
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: {
-    measurements: { MeasurementApi: { Instance: { toggleVisibilityMeasurement: () => {} } }, refreshCornerstoneViewports: () => {} },
+    // A row's visibility toggle is the user's choice for the annotation, a landmark set's through the same API call
+    measurements: { MeasurementApi: { Instance: { toggleVisibilityMeasurement: (...args) => mockSetVisible(...args) } }, refreshCornerstoneViewports: () => {} },
     DICOMSR: { landmarks: { setLandmarkSetVisible: (...args) => mockSetVisible(...args), clearCurrentLandmark: () => mockClearCurrent() } },
     DicomMetadataStore: { getSeries: () => ({ instances: new Array(120) }) },
     utils: {

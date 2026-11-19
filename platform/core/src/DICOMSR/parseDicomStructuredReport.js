@@ -39,6 +39,7 @@ import initDisplaySetMeasurements from './utils/initDisplaySetMeasurements';
 import parseSCOORD3D from './SCOORD3D/parseSCOORD3D';
 import findInstanceMetadataBySopInstanceUID from './utils/findInstanceMetadataBySopInstanceUid';
 import { currentSession } from './utils/srDocument';
+import { timepointOf } from './utils/timepoint';
 import { readDicomFile } from '../utils/dicomCharacterSet';
 
 import { Cornerstone3D as Cornerstone3dDcmSrParse } from './Cornerstone3d';
@@ -77,6 +78,17 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
   const isCornerstone3dParser = options.parserModule.name == Cornerstone3dSR.sr.name
     && options.parserModule.version == Cornerstone3dSR.sr.version;
+
+  // A document with a timepoint is supported by the Cornerstone3D parser only: the legacy parser
+  // does not hydrate it, and it is never a save parent
+  if (!isCornerstone3dParser && part10SRArrayBuffer && hasTimepoint(part10SRArrayBuffer)) {
+    LoggerService.info({
+      title: 'Report not loaded',
+      message: 'The report belongs to a timepoint, which the legacy report parser does not support.',
+      notify: true,
+    });
+    return undefined;
+  }
 
   try {
 
@@ -122,3 +134,15 @@ const parseDicomStructuredReport = async (part10SRArrayBuffer, displaySets, exte
 
 
 export default parseDicomStructuredReport;
+
+
+/** Whether a Part 10 report carries a timepoint; false when it cannot be read here */
+function hasTimepoint(part10SRArrayBuffer) {
+  try {
+    const dicomData = readDicomFile(part10SRArrayBuffer);
+    const dataset = dcmjs.data.DicomMetaDictionary.naturalizeDataset(dicomData.dict);
+    return Boolean(timepointOf(dataset));
+  } catch (error) {
+    return false;
+  }
+}

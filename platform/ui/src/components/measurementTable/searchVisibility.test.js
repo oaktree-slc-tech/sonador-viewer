@@ -1,6 +1,6 @@
-// "Apply search to views": the annotations a search leaves out are hidden in the views, only if
-// they were shown, and shown again when they match again, the search is cleared or the setting
-// is turned off; one the user hid stays hidden.
+// "Apply search to views": the rows the search leaves out are reported to the session's visibility
+// rule (through the Measurements API), which hides them in the views beside the user's own choices
+// and the active timepoint; nothing is reported while the setting is off or no search is active.
 
 import reconcileSearchVisibility from './searchVisibility';
 
@@ -10,24 +10,17 @@ const rows = [
   { measurementId: 'c', isVisible: false },
 ];
 
-it('hides the shown annotations the search leaves out, not one the user hid', () => {
-  const result = reconcileSearchVisibility({ rows, matching: new Set(['a']), active: true, hiddenBySearch: new Set() });
-  expect(result.hide).toEqual(['b']);
-  expect(result.show).toEqual([]);
-  expect([...result.hiddenBySearch]).toEqual(['b']);
+it('reports the rows the search leaves out, whatever their visibility', () => {
+  const result = reconcileSearchVisibility({ rows, matching: new Set(['a']), active: true });
+  expect([...result.hiddenBySearch].sort()).toEqual(['b', 'c']);
 });
 
-it('shows an annotation again when it matches again, and keeps hidden what still does not match', () => {
-  const after = rows.map(row => (row.measurementId === 'b' ? { ...row, isVisible: false } : row));
-  const result = reconcileSearchVisibility({ rows: after, matching: new Set(['b']), active: true, hiddenBySearch: new Set(['b']) });
-  expect(result.show).toEqual(['b']);
-  expect(result.hide).toEqual(['a']);
-  expect([...result.hiddenBySearch]).toEqual(['a']);
+it('reports nothing while the search does not apply to the views', () => {
+  expect(reconcileSearchVisibility({ rows, matching: new Set(['a']), active: false }).hiddenBySearch.size).toBe(0);
+  expect(reconcileSearchVisibility({ rows: [], matching: new Set(), active: true }).hiddenBySearch.size).toBe(0);
 });
 
-it('shows everything it hid when the search or the setting is cleared, and forgets removed rows', () => {
-  const result = reconcileSearchVisibility({ rows, matching: new Set(), active: false, hiddenBySearch: new Set(['b', 'gone']) });
-  expect(result.show).toEqual(['b']);
-  expect(result.hide).toEqual([]);
-  expect(result.hiddenBySearch.size).toBe(0);
+it('leaves out rows without a key', () => {
+  const result = reconcileSearchVisibility({ rows: [...rows, { label: 'no key' }, null], matching: new Set(), active: true });
+  expect([...result.hiddenBySearch].sort()).toEqual(['a', 'b', 'c']);
 });
