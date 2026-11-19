@@ -10,10 +10,16 @@
 // and are reset with the session.
 //
 // An entry: { key, set, document: { SOPInstanceUID, SeriesInstanceUID, StudyInstanceUID, kind,
-// evidence } } (readLandmarkSets.js for the set, landmarkPlacement.js for the evidence).
+// evidence, timepoint } } (readLandmarkSets.js for the set, landmarkPlacement.js for the evidence,
+// utils/timepoint.js for the document's own timepoint, or null).
+//
+// The store's visibility is written by the session's visibility rule (utils/annotationVisibility.js),
+// with which the store registers: the panel and the renderers read it here.
 
 import log from '../../log';
 import { documentKind, subscribeSessionCleared } from '../utils/srDocument';
+import { timepointOf } from '../utils/timepoint';
+import { registerVisibilityStore } from '../utils/visibilityStores';
 import readLandmarkSets from './readLandmarkSets';
 import { attributionOf, cachedSeries, evidenceOf, imageOf } from './landmarkPlacement';
 
@@ -90,7 +96,9 @@ function addLandmarkSetsOf(dataset, store) {
   const instanceOf = uid => cachedSeries(store)
     .reduce((found, series) => found || (series.instances || []).find(instance => instance && instance.SOPInstanceUID === uid), undefined);
   const { sets, diagnostics } = readLandmarkSets(dataset, { instanceOf });
-  const document = { SOPInstanceUID, SeriesInstanceUID, StudyInstanceUID, kind: documentKind(dataset), evidence: evidenceOf(dataset) };
+  const document = {
+    SOPInstanceUID, SeriesInstanceUID, StudyInstanceUID, kind: documentKind(dataset), evidence: evidenceOf(dataset), timepoint: timepointOf(dataset),
+  };
   let added = 0;
   sets.forEach((set) => {
     const key = keyOf(SOPInstanceUID, set.trackingUid);
@@ -160,6 +168,25 @@ function setLandmarkSetsVisible(visible) {
   notify(EVENTS.VISIBILITY_CHANGED);
 }
 
+/** Show or hide several sets at once: [{ key, visible }], announced once */
+function setLandmarkSetsVisibility(changes) {
+  let changed = false;
+  (changes || []).forEach(({ key, visible }) => {
+    if (!entries.has(key) || isLandmarkSetVisible(key) === Boolean(visible)) {
+      return;
+    }
+    if (visible) {
+      hidden.delete(key);
+    } else {
+      hidden.add(key);
+    }
+    changed = true;
+  });
+  if (changed) {
+    notify(EVENTS.VISIBILITY_CHANGED);
+  }
+}
+
 /** Whether every listed set is shown */
 const areLandmarkSetsVisible = () => [...entries.keys()].every(isLandmarkSetVisible);
 
@@ -214,6 +241,15 @@ function stepLandmarkSet(key) {
 }
 
 subscribeSessionCleared(clearLandmarkSets);
+
+registerVisibilityStore({
+  id: 'landmarkSets',
+  entries: getLandmarkSets,
+  keyOf: entry => entry.key,
+  isVisible: entry => isLandmarkSetVisible(entry.key),
+  setVisible: (entry, visible) => setLandmarkSetVisible(entry.key, visible),
+  setVisibleMany: changes => setLandmarkSetsVisibility(changes.map(({ entry, visible }) => ({ key: entry.key, visible }))),
+});
 
 
 export {

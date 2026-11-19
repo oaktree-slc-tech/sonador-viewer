@@ -28,6 +28,8 @@ jest.mock('@ohif/core', () => {
       _serviceManagedTool: toolType => ({ toolServiceManaged: SERVICE_TOOLS.includes(toolType) }),
       getServiceMeasurementByCornerstoneId: _id => mockServiceMeasurements[_id],
       measurementService: { getMeasurements: () => mockOutOfPlane },
+      // The timepoint of a measurement: its own, else Study Date/Time
+      timepointIdOf: measurement => measurement.timepointId || (measurement.metadata && measurement.metadata.timepointId) || 'tp-1',
     },
     _getToolType: measurement => measurement.toolType,
     seriesInstanceUIDOf: measurement => measurement.SeriesInstanceUID || measurement.referenceSeriesUID,
@@ -58,7 +60,7 @@ jest.mock('@ohif/core', () => {
   };
 });
 
-const { convertMeasurementsToTableData } = require('./ConnectedMeasurementTable');
+const { convertMeasurementsToTableData, timepointSelectorEntries } = require('./ConnectedMeasurementTable');
 
 const timepoints = [{ timepointId: 'tp-1' }];
 const drawn = (toolType, extra = {}) => {
@@ -159,4 +161,67 @@ it('marks the row of a measurement read from an application document, read-only 
     Length: [drawn('Length', { isReadOnly: true, isLocked: true, metadata: { TrackingUniqueIdentifier: '2.25.556' } })],
   }, timepoints);
   expect(other.measurements[0].fromApplicationDocument).toBe(false);
+});
+
+
+describe('timepoints', () => {
+  it('lists the rows of the active timepoint only, each with its timepoint and one data entry', () => {
+    const groups = convertMeasurementsToTableData({
+      Length: [
+        drawn('Length', { _id: 'Length-1', uid: 'Length-uid-1', measurementNumber: 1, timepointId: 'tp-1' }),
+        drawn('Length', { _id: 'Length-2', uid: 'Length-uid-2', measurementNumber: 2, timepointId: 'timepoint:s:2.25.7' }),
+      ],
+    }, timepoints, { activeTimepointId: 'tp-1' });
+    expect(groups.map(group => group.measurements.map(row => [row.measurementId, row.timepointId]))).toEqual([[['Length-1', 'tp-1']]]);
+    expect(groups[0].measurements[0].data).toHaveLength(1);
+
+    const defined = convertMeasurementsToTableData({
+      Length: [
+        drawn('Length', { _id: 'Length-1', uid: 'Length-uid-1', measurementNumber: 1, timepointId: 'tp-1' }),
+        drawn('Length', { _id: 'Length-2', uid: 'Length-uid-2', measurementNumber: 2, timepointId: 'timepoint:s:2.25.7', isReadOnly: true }),
+      ],
+    }, timepoints, { activeTimepointId: 'timepoint:s:2.25.7' });
+    expect(defined.map(group => [group.groupName, group.measurements.map(row => row.measurementId)])).toEqual([['Measurements', ['Length-2']]]);
+  });
+
+  it('lists every row when no active timepoint is given, as before', () => {
+    const groups = convertMeasurementsToTableData({
+      Length: [
+        drawn('Length', { _id: 'Length-1', uid: 'Length-uid-1', measurementNumber: 1, timepointId: 'tp-1' }),
+        drawn('Length', { _id: 'Length-2', uid: 'Length-uid-2', measurementNumber: 2, timepointId: 'timepoint:s:2.25.7' }),
+      ],
+    }, timepoints);
+    expect(groups[0].measurements.map(row => row.measurementId)).toEqual(['Length-1', 'Length-2']);
+  });
+
+  it('lists an out-of-plane measurement under the active timepoint only', () => {
+    const outOfPlane = (uid, timepointId) => ({
+      uid, toolName: 'Length', points: [[12, 0, 0], [12, 30, -40]], length: 50, isLocked: false, isReadOnly: false, FrameOfReferenceUID: '2.25.7001',
+      metadata: { outOfPlane: true, views: ['sagittal'], timepointId },
+    });
+    mockOutOfPlane.push(outOfPlane('oop-default', 'tp-1'), outOfPlane('oop-defined', 'timepoint:s:2.25.7'));
+    const rows = convertMeasurementsToTableData({}, timepoints, { activeTimepointId: 'tp-1' }).flatMap(group => group.measurements);
+    mockOutOfPlane.length = 0;
+    expect(rows.map(row => [row.measurementId, row.timepointId])).toEqual([['oop-default', 'tp-1']]);
+  });
+
+  it('builds the selector entries: Study Date/Time first with the header date, then each defined timepoint with its label fallbacks', () => {
+    const entries = timepointSelectorEntries([
+      { timepointId: 'TimepointId', isDefault: true, timepointType: 'baseline', studyInstanceUIDs: ['1.2.3'], measurementCount: 2, landmarkSetCount: 0 },
+      { timepointId: 'timepoint:1.2.3:2.25.7', timepointType: 'defined', date: '20261104', time: '093000', description: 'Post-operative review, 6 weeks', id: 'TP-POSTOP-6W', studyInstanceUIDs: ['1.2.3'] },
+      { timepointId: 'timepoint:1.2.3:2.25.8', timepointType: 'defined', date: '20260901', time: null, description: null, id: 'TP-PREOP', studyInstanceUIDs: ['1.2.3'] },
+      { timepointId: 'timepoint:1.2.3:2.25.9', timepointType: 'defined', date: '20260101', description: null, id: null, studyInstanceUIDs: ['1.2.3'] },
+      { timepointId: 'timepoint:1.2.3:2.25.10', timepointType: 'defined', date: '2026-01-01', dateValid: false, description: null, id: null, studyInstanceUIDs: ['1.2.3'] },
+    ], { date: 'November 04, 2026' });
+    expect(entries.map(entry => [entry.timepointId, entry.isDefault, entry.label, entry.date, entry.time])).toEqual([
+      ['TimepointId', true, 'Study Date/Time', 'November 04, 2026', undefined],
+      ['timepoint:1.2.3:2.25.7', false, 'Post-operative review, 6 weeks', 'November 04, 2026', '09:30'],
+      ['timepoint:1.2.3:2.25.8', false, 'TP-PREOP', 'September 01, 2026', undefined],
+      ['timepoint:1.2.3:2.25.9', false, 'Timepoint January 01, 2026', undefined, undefined],
+      ['timepoint:1.2.3:2.25.10', false, 'Timepoint', undefined, undefined],
+    ]);
+    // One study loaded: no study text
+    expect(entries.every(entry => entry.study === undefined)).toBe(true);
+    expect(entries[0].measurementCount).toBe(2);
+  });
 });

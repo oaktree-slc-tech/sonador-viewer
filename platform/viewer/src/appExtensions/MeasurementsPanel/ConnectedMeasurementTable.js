@@ -108,29 +108,16 @@ function getMeasurementText(measurement, location='', description='', options) {
 
 function getDataForEachMeasurementNumber(measurementNumberList, timepoints, displayFunction) {
   /**
-  * Takes a list of measurements grouped by measurement numbers and return each measurement data by available timepoint
+  * One data entry per row, against the row's own timepoint: the display text of the row's
+  * measurement (the first of the list, the others share its row)
   *
-  * @param {Array} measurementNumberList - The list of measurements
-  * @param {Array} timepoints - The list of available timepoints
+  * @param {Array} measurementNumberList - The measurements of the row
+  * @param {Array} timepoints - unused; the shared table still accepts several entries for other callers
   * @param {Function} displayFunction - The function that builds the display text by each tool
-  * @returns
-  */  
-  const data = [];
-  
-  // on each measurement number we should get each measurement data by available timepoint
-  measurementNumberList.forEach((measurement) => {
-    timepoints.forEach((timepoint) => {
-      const eachData = {
-        displayText: '...',
-      };
-      if (measurement.timepointId === timepoint.timepointId) {
-        eachData.displayText = displayFunction(measurement);
-      }
-      data.push(eachData);
-    });
-  });
-
-  return data;
+  * @returns {{ displayText: string }[]}
+  */
+  const [measurement] = measurementNumberList;
+  return [{ displayText: measurement ? displayFunction(measurement) || '...' : '...' }];
 }
 
 
@@ -238,6 +225,7 @@ function measurement2tableitem(tool, timepoints, measurementNumberList, csMeasur
     const tableMeasurement = {
       measurementNumber,
       itemNumber: measurementNumber,
+      timepointId: csMeasurementData.timepointId || MeasurementApi.Instance.timepointIdOf(measurement),
       toolType,
       // The tool a report's measurement was drawn with ("cornerstoneTools@^4.0.0:Length"): the
       // row of a measurement read from a report has the display tool's type
@@ -292,6 +280,13 @@ function initTableGroup(toolGroup, options) {
 }
 
 
+/** Whether a representation or record belongs to a timepoint (its own id, else as the API places it) */
+function inTimepoint(measurement, timepointId) {
+  const own = measurement.timepointId || (measurement.metadata && measurement.metadata.timepointId);
+  return (own || MeasurementApi.Instance.timepointIdOf(measurement)) === timepointId;
+}
+
+
 function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, filter, options) {
   // Create table group for the provided tool group.
 
@@ -320,8 +315,12 @@ function toolgroups2tablegroups(toolGroups, toolCollections, tools, timepoints, 
       // Retrieve Cornerstone tools version of the data
       const csMeasurementData = measurementNumberList[0];
 
-      // A measurement drawn in the viewports only (one of an application document) is not listed
+      // A measurement drawn in the viewports only (one of an application document) is not listed;
+      // nor is one of another timepoint than the active one
       if (csMeasurementData && csMeasurementData.isListed === false) {
+        return;
+      }
+      if (options.activeTimepointId && !inTimepoint(csMeasurementData, options.activeTimepointId)) {
         return;
       }
 
@@ -358,7 +357,8 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
   * @param {Object} toolCollections - The list of all measurement grouped by groupTool and toolName
   * @param {Array} timepoints - The list of available timepoints
   * @param {Object} options - { viewports }: the viewports state, for the rows of out-of-plane
-  *   measurements (outOfPlaneRows.js), which the classic viewport does not draw
+  *   measurements (outOfPlaneRows.js), which the classic viewport does not draw; { activeTimepointId }:
+  *   only the rows of this timepoint are listed (every row when absent)
   * @returns
   */
 
@@ -367,6 +367,7 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
   const config = MeasurementApi.getConfiguration();
   const toolGroups = config.measurementTools;
   const tools = getAllTools(toolGroups);
+  const { activeTimepointId } = options;
 
   // "Primary" measurements: those which cannot be persisted to DICOM-SR
   const tableMeasurements = toolGroups.map((toolGroup) => initTableGroup(toolGroup));
@@ -383,7 +384,7 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
 
     // Primary measurement groups are those not managed by the MeasurementService or those which are marked as read only
     return !toolServiceManaged || Boolean(isReadOnly);
-  });
+  }, { activeTimepointId });
 
   // "Pending" measurements: those which can be persisted
   const pendingMeasurements = toolGroups.map((toolGroup) => initTableGroup(toolGroup, { groupIdPrefix: 'pending', groupNamePrefix: 'Pending ' }));
@@ -397,10 +398,12 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
     const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(csMeasurementData);
 
     return toolServiceManaged && !isReadOnly;
-  });
+  }, { activeTimepointId });
 
   // Out-of-plane measurements: the saved ones with the saved measurements, the others pending
-  const outOfPlane = outOfPlaneRows(tools, { labelOf: measurement => getMeasurementText(measurement), viewports: options.viewports });
+  const outOfPlane = outOfPlaneRows(tools, {
+    labelOf: measurement => getMeasurementText(measurement), viewports: options.viewports, activeTimepointId,
+  });
   const addRows = (groups, rows) => rows.forEach(({ row, toolGroup }) => {
     const group = groups.find(candidate => candidate.toolGroupId === toolGroup);
     if (group) {
@@ -424,7 +427,7 @@ export function convertMeasurementsToTableData(toolCollections, timepoints, opti
   }));
 
   // The landmark sets, after the measurement groups, numbered within their group
-  const landmarks = landmarksGroup();
+  const landmarks = landmarksGroup({ activeTimepointId });
   if (landmarks) {
     landmarks.measurements.forEach((row, index) => {
       row.itemNumber = index + 1;
@@ -491,6 +494,57 @@ function convertTimepointsToTableData(timepoints) {
   return timepoints.map(timepoint2tabledate);
 }
 
+
+/** The description or date of a study, for a selector that lists several studies */
+function studyTextOf(StudyInstanceUID) {
+  const study = StudyInstanceUID && DicomMetadataStore.getStudy(StudyInstanceUID);
+  if (!study) {
+    return undefined;
+  }
+  const instance = ((study.series || [])[0] || {}).instances && study.series[0].instances[0];
+  const description = study.StudyDescription || (instance && instance.StudyDescription);
+  const date = study.StudyDate || (instance && instance.StudyDate);
+  return description || (date && moment(date, 'YYYYMMDD').format('MMMM DD, YYYY')) || undefined;
+}
+
+
+/**
+ * The entries of the timepoint selector (MeasurementApi.getTimepoints): the Study Date/Time
+ * timepoint first, with the date the header shows, then each defined timepoint with its label (its
+ * description, else its identifier, else "Timepoint" and its date), its date and time when valid, and
+ * its study when several are loaded.
+ */
+export function timepointSelectorEntries(timepoints, defaultHeader) {
+  const studies = _.uniq(timepoints.flatMap(tp => tp.studyInstanceUIDs || []));
+  return timepoints.map((tp) => {
+    if (!tp.timepointType || tp.timepointType !== 'defined') {
+      return {
+        timepointId: tp.timepointId,
+        isDefault: true,
+        label: 'Study Date/Time',
+        date: defaultHeader ? defaultHeader.date : undefined,
+        measurementCount: tp.measurementCount,
+        landmarkSetCount: tp.landmarkSetCount,
+      };
+    }
+    const dateValid = tp.date && tp.dateValid !== false;
+    const date = dateValid ? moment(tp.date, 'YYYYMMDD').format('MMMM DD, YYYY') : undefined;
+    const timeValid = tp.time && tp.timeValid !== false;
+    const time = timeValid ? moment(tp.time.split('.')[0].padEnd(6, '0'), 'HHmmss').format('HH:mm') : undefined;
+    const label = tp.description || tp.id || (date ? `Timepoint ${date}` : 'Timepoint');
+    return {
+      timepointId: tp.timepointId,
+      isDefault: false,
+      label,
+      date: tp.description || tp.id ? date : undefined,
+      time,
+      study: studies.length > 1 ? studyTextOf((tp.studyInstanceUIDs || [])[0]) : undefined,
+      measurementCount: tp.measurementCount,
+      landmarkSetCount: tp.landmarkSetCount,
+    };
+  });
+}
+
   
 function getSaveFunction(serverType) {
   /**
@@ -525,10 +579,22 @@ const mapStateToProps = (state, ownProps) => {
   const activeServer = servers.servers.find((a) => a.active === true);
   const saveFunction = getSaveFunction(activeServer.type);
 
+  // The Study Date/Time header, and the selector's entries once a defined timepoint exists
+  const measurementApi = MeasurementApi.Instance;
+  const defaultTimepoints = (timepoints || []).filter(tp => tp.timepointType !== 'defined');
+  const header = convertTimepointsToTableData(defaultTimepoints);
+  const apiTimepoints = measurementApi && typeof measurementApi.getTimepoints === 'function' ? measurementApi.getTimepoints() : [];
+  const activeTimepointId = measurementApi && typeof measurementApi.getActiveTimepointId === 'function'
+    ? measurementApi.getActiveTimepointId() : undefined;
+  const activeTimepoint = apiTimepoints.find(tp => tp.timepointId === activeTimepointId);
+
   return {
     server: activeServer,
-    timepoints: convertTimepointsToTableData(timepoints),
-    measurementCollection: convertMeasurementsToTableData(measurements, timepoints, { viewports: state.viewports }),
+    timepoints: header,
+    timepointOptions: timepointSelectorEntries(apiTimepoints, header[0]),
+    activeTimepointId,
+    activeTimepointIsDefined: Boolean(activeTimepoint && activeTimepoint.timepointType === 'defined'),
+    measurementCollection: convertMeasurementsToTableData(measurements, timepoints, { viewports: state.viewports, activeTimepointId }),
     timepointManager: state.timepointManager,
     viewports: state.viewports,
     saveFunction,
@@ -704,11 +770,19 @@ const mergeProps = (propsFromState, propsFromDispatch, ownProps) => {
     servicesManager,
     isOpen,
     timepoints,
+    timepointOptions: propsFromState.timepointOptions,
+    activeTimepointId: propsFromState.activeTimepointId,
+    activeTimepointIsDefined: propsFromState.activeTimepointIsDefined,
     saveFunction,
     measurementCollection,
     onSaveComplete,
     viewports: propsFromState.viewports,
     ...propsFromDispatch,
+
+    onTimepointChange: (timepointId) => {
+      // The chosen timepoint is the active one for the session
+      MeasurementApi.Instance.setActiveTimepoint(timepointId);
+    },
     
     onItemClick: (event, measurementData) => {
       // TODO: Add timepointId to .data for measurementData?

@@ -423,13 +423,9 @@ const MeasurementTableItem = ({
   };
 
   const onToggleVisibility = (evt) => {
-    // Set visibility of the measurement; a landmark set's is the session's (core DICOMSR/landmarks)
+    // The user's choice for the annotation, a landmark set's included (its row key is the set's)
     
     evt.stopPropagation();
-    if (landmarkSet) {
-      OHIF.DICOMSR.landmarks.setLandmarkSetVisible(landmarkSet.key, !measurementData.isVisible);
-      return;
-    }
     measurements.MeasurementApi.Instance.toggleVisibilityMeasurement(
       measurementData.measurementId, !measurementData.isVisible);
     measurements.refreshCornerstoneViewports();

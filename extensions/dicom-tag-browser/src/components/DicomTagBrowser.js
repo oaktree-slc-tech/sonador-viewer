@@ -116,7 +116,7 @@ const DicomTagBrowser = ({ displaySets, displaySetInstanceUID }) => {
 
   return (
     <div className="dicom-tag-browser-content">
-      <CustomSelect value={selectedDisplaySetValue} options={displaySetList} />
+      <CustomSelect label="Series" value={selectedDisplaySetValue} options={displaySetList} />
       {instanceSelectList}
       <div className="dicom-tag-browser-table-wrapper">
         <DicomTagTable tags={tags} meta={meta} />

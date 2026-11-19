@@ -42,6 +42,15 @@
   border-radius: 5px;
   z-index: 1000;
   padding: 0;
+  /* Bounded by the room visible below or above the control (set on the element), scrolling within it */
+  max-height: 50vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.customSelectMenu.customSelectMenuAbove {
+  top: auto;
+  bottom: 58px;
 }
 
 .customSelectOption {
@@ -54,8 +63,14 @@
   cursor: pointer;
 }
 
-.customSelectOption:hover {
+.customSelectOption:hover,
+.customSelectOption.highlighted {
   background-color: #16202b;
+}
+
+.customSelectControl:focus-visible {
+  outline: none;
+  border-color: #20a5d6;
 }
 
 .customSelectOption:first-of-type {

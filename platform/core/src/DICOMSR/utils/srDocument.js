@@ -208,9 +208,18 @@ function registerHydratedReport(dataset, loadSession = session) {
   });
 }
 
+// Reports that are never save parents whatever their own content, decided by the Measurements API:
+// those of an SR series that belongs to a defined timepoint, every revision of it included
+let saveParentExclusion = () => false;
+
+function setSaveParentExclusion(predicate) {
+  saveParentExclusion = typeof predicate === 'function' ? predicate : () => false;
+}
+
 function saveParent(StudyInstanceUID) {
   // The single SR hydrated for the study, or null when there are none or several
-  const reports = [...hydratedReports.values()].filter(report => report.StudyInstanceUID === StudyInstanceUID);
+  const reports = [...hydratedReports.values()]
+    .filter(report => report.StudyInstanceUID === StudyInstanceUID && !saveParentExclusion(report));
   return reports.length === 1 ? reports[0] : null;
 }
 
@@ -353,6 +362,7 @@ export {
   registerHydratedReport,
   resolvePersonObserverName,
   saveParent,
+  setSaveParentExclusion,
   softwareVersion,
   subscribeSessionCleared,
 };

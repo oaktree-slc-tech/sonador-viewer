@@ -58,9 +58,11 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
   const view = _.first(metadata.views);
   // Points in no common plane are drawn in the 3D views only: no slice contains them
   const planar = drawingPlanes().navigationPlaneOf(planePointsOf(measurement), metadata.drawingPlane).kind !== 'none';
+  const api = MeasurementApi.Instance;
   return {
     toolType: measurement.toolName,
     trackingIdentifier: MeasurementApi.trackingIdentifierOf(measurement),
+    timepointId: metadata.timepointId || (api && typeof api.timepointIdOf === 'function' ? api.timepointIdOf(measurement) : undefined),
     measurementId: measurement.uid,
     _measurementServiceId: measurement.uid,
     label,
@@ -88,11 +90,14 @@ function outOfPlaneTableItem(measurement, tool, { label, inClassicViewport }) {
   };
 }
 
-/** The panel rows of the out-of-plane measurements, pending and saved (read-only) */
-function outOfPlaneRows(tools, { labelOf, viewports }) {
+/** The panel rows of the out-of-plane measurements, pending and saved (read-only), of the active timepoint */
+function outOfPlaneRows(tools, { labelOf, viewports, activeTimepointId }) {
   const inClassicViewport = !isMprActive(viewports);
   const rows = { saved: [], pending: [] };
-  outOfPlaneMeasurements().forEach((measurement) => {
+  const api = measurementApiClass().Instance;
+  const inTimepoint = measurement => !activeTimepointId || !api || typeof api.timepointIdOf !== 'function'
+    || api.timepointIdOf(measurement) === activeTimepointId;
+  outOfPlaneMeasurements().filter(inTimepoint).forEach((measurement) => {
     // The circle's records carry its Cornerstone3D name, its tool configuration the classic one
     const tool = tools.find(candidate => candidate.id === classicToolName(measurement.toolName));
     if (!tool) {

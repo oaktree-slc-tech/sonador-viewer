@@ -39,6 +39,14 @@ const EVENTS = {
 	MEASUREMENT_DCMSR_PARSE_START: 'api-event::measurements::DCMSR-parse:start',
 	MEASUREMENT_DCMSR_PARSE_MEAUSREMENT: 'api-event::measurements::DCMSR-parse-measurement',
 	MEASUREMENT_DCMSR_PARSE_SUCCESS: 'api-event::measurements::DCMSR-parse::success',
+
+	// The active timepoint, the list of timepoints or the series membership changed
+	TIMEPOINTS_CHANGED: 'api-event::timepoints::changed',
+}
+
+// Names of the errors a save is refused with (a rejected Promise, before MEASUREMENT_PERSIST_START)
+const TIMEPOINT_ERRORS = {
+	SAVE_REFUSED: 'TimepointSaveRefused',
 }
 
 
@@ -91,6 +99,7 @@ const Enums = {
 	CORNERSTONE_3D_TOOLS_SOURCE_VERSION,
 	SERVICE_EVENTS,
 	EVENTS,
+	TIMEPOINT_ERRORS,
 	DCM,
 	Cornerstone,
 	Cornerstone3D,
@@ -100,4 +109,4 @@ const Enums = {
 
 
 export default Enums;
-export { Enums, SREnums, DCM, EVENTS, SERVICE_EVENTS };
+export { Enums, SREnums, DCM, EVENTS, SERVICE_EVENTS, TIMEPOINT_ERRORS };

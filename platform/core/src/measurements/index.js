@@ -12,6 +12,7 @@ import MeasurementHandlers from './measurementHandlers';
 import * as tools from './tools';
 import Enums from './enums';
 import SREnums from '../DICOMSR/enums';
+import { isAnnotationTool } from './annotationTools';
 import { EVENTS, VALUE_TYPES } from './../services/MeasurementService/MeasurementService';
 
 
@@ -29,6 +30,8 @@ const measurements = {
   getImageIdForImagePath,
   getImagePath,
   refreshCornerstoneViewports,
+  // Whether a tool creates annotations (the toolbars and commands ask before activating one)
+  isAnnotationTool,
   Events:  EVENTS,
   ValueTypes: VALUE_TYPES,
   Enums,

@@ -23,6 +23,7 @@ import { connectToolsToMeasurementService } from './initMeasurementService.js';
 import { initDataServiceIntegration } from './initDataIntegrations.js';
 import { registerSonadorLocalImageLoader } from './loaders/sonadorLocalImageLoader.js';
 import { annotationTextCallbacks } from './utils/annotationTextDialog';
+import releaseAnnotationTools from './utils/releaseAnnotationTools';
 
 
 export default function init({ servicesManager, commandsManager, configuration }) {
@@ -182,5 +183,20 @@ export default function init({ servicesManager, commandsManager, configuration }
   csTools.setToolEnabled(ARROW_MARKER_TOOL, {});
   // The markers of the landmark sets (tools/LandmarkMarkerTool)
   csTools.setToolEnabled(LANDMARK_MARKER_TOOL, {});
+
+  // When a defined timepoint becomes active (shown for review only), a drawing in progress is
+  // cancelled and an active annotation tool gives way to the navigation default of the classic viewport
+  if (MeasurementService && MeasurementService.EVENTS && typeof MeasurementService.subscribe === 'function') {
+    MeasurementService.subscribe(MeasurementService.EVENTS.MEASUREMENTS_DATASYNC, ({ apiEvent } = {}) => {
+      if (apiEvent !== OHIF.measurements.Enums.EVENTS.TIMEPOINTS_CHANGED) {
+        return;
+      }
+      const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+      if (!measurementApi || typeof measurementApi.canCreateAnnotations !== 'function' || measurementApi.canCreateAnnotations()) {
+        return;
+      }
+      releaseAnnotationTools();
+    });
+  }
 }
 

@@ -1,46 +1,29 @@
 // "Filter annotations in imaging viewports" (an Annotations display setting, off by default and
 // kept only while the table is mounted): while it is on and a search is active, the annotations
-// the search leaves out are hidden in the views as well as the list. Only annotations that were
-// shown are hidden, and each is shown again when it matches again, when the search is cleared or
-// when the setting is turned off; an annotation the user hid stays hidden.
+// the search leaves out are hidden in the views as well as the list. The search is one reason of
+// the session's visibility rule (core DICOMSR/utils/annotationVisibility.js): this reports which
+// rows it leaves out, and the rule decides what is drawn with the user's own choices and the
+// active timepoint, so an annotation the user hid stays hidden when the search clears.
 
 /**
- * The visibility changes that bring the views in line with the search.
+ * The rows the search hides in the views.
  *
  * @param {object} params
- * @param {object[]} params.rows - every listed row ({ measurementId, isVisible })
+ * @param {object[]} params.rows - every listed row ({ measurementId })
  * @param {Set<string>} params.matching - the measurement ids the search keeps
  * @param {boolean} params.active - whether the search applies to the views (setting on, search active)
- * @param {Set<string>} params.hiddenBySearch - the ids hidden for the search so far
- * @returns {{ hide: string[], show: string[], hiddenBySearch: Set<string> }}
+ * @returns {{ hiddenBySearch: Set<string> }}
  */
-function reconcileSearchVisibility({ rows, matching, active, hiddenBySearch }) {
-  const byId = new Map((rows || []).map(row => [row.measurementId, row]));
-  const hide = [];
-  const show = [];
-  const next = new Set();
-
-  hiddenBySearch.forEach((id) => {
-    if (!byId.has(id)) {
-      return;
-    }
-    if (active && !matching.has(id)) {
-      next.add(id);
-    } else {
-      show.push(id);
-    }
-  });
-
+function reconcileSearchVisibility({ rows, matching, active }) {
+  const hiddenBySearch = new Set();
   if (active) {
-    byId.forEach((row, id) => {
-      if (!matching.has(id) && !next.has(id) && row.isVisible !== false) {
-        hide.push(id);
-        next.add(id);
+    (rows || []).forEach((row) => {
+      if (row && row.measurementId && !matching.has(row.measurementId)) {
+        hiddenBySearch.add(row.measurementId);
       }
     });
   }
-
-  return { hide, show, hiddenBySearch: next };
+  return { hiddenBySearch };
 }
 
 export default reconcileSearchVisibility;

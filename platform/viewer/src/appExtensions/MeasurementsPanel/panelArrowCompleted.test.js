@@ -62,8 +62,7 @@ it('stops listening when the element is disabled', () => {
   expect(listeners.completed).toBeUndefined();
 });
 
-it('registers the landmark sets with the global visibility when the panel is initialised, before any panel is built', () => {
-  expect(mockSources).toHaveLength(1);
-  expect(typeof mockSources[0].setVisibility).toBe('function');
+it('registers no visibility source of its own: the landmark sets register with the visibility rule in core', () => {
+  expect(mockSources).toHaveLength(0);
 });
 

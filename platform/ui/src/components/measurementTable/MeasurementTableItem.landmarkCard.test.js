@@ -17,7 +17,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@ohif/core', () => ({
   __esModule: true,
   default: {
-    measurements: { MeasurementApi: { Instance: {} }, refreshCornerstoneViewports: () => {} },
+    measurements: { MeasurementApi: { Instance: { toggleVisibilityMeasurement: () => {} } }, refreshCornerstoneViewports: () => {} },
     DICOMSR: { landmarks: { setLandmarkSetVisible: () => {}, clearCurrentLandmark: () => {} } },
     DicomMetadataStore: { getSeries: () => ({ instances: new Array(120) }) },
     displayAttributes: {

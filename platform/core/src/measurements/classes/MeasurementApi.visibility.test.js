@@ -56,7 +56,7 @@ describe('MeasurementService', () => {
 });
 
 describe('MeasurementApi.setAllMeasurementsVisibility', () => {
-  it('sets the service measurements and the representations only the API holds', () => {
+  it('sets the service measurements and the representations only the API holds, through the visibility rule', () => {
     const measurementService = serviceWith({ uid: 'svc-1', isVisible: true });
     const api = {
       measurementService,
@@ -65,12 +65,19 @@ describe('MeasurementApi.setAllMeasurementsVisibility', () => {
         DICOMSRDisplayTool: [{ _id: 'ro-1', isReadOnly: true }],
       },
       toggleVisibilityMeasurement: jest.fn(),
+      updateMeasurement: jest.fn((toolType, representation) => representation),
+      syncMeasurementsAndToolData: jest.fn(),
     };
     MeasurementApi.prototype.setAllMeasurementsVisibility.call(api, false);
 
     expect(measurementService.measurements.get('svc-1').isVisible).toBe(false);
-    expect(api.toggleVisibilityMeasurement).toHaveBeenCalledTimes(1);
-    expect(api.toggleVisibilityMeasurement).toHaveBeenCalledWith('ro-1', false);
+    expect(api.tools.DICOMSRDisplayTool[0].visible).toBe(false);
+    expect(api.updateMeasurement).toHaveBeenCalledWith('DICOMSRDisplayTool', api.tools.DICOMSRDisplayTool[0]);
+    expect(api.toggleVisibilityMeasurement).not.toHaveBeenCalled();
+
+    MeasurementApi.prototype.setAllMeasurementsVisibility.call(api, true);
+    expect(measurementService.measurements.get('svc-1').isVisible).toBe(true);
+    expect(api.tools.DICOMSRDisplayTool[0].visible).toBe(true);
   });
 });
 

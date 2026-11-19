@@ -896,7 +896,7 @@ const SegmentationPanel = ({
 
                   {!_.isNil(selectedSegmentationOption) && (<>
                     <div className="panelSelect">
-                      <CustomSelect value={selectedSegmentationOption} options={state.labelMapList} />
+                      <CustomSelect label={t('Segmentation')} value={selectedSegmentationOption} options={state.labelMapList} />
                     </div>
 
                     <div className={panelStyles.panelHeader}>

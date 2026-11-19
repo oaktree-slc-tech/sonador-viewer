@@ -15,6 +15,7 @@ import {
 
 import { Icon } from './../../elements/Icon';
 import { toolIcon } from '@ohif/core/src/measurements/tools/measurementDetail';
+import CustomSelect from '../CustomSelect/CustomSelect';
 
 import { OverlayTrigger } from '../overlayTrigger';
 import { TableList } from '../tableList';
@@ -70,9 +71,6 @@ const seriesLabel = (series, t) => (series.labelKey ? t(series.labelKey, series.
 
 /** The rows of a group collection */
 const rowsOf = groups => (groups || []).flatMap(group => (group && group.measurements) || []);
-// The rows whose visibility the all-annotations toggle and the search filter set: a landmark set's
-// visibility is its own
-const annotationRowsOf = groups => rowsOf(groups).filter(row => !(row && row.landmarkSet));
 
 
 /** The series glyph: two stacked squares, as the series thumbnail's instance count */
@@ -168,6 +166,10 @@ const MeasurementTable = ({
   onSaveComplete,
   eventTimeout = 50,
   isOpen = true,
+  timepointOptions = [],
+  activeTimepointId,
+  activeTimepointIsDefined = false,
+  onTimepointChange,
 }) => {
   // Unpack references to services  
   const { displaySetService } = servicesManager.services;
@@ -239,50 +241,30 @@ const MeasurementTable = ({
 
   // With "Filter annotations in imaging viewports", the annotations the search leaves out are
   // hidden in the views too while the panel is open, and shown again when they match again, the
-  // search or the setting is cleared, or the panel closes. A later global choice (every annotation
-  // shown or hidden at once, from the panel or View > Annotations) takes them over: after Hide All
-  // they stay hidden when the filter goes. Show All while the filter applies shows the matching
-  // annotations only: the filter hides the others again.
-  const hiddenBySearch = useRef(new Set());
-  const allRows = annotationRowsOf(measurementCollection);
-  const matchingIds = annotationRowsOf(listedGroups).map(row => row.measurementId);
+  // search or the setting is cleared, or the panel closes. The search is one reason of the
+  // session's visibility rule (reported through the Measurements API); the user's own choices and
+  // the active timepoint are the others, kept apart from it: an annotation the user hid stays hidden
+  // when the search clears, and Show all shows the matching annotations only.
+  const allRows = rowsOf(measurementCollection);
+  const matchingIds = rowsOf(listedGroups).map(row => row.measurementId);
   const latest = useRef({});
   const filterActive = isOpen && applySearchToViews && searching;
   latest.current = { allRows, matchingIds, filterActive };
-  const syncSearchVisibility = (active, rows = latest.current.allRows) => {
-    const { hide, show, hiddenBySearch: next } = reconcileSearchVisibility({
-      rows,
-      matching: new Set(latest.current.matchingIds),
-      active,
-      hiddenBySearch: hiddenBySearch.current,
+  const syncSearchVisibility = (active) => {
+    const { hiddenBySearch } = reconcileSearchVisibility({
+      rows: latest.current.allRows, matching: new Set(latest.current.matchingIds), active,
     });
-    hiddenBySearch.current = next;
-    if (hide.length || show.length) {
-      hide.forEach(id => measurementApi.toggleVisibilityMeasurement(id, false));
-      show.forEach(id => measurementApi.toggleVisibilityMeasurement(id, true));
+    if (typeof measurementApi.setSearchVisibility === 'function') {
+      measurementApi.setSearchVisibility([...hiddenBySearch]);
       measurements.refreshCornerstoneViewports();
     }
   };
   useEffect(() => {
     syncSearchVisibility(filterActive);
   }, [filterActive, matchingIds.join('|'), allRows.map(row => row.measurementId).join('|')]);
-  useEffect(() => {
-    const removeListener = typeof MeasurementApi.addAllVisibilityListener === 'function'
-      ? MeasurementApi.addAllVisibilityListener((visibility) => {
-        hiddenBySearch.current = new Set();
-        if (visibility && latest.current.filterActive) {
-          // Every annotation was just shown; the rows still hold their earlier visibility
-          syncSearchVisibility(true, latest.current.allRows.map(row => ({ ...row, isVisible: true })));
-        }
-      })
-      : undefined;
-    return () => {
-      if (removeListener) {
-        removeListener();
-      }
-      // Leaving the panel shows what the search hid
-      syncSearchVisibility(false);
-    };
+  useEffect(() => () => {
+    // Leaving the panel shows what the search hid
+    syncSearchVisibility(false);
   }, []);
 
   const pendingCount = useMemo(() => {
@@ -589,6 +571,32 @@ const MeasurementTable = ({
     });
   };
 
+  // The timepoint selector, in the header's place while a defined timepoint exists: the dropdown
+  // the Segmentations panel selects a segmentation with, filling the panel's width with that
+  // panel's margins. Study Date/Time first, then each defined timepoint in the order the API gives
+  // them; one timepoint is active at a time, for the session. A defined timepoint's description or
+  // identifier is shown as written, never translated; its date, time and study are the second line.
+  const hasDefinedTimepoints = (timepointOptions || []).some(option => !option.isDefault);
+  const activeOption = (timepointOptions || []).find(option => option.timepointId === activeTimepointId) || timepointOptions[0];
+  const timepointSelectOption = option => ({
+    value: option.timepointId,
+    title: option.isDefault ? t(option.label) : option.label,
+    description: [option.date, option.time, option.study].filter(Boolean).join(' \u00B7 ') || undefined,
+    onClick: () => {
+      if (onTimepointChange && option.timepointId !== activeTimepointId) {
+        onTimepointChange(option.timepointId);
+      }
+    },
+  });
+
+  const getTimepointSelector = () => (
+    <CustomSelect
+      label={t('Timepoint')}
+      value={activeOption ? timepointSelectOption(activeOption) : undefined}
+      options={(timepointOptions || []).map(timepointSelectOption)}
+    />
+  );
+
   const getWarningContent = () => {
     const { warningList = '' } = overallWarnings;
 
@@ -608,29 +616,10 @@ const MeasurementTable = ({
 
   return (
     <div className="measurementTable">
-      <div className="measurementTableHeader">
-        {hasOverallWarnings && (
-          <OverlayTrigger
-            placement="left"
-            overlay={
-              <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
-                <div className="warningTitle">{t('Criteria nonconformities')}</div>
-                <div className="warningContent">{getWarningContent()}</div>
-              </Tooltip>
-            }
-          >
-            <span className="warning-status">
-              <span className="warning-border">
-                <Icon name="exclamation-triangle" />
-              </span>
-            </span>
-          </OverlayTrigger>
-        )}
-        {getTimepointsHeader()}
-      </div>
-      {/* The measurement groups (Measurements, Findings, pending) under one collapsible
-          section, the same element the Segmentations panel groups its controls with, with the
-          groups scrolling inside it: room for the other annotation kinds the panel is to hold */}
+      {/* The panel as the Segmentations panel is laid out: the Annotations section header first,
+          flush with the panel's top, then the Study Date or the timepoint selector, the search row
+          and the measurement groups (Measurements, Findings, pending), which scroll inside the
+          section; room for the other annotation kinds the panel is to hold */}
       <div className="measurementTableAnnotations">
         <PanelSection defaultOpen>
           <PanelSection.Header className="flex items-center justify-between">
@@ -659,6 +648,31 @@ const MeasurementTable = ({
           </PanelSection.Header>
           <PanelSection.Content>
             {showSettings && getDisplaySettings()}
+            {/* The Study Date, or the timepoint selector once a defined timepoint exists, as the
+                Segmentations panel places its selector: under the section's header and settings */}
+            <div
+              className={['measurementTableHeader', hasDefinedTimepoints ? 'timepointSelect' : '', hasOverallWarnings ? 'withWarning' : ''].filter(Boolean).join(' ')}
+              data-cy={hasDefinedTimepoints ? 'timepoint-selector' : undefined}
+            >
+              {hasOverallWarnings && (
+                <OverlayTrigger
+                  placement="left"
+                  overlay={
+                    <Tooltip placement="left" className="in tooltip-warning" id="tooltip-left">
+                      <div className="warningTitle">{t('Criteria nonconformities')}</div>
+                      <div className="warningContent">{getWarningContent()}</div>
+                    </Tooltip>
+                  }
+                >
+                  <span className="warning-status">
+                    <span className="warning-border">
+                      <Icon name="exclamation-triangle" />
+                    </span>
+                  </span>
+                </OverlayTrigger>
+              )}
+              {hasDefinedTimepoints ? getTimepointSelector() : getTimepointsHeader()}
+            </div>
             <AnnotationsVisibilityRow
               measurementCollection={listedGroups}
               onQueryChange={setQuery}
@@ -667,9 +681,7 @@ const MeasurementTable = ({
               onToggleAllVisibility={(visible) => {
                 if (searching) {
                   // The matching annotations only, landmark sets among them
-                  rowsOf(listedGroups).forEach(row => (row.landmarkSet
-                    ? OHIF.DICOMSR.landmarks.setLandmarkSetVisible(row.landmarkSet.key, visible)
-                    : measurementApi.toggleVisibilityMeasurement(row.measurementId, visible)));
+                  rowsOf(listedGroups).forEach(row => measurementApi.toggleVisibilityMeasurement(row.measurementId, visible));
                 } else {
                   measurementApi.setAllMeasurementsVisibility(visible);
                 }
@@ -683,7 +695,8 @@ const MeasurementTable = ({
         </PanelSection>
       </div>
       <div className="measurementTableFooter">
-        {_.get(server, 'perms.upload', false) && saveFunction && savePending && (
+        {/* A defined timepoint is shown for review only: nothing can be saved while it is active */}
+        {_.get(server, 'perms.upload', false) && saveFunction && savePending && !activeTimepointIsDefined && (
           <button onClick={handleSave} className="saveBtn" data-cy="save-measurements-btn">
             <Icon name="save" width="14px" height="14px" />
             Save measurements
@@ -720,6 +733,13 @@ MeasurementTable.propTypes = {
   eventTimeout: PropTypes.number,
   /** Whether the side panel holding the table is open; it stays mounted while closed */
   isOpen: PropTypes.bool,  
+  /** The timepoint selector's entries: { timepointId, isDefault, label, date, time, study } */
+  timepointOptions: PropTypes.array,
+  activeTimepointId: PropTypes.string,
+  /** Whether the active timepoint is a defined one (shown for review only: no save) */
+  activeTimepointIsDefined: PropTypes.bool,
+  /** The user chose a timepoint: (timepointId) */
+  onTimepointChange: PropTypes.func,
 };
 
 

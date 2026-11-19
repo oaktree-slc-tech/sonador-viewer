@@ -115,10 +115,18 @@ import { measurementApiDefaultConfig } from './../configuration.js';
 import utils from './../../utils';
 
 import Enums from '../enums';
-import { clearHydratedReports } from '../../DICOMSR/utils/srDocument';
+import { clearHydratedReports, currentDocument, documentOrderOf, setSaveParentExclusion } from '../../DICOMSR/utils/srDocument';
 import { isCarriedForward, isOutOfPlaneMeasurement } from '../../DICOMSR/utils/outOfPlane';
 import { classicToolName } from '../../DICOMSR/utils/circleGeometry';
-import { clearSRDisplayAnnotations, setSRDisplayAnnotationVisible } from '../../DICOMSR/readOnly/srDisplayAnnotations';
+import { clearSRDisplayAnnotations } from '../../DICOMSR/readOnly/srDisplayAnnotations';
+import {
+  DIAGNOSTICS as TIMEPOINT_DIAGNOSTICS, compareTimepoints, isDefinedTimepoint, timepointIdFor, timepointValuesEqual,
+} from '../../DICOMSR/utils/timepoint';
+import {
+  activeTimepointKeys, applyAnnotationVisibility, isUserVisible, reconcileRecordVisibility, resetAnnotationVisibility, setSearchHidden,
+  setUserVisible,
+} from '../../DICOMSR/utils/annotationVisibility';
+import { visibilityStores } from '../../DICOMSR/utils/visibilityStores';
 import {
   SERIES_TAG_TOOL, getCustomLineTextColor, getLineTextColor, resolveDisplayColor, withLineTextColor,
 } from '../../displayAttributes';
@@ -133,6 +141,112 @@ const annotationVisibilitySources = new Set();
 
 // Listeners told when every annotation is shown or hidden at once (setAllMeasurementsVisibility)
 const allVisibilityListeners = new Set();
+
+
+// Timepoints (the methods of the same names on the API delegate here). A timepoint is a bucket inside
+// a study that groups series (DICOMSR/utils/timepoint.js). The Study Date/Time timepoint, the session
+// default (`isDefault`), holds every annotation whose SR series has no timepoint and every annotation
+// drawn in the Viewer. Membership is by SR series: the timepoint of a series is that of the current
+// document among those read of it, so a document read later can move a series and every annotation
+// read from it. The API holds the membership (`timepointSeries`), the TimepointApi the descriptors
+// and the active id; aggregations are computed on each call.
+
+const defaultTimepointOf = (api) => {
+  const timepoints = (api && api.timepointApi && api.timepointApi.timepoints) || [];
+  return timepoints.find(tp => tp.isDefault) || timepoints.find(tp => !isDefinedTimepoint(tp));
+};
+
+const defaultTimepointIdOf = (api) => {
+  const timepoint = defaultTimepointOf(api);
+  return timepoint ? timepoint.timepointId : undefined;
+};
+
+const activeTimepointIdOf = api => (api && api.timepointApi && api.timepointApi.currentTimepointId) || defaultTimepointIdOf(api);
+
+const isDefinedTimepointIdIn = (api, timepointId) => Boolean(timepointId && api && api.timepointApi
+  && isDefinedTimepoint((api.timepointApi.timepoints || []).find(tp => tp.timepointId === timepointId)));
+
+/** Whether two entries (representations, group pointers, records) are in one timepoint */
+const sameTimepoint = (a, b) => {
+  const idA = a && (a.timepointId || (a.metadata && a.metadata.timepointId));
+  const idB = b && (b.timepointId || (b.metadata && b.metadata.timepointId));
+  return !idA || !idB || idA === idB;
+};
+
+/** The SR series an annotation was read from, or undefined for one drawn in the Viewer */
+function srSeriesOf(annotation) {
+  if (!annotation) {
+    return undefined;
+  }
+  if (annotation.srDocument && annotation.srDocument.SeriesInstanceUID) {
+    return annotation.srDocument.SeriesInstanceUID;
+  }
+  // A landmark set entry names its document
+  if (annotation.set && annotation.document) {
+    return annotation.document.SeriesInstanceUID;
+  }
+  const { measurementMeta, measurementData } = MeasurementApi._unpackMeasurementData(annotation);
+  const srDocument = (measurementMeta && measurementMeta.srDocument)
+    || (measurementData && measurementData.srDocument)
+    || (measurementData && measurementData.metadata && measurementData.metadata.srDocument);
+  return srDocument ? srDocument.SeriesInstanceUID : undefined;
+}
+
+const seriesTimepointIdOf = (api, SeriesInstanceUID) => {
+  const series = SeriesInstanceUID && api && api.timepointSeries && api.timepointSeries.get(SeriesInstanceUID);
+  const timepoint = series && series.current && series.current.timepoint;
+  return timepoint ? timepointIdFor(series.StudyInstanceUID, timepoint.uid) : undefined;
+};
+
+/** The timepoint of an annotation: its SR series' (when read from a document), else the default */
+const timepointIdOfEntity = (api, annotation) => seriesTimepointIdOf(api, srSeriesOf(annotation)) || defaultTimepointIdOf(api);
+
+const isSaveEligibleIn = (api, record) => !isDefinedTimepointIdIn(api, timepointIdOfEntity(api, record));
+
+/** The error a save is refused with, or undefined when it may proceed */
+function saveRefusalFor(api, timepointId) {
+  const name = (Enums.TIMEPOINT_ERRORS && Enums.TIMEPOINT_ERRORS.SAVE_REFUSED) || 'TimepointSaveRefused';
+  let message;
+  if (isDefinedTimepointIdIn(api, activeTimepointIdOf(api))) {
+    message = 'The active timepoint is shown for review only: nothing is saved while it is active.';
+  } else if (timepointId && isDefinedTimepointIdIn(api, timepointId)) {
+    message = 'A defined timepoint cannot be saved to.';
+  }
+  if (!message) {
+    return undefined;
+  }
+  const error = new Error(message);
+  error.name = name;
+  return error;
+}
+
+/** Announce a change of the active timepoint, of the list or of membership; the rule redraws */
+function announceTimepoints(api) {
+  applyAnnotationVisibility(api);
+  if (api.options && typeof api.options.onMeasurementsUpdated === 'function' && typeof api.onMeasurementsUpdated === 'function') {
+    api.onMeasurementsUpdated();
+  }
+  if (api.measurementService && typeof api.measurementService.triggerApiEvent === 'function') {
+    api.measurementService.triggerApiEvent(Enums.EVENTS.TIMEPOINTS_CHANGED, { activeTimepointId: activeTimepointIdOf(api) });
+  }
+}
+
+/** Forget the session's membership and defined timepoints; the default is active, every annotation shown */
+function clearTimepointState(api) {
+  api.timepointSeries = new Map();
+  resetAnnotationVisibility();
+  const { timepointApi } = api;
+  if (!timepointApi) {
+    return;
+  }
+  if (typeof timepointApi.removeDefinedTimepoints === 'function') {
+    timepointApi.removeDefinedTimepoints();
+  }
+  const defaultId = defaultTimepointIdOf(api);
+  if (defaultId && timepointApi.currentTimepointId !== defaultId && typeof timepointApi.setCurrentTimepointId === 'function') {
+    timepointApi.setCurrentTimepointId(defaultId);
+  }
+}
 
 
 export default class MeasurementApi {
@@ -592,6 +706,10 @@ export default class MeasurementApi {
     this.toolsGroupsMap = MeasurementApi.getToolsGroupsMap();
     this.toolGroupTools = MeasurementApi.getToolGroupTools(this.toolsGroupsMap);
 
+    // The SR series read this session, each with every document read of it (registerDocumentTimepoint)
+    this.timepointSeries = new Map();
+    setSaveParentExclusion(report => this.seriesHasDefinedTimepoint(report && report.SeriesInstanceUID));
+
     // Iterate over each tool group and create collection
     configuration.measurementTools.forEach((toolGroup) => {
       this.toolGroups[toolGroup.id] = [];
@@ -688,6 +806,10 @@ export default class MeasurementApi {
     // Initialize tool representation of the measurement
     if (measurement) {
 
+      // Whatever its source, a record is drawn only if its timepoint is the active one (the
+      // visibility rule), from the moment it arrives
+      reconcileRecordVisibility(this, measurement);
+
       if (this.options.serviceEventCheckSource && !this._apiSourceServiceMeasurement(measurement, source)) {
 
         log.warn('[measurementApi:event:measurement-added] measurement source checking enabled. Received measurement '
@@ -727,6 +849,9 @@ export default class MeasurementApi {
     if (measurement) {
       log.debug('[measurementApi:event:measurement-update] uid='+measurement.uid,
         'pending-render='+notYetUpdatedAtSource, 'measurement', measurement);
+
+      // An update made outside the rule keeps the rule's visibility
+      reconcileRecordVisibility(this, measurement);
 
       if (this.options.serviceEventCheckSource && !this._apiSourceServiceMeasurement(measurement, source)) {
 
@@ -855,6 +980,14 @@ export default class MeasurementApi {
     options = options || {};
     const _api = this;
 
+    // Nothing is saved while a defined timepoint is active, whatever id the caller passes, and a
+    // defined timepoint is never a save target: refused before anything starts
+    const refusal = saveRefusalFor(this, timepointId);
+    if (refusal) {
+      log.warn('[measurementAPI:storeMeasurements] save refused: ' + refusal.message);
+      return Promise.reject(refusal);
+    }
+
     const { server } = configuration;
     const storeFn = configuration.dataExchange.store;
     if (typeof storeFn !== 'function') {
@@ -865,13 +998,14 @@ export default class MeasurementApi {
     // Trigger start of measurement persistence
     this.measurementService.triggerApiEvent(Enums.EVENTS.MEASUREMENT_PERSIST_START);
 
-    // Retrieve current time point
-    let timepoints, tp0;
+    // The timepoint the save writes: the one named, else the Study Date/Time timepoint
+    let tp0;
     if (timepointId) {
-      timepoints = this.timepointApi.all((tp) => tp.timepointId && tp.timepointId === timepointId);
-    } else { timepoints = this.timepointApi.all(); }
-
-    tp0 = timepoints.length > 0 ? timepoints[0] : undefined;
+      tp0 = this.timepointApi.timepoints.find((tp) => tp.timepointId && tp.timepointId === timepointId);
+    } else {
+      // The Study Date/Time timepoint; a session without one (no `isDefault`) saves to its first timepoint
+      tp0 = defaultTimepointOf(this) || (typeof this.timepointApi.all === 'function' ? this.timepointApi.all()[0] : undefined);
+    }
     if (!tp0) {
       log.warn('[measurementAPI:storeMeasurements] unable to retrieve timepoint, cancel export of measurements');
       return;
@@ -914,7 +1048,8 @@ export default class MeasurementApi {
             // and which are not yet saved (isReadOnly=false); a measurement the user locked is saved as well.
             const matchTool = m.toolName == tool.id;
             const { isReadOnly } = MeasurementApi._unpackMeasurementLifecycleAttrs(m);
-            return matchTool && !Boolean(isReadOnly) && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
+            return matchTool && !Boolean(isReadOnly) && tp0.studyInstanceUIDs.includes(m.referenceStudyUID)
+              && isSaveEligibleIn(_api, m);
           }, options);
 
         // Add measurements to the 
@@ -927,7 +1062,7 @@ export default class MeasurementApi {
           const pending = !Boolean(isReadOnly);
           // The circle's records carry its Cornerstone3D name; its tool configuration the classic one
           return classicToolName(m.toolName) == tool.id && isOutOfPlaneMeasurement(m) && (pending || isCarriedForward(m))
-            && tp0.studyInstanceUIDs.includes(m.referenceStudyUID);
+            && tp0.studyInstanceUIDs.includes(m.referenceStudyUID) && isSaveEligibleIn(_api, m);
         });
         measurementData[toolGroup.id] = [...measurementData[toolGroup.id], ...outOfPlane];
       });
@@ -1115,31 +1250,29 @@ export default class MeasurementApi {
   }
 
   toggleVisibilityMeasurement(_id, visibility) {
-    // Toggle the visibility of the measurement
+    // The user's choice for one annotation, by the key its panel row carries (a representation's
+    // _id, an out-of-plane record's uid, a landmark set's key). The visibility rule
+    // (DICOMSR/utils/annotationVisibility.js) applies it with the search and the active timepoint,
+    // to every store that draws the annotation.
 
-    // Attempt to toggle service measurement
-    let measurement = this.getMeasurementByCornerstoneId(_id);
-    if (measurement && measurement.uid) {
-      return this.measurementService.toggleVisibilityMeasurement(measurement.uid, visibility);
+    if (!_id) {
+      return;
     }
+    const visible = visibility === undefined ? !isUserVisible(_id) : Boolean(visibility);
+    setUserVisible(_id, visible);
+    applyAnnotationVisibility(this);
+  }
 
-    // An out-of-plane measurement is a service record only; its panel row carries its uid
-    if (!measurement && isOutOfPlaneMeasurement(this.measurementService.getMeasurement(_id))) {
-      return this.measurementService.toggleVisibilityMeasurement(_id, visibility);
-    }
+  setSearchVisibility(hiddenKeys) {
+    // The annotations the Annotations panel's search leaves out while it applies to the views, by
+    // their row keys; an empty list clears the reason. The user's choices are kept apart.
+    setSearchHidden(hiddenKeys);
+    applyAnnotationVisibility(this);
+  }
 
-    // Toggle API managed measurement instance
-    if (measurement) {
-      measurement.visible = visibility;
-
-      // A read-only SR measurement is also drawn in the Cornerstone3D viewports
-      const trackingUid = measurement.TrackingUniqueIdentifier || measurement.metadata?.TrackingUniqueIdentifier;
-      if (measurement.isReadOnly && trackingUid) {
-        setSRDisplayAnnotationVisible(trackingUid, visibility);
-      }
-      this.syncMeasurementsAndToolData(
-        this.updateMeasurement(measurement.toolType, measurement));
-    }
+  applyAnnotationVisibility() {
+    // Apply the visibility rule to every annotation (a change of membership, hydration, a clear)
+    return applyAnnotationVisibility(this);
   }
 
   _pendingServiceMeasurement(uid) {
@@ -1257,18 +1390,11 @@ export default class MeasurementApi {
     // toggle updates it; the store is told, so controls that follow the state update when only
     // session-only annotations changed.
 
-    this.measurementService.setMeasurementsVisibility(visibility);
-    _.each(this.tools, (collection) => {
-      collection.slice().forEach((representation) => {
-        const { uid, _id } = MeasurementApi._unpackMeasurementData(representation);
-        if ((uid && this.measurementService.getMeasurement(uid)) || !_id) {
-          return;
-        }
-        this.toggleVisibilityMeasurement(_id, visibility);
-      });
-    });
+    // The user reason of every annotation of the active timepoint; the rule applies them
+    activeTimepointKeys(this).forEach(key => setUserVisible(key, visibility));
+    applyAnnotationVisibility(this);
     if (annotationVisibilitySources.size) {
-      annotationVisibilitySources.forEach(source => source.setVisibility(visibility));
+      annotationVisibilitySources.forEach(source => typeof source.setVisibility === 'function' && source.setVisibility(visibility));
       this.onMeasurementsUpdated();
     }
     allVisibilityListeners.forEach((listener) => {
@@ -1285,17 +1411,22 @@ export default class MeasurementApi {
     // service, the read-only representations only the API holds (as the Measurements panel lists
     // them) and the registered session-only annotations
 
-    const visibility = [...this.measurementService.getMeasurements()].map(m => m.isVisible);
+    // Within the active timepoint: the other timepoints' annotations are hidden by the rule
+    const activeTimepointId = activeTimepointIdOf(this);
+    const inActiveTimepoint = entity => !activeTimepointId || timepointIdOfEntity(this, entity) === activeTimepointId;
+    const visibility = [...this.measurementService.getMeasurements()].filter(inActiveTimepoint).map(m => m.isVisible);
     _.each(this.tools, (collection) => {
       collection.forEach((representation) => {
         const { uid, _id } = MeasurementApi._unpackMeasurementData(representation);
-        if ((uid && this.measurementService.getMeasurement(uid)) || !_id) {
+        if ((uid && this.measurementService.getMeasurement(uid)) || !_id || !inActiveTimepoint(representation)) {
           return;
         }
         visibility.push(MeasurementApi._unpackMeasurementLifecycleAttrs(representation).isVisible);
       });
     });
-    annotationVisibilitySources.forEach(source => visibility.push(...source.visibilities()));
+    visibilityStores().forEach(store => (store.entries() || []).filter(inActiveTimepoint)
+      .forEach(entry => visibility.push(store.isVisible(entry))));
+    annotationVisibilitySources.forEach(source => typeof source.visibilities === 'function' && visibility.push(...source.visibilities()));
     return visibility.length > 0 && visibility.every(isVisible => isVisible === false);
   }
 
@@ -1363,6 +1494,7 @@ export default class MeasurementApi {
     // - pending: not yet saved (service managed and not read-only), as the Measurements panel
     //   lists it under its Pending groups
     // - outOfPlane: an out-of-plane measurement (a service record only), under its source series
+    // - timepointId: the timepoint of the measurement's SR series, else the Study Date/Time's
 
     const records = new Map();
     if (this.measurementService && typeof this.measurementService.getMeasurements === 'function') {
@@ -1399,6 +1531,7 @@ export default class MeasurementApi {
           representation,
           seriesInstanceUID,
           studyInstanceUID: MeasurementApi.studyInstanceUIDOf(measurement) || MeasurementApi.studyInstanceUIDOf(representation),
+          timepointId: timepointIdOfEntity(this, measurement),
           toolType: MeasurementApi.measurementToolType(measurement) || toolType,
           trackingIdentifier: MeasurementApi.trackingIdentifierOf(measurement),
           serviceManaged: Boolean(toolServiceManaged),
@@ -1428,6 +1561,7 @@ export default class MeasurementApi {
             representation: undefined,
             seriesInstanceUID,
             studyInstanceUID: record.referenceStudyUID,
+            timepointId: timepointIdOfEntity(this, record),
             toolType: record.toolName,
             trackingIdentifier: MeasurementApi.trackingIdentifierOf(record),
             serviceManaged: true,
@@ -1525,6 +1659,11 @@ export default class MeasurementApi {
       return;
     }
 
+    // A record of a defined timepoint takes no part in the trial matching
+    if (isDefinedTimepointIdIn(this, timepointId)) {
+      return false;
+    }
+
     const { toolGroupId } = toolConfig;
     const current = timepointApi.timepoints.find((tp) => tp.timepointId === timepointId);
     const initialTimepointIds = timepointApi.initialTimepointIds();
@@ -1603,7 +1742,8 @@ export default class MeasurementApi {
     const _tool = MeasurementApi._getToolType(measurement);
     const toolGroupId = this.toolsGroupsMap[_tool];
 
-    const filter = (tool) => tool._id !== _id;
+    // Numbered within its timepoint
+    const filter = (tool) => tool._id !== _id && sameTimepoint(tool, measurement);
 
     const isNew = this.isNewMeasurement(measurement);
 
@@ -1656,17 +1796,23 @@ export default class MeasurementApi {
       return;
     }
 
+    // A record of a defined timepoint neither matches a previous record nor is offered as one
+    if (isDefinedTimepointIdIn(this, timepointId)) {
+      return;
+    }
+
     const toolGroupId = this.toolsGroupsMap[_tool];
 
     // TODO: Remove TrialPatientLocationUID from here and override it somehow
     // by dependant applications. Here we should use the location attribute instead of the uid
     let filter;
+    const candidate = (tool) => tool._id !== measurementData._id && !isDefinedTimepointIdIn(this, tool.timepointId);
     const uid = measurementData.additionalData && measurementData.additionalData.TrialPatientLocationUID;
     if (uid) {
       filter = (tool) =>
-        tool._id !== measurementData._id && tool.additionalData && tool.additionalData.TrialPatientLocationUID === uid;
+        candidate(tool) && tool.additionalData && tool.additionalData.TrialPatientLocationUID === uid;
     } else {
-      filter = (tool) => tool._id !== measurementData._id && tool.namingNumber === namingNumber;
+      filter = (tool) => candidate(tool) && tool.namingNumber === namingNumber;
     }
 
     const childToolTypes = this.toolGroupTools[toolGroupId];
@@ -1692,9 +1838,11 @@ export default class MeasurementApi {
       return;
     }
 
-    // Group pointers name their representation by toolItemId, representations by _id
+    // Group pointers name their representation by toolItemId, representations by _id. Numbers are
+    // unique within a timepoint: another timepoint's are not duplicates.
     const { _id } = MeasurementApi._unpackMeasurementData(measurementData);
-    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber === measurementNumber;
+    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber === measurementNumber
+      && sameTimepoint(entry, measurementData);
 
     return configuration.measurementTools
       .filter((toolGroup) => toolGroup.id !== 'temp')
@@ -1725,7 +1873,8 @@ export default class MeasurementApi {
     const { measurementMeta, measurementData, _id } = MeasurementApi._unpackMeasurementData(measurement);
     const measurementNumber = measurementData.measurementNumber || measurementMeta.measurementNumber || measurement.measurementNumber;
 
-    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber >= measurementNumber;
+    const filter = (entry) => (entry.toolItemId || entry._id) !== _id && entry.measurementNumber >= measurementNumber
+      && sameTimepoint(entry, measurement);
 
     configuration.measurementTools
       .filter((toolGroup) => toolGroup.id !== 'temp')
@@ -1923,9 +2072,27 @@ export default class MeasurementApi {
     // A representation already held is updated in place: it keeps its number and its group pointer
     const existing = _id ? collection.find((t) => t._id === _id) : undefined;
 
-    // Get the related measurement by the measurement number and use its location if defined
+    // The timepoint of the measurement: that of the SR series it was read from, else the Study
+    // Date/Time timepoint (timepointIdOf); the service record carries the source document
+    const serviceRecord = uid && this.measurementService.getMeasurement(uid);
+    const timepointId = timepointIdOfEntity(this, serviceRecord || _measurement);
+    let timepoint = timepointId ? (this.timepointApi.timepoints || []).find((t) => t.timepointId === timepointId) : undefined;
+    if (!timepoint) {
+      timepoint = defaultTimepointOf(this);
+    }
+
+    // Preventing errors thrown when non-associated (standalone) study is opened...
+    if (!timepoint) {
+      log.warn('[measurementAPI:addMeasurementRepresentation:timepoint] Unable to retrieve timepoint '
+        + 'for measurement. Skip render. timepoint', timepoint, 'measurement', measurement);
+      return;
+    }
+
+    // Get the related measurement by the measurement number, in the same timepoint, and use its
+    // location if defined
     const relatedMeasurement = collection.find(
-      (t) => t.measurementNumber === measurementNumber && t.toolType ===  MeasurementApi._getToolType(measurement));
+      (t) => t.measurementNumber === measurementNumber && t.toolType ===  MeasurementApi._getToolType(measurement)
+        && (!t.timepointId || t.timepointId === timepoint.timepointId));
 
     // Use the related measurement location if found and defined
     if (relatedMeasurement && relatedMeasurement.location) {
@@ -1950,40 +2117,14 @@ export default class MeasurementApi {
       measurement.metadata._id = measurement._id;
     }
 
-    // Retrieve the timepoint for the measurement: resolution order of properties.
-    // * m.referenceStudyUID (OHIF v3 schema)
-    // * m.StudyInstanceUID (Cornerstone v4 Legacy schema)
-    // * m.metadata.StudyInstanceUID (Cornerstone v4 Legacy Schema, alt1)
-    // * measurement.measurementData.StudyInstanceUID (Cornerstone v4 Legacy Schema, alt2)
-    let timepoint;
-    const StudyInstanceUID = measurement.referenceStudyUID || measurement.StudyInstanceUID
-      ||  measurementMeta.StudyInstanceUID  || measurementData.StudyInstanceUID;
-    
-    if (StudyInstanceUID) {
-
-      // Use default timepoint for the study
-      timepoint = this.timepointApi.study(StudyInstanceUID)[0];
-    } else {
-
-      // Retrieve timepoint specified by the measurement
-      const timepointId = measurementMeta.timepointId || measurementData.timepointId || measurement.timepointId;
-      timepoint = this.timepointApi.timepoints.find((t) => t.timepointId === timepointId);
-    }
-
-    // Preventing errors thrown when non-associated (standalone) study is opened...
-    // @TODO: Make sure this logic is correct.
-    if (!timepoint) {
-
-      log.warn('[measurementAPI:addMeasurementRepresentation:timepoint] Unable to retrieve timepoint '
-        + 'for measurement. Skip render. timepoint', timepoint, 'measurement', measurement);
-      return;
-    } 
-
     // Empty Item just added in cornerstoneTools, but does not have measurement data yet
     const emptyItem = groupCollection.find((groupTool) => !groupTool.toolId && groupTool.timepointId === timepoint.timepointId);
 
     // Set the timepointId attribute to measurement to make it easier to filter measurements by timepoint
     measurement.timepointId = timepoint.timepointId;
+    if (serviceRecord && (!serviceRecord.metadata || serviceRecord.metadata.timepointId !== timepoint.timepointId)) {
+      serviceRecord.metadata = { ...(serviceRecord.metadata || {}), timepointId: timepoint.timepointId };
+    }
 
     if (existing && !_.isNil(existing.measurementNumber)) {
 
@@ -2016,8 +2157,8 @@ export default class MeasurementApi {
       measurementNumber: measurement.measurementNumber || measurementNumber,
     };
 
-    // Find the matched measurement from other timepoints
-    const found = existing ? undefined : this.getPreviousMeasurement(measurement);
+    // Find the matched measurement from other timepoints (Study Date/Time records only)
+    const found = existing || isDefinedTimepoint(timepoint) ? undefined : this.getPreviousMeasurement(measurement);
 
     // Check if a previous related meausurement was found on other timepoints
     if (found) {
@@ -2116,6 +2257,11 @@ export default class MeasurementApi {
     }
 
     this.repairMeasurementNumbers();
+
+    // A measurement added while another timepoint is active is hidden at once
+    if (!existing && activeTimepointIdOf(this) && timepoint.timepointId !== activeTimepointIdOf(this)) {
+      applyAnnotationVisibility(this);
+    }
 
     // Let others know that the measurements are updated
     this.onMeasurementsUpdated();
@@ -2323,9 +2469,10 @@ export default class MeasurementApi {
     //  Remove the deleted measurement only in its timepoint from the collection
     groupCollection.splice(groupIndex, 1);
 
-    //  Check which timepoints have the deleted measurement
+    //  Check whether the deleted measurement's number is still held in its own timepoint (another
+    //  timepoint's numbers are its own)
     const timepointsWithDeletedMeasurement = groupCollection
-      .filter((tool) => tool.measurementNumber === measurementNumber)
+      .filter((tool) => tool.measurementNumber === measurementNumber && sameTimepoint(tool, measurement))
       .map((tool) => tool.timepointId);
 
     //  Update measurementNumber only if there is no timepoint with that measurement
@@ -2554,6 +2701,10 @@ export default class MeasurementApi {
     clearHydratedReports();
     clearSRDisplayAnnotations();
 
+    // The defined timepoints and the series membership of the session go with its documents; the
+    // Study Date/Time timepoint is active again, and every annotation starts shown
+    clearTimepointState(this);
+
     this.measurementService.triggerApiEvent(Enums.EVENTS.MEAUSREMENT_CLEAR_START, {
       api: this, measurementRepresentations: this.tools,
     });
@@ -2610,5 +2761,260 @@ export default class MeasurementApi {
     this.measurementService.triggerApiEvent(Enums.EVENTS.MEASUREMENT_CLEAR_SUCCESS, {
       api: this, measurementRepresentations: this.tools,
     });
+    announceTimepoints(this);
   }
+
+
+  // Timepoints: see the module-level helpers above the class. Every consumer obtains timepoints,
+  // membership, the active timepoint, canCreateAnnotations and isSaveEligible here.
+
+  /** The Study Date/Time timepoint, or undefined before one is registered */
+  getDefaultTimepoint() {
+    return defaultTimepointOf(this);
+  }
+
+  getDefaultTimepointId() {
+    return defaultTimepointIdOf(this);
+  }
+
+  /** The id of the active timepoint: the TimepointApi's current one, else the default's */
+  getActiveTimepointId() {
+    return activeTimepointIdOf(this);
+  }
+
+  /** The active timepoint's descriptor (getTimepoints), or undefined */
+  getActiveTimepoint() {
+    const activeTimepointId = activeTimepointIdOf(this);
+    return this.getTimepoints().find(tp => tp.timepointId === activeTimepointId);
+  }
+
+  /** Whether the active timepoint is a defined one (shown for review only) */
+  isDefinedTimepointActive() {
+    return isDefinedTimepointIdIn(this, activeTimepointIdOf(this));
+  }
+
+  /** Whether annotations can be created, changed or saved: not while a defined timepoint is active */
+  canCreateAnnotations() {
+    return !this.isDefinedTimepointActive();
+  }
+
+  /** The SR series an annotation was read from, or undefined for one drawn in the Viewer */
+  static srSeriesOf(annotation) {
+    return srSeriesOf(annotation);
+  }
+
+  /** The current document of an SR series read this session: { SOPInstanceUID, order, timepoint }, or undefined */
+  seriesTimepoint(SeriesInstanceUID) {
+    const series = SeriesInstanceUID && this.timepointSeries && this.timepointSeries.get(SeriesInstanceUID);
+    return series ? series.current : undefined;
+  }
+
+  seriesHasDefinedTimepoint(SeriesInstanceUID) {
+    const current = this.seriesTimepoint(SeriesInstanceUID);
+    return Boolean(current && current.timepoint);
+  }
+
+  /**
+   * The timepoint of an annotation: that of its SR series (a service record, a representation, a
+   * display annotation's data or a landmark set entry), else the Study Date/Time timepoint. The
+   * series of the referenced image never decides it.
+   */
+  timepointIdOf(annotation) {
+    return timepointIdOfEntity(this, annotation);
+  }
+
+  /**
+   * Record a document read by the parser, with its own timepoint (or null), before its annotations
+   * are imported. The series' current document is computed again over every document read of it, so
+   * the result does not depend on load order; a change of the series' timepoint moves every
+   * annotation read from the series.
+   *
+   * @param {object} document - the naturalized dataset, or { StudyInstanceUID, SeriesInstanceUID,
+   *   SOPInstanceUID, order } (order as srDocument.js documentOrderOf gives it)
+   * @param {object|null} timepoint - timepointOf(document)
+   */
+  registerDocumentTimepoint(document, timepoint) {
+    const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = document || {};
+    if (!SeriesInstanceUID || !SOPInstanceUID) {
+      return;
+    }
+    const series = this.timepointSeries.get(SeriesInstanceUID) || { StudyInstanceUID, documents: new Map(), current: undefined };
+    series.StudyInstanceUID = series.StudyInstanceUID || StudyInstanceUID;
+    const before = seriesTimepointIdOf(this, SeriesInstanceUID);
+    series.documents.set(SOPInstanceUID, { order: document.order || documentOrderOf(document), timepoint: timepoint || null });
+    this.timepointSeries.set(SeriesInstanceUID, series);
+
+    const documents = [...series.documents.values()];
+    const uids = _.uniq(documents.map(entry => entry.timepoint && entry.timepoint.uid).filter(Boolean));
+    if (uids.length > 1) {
+      log.warn(`[measurementAPI:timepoints] ${TIMEPOINT_DIAGNOSTICS.SERIES_CONFLICT}: documents of series ${SeriesInstanceUID}`
+        + ` carry different timepoints (${uids.join(', ')}); the current document's applies`);
+    }
+    const current = currentDocument(documents.map(entry => entry.order));
+    series.current = current ? { SOPInstanceUID: current.SOPInstanceUID, ...series.documents.get(current.SOPInstanceUID) } : undefined;
+
+    this._rebuildTimepointDescriptors();
+    const after = seriesTimepointIdOf(this, SeriesInstanceUID);
+    if (before !== after) {
+      this._reassignSeriesTimepoint(SeriesInstanceUID, after || defaultTimepointIdOf(this));
+    }
+    announceTimepoints(this);
+  }
+
+  /** Register a descriptor per (study, timepoint UID) with members; remove those with none */
+  _rebuildTimepointDescriptors() {
+    const { timepointApi } = this;
+    if (!timepointApi || typeof timepointApi.registerTimepoint !== 'function') {
+      return;
+    }
+    const groups = new Map();
+    this.timepointSeries.forEach((series, SeriesInstanceUID) => {
+      const timepoint = series.current && series.current.timepoint;
+      if (!timepoint) {
+        return;
+      }
+      const timepointId = timepointIdFor(series.StudyInstanceUID, timepoint.uid);
+      const group = groups.get(timepointId) || { timepointId, StudyInstanceUID: series.StudyInstanceUID, uid: timepoint.uid, members: [] };
+      group.members.push({ SeriesInstanceUID, timepoint });
+      groups.set(timepointId, group);
+    });
+
+    const defaultTimepoint = defaultTimepointOf(this);
+    groups.forEach((group) => {
+      // The values shown are those of the member series with the lowest Series Instance UID
+      const members = _.sortBy(group.members, member => String(member.SeriesInstanceUID));
+      const representative = members[0].timepoint;
+      const mismatched = members.filter(member => !timepointValuesEqual(member.timepoint, representative));
+      if (mismatched.length) {
+        log.warn(`[measurementAPI:timepoints] ${TIMEPOINT_DIAGNOSTICS.ATTRIBUTE_MISMATCH}: members of timepoint ${group.uid}`
+          + ` differ in identifier, date, time or description`, mismatched.map(member => member.SeriesInstanceUID));
+      }
+      timepointApi.registerTimepoint({
+        timepointId: group.timepointId,
+        timepointType: 'defined',
+        isDefault: false,
+        uid: group.uid,
+        id: representative.id,
+        date: representative.date,
+        time: representative.time,
+        description: representative.description,
+        dateValid: representative.dateValid,
+        timeValid: representative.timeValid,
+        PatientID: defaultTimepoint ? defaultTimepoint.PatientID : undefined,
+        studyInstanceUIDs: [group.StudyInstanceUID],
+        seriesInstanceUIDs: members.map(member => member.SeriesInstanceUID),
+        isLocked: true,
+      });
+    });
+
+    (timepointApi.timepoints || []).filter(tp => isDefinedTimepoint(tp) && !groups.has(tp.timepointId))
+      .forEach(tp => timepointApi.unregisterTimepoint(tp.timepointId));
+
+    // The active timepoint lost its last member: the Study Date/Time timepoint is active
+    const activeTimepointId = timepointApi.currentTimepointId;
+    if (activeTimepointId && !(timepointApi.timepoints || []).some(tp => tp.timepointId === activeTimepointId)
+        && typeof timepointApi.setCurrentTimepointId === 'function') {
+      timepointApi.setCurrentTimepointId(defaultTimepointIdOf(this));
+    }
+  }
+
+  /** Move every record, representation and group pointer read from a series to a timepoint, in one pass */
+  _reassignSeriesTimepoint(SeriesInstanceUID, timepointId) {
+    const ofSeries = entity => srSeriesOf(entity) === SeriesInstanceUID;
+    const moved = new Set();
+    if (this.measurementService && typeof this.measurementService.getMeasurements === 'function') {
+      this.measurementService.getMeasurements().filter(ofSeries).forEach((record) => {
+        record.metadata = { ...(record.metadata || {}), timepointId };
+        const { _id } = MeasurementApi._unpackMeasurementData(record);
+        if (_id) {
+          moved.add(_id);
+        }
+      });
+    }
+    _.each(this.tools, (collection) => {
+      (collection || []).forEach((representation) => {
+        if (moved.has(representation._id) || ofSeries(representation)) {
+          representation.timepointId = timepointId;
+          moved.add(representation._id);
+        }
+      });
+    });
+    _.each(this.toolGroups, (pointers) => {
+      (pointers || []).forEach((pointer) => {
+        if (moved.has(pointer.toolItemId)) {
+          pointer.timepointId = timepointId;
+        }
+      });
+    });
+    this.repairMeasurementNumbers();
+  }
+
+  /**
+   * The timepoints of the session: the Study Date/Time timepoint, then the defined ones in the
+   * order of the contract (dated before undated, date, time, description, UID), each with the
+   * number of listed measurements and of landmark sets it holds.
+   */
+  getTimepoints() {
+    const { timepointApi } = this;
+    if (!timepointApi) {
+      return [];
+    }
+    const defaultTimepoint = defaultTimepointOf(this);
+    const defined = (timepointApi.timepoints || []).filter(isDefinedTimepoint).slice().sort(compareTimepoints);
+    const measurementCounts = new Map();
+    this.getMeasurementsByTimepoint().forEach((entries, timepointId) => measurementCounts.set(timepointId, entries.length));
+    const landmarkSetCounts = new Map();
+    visibilityStores().filter(store => store.id === 'landmarkSets').forEach(store => (store.entries() || []).forEach((entry) => {
+      const timepointId = timepointIdOfEntity(this, entry);
+      landmarkSetCounts.set(timepointId, (landmarkSetCounts.get(timepointId) || 0) + 1);
+    }));
+    return [defaultTimepoint, ...defined].filter(Boolean).map(tp => ({
+      ...tp,
+      measurementCount: measurementCounts.get(tp.timepointId) || 0,
+      landmarkSetCount: landmarkSetCounts.get(tp.timepointId) || 0,
+    }));
+  }
+
+  /** The listed measurements (getMeasurementsBySeries) by timepoint: Map<timepointId, entry[]> */
+  getMeasurementsByTimepoint() {
+    const byTimepoint = new Map();
+    this.getMeasurementsBySeries().forEach((entries) => {
+      entries.forEach((entry) => {
+        const timepointId = entry.timepointId || timepointIdOfEntity(this, entry.measurement);
+        if (!byTimepoint.has(timepointId)) {
+          byTimepoint.set(timepointId, []);
+        }
+        byTimepoint.get(timepointId).push(entry);
+      });
+    });
+    return byTimepoint;
+  }
+
+  getMeasurementsForTimepoint(timepointId) {
+    return this.getMeasurementsByTimepoint().get(timepointId) || [];
+  }
+
+  /**
+   * Make a timepoint the active one; false, with nothing changed, for an id that is not registered.
+   * Its annotations alone are listed and drawn; a defined timepoint is shown for review only.
+   */
+  setActiveTimepoint(timepointId) {
+    const { timepointApi } = this;
+    if (!timepointApi || !timepointId || !(timepointApi.timepoints || []).some(tp => tp.timepointId === timepointId)) {
+      log.warn('[measurementAPI:setActiveTimepoint] timepoint not registered', timepointId);
+      return false;
+    }
+    if (timepointApi.currentTimepointId === timepointId) {
+      return true;
+    }
+    timepointApi.setCurrentTimepointId(timepointId);
+    announceTimepoints(this);
+    return true;
+  }
+
+  /** Whether a save writes a record: not one of a defined timepoint */
+  isSaveEligible(record) {
+    return isSaveEligibleIn(this, record);
+  }
+
 }

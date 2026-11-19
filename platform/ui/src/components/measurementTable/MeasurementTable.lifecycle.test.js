@@ -3,9 +3,9 @@
  */
 // The Annotations search across the panel's lifecycle, rendered with the real ui-next section,
 // accordion and search box: collapsing and reopening the Annotations section shows the search in
-// effect again; closing the side panel (which keeps the table mounted) shows what the search hid
-// in the views, and reopening it hides those again; a later global choice to hide every
-// annotation is kept when the filter goes, and a later Show All shows the matching ones only.
+// effect again; closing the side panel (which keeps the table mounted) clears the search reason
+// reported to the visibility rule, and reopening it reports the rows again. The user's global
+// choices (Show all, Hide all) are the rule's own reasons: the table reports the search only.
 
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -13,6 +13,7 @@ import { createRoot } from 'react-dom/client';
 const mockListeners = new Set();
 const mockApi = {
   toggleVisibilityMeasurement: jest.fn(),
+  setSearchVisibility: jest.fn(),
   setAllMeasurementsVisibility: jest.fn((visibility) => mockListeners.forEach(listener => listener(visibility))),
   getMeasurementsBySeries: jest.fn(() => new Map()),
 };
@@ -120,7 +121,11 @@ const filterViews = () => {
   act(() => $('[data-cy="annotations-settings-toggle"]').click());
   act(() => $('#annotations-search-in-views').click());
 };
-const calls = () => mockApi.toggleVisibilityMeasurement.mock.calls.map(call => call.join(':')).sort();
+// The rows last reported to the visibility rule as left out by the search
+const searchHidden = () => {
+  const { calls } = mockApi.setSearchVisibility.mock;
+  return calls.length ? calls[calls.length - 1][0].slice().sort() : undefined;
+};
 
 it('shows the search in effect again when the Annotations section is reopened', () => {
   type('femur');
@@ -136,42 +141,30 @@ it('shows the search in effect again when the Annotations section is reopened', 
   expect(listed()).toEqual(['l1', 'l2']);
 });
 
-it('shows what the search hid in the views when the side panel closes, and hides it again on reopening', () => {
+it('reports what the search leaves out when the side panel closes and reopens', () => {
   type('femur');
   filterViews();
-  expect(calls()).toEqual(['l2:false']);
+  expect(searchHidden()).toEqual(['l2']);
 
-  mockApi.toggleVisibilityMeasurement.mockClear();
   render({ isOpen: false });
-  expect(calls()).toEqual(['l2:true']);
+  expect(searchHidden()).toEqual([]);
 
-  mockApi.toggleVisibilityMeasurement.mockClear();
   render({ isOpen: true });
-  expect(calls()).toEqual(['l2:false']);
+  expect(searchHidden()).toEqual(['l2']);
 });
 
-it('shows only the matching annotations on a later Show All while the filter applies', () => {
+it('leaves a later Show All or Hide All to the rule: the search reason stands until the search clears', () => {
   type('femur');
   filterViews();
-  act(() => mockApi.setAllMeasurementsVisibility(false));
-  mockApi.toggleVisibilityMeasurement.mockClear();
+  expect(searchHidden()).toEqual(['l2']);
+  mockApi.setSearchVisibility.mockClear();
 
-  // View > Annotations shows every annotation again: the filter hides the excluded one again,
-  // and shows it when the search is cleared
+  // The global choices are the user's reason, applied by the rule: the table reports nothing new
+  act(() => mockApi.setAllMeasurementsVisibility(false));
   act(() => mockApi.setAllMeasurementsVisibility(true));
-  expect(calls()).toEqual(['l2:false']);
-  mockApi.toggleVisibilityMeasurement.mockClear();
-  type('');
-  expect(calls()).toEqual(['l2:true']);
-});
+  expect(mockApi.setSearchVisibility).not.toHaveBeenCalled();
+  expect(mockApi.toggleVisibilityMeasurement).not.toHaveBeenCalled();
 
-it('keeps a later Hide All when the filter goes', () => {
-  type('femur');
-  filterViews();
-  mockApi.toggleVisibilityMeasurement.mockClear();
-
-  // View > Annotations hides every annotation
-  act(() => mockApi.setAllMeasurementsVisibility(false));
   type('');
-  expect(calls()).toEqual([]);
+  expect(searchHidden()).toEqual([]);
 });

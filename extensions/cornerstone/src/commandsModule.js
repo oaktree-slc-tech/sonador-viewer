@@ -175,6 +175,22 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
         return;
       }
 
+      // A defined timepoint is shown for review only: no tag is created while one is active, asked
+      // here and again when the dialog submits
+      const reviewOnly = () => {
+        const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+        return measurementApi && typeof measurementApi.canCreateAnnotations === 'function' && !measurementApi.canCreateAnnotations();
+      };
+      if (reviewOnly()) {
+        UINotificationService.show({
+          title: 'Series tag not added',
+          message: 'The active timepoint is shown for review only. Choose Study Date/Time to tag a series.',
+          type: 'warning',
+          autoClose: true,
+        });
+        return;
+      }
+
       // Initialize series tag measurement data, add measurement type and toolType to structure
       measurementData = measurementData || {};
       if (!measurementData.toolType || !measurementData.type) {
@@ -228,6 +244,17 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                   },
                   updateLabelling: ({ value, text, description, location, scheme, schemeVersion, group, meta }) => {
                     // Update measurement service with tag value
+
+                    if (reviewOnly()) {
+                      UIDialogService.dismiss({ id: 'labelling' });
+                      UINotificationService.show({
+                        title: 'Series tag not added',
+                        message: 'The active timepoint is shown for review only.',
+                        type: 'warning',
+                        autoClose: true,
+                      });
+                      return;
+                    }
 
                     // Add tag to measurement API
                     const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
@@ -296,6 +323,26 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       // Retrieve currently active server
       const activeServer = sonador.getActiveServer(servers.servers);
 
+      // A defined timepoint is shown for review only: refused before the dialog opens, and again on
+      // submit, since the active timepoint can change while the dialog is open. A refusal is the
+      // named error the API raises (TimepointSaveRefused), with the title the notification shows.
+      const SAVE_REFUSED = (OHIF.measurements.Enums && OHIF.measurements.Enums.TIMEPOINT_ERRORS
+        && OHIF.measurements.Enums.TIMEPOINT_ERRORS.SAVE_REFUSED) || 'TimepointSaveRefused';
+      const notSaved = (error, message) => Object.assign(error, { title: 'Measurements not saved', message: message || error.message });
+      const saveRefusal = () => {
+        const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+        if (measurementApi && typeof measurementApi.canCreateAnnotations === 'function' && !measurementApi.canCreateAnnotations()) {
+          const error = new Error('The active timepoint is shown for review only. Choose Study Date/Time to save.');
+          error.name = SAVE_REFUSED;
+          return notSaved(error);
+        }
+        return undefined;
+      };
+      const refusedBeforeDialog = saveRefusal();
+      if (refusedBeforeDialog) {
+        return Promise.reject(refusedBeforeDialog);
+      }
+
       // Clear any active save dialogs
       UIDialogService.dismiss({ id: 'saveDicomSeries' });
 
@@ -312,6 +359,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
             seriesNumber,
             onUpdate: async ({ SeriesNumber, SeriesDescription }) => {
 
+              const refusedOnSubmit = saveRefusal();
+              if (refusedOnSubmit) {
+                UIDialogService.dismiss({ id: 'saveDicomSeries' });
+                reject(refusedOnSubmit);
+                return;
+              }
+
               // The signed-in user is the report's Person Observer
               const personName = await OHIF.DICOMSR.resolvePersonObserverName(activeServer, sonador.fetchServerSystemInfo);
 
@@ -327,11 +381,13 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                 }
               });
 
-              // Nothing was stored: the report could not be built or the upload failed
+              // Nothing was stored: the save was refused (its error keeps its name), the report could
+              // not be built or the upload failed
               if (promise && promise.catch) {
                 promise.catch(error => {
                   UIDialogService.dismiss({ id: 'saveDicomSeries' });
-                  reject({ title: 'Measurements not saved', message: (error && error.message) || 'The report could not be stored.' });
+                  const refused = error && error.name === SAVE_REFUSED;
+                  reject(notSaved(refused ? error : new Error(''), (error && error.message) || 'The report could not be stored.'));
                 });
               }
             },
@@ -415,10 +471,17 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
     },
     
     setToolActive: ({ toolName }) => {
-      // Sets the state of a tool to active
+      // Sets the state of a tool to active. An annotation tool is not activated while a defined
+      // timepoint is active (shown for review only); navigation and window tools always are.
 
       if (!toolName) {
         log.warn('No toolname provided to setToolActive command');
+      }
+      const measurementApi = OHIF.measurements.MeasurementApi.Instance;
+      if (OHIF.measurements.isAnnotationTool(toolName) && measurementApi
+          && typeof measurementApi.canCreateAnnotations === 'function' && !measurementApi.canCreateAnnotations()) {
+        log.warn('[cornerstone:commands:setToolActive] annotation tool not activated: the active timepoint is shown for review only', toolName);
+        return;
       }
       cornerstoneTools.setToolActive(toolName, { mouseButtonMask: 1 });
     },

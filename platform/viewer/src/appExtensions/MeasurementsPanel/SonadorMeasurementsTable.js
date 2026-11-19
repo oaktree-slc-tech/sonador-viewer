@@ -65,7 +65,8 @@ const SonadorMeasurementTable = ({servicesManager, renderTimeout = 50, ...props}
           console.log('[ui:measurementTable:measurement-event:api-datasync] apiEvent='+apiEvent, measurementRepresentation);
         }
 
-        if (apiEvent && apiEvent == measurements.Enums.EVENTS.MEASUREMENT_CLEAR_SUCCESS) {
+        if (apiEvent && (apiEvent == measurements.Enums.EVENTS.MEASUREMENT_CLEAR_SUCCESS
+            || apiEvent == measurements.Enums.EVENTS.TIMEPOINTS_CHANGED)) {
 
           // Increment table version to force re-render
           setVersion(utils.guid());

@@ -85,6 +85,10 @@ const BUTTON_TOOLS = [
 ];
 const BUTTON_TOOL_STATE = _.fromPairs(BUTTON_TOOLS.map(({ stateKey }) => [stateKey, false]));
 
+const measurementApiInstance = () => OHIF.measurements && OHIF.measurements.MeasurementApi && OHIF.measurements.MeasurementApi.Instance;
+const timepointsChangedEvent = () => OHIF.measurements && OHIF.measurements.Enums && OHIF.measurements.Enums.EVENTS
+  && OHIF.measurements.Enums.EVENTS.TIMEPOINTS_CHANGED;
+
 
 class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   // VTK viewport which renders the provided volume and allows inspection of its properties.
@@ -106,6 +110,52 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     super(props);
 
     this.boundKeyboardEvent = this.keyboardEvent.bind(this);
+    this.onTimepointsChanged = this.onTimepointsChanged.bind(this);
+  }
+
+  /** Whether annotations can be created now (MeasurementApi): false while a defined timepoint is active */
+  canCreateAnnotations() {
+    const measurementApi = measurementApiInstance();
+    return !measurementApi || typeof measurementApi.canCreateAnnotations !== 'function' || measurementApi.canCreateAnnotations();
+  }
+
+  /** Whether a Cornerstone3D annotation is a measurement of a defined timepoint (never removed) */
+  isDefinedTimepointAnnotation(annotationUID) {
+    const measurementApi = measurementApiInstance();
+    const uid = typeof cextUtils.measurementUIDOf === 'function' ? cextUtils.measurementUIDOf(annotationUID) : null;
+    const record = uid && measurementApi && measurementApi.measurementService.getMeasurement(uid);
+    return Boolean(record && typeof measurementApi.isSaveEligible === 'function' && !measurementApi.isSaveEligible(record));
+  }
+
+  onTimepointsChanged({ apiEvent } = {}) {
+    // A defined timepoint became active: a drawing in progress is cancelled and an active annotation
+    // tool gives way to the window/level default
+    if (!apiEvent || apiEvent !== timepointsChangedEvent()) {
+      return;
+    }
+    const reviewOnly = !this.canCreateAnnotations();
+    if (reviewOnly === this.state.reviewOnly) {
+      return;
+    }
+    this.setState({ reviewOnly });
+    if (!reviewOnly) {
+      return;
+    }
+    const element = this.container && this.container.current;
+    if (element) {
+      try {
+        const annotationUid = cancelActiveManipulations(element);
+        if (annotationUid) {
+          c3dAnnotations.state.removeAnnotation(annotationUid);
+        }
+      } catch (error) {
+        console.warn('[Cornerstone3DInspectionView] unable to cancel the active drawing', error);
+      }
+    }
+    const { toolMode } = this.state;
+    if (toolMode && !['default', 'stack-scroll', 'zoom', 'pan'].includes(toolMode)) {
+      this.activateLevelTool();
+    }
   }
 
   state = {
@@ -126,6 +176,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     // Display tools
     gridActive: false,
     segDisplayActive: true,
+
+    // A defined timepoint is active: shown for review only, no annotation is created or removed
+    reviewOnly: false,
   }
 
   static defaultProps = {
@@ -531,6 +584,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   activateLengthTool() {
+    if (!this.canCreateAnnotations()) {
+      return;
+    }
     // Activate length tool
     
     const component = this;
@@ -539,6 +595,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   activateAngleTool() {
+    if (!this.canCreateAnnotations()) {
+      return;
+    }
     // Activate angle tool
 
     const component = this;
@@ -547,6 +606,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   activateCobbAngleTool() {
+    if (!this.canCreateAnnotations()) {
+      return;
+    }
     // Activate Cobb angle tool
 
     const component = this;
@@ -555,6 +617,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   activateCircleTool() {
+    if (!this.canCreateAnnotations()) {
+      return;
+    }
     // Activate circle tool
 
     const component = this;
@@ -563,6 +628,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   activateArrowTool() {
+    if (!this.canCreateAnnotations()) {
+      return;
+    }
     // Activate arrow annotation tool
 
     const component = this;
@@ -574,6 +642,9 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     // Activate a measurement tool of BUTTON_TOOLS
 
     const component = this;
+    if (!component.canCreateAnnotations()) {
+      return;
+    }
     const sessionTool = BUTTON_TOOLS.find(entry => entry.mode == mode);
     if (sessionTool) {
       component.selectionToolState({ [sessionTool.stateKey]: true });
@@ -658,8 +729,15 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
 
     } else if (key == 'Delete') {
 
-      // Remove selected annotations
+      // Remove selected annotations: none while a defined timepoint is active, and never a
+      // measurement of a defined timepoint
+      if (!component.canCreateAnnotations()) {
+        return;
+      }
       _.each(c3dAnnotationSelection.getAnnotationsSelected(), (a) => {
+        if (component.isDefinedTimepointAnnotation(a)) {
+          return;
+        }
         c3dAnnotations.state.removeAnnotation(a);
         component.render3d();
       });
@@ -671,6 +749,17 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     
     const component = this;
     await super.componentDidMount();
+
+    // The annotation buttons follow the active timepoint
+    const measurementApi = measurementApiInstance();
+    const service = measurementApi && measurementApi.measurementService;
+    if (service && service.EVENTS && typeof service.subscribe === 'function') {
+      component.timepointsSubscription = service.subscribe(service.EVENTS.MEASUREMENTS_DATASYNC, component.onTimepointsChanged);
+    }
+    const reviewOnly = !component.canCreateAnnotations();
+    if (reviewOnly !== component.state.reviewOnly) {
+      component.setState({ reviewOnly });
+    }
   }
 
   async componentDidUpdate(prevProps, prevState) {
@@ -686,6 +775,10 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
   }
 
   componentWillUnmount() {
+    if (this.timepointsSubscription) {
+      this.timepointsSubscription.unsubscribe();
+      this.timepointsSubscription = null;
+    }
     // Deactivate tool bindings
     
     const component = this;
@@ -719,7 +812,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
     const component = this;
     const { paintFilterLabelMapDetails } = component.props;
     const { stackScrollActive, zoomActive, levelsActive, panActive, lengthToolActive, 
-      angleToolActive, cobbAngleToolActive, circleToolActive, arrowToolActive, gridActive, segDisplayActive } = component.state;
+      angleToolActive, cobbAngleToolActive, circleToolActive, arrowToolActive, gridActive, segDisplayActive, reviewOnly } = component.state;
 
     return (
       <div className="inspectionViewRoot"><div className="inspectionViewModalContent" >
@@ -736,6 +829,8 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
           <ToolbarButton isToggle label="Pan" icon="arrows"
             isActive={panActive} onClick={component.activatePanTool.bind(component)}
           />
+          {/* The annotation tools are absent while a defined timepoint is active (shown for review only) */}
+          {!reviewOnly && (<>
           <ToolbarButton isToggle label="Length" icon="measure-temp"
             isActive={lengthToolActive} onClick={component.activateLengthTool.bind(component)}
           />
@@ -756,6 +851,7 @@ class Cornerstone3DInspectionView extends Cornerstone3DLabelmapBaseView {
               isActive={component.state[stateKey]} onClick={() => component.activateSessionTool(mode)}
             />
           ))}
+          </>)}
           <ToolbarButton isToggle icon="grid-multi" label='Grid'
             isActive={gridActive} onClick={component.toggleGrid.bind(component)}
           />
