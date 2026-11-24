@@ -1277,3 +1277,150 @@ describe('series-scoped jobs (ohif-viewers#130)', () => {
     await waitForTerminal(job.id);
   });
 });
+
+describe('reused session copies (imaging-development-env#103)', () => {
+  const putSession = async sop =>
+    LocalCacheService.putInstance({
+      StudyInstanceUID: STUDY, SeriesInstanceUID: SERIES_A, SOPInstanceUID: sop,
+      bytes: part10(sop, SERIES_A).buffer, metadata: { SOPInstanceUID: sop, SeriesInstanceUID: SERIES_A, StudyInstanceUID: STUDY, Modality: 'CT' },
+      session: true,
+    });
+
+  it('promotes the session copies it reuses before counting them complete, so the study closing mid-job cannot remove them', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_A)).toBe('temporary');
+    const parked = parkRetrieves();
+
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => job.state === JOB_STATES.DOWNLOADING && LocalCacheService.getSeriesCopyStateSync(SERIES_A) === 'saved', 'the reused copies to be promoted');
+    expect(job.progress.completed).toBe(2);
+
+    // The viewing session that fetched series A leaves the study while B is still in flight
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync(A2)).toBe(true);
+
+    parked.releaseAll();
+    scriptTwoSeries();
+    // The parked retrieves were rejected: the job retries B on the working script
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(job.progress).toEqual({ total: 4, completed: 4, failed: 0 });
+    [A1, A2, B1, B2].forEach(sop => expect(LocalCacheService.isInstanceCachedSync(sop)).toBe(true));
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toMatchObject({ state: 'saved', savedSeriesCount: 2, temporarySeriesCount: 0 });
+  });
+
+  it('hands the copies it promoted back to the session when it is cancelled, and removes only what it stored', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    const parked = parkRetrieves();
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => LocalCacheService.getSeriesCopyStateSync(SERIES_A) === 'saved', 'the reused copies to be promoted');
+
+    DownloadManagerService.cancel(job.id);
+    parked.releaseAll();
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.CANCELLED);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_A)).toBe('temporary');
+    expect(LocalCacheService.isSeriesCachedSync(SERIES_B)).toBe(false);
+  });
+
+  it('keeps the copies an earlier job promoted and this job relies on when that job is cancelled and the study is left mid-transfer', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    // An earlier job promoted the copies and is still running
+    await LocalCacheService.markSaved(STUDY, undefined, { holder: 'earlier-job' });
+    const parked = parkRetrieves();
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => job.state === JOB_STATES.DOWNLOADING && job.progress.completed === 2, 'the reused copies to be counted');
+
+    // The earlier job is cancelled and the viewing session leaves the study while B is in flight
+    expect(await LocalCacheService.markSession(STUDY, 'earlier-job')).toEqual([]);
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync(A2)).toBe(true);
+
+    parked.releaseAll();
+    scriptTwoSeries();
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(job.progress).toEqual({ total: 4, completed: 4, failed: 0 });
+    [A1, A2, B1, B2].forEach(sop => expect(LocalCacheService.isInstanceCachedSync(sop)).toBe(true));
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toMatchObject({ state: 'saved', savedSeriesCount: 2, temporarySeriesCount: 0 });
+    // Confirmed by the completion: the earlier job's hand-back, had it come later, changes nothing
+    expect(await LocalCacheService.markSession(STUDY, 'earlier-job')).toEqual([]);
+  });
+
+  it('a transfer that shares its persisted job id with another (the same clock tick, or one persisted job retried in two contexts) does not share its holder: the other one cancelling leaves its reused copies saved', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    const parked = parkRetrieves();
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    // The other transfer with the same id promotes the copies first (its request for the study lock
+    // is queued before this job finishes enumerating)
+    await LocalCacheService.markSaved(STUDY, undefined, { holder: job.id });
+    await waitFor(() => job.state === JOB_STATES.DOWNLOADING && job.progress.completed === 2, 'the reused copies to be counted');
+
+    // The other transfer is cancelled and the viewing session leaves the study
+    expect(await LocalCacheService.markSession(STUDY, job.id)).toEqual([]);
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync(A2)).toBe(true);
+
+    parked.releaseAll();
+    scriptTwoSeries();
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    expect(job.progress).toEqual({ total: 4, completed: 4, failed: 0 });
+    [A1, A2, B1, B2].forEach(sop => expect(LocalCacheService.isInstanceCachedSync(sop)).toBe(true));
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toMatchObject({ state: 'saved', savedSeriesCount: 2, temporarySeriesCount: 0 });
+  });
+
+  it('the same in archive mode', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    await LocalCacheService.markSaved(STUDY, undefined, { holder: 'earlier-job' });
+    DownloadManagerService.setArchiveTransferEnabled(true);
+    let releaseB;
+    global.fetch = jest.fn(url => {
+      if (url.includes(SERIES_A)) {
+        return Promise.resolve(archiveFor(SERIES_A));
+      }
+      return new Promise(resolve => { releaseB = () => resolve(archiveFor(SERIES_B)); });
+    });
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => !!releaseB, 'series B to be requested');
+    expect(await LocalCacheService.markSession(STUDY, 'earlier-job')).toEqual([]);
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    releaseB();
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    [A1, A2, B1, B2].forEach(sop => expect(LocalCacheService.isInstanceCachedSync(sop)).toBe(true));
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toMatchObject({ state: 'saved', savedSeriesCount: 2 });
+  });
+
+  it('does the same in archive mode', async () => {
+    await putSession(A1);
+    await putSession(A2);
+    DownloadManagerService.setArchiveTransferEnabled(true);
+    let releaseB;
+    global.fetch = jest.fn(url => {
+      if (url.includes(SERIES_A)) {
+        return Promise.resolve(archiveFor(SERIES_A));
+      }
+      return new Promise(resolve => { releaseB = () => resolve(archiveFor(SERIES_B)); });
+    });
+    const job = DownloadManagerService.enqueueStudy({ server: SERVER, StudyInstanceUID: STUDY });
+    await waitFor(() => LocalCacheService.getSeriesCopyStateSync(SERIES_A) === 'saved', 'the reused copies to be promoted');
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isInstanceCachedSync(A1)).toBe(true);
+    await waitFor(() => !!releaseB, 'series B to be requested');
+    releaseB();
+    await waitForTerminal(job.id);
+    expect(job.state).toBe(JOB_STATES.COMPLETED);
+    [A1, A2, B1, B2].forEach(sop => expect(LocalCacheService.isInstanceCachedSync(sop)).toBe(true));
+  });
+});

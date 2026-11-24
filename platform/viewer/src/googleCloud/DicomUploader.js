@@ -1,4 +1,4 @@
-import React, { createElement, useState } from 'react';
+import React, { createElement, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   CheckIcon,
@@ -19,8 +19,8 @@ import '../styles/global-viewer.css';
 import './googleCloud.css';
 import './styles/dicom-uploader.css';
 
-const retryLimit = 100;
-const notValidDicomFileError = 'This is not a valid DICOM file.';
+// The upload service owns the retry (DicomUploadService): each file carries the standing the
+// service reports -- `attempt`, `attempts` (the budget) and `willRetry` -- and the rows render it.
 
 
 const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
@@ -44,6 +44,12 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
     uploadDetailsVisible: false,
   });
 
+  // What the service's callback reads: the files of the batch in flight and the batch's identity.
+  // Refs, not state, because the callback runs long after the render that created it and a
+  // render-time snapshot of `state` would describe no batch at all (imaging-development-env#103).
+  const filesRef = useRef({});
+  const uploadContextRef = useRef(null);
+
   const filesLeft = () => {
     return `${state.uploadedList.length} ${t(' of ')} ${state.totalCount} ${t(' files')}`;
   };
@@ -56,13 +62,16 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
     return parseInt(percentsFloat());
   };
 
-  const uploadCallback = (fileId, error, filesArray) => {
+  const uploadCallback = (fileId, error, filesArray, status) => {
     // Callback invoked on the completion of a file upload. Updates error list
-    // and adds details about the transfer to the log. If there was an error in transfer
-    // and the retry limit has not yet been reached, re-queue for transfer.
+    // and adds details about the transfer to the log. The upload service retries a failed
+    // transfer itself (`status.willRetry`); this component only reflects the standing it reports.
 
     // Retrieve reference to file and mark as processed
-    const file = state.files[fileId];
+    const file = filesRef.current[fileId];
+    if (!file) {
+      return;
+    }
 
     if (!error) {
       // File uploaded successfully
@@ -70,36 +79,42 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
       // Set file state properites
       file.processed = true;
       file.error = null;
+      file.willRetry = false;
+      file.attempt = status?.attempt || file.attempt;
 
-      let uploadedVolume = state.uploadedVolume + file.size;
-      setState((prevState) => ({ ...prevState, uploadedVolume }));
-      setState((prevState) => ({ ...prevState, successCount: state.successCount + 1 }));
+      setState((prevState) => ({
+        ...prevState,
+        uploadedVolume: (prevState.uploadedVolume || 0) + file.size,
+        successCount: prevState.successCount + 1,
+      }));
     } else {
       // File upload encountered an error
 
       file.error = error;
+      file.attempt = status?.attempt || (file.attempt || 0) + 1;
+      file.attempts = status?.attempts || file.attempts;
+      file.willRetry = !!(status && status.willRetry);
 
-      if ((file.retry || 0) < retryLimit && !(error || '').includes(notValidDicomFileError)) {
-        // Retry limit not yet exceeded, re-queue for transfer. Files which failed because
-        // they are not valid DICOM files are skipped.
-
-        file.retry = (file.retry || 0) + 1;
-        filesArray.unshift(file.ref);
+      if (file.willRetry) {
+        // The service has scheduled another send; show the file as retrying
+        file.retry = file.attempt;
       } else {
         // Number of retries exceeded, increment transfer error count
 
         file.failed = true;
-        setState((prevState) => ({ ...prevState, errorsCount: state.errorsCount + 1 }));
+        setState((prevState) => ({ ...prevState, errorsCount: prevState.errorsCount + 1 }));
       }
     }
 
-    // Update component state: last file and uploaded file list
-    setState((prevState) => ({ ...prevState, lastFile: file.name }));
-    let uploadedList = state.uploadedList;
-    if (uploadedList.indexOf(file) === -1) {
-      uploadedList.push(file);
-    }
-    setState((prevState) => ({ ...prevState, uploadedList }));
+    // Update component state: last file and the list of files the service has reported on
+    setState((prevState) => {
+      const uploadedList = prevState.uploadedList || [];
+      return {
+        ...prevState,
+        lastFile: file.name,
+        uploadedList: uploadedList.indexOf(file) === -1 ? [...uploadedList, file] : [...uploadedList],
+      };
+    });
   };
 
   const uploadFiles = (files) => {
@@ -121,6 +136,8 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
     });
     const wholeVolume = filesArray.map((f) => f.size).reduce((a, b) => a + b);
     const uploadContext = Math.random();
+    filesRef.current = filesDict;
+    uploadContextRef.current = uploadContext;
 
     setState((prevState) => ({
       ...prevState,
@@ -136,8 +153,9 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
     }));
 
     const cancellationToken = new CancellationToken();
-    const uploadCb = (fileId, error, filesArray) =>
-      uploadContext === state.uploadContext && uploadCallback(fileId, error, filesArray);
+    // The full service contract, status included; a callback from a batch that was replaced is ignored
+    const uploadCb = (fileId, error, filesArray, status) =>
+      uploadContext === uploadContextRef.current && uploadCallback(fileId, error, filesArray, status);
 
     dicomUploader.setRetrieveAuthHeaderFunction(retrieveAuthHeaderFunction);
     dicomUploader.smartUpload(files.target.files, url, uploadCb, cancellationToken);
@@ -157,7 +175,7 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
       // File processed successfully
 
       sicon = <CheckIcon className="success icon-size-16 spacer-left-1rem" />;
-    } else if (file.error !== null && (file.retry || 0) < retryLimit) {
+    } else if (file.error !== null && file.willRetry) {
       // File experienced upload error, but has been requeued for retry
 
       sicon = <ShieldExclamationIcon className="warning icon-size-16 spacer-left-1rem" />;
@@ -168,27 +186,20 @@ const DicomUploader = ({ url, retrieveAuthHeaderFunction }) => {
     }
 
     // File status message and error details
-    if (file.error !== null && (file.retry || 0) < retryLimit) {
+    const budget = file.attempts ? `${file.attempt || 0}/${file.attempts}` : null;
+    if (file.error !== null && file.willRetry) {
       // File experienced an upload error, but has been re-queued for retry
       message = <span className="warning spacer-left-3rem vertical-top font-light">{t('Error & Retry')}</span>;
       error = <span className="spacer-left-05rem vertical-top">{file.error}</span>;
-      if (file.retry) {
-        rmessage = (
-          <span className="spacer-left-2rem vertical-top">
-            {file.retry}/{retryLimit}
-          </span>
-        );
+      if (budget) {
+        rmessage = <span className="spacer-left-2rem vertical-top" data-cy="upload-attempts">{budget}</span>;
       }
     } else if (file.error !== null) {
-      // File upload failed
+      // File upload failed: its attempts are spent, or the failure is not worth repeating
       message = <span className="error spacer-left-3rem vertical-top font-light">{t('Error/Failed')}</span>;
       error = <span className="spacer-left-3rem vertical-top">{file.error}</span>;
-      if (file.retry) {
-        rmessage = (
-          <span className="error spacer-left-2rem vertical-top">
-            {file.retry}/{retryLimit}
-          </span>
-        );
+      if (budget) {
+        rmessage = <span className="error spacer-left-2rem vertical-top" data-cy="upload-attempts">{budget}</span>;
       }
     } else {
       // File transfer successful

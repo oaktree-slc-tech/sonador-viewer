@@ -68,9 +68,11 @@ function GeneralPreferences({ onClose }) {
           [RETRY_ATTEMPTS_PREFERENCE_KEY]:
             DownloadManagerService?.getRetryAttempts?.() ?? RETRY_ATTEMPTS_DEFAULT,
           // Carried for the same reason: the Settings page (and the Open as Segmentation dialog)
-          // own this one.
+          // own these -- the locked-models warning, the study archive loading and the upload
+          // attempt budget, every server-side key the service holds.
           [LOCKED_MODELS_WARNING_PREFERENCE_KEY]:
             UserPreferencesService?.getGeneral?.(LOCKED_MODELS_WARNING_PREFERENCE_KEY) ?? true,
+          ...(UserPreferencesService?.getGeneralValues?.() ?? {}),
         },
       },
       showSaveOutcome(t('SaveMessage'), 'general preferences')
@@ -110,8 +112,7 @@ function GeneralPreferences({ onClose }) {
             </div>
             <p className="offlineTransferHelp">
               Fetches one compressed archive per series instead of one request per image. This is
-              usually much faster over slow or high-latency connections. The copy stored on this
-              device is the same either way.
+              usually much faster over slow or high-latency connections.
             </p>
           </div>
         </div>

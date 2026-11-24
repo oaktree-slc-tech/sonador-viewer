@@ -25,21 +25,25 @@ const formatBytes = OHIF.utils.formatBytes;
 
 
 function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
-  // Offline-availability indicator for a series thumbnail (ohif-viewers#125, FR-8). Shows an
-  // offline-cache icon when the series is locally cached; the hover popup (OverlayTrigger + Tooltip,
-  // reusing the getWarningInfo pattern per AR-9) reports cached-instance count + storage size.
+  // Offline-availability indicator for a series thumbnail (ohif-viewers#125, FR-8). Shows the
+  // offline-cache icon when the series is saved offline, and its dashed, hollow form when the cache
+  // holds only a temporary copy fetched for this viewing session (imaging-development-env#103); the
+  // hover popup (OverlayTrigger + Tooltip, reusing the getWarningInfo pattern per AR-9) names the
+  // state and reports instance count + storage size.
   //
   // A pure indicator, with no control of its own (ohif-viewers#130, FR-7): removing the local copy
   // is "Remove Offline Storage" in this thumbnail's own series actions menu, and two removal
   // affordances on one thumbnail would be worse than one.
   const { t } = useTranslation('Common');
-  const compute = () =>
-    LocalCacheService
-      ? {
-          cached: LocalCacheService.isSeriesCachedSync(SeriesInstanceUID),
-          summary: LocalCacheService.getSeriesSummary(StudyInstanceUID, SeriesInstanceUID),
-        }
-      : { cached: false, summary: null };
+  const compute = () => {
+    if (!LocalCacheService) {
+      return { state: 'none', summary: null };
+    }
+    const state = LocalCacheService.getSeriesCopyStateSync
+      ? LocalCacheService.getSeriesCopyStateSync(SeriesInstanceUID)
+      : LocalCacheService.isSeriesSavedSync(SeriesInstanceUID) ? 'saved' : 'none';
+    return { state, summary: LocalCacheService.getSeriesSummary(StudyInstanceUID, SeriesInstanceUID) };
+  };
 
   const [state, setState] = useState(compute);
 
@@ -54,13 +58,17 @@ function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [StudyInstanceUID, SeriesInstanceUID]);
 
-  if (!state.cached || !SeriesInstanceUID) {
+  if (state.state === 'none' || !SeriesInstanceUID) {
     return null;
   }
 
   const { summary } = state;
+  const temporary = state.state === 'temporary';
   const instanceCount = summary?.instanceCount ?? 0;
   const totalBytes = summary?.totalBytes ?? 0;
+  const countLabel = temporary
+    ? instanceCount === 1 ? t('instance in the temporary copy') : t('instances in the temporary copy')
+    : instanceCount === 1 ? t('instance cached') : t('instances cached');
 
   return (
     <OverlayTrigger
@@ -69,19 +77,20 @@ function SeriesCacheBadge({ StudyInstanceUID, SeriesInstanceUID }) {
       trigger={['hover', 'focus']}
       overlay={
         <Tooltip placement="left" className="in tooltip-cache" id={`tooltip-cache-${SeriesInstanceUID}`}>
-          <div className="warningTitle">{t('Available offline')}</div>
+          <div className="warningTitle">{temporary ? t('Temporary copy') : t('Available offline')}</div>
           <div className="warningContent">
+            {temporary && <div>{t('Cleared when the study is closed')}</div>}
             <div>
-              {instanceCount} {instanceCount === 1 ? t('instance cached') : t('instances cached')}
+              {instanceCount} {countLabel}
             </div>
             <div>{formatBytes(totalBytes)}</div>
           </div>
         </Tooltip>
       }
     >
-      <div className="cache-indicator">
+      <div className={classNames('cache-indicator', { temporary })}>
         <span className="cache-icon">
-          <Icon name="offline-cache" />
+          <Icon name={temporary ? 'offline-cache-temporary' : 'offline-cache'} />
         </span>
       </div>
     </OverlayTrigger>

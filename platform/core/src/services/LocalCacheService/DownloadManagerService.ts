@@ -852,6 +852,25 @@ class DownloadManagerServiceClass extends PubSubService {
     job.progress = { total: instances.length, completed: 0, failed: 0 };
     this._emitProgress(job);
 
+    // Instances the cache already holds as temporary copies of a viewing session are counted as
+    // complete below rather than fetched again. They become part of the saved copy NOW, before the
+    // session that fetched them can evict them (imaging-development-env#103), with this run of the
+    // job as a holder: a copy another transfer promoted and this one relies on stays saved if that
+    // transfer is cancelled, and a cancelled transfer hands back only what no other still relies on.
+    // The holder is this execution, not the persisted job id: two jobs enqueued in the same clock
+    // tick, or one persisted job retried in two browsing contexts, share an id and must not share a
+    // holder, or one cancellation would release the other's protection.
+    const holder = `${job.id}#${_executionId()}`;
+    try {
+      await LocalCacheService.markSaved(
+        job.StudyInstanceUID,
+        job.kind === 'series' ? job.SeriesInstanceUID : undefined,
+        { holder }
+      );
+    } catch (error) {
+      console.warn('[DownloadManagerService] Failed to promote reused session copies.', error);
+    }
+
     // Reuse the app's DICOMweb client (same auth/CORS path as metadata retrieval) to pull each
     // instance's Part10 bytes via WADO-RS, rather than a raw fetch of the WADO-URI (which the
     // server may not serve or CORS-allow when configured for WADO-RS rendering). Both modes use
@@ -882,8 +901,14 @@ class DownloadManagerServiceClass extends PubSubService {
 
     if (this._isCancelled(jobId)) {
       // Clean up after ourselves: remove everything this job stored (including a retrieve that was
-      // mid-flight when the cancel landed and completed afterwards).
+      // mid-flight when the cancel landed and completed afterwards), and hand the copies promoted
+      // at the start back to their viewing session.
       await this._cleanupCancelledDownloads(downloadedByThisJob);
+      try {
+        await LocalCacheService.markSession(job.StudyInstanceUID, holder);
+      } catch (error) {
+        console.warn('[DownloadManagerService] Failed to hand promoted copies back to the session.', error);
+      }
       this._setState(job, JOB_STATES.CANCELLED);
       return;
     }
@@ -916,6 +941,19 @@ class DownloadManagerServiceClass extends PubSubService {
       } catch (error) {
         console.warn('[DownloadManagerService] Failed to store study metadata payload.', error);
       }
+    }
+
+    // Whatever this scope now holds is the user's offline copy: the copies promoted at the start, and
+    // anything a viewing session stored while the job ran (imaging-development-env#103). Confirmed,
+    // so that no cancellation of another transfer can hand any of them back.
+    try {
+      await LocalCacheService.markSaved(
+        job.StudyInstanceUID,
+        job.kind === 'series' ? job.SeriesInstanceUID : undefined,
+        { holder, confirm: true }
+      );
+    } catch (error) {
+      console.warn('[DownloadManagerService] Failed to mark session instances as saved.', error);
     }
 
     if (quotaHit) {
@@ -1684,6 +1722,15 @@ class DownloadManagerServiceClass extends PubSubService {
       });
     await Promise.all(runners);
   }
+}
+
+/** A token unique to one run of a job, across browsing contexts. */
+function _executionId(): string {
+  const cryptoApi = typeof crypto !== 'undefined' ? (crypto as any) : undefined;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function _pn(pn: any): string | undefined {

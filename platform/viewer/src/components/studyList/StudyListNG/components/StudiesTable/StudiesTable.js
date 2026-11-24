@@ -284,7 +284,7 @@ export default function StudiesTable({
                         [styles.odd]: index % 2 === 0,
                         [styles.withRightBorder]: !isExpanded,
                         // Heavier font weight for locally-cached studies (FR-6).
-                        [styles.cached]: LocalCacheService?.isStudyCachedSync(studyId),
+                        [styles.cached]: LocalCacheService?.isStudySavedSync(studyId),
                       })}
                     >
                       {row.getVisibleCells().map((cell) => {

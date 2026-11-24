@@ -101,6 +101,13 @@ export default function StudyOfflineDetailsCard({
     : [];
   const seriesSummaries = mergeSeriesRows(stored, job);
   const showActions = typeof onRemoveSeries === 'function';
+  // Saved versus temporary copies (imaging-development-env#103): the breakdown the title line
+  // carries, and the state each row shows
+  const copies = LocalCacheService?.getStudyCopyStateSync?.(item?.StudyInstanceUID);
+  const copyLine = copies && copies.state !== 'none'
+    ? `${copies.savedSeriesCount} ${t('of')} ${copies.seriesCount} ${t('series')} ${t('available offline')}` +
+      (copies.temporarySeriesCount ? `, ${copies.temporarySeriesCount} ${t('temporary')}` : '')
+    : null;
   // #130 FR-8, decided the same way the series menus decide it: a series a transfer is still
   // writing has no removal control, because the job would re-cache it moments later. The predicate
   // comes from the parent so the service stays out of this card (AR-5).
@@ -122,6 +129,7 @@ export default function StudyOfflineDetailsCard({
           </div>
         )}
         {item?.StudyDescription && <div className={styles.detailsDescription}>"{item.StudyDescription}"</div>}
+        {copyLine && <div className={styles.detailsAttr}>{copyLine}</div>}
         {item?.AccessionNumber && (
           <div className={styles.detailsAttr}>
             {t('AccessionNumber')} {item.AccessionNumber}
@@ -141,6 +149,7 @@ export default function StudyOfflineDetailsCard({
                 <th>{t('Modality')}</th>
                 <th>{t('Instances')}</th>
                 <th>{t('Size')}</th>
+                <th>{t('Copy')}</th>
                 {job && <th>{t('Transfer')}</th>}
                 {/* Empty header, like the study table's offline-indicator column. */}
                 {showActions && <th />}
@@ -154,6 +163,7 @@ export default function StudyOfflineDetailsCard({
                   <td>{series.Modality || ''}</td>
                   <td>{series.instanceCount}</td>
                   <td>{formatBytes(series.totalBytes)}</td>
+                  <td>{renderCopyCell(series.state, t)}</td>
                   {job && <td>{renderTransferCell(series.transfer, t)}</td>}
                   {showActions && (
                     <td>
@@ -163,13 +173,17 @@ export default function StudyOfflineDetailsCard({
                           className={styles.seriesRemoveButton}
                           data-cy="offline-series-remove"
                           data-series-uid={series.SeriesInstanceUID}
-                          title={t('Remove Offline Storage')}
-                          aria-label={t('Remove this series from offline storage')}
+                          title={series.state === 'temporary' ? t('Remove Temporary Copy') : t('Remove Offline Storage')}
+                          aria-label={
+                            series.state === 'temporary'
+                              ? t("Remove this series' temporary copy")
+                              : t('Remove this series from offline storage')
+                          }
                           // The row underneath a study-table card toggles its drawer; keep it
                           // from reacting to a click meant for this control (AR-5).
                           onClick={event => {
                             event.stopPropagation();
-                            onRemoveSeries(item?.StudyInstanceUID, series.SeriesInstanceUID);
+                            onRemoveSeries(item?.StudyInstanceUID, series.SeriesInstanceUID, series.state);
                           }}
                         >
                           <Icon name="trash" />
@@ -191,6 +205,27 @@ export default function StudyOfflineDetailsCard({
 
 // Transfer state for one series, with its byte progress when the server reported a size and the
 // retrieval path when it was not the archive it started as (#129 FR-9).
+/** The copy state of a series row: the solid cloud for a saved copy, the dashed one for a temporary copy. */
+function renderCopyCell(state, t) {
+  if (state === 'temporary') {
+    return (
+      <span className={styles.copyState} title={`${t('Temporary copy')}: ${t('Cleared when the study is closed').toLowerCase()}`}>
+        <Icon name="offline-cache-temporary" />
+        <span>{t('Temporary')}</span>
+      </span>
+    );
+  }
+  if (state === 'saved') {
+    return (
+      <span className={styles.copyState} title={t('Available offline')}>
+        <Icon name="offline-cache" />
+        <span>{t('Saved')}</span>
+      </span>
+    );
+  }
+  return '';
+}
+
 function renderTransferCell(transfer, t) {
   if (!transfer) {
     return '';

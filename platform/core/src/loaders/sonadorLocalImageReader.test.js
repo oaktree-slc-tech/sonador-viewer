@@ -3,6 +3,7 @@
 // takes effect within the session) and the per-instance remote fallback (FR-10 / AC-5).
 
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
+import { markInstancesPending, releasePendingInstance } from '../services/LocalCacheService/sessionArchiveRegistry';
 import {
   buildSonadorLocalImageId,
   parseSonadorLocalImageId,
@@ -121,6 +122,42 @@ describe('sonadorLocalImageReader', () => {
     expect(remoteLoad).toHaveBeenCalledWith('wadors:https://example/instances/sop-fallback-1', { opt: 1 });
     expect(result).toEqual({ fromRemote: true });
     expect(wadoImageLoader.fileManager.add).not.toHaveBeenCalled();
+  });
+
+  it('waits for an instance a series archive still owes, then serves it from the cache (imaging-development-env#103)', async () => {
+    const bytes = jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(null);
+    const wadoImageLoader = makeFakeWadoLoader();
+    const remoteLoad = jest.fn(() => ({ promise: Promise.resolve({ remote: true }) }));
+    registerRemoteFallback('sop-owed', 'wadors:remote/owed');
+    markInstancesPending(['sop-owed']);
+
+    let settled = false;
+    const load = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-owed'), {}, { wadoImageLoader, remoteLoad }).promise
+      .then(image => { settled = true; return image; });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    // Still waiting: no remote request was made in the meantime
+    expect(settled).toBe(false);
+    expect(remoteLoad).not.toHaveBeenCalled();
+
+    // The archive member lands and is released to the waiter
+    bytes.mockResolvedValue(new ArrayBuffer(16));
+    releasePendingInstance('sop-owed');
+    const image = await load;
+    expect(image.imageId).toBe(buildSonadorLocalImageId('sop-owed'));
+    expect(wadoImageLoader.fileManager.add).toHaveBeenCalledTimes(1);
+    expect(remoteLoad).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the remote imageId once a failed archive releases the instance it owed', async () => {
+    jest.spyOn(LocalCacheService, 'getInstanceBytes').mockResolvedValue(null);
+    const wadoImageLoader = makeFakeWadoLoader();
+    const remoteLoad = jest.fn(() => ({ promise: Promise.resolve({ remote: true }) }));
+    registerRemoteFallback('sop-abandoned', 'wadors:remote/abandoned');
+    markInstancesPending(['sop-abandoned']);
+    const load = loadCachedInstanceImageObject(buildSonadorLocalImageId('sop-abandoned'), {}, { wadoImageLoader, remoteLoad }).promise;
+    releasePendingInstance('sop-abandoned');
+    expect(await load).toEqual({ remote: true });
+    expect(remoteLoad).toHaveBeenCalledWith('wadors:remote/abandoned', {});
   });
 
   it('throws on a cache miss with no registered fallback', async () => {

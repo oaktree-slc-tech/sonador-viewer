@@ -114,8 +114,10 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
     if (!part10SRArrayBuffer) {
       part10SRArrayBuffer = await dicomWeb.retrieveInstance(_args);
 
-      // Write-back: if the study is saved offline, cache the fetched SR so the next retrieval is
-      // local (same opportunistic pattern as dicomLoaderService._fetchAndRecache).
+      // Write-back: if the cache holds the study, cache the fetched SR so the next retrieval is
+      // local (same opportunistic pattern as dicomLoaderService._fetchAndRecache). The copy takes
+      // the study's state: saved when the study has a saved offline copy, temporary otherwise
+      // (imaging-development-env#103).
       if (
         part10SRArrayBuffer && isUsablePart10(part10SRArrayBuffer) &&
         LocalCacheService?.isStudyCachedSync(_args.studyInstanceUID)
@@ -126,6 +128,7 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
           SOPInstanceUID: _args.sopInstanceUID,
           bytes: part10SRArrayBuffer,
           metadata: { SOPInstanceUID: _args.sopInstanceUID, Modality: 'SR' },
+          session: !LocalCacheService.isStudySavedSync?.(_args.studyInstanceUID),
         }).catch(() => {});
       }
     }

@@ -29,6 +29,7 @@ import createComment from './icons/create-comment.svg';
 import cloudDownload from './icons/cloud-download.svg';
 import createScreenCapture from './icons/create-screen-capture.svg';
 import offlineCache from './icons/offline-cache.svg';
+import offlineCacheTemporary from './icons/offline-cache-temporary.svg';
 import crop from './icons/crop.svg';
 import crosshairs from './icons/crosshairs.svg';
 import cube from './icons/cube.svg';
@@ -150,6 +151,9 @@ const ICONS = {
   'cloud-download': cloudDownload,
   'create-screen-capture': createScreenCapture,
   'offline-cache': offlineCache,
+  // The dashed, hollow form of the same cloud: a copy the viewer fetched for the session, not one
+  // the user saved (imaging-development-env#103).
+  'offline-cache-temporary': offlineCacheTemporary,
   edit,
   'fast-backward': fastBackward,
   'fast-forward': fastForward,

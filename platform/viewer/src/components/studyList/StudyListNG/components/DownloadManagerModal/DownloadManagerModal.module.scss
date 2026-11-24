@@ -3,7 +3,9 @@
 // (e.g. with `relative`) drops the dialog into document flow. The fixed box is already a
 // positioned ancestor, so the confirmOverlay's `absolute; inset: 0` anchors to it as-is.
 .modal {
-  width: 700px;
+  // Wide enough for a stored row to carry its copy-state line beside the Keep and Remove controls
+  // (imaging-development-env#103)
+  width: 840px;
   max-width: 90vw;
 }
 
@@ -163,6 +165,27 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+// The copy state of a stored study, on its own line under the counts: the cloud icon (solid for a
+// saved copy, dashed for a temporary one) centred on the text that names the state and, for a mixed
+// study, the breakdown by series (imaging-development-env#103).
+.rowState {
+  display: flex;
+  align-items: center;
+  column-gap: 6px;
+  color: #9a9da4;
+  font-size: 12px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .progressTrack {

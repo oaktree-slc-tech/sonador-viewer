@@ -526,3 +526,134 @@ describe('LocalCacheService (in-memory index)', () => {
     expect(LocalCacheService.isInstanceCachedSync('sop-1')).toBe(false);
   });
 });
+
+describe('LocalCacheService: session copies (imaging-development-env#103)', () => {
+  beforeEach(async () => {
+    await LocalCacheService.ready();
+    await LocalCacheService.clearAll();
+  });
+
+  it('a session instance is cached but not saved, and is listed for the sweep', async () => {
+    await LocalCacheService.putInstance({ ...makeInstance('sop-1'), session: true });
+
+    expect(LocalCacheService.isInstanceCachedSync('sop-1')).toBe(true);
+    expect(LocalCacheService.isSeriesCachedSync(SERIES_A)).toBe(true);
+    expect(LocalCacheService.isStudyCachedSync(STUDY)).toBe(true);
+    expect(LocalCacheService.isStudySavedSync(STUDY)).toBe(false);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(false);
+    expect(LocalCacheService.hasSessionInstancesSync(STUDY)).toBe(true);
+    expect(LocalCacheService.getSessionStudyUIDsSync()).toEqual([STUDY]);
+  });
+
+  it('a saved instance makes its study and series saved; a later session write does not demote it', async () => {
+    await LocalCacheService.putInstance(makeInstance('sop-1'));
+    await LocalCacheService.putInstance({ ...makeInstance('sop-2', { SeriesInstanceUID: SERIES_B }), session: true });
+
+    expect(LocalCacheService.isStudySavedSync(STUDY)).toBe(true);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(true);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_B)).toBe(false);
+
+    await LocalCacheService.putInstance({ ...makeInstance('sop-1'), session: true });
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(true);
+
+    // A saved write of a session instance promotes it
+    await LocalCacheService.putInstance(makeInstance('sop-2', { SeriesInstanceUID: SERIES_B }));
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_B)).toBe(true);
+    expect(LocalCacheService.hasSessionInstancesSync(STUDY)).toBe(false);
+  });
+
+  it('markSaved promotes the session instances of a study, or of one series, and announces it', async () => {
+    await LocalCacheService.putInstance({ ...makeInstance('sop-1'), session: true });
+    await LocalCacheService.putInstance({ ...makeInstance('sop-2', { SeriesInstanceUID: SERIES_B }), session: true });
+    const updates = [];
+    const sub = LocalCacheService.subscribe(LocalCacheService.EVENTS.STUDY_CACHE_UPDATED, p => updates.push(p.StudyInstanceUID));
+
+    await LocalCacheService.markSaved(STUDY, SERIES_B);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_B)).toBe(true);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(false);
+    expect(updates).toEqual([STUDY]);
+
+    await LocalCacheService.markSaved(STUDY);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(true);
+    expect(LocalCacheService.getSessionStudyUIDsSync()).toEqual([]);
+    // Nothing left to promote: no further announcement
+    await LocalCacheService.markSaved(STUDY);
+    expect(updates).toEqual([STUDY, STUDY]);
+    sub.unsubscribe();
+  });
+
+  it('removeSessionInstances evicts only the session instances, through the series removal when a series is wholly session', async () => {
+    await LocalCacheService.putInstance(makeInstance('sop-1'));
+    await LocalCacheService.putInstance({ ...makeInstance('sop-2'), session: true });
+    await LocalCacheService.putInstance({ ...makeInstance('sop-3', { SeriesInstanceUID: SERIES_B }), session: true });
+    const removed = [];
+    const sub = LocalCacheService.subscribe(LocalCacheService.EVENTS.INSTANCE_REMOVED, p => removed.push(p.SOPInstanceUID));
+
+    await LocalCacheService.removeSessionInstances(STUDY);
+    sub.unsubscribe();
+
+    expect(removed.sort()).toEqual(['sop-2', 'sop-3']);
+    expect(LocalCacheService.isInstanceCachedSync('sop-1')).toBe(true);
+    expect(LocalCacheService.isSeriesCachedSync(SERIES_B)).toBe(false);
+    expect(LocalCacheService.isStudySavedSync(STUDY)).toBe(true);
+    expect(LocalCacheService.hasSessionInstancesSync(STUDY)).toBe(false);
+    expect(LocalCacheService.getStudySummary(STUDY).instanceCount).toBe(1);
+  });
+
+  it('a series-level saved query works after a hydrate-free start and after the series is removed', async () => {
+    await LocalCacheService.putInstance(makeInstance('sop-1'));
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(true);
+    await LocalCacheService.removeSeries(STUDY, SERIES_A);
+    expect(LocalCacheService.isSeriesSavedSync(SERIES_A)).toBe(false);
+    expect(LocalCacheService.isSeriesSavedSync(undefined)).toBe(false);
+  });
+});
+
+describe('LocalCacheService: copy state and saved-only removal (imaging-development-env#103)', () => {
+  beforeEach(async () => {
+    await LocalCacheService.ready();
+    await LocalCacheService.clearAll();
+  });
+
+  it('reports saved, temporary and none per series and per study, saved winning for the study', async () => {
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_A)).toBe('none');
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toEqual({ state: 'none', seriesCount: 0, savedSeriesCount: 0, temporarySeriesCount: 0 });
+
+    await LocalCacheService.putInstance({ ...makeInstance('sop-1'), session: true });
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_A)).toBe('temporary');
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY).state).toBe('temporary');
+
+    await LocalCacheService.putInstance(makeInstance('sop-2', { SeriesInstanceUID: SERIES_B }));
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_B)).toBe('saved');
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY)).toEqual({ state: 'saved', seriesCount: 2, savedSeriesCount: 1, temporarySeriesCount: 1 });
+
+    const summary = LocalCacheService.getStudySummary(STUDY);
+    expect(summary).toMatchObject({ state: 'saved', savedSeriesCount: 1, temporarySeriesCount: 1 });
+    expect(LocalCacheService.getSeriesSummary(STUDY, SERIES_A)).toMatchObject({ state: 'temporary', savedInstanceCount: 0, temporaryInstanceCount: 1 });
+    expect(LocalCacheService.getStudySeriesSummaries(STUDY).map(s => [s.SeriesInstanceUID, s.state])).toEqual([[SERIES_A, 'temporary'], [SERIES_B, 'saved']]);
+  });
+
+  it('removeSavedInstances removes the saved copies only, series-wise when a series is wholly saved', async () => {
+    await LocalCacheService.putInstance(makeInstance('sop-1'));
+    await LocalCacheService.putInstance({ ...makeInstance('sop-2'), session: true });
+    await LocalCacheService.putInstance(makeInstance('sop-3', { SeriesInstanceUID: SERIES_B }));
+    const removed = [];
+    const sub = LocalCacheService.subscribe(LocalCacheService.EVENTS.INSTANCE_REMOVED, p => removed.push(p.SOPInstanceUID));
+
+    await LocalCacheService.removeSavedInstances(STUDY);
+    sub.unsubscribe();
+
+    expect(removed.sort()).toEqual(['sop-1', 'sop-3']);
+    expect(LocalCacheService.isInstanceCachedSync('sop-2')).toBe(true);
+    expect(LocalCacheService.isSeriesCachedSync(SERIES_B)).toBe(false);
+    expect(LocalCacheService.getStudyCopyStateSync(STUDY).state).toBe('temporary');
+  });
+
+  it('removeSavedInstances can be scoped to one series', async () => {
+    await LocalCacheService.putInstance(makeInstance('sop-1'));
+    await LocalCacheService.putInstance(makeInstance('sop-3', { SeriesInstanceUID: SERIES_B }));
+    await LocalCacheService.removeSavedInstances(STUDY, SERIES_B);
+    expect(LocalCacheService.isInstanceCachedSync('sop-1')).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync('sop-3')).toBe(false);
+  });
+});

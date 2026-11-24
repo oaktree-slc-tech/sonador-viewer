@@ -1,5 +1,5 @@
 /* global cornerstone */
-import React, { createRef, useEffect, useState } from 'react';
+import React, { createRef, useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
 import PropTypes from 'prop-types';
 
@@ -23,7 +23,11 @@ function ImageThumbnail({ active = false, width = 217, height = 123, imageSrc, i
   const canvasRef = createRef();
 
   let loadingOrError;
-  let cancelablePromise;
+  // The load in flight. Held in a ref, not a local, so re-renders of this component (the stack's
+  // progress events alone cause many) neither cancel nor restart it: a preview served by the
+  // archive-based loader can take seconds, and a load restarted on every render never finishes
+  // (imaging-development-env#103).
+  const cancelablePromise = useRef(null);
 
   if (propsError) {
     loadingOrError = <ViewportErrorIndicator />;
@@ -35,41 +39,34 @@ function ImageThumbnail({ active = false, width = 217, height = 123, imageSrc, i
 
   const shouldRenderToCanvas = imageId && !imageSrc;
 
+  const purgeCancelablePromise = () => {
+    if (cancelablePromise.current) {
+      cancelablePromise.current.cancel();
+      cancelablePromise.current = null;
+    }
+  };
+
   const fetchImagePromise = () => {
-    if (!cancelablePromise) {
+    if (!shouldRenderToCanvas) {
       return;
     }
+    const promise = utils.makeCancelable(loadThumbnailImage(imageId));
+    cancelablePromise.current = promise;
 
     setLoading(true);
-    cancelablePromise
+    promise
       .then((response) => {
+        if (cancelablePromise.current === promise) {
+          cancelablePromise.current = null;
+        }
         setImage(response);
       })
       .catch((error) => {
         if (error.isCanceled) return;
-        // setLoading(false);
-        // setError(true);
-        // throw new Error(error);
+        // A preview that cannot load leaves the indicator: the stack bar still reports the series
+        setLoading(false);
       });
   };
-
-  const setImagePromise = () => {
-    if (shouldRenderToCanvas) {
-      cancelablePromise = utils.makeCancelable(loadThumbnailImage(imageId));
-    }
-  };
-
-  const purgeCancelablePromise = () => {
-    if (cancelablePromise) {
-      cancelablePromise.cancel();
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      purgeCancelablePromise();
-    };
-  }, [purgeCancelablePromise]);
 
   useEffect(() => {
     if (image.imageId) {
@@ -78,13 +75,18 @@ function ImageThumbnail({ active = false, width = 217, height = 123, imageSrc, i
     }
   }, [canvasRef, image, image.imageId]);
 
+  // One load per imageId: started when the id is set or changes, cancelled when it changes again or
+  // the thumbnail unmounts
   useEffect(() => {
     if (!image.imageId || image.imageId !== imageId) {
       purgeCancelablePromise();
-      setImagePromise();
       fetchImagePromise();
     }
-  }, [fetchImagePromise, image.imageId, imageId, purgeCancelablePromise, setImagePromise]);
+    return () => {
+      purgeCancelablePromise();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageId]);
 
   return (
     <div className={classNames('ImageThumbnail', { active: active })}>
