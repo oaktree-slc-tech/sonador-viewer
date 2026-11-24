@@ -598,3 +598,210 @@ describe('LocalCacheService: reports the viewer saved, across contexts and lifec
     });
   });
 });
+
+
+describe('LocalCacheService: a clear landing inside adoption, a sweep repair, and a rollback', () => {
+  const SR_SERIES = `${STUDY}.9`;
+  const ADDS = `__studyadds__::${STUDY}`;
+  const INDEX_STORE = 'sonador-local-cache-index/index';
+  const idb = require('idb-keyval');
+  const report = sop => ({
+    StudyInstanceUID: STUDY,
+    bytes: new ArrayBuffer(4),
+    metadata: { StudyInstanceUID: STUDY, SeriesInstanceUID: SR_SERIES, SOPInstanceUID: sop, Modality: 'SR', ...IDENTIFIERS },
+    instance: { '0020000E': { vr: 'UI', Value: [SR_SERIES] }, '00080018': { vr: 'UI', Value: [sop] } },
+    series: { '0020000E': { vr: 'UI', Value: [SR_SERIES] }, '00080060': { vr: 'CS', Value: ['SR'] } },
+  });
+  const payload = () => ({
+    series: [{ '0020000E': { Value: [SERIES_A] } }],
+    instancesBySeries: { [SERIES_A]: [{ '00080018': { Value: ['c1'] } }] },
+  });
+  const sopsOf = (stored, series) => ((stored && stored.instancesBySeries[series]) || []).map(e => e['00080018'].Value[0]);
+  const fresh = async () => {
+    const context = new LocalCacheServiceClass({ locks });
+    await context.ready();
+    return context;
+  };
+  const until = async (predicate, what) => {
+    for (let i = 0; i < 200; i += 1) {
+      if (predicate()) return;
+      await flush();
+    }
+    throw new Error(`timed out waiting for ${what}`);
+  };
+  // Holds the next read of the stored index once it has captured the index as it was
+  const holdNextIndexRead = () => {
+    const original = idb.get;
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const held = { release, isHeld: false };
+    const spy = jest.spyOn(idb, 'get').mockImplementation(async (key, store) => {
+      if (store && store.name === INDEX_STORE) {
+        spy.mockRestore();
+        const value = await original(key, store);
+        held.isHeld = true;
+        await gate;
+        return value;
+      }
+      return original(key, store);
+    });
+    return held;
+  };
+  // Holds the next write of the stored index; settled by the test (resolve to write, reject to fail)
+  const holdNextIndexWrite = () => {
+    const original = idb.set;
+    const held = { isHeld: false };
+    const spy = jest.spyOn(idb, 'set').mockImplementation((key, value, store) => {
+      if (store && store.name === INDEX_STORE) {
+        spy.mockRestore();
+        held.isHeld = true;
+        return new Promise((resolve, reject) => {
+          held.release = () => original(key, value, store).then(resolve, reject);
+          held.fail = error => reject(error);
+        });
+      }
+      return original(key, value, store);
+    });
+    return held;
+  };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  describe('a clear that starts while a mutation reads the stored index', () => {
+    const arrange = async () => {
+      await service.putInstance(instance('c1'));
+      await service.putStudyMetadataPayload(STUDY, payload());
+    };
+
+    it('voids the read of a save, which then abandons, and nothing comes back', async () => {
+      await arrange();
+      const read = holdNextIndexRead();
+      const save = service.cacheViewerInstance(report('sr1'));
+      await until(() => read.isHeld, 'the adoption read');
+      const write = holdNextIndexWrite();
+      const clearing = service.clearAll();
+      await until(() => write.isHeld, "the clear's index write");
+      read.release();
+      await flush();
+      write.release();
+      await clearing;
+      await expect(save).resolves.toBe(false);
+
+      expect(service.isStudyCachedSync(STUDY)).toBe(false);
+      expect(records().size).toBe(0);
+      expect((await fresh()).isStudyCachedSync(STUDY)).toBe(false);
+    });
+
+    it('voids the read of a write without a clear token, which adopts the emptied index after the clear', async () => {
+      await arrange();
+      const read = holdNextIndexRead();
+      const late = service.putInstance(instance('c2'));
+      await until(() => read.isHeld, 'the adoption read');
+      const write = holdNextIndexWrite();
+      const clearing = service.clearAll();
+      await until(() => write.isHeld, "the clear's index write");
+      read.release();
+      await flush();
+      write.release();
+      await clearing;
+      await late;
+
+      // The write lands after the clear, in an emptied cache: the cleared instance does not return
+      expect(service.isInstanceCachedSync('c1')).toBe(false);
+      const reader = await fresh();
+      expect(reader.isInstanceCachedSync('c1')).toBe(false);
+      expect(reader.getStudySummary(STUDY).instanceCount).toBe(1);
+      expect(records().has('c1')).toBe(false);
+    });
+
+    it('voids the read when the clear then fails, and the write adopts the saved copy another context made', async () => {
+      await service.putInstance(instance('x', SERIES_A, true));
+      const other = await fresh();
+      await other.markSaved(STUDY, SERIES_A, { confirm: true });
+
+      const read = holdNextIndexRead();
+      const late = service.putInstance(instance('x', SERIES_A, true));
+      await until(() => read.isHeld, 'the adoption read');
+      let failClear;
+      jest.spyOn(idb, 'clear').mockImplementationOnce(() => new Promise((resolve, reject) => { failClear = reject; }));
+      const clearing = service.clearAll();
+      await flush();
+      read.release();
+      await flush();
+      failClear(new Error('clear failed'));
+      await expect(clearing).rejects.toThrow('clear failed');
+      await late;
+
+      expect((await fresh()).isSeriesSavedSync(SERIES_A)).toBe(true);
+      expect(records().get('x').session).toBeUndefined();
+    });
+  });
+
+  it('publishes a missing-record repair, so another context does not advertise the missing report', async () => {
+    await service.putInstance(instance('c1'));
+    await service.putStudyMetadataPayload(STUDY, payload());
+    await service.cacheViewerInstance(report('sr1'));
+    await service.cacheViewerInstance(report('sr2'));
+    records().delete('sr1');
+
+    // The prune of the missing report's addition fails, leaving it in the document
+    const original = idb.get;
+    jest.spyOn(idb, 'get').mockImplementation((key, store) => (
+      key === ADDS ? Promise.reject(new Error('read failed')) : original(key, store)
+    ));
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await service.removeSessionInstances(STUDY);
+    idb.get.mockRestore();
+    expect(Object.keys(records().get(ADDS)).sort()).toEqual(['sr1', 'sr2']);
+
+    const other = await fresh();
+    expect(other.isInstanceCachedSync('sr1')).toBe(false);
+    await other.putStudyMetadataPayload(STUDY, payload());
+    expect(sopsOf(await other.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual(['sr2']);
+  });
+
+  describe('a save whose index write fails while the cache is cleared', () => {
+    const arrange = async () => {
+      await service.putInstance(instance('c1'));
+      await service.putStudyMetadataPayload(STUDY, payload());
+      await service.cacheViewerInstance(report('sr1'));
+    };
+    const expectEmptied = async () => {
+      expect(records().size).toBe(0);
+      expect(service.isStudyCachedSync(STUDY)).toBe(false);
+      expect(service.isInstanceCachedSync('sr1')).toBe(false);
+      const reader = await fresh();
+      expect(reader.isStudyCachedSync(STUDY)).toBe(false);
+      expect(await reader.getStudyMetadataPayload(STUDY)).toBeNull();
+    };
+
+    it('restores nothing from before a clear that started while the index write was pending', async () => {
+      await arrange();
+      const write = holdNextIndexWrite();
+      const save = service.cacheViewerInstance(report('sr2'));
+      await until(() => write.isHeld, "the save's index write");
+      const clearing = service.clearAll();
+      await flush();
+      write.fail(new Error('QuotaExceededError'));
+      await expect(save).rejects.toThrow('QuotaExceededError');
+      await clearing;
+      await expectEmptied();
+    });
+
+    it('restores nothing from before a clear that started while the rollback was deleting', async () => {
+      await arrange();
+      const write = holdNextIndexWrite();
+      const save = service.cacheViewerInstance(report('sr2'));
+      await until(() => write.isHeld, "the save's index write");
+      const releaseDelete = hold('sr2');
+      write.fail(new Error('QuotaExceededError'));
+      await flush();
+      const clearing = service.clearAll();
+      await flush();
+      releaseDelete();
+      await expect(save).rejects.toThrow('QuotaExceededError');
+      await clearing;
+      await expectEmptied();
+    });
+  });
+});

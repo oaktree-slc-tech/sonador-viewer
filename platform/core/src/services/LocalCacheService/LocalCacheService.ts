@@ -586,22 +586,31 @@ class LocalCacheServiceClass extends PubSubService {
   ): Promise<T> {
     const previous = this._studyLocks.get(StudyInstanceUID) || Promise.resolve();
     const run = async () => {
-      // A mutation that took a clear token which a clear has since invalidated abandons its write
-      // (_mutationStillValid): it runs at once, and adopts nothing, since the stored index may still
-      // list studies the clear has already emptied from memory.
-      const abandoned = !!token && !this._mutationStillValid(token);
-      if (!abandoned) {
-        // Every other mutation waits for a clear in this context to settle, then adopts the stored
-        // entry: emptied when the clear succeeded, as it was when the clear failed. Neither a
-        // cleared entry nor this context's stale one is written over another context's.
-        while (this._clearing) {
-          await this._clearing.catch(() => undefined);
-        }
-      }
       this._heldStudies.add(StudyInstanceUID);
       try {
-        if (!abandoned) {
-          await this._adoptStoredStudy(StudyInstanceUID);
+        // A mutation that took a clear token which a clear has since invalidated abandons its
+        // write (_mutationStillValid): it adopts nothing, since the stored index may still list
+        // studies the clear has already emptied from memory. Every other mutation waits for a
+        // clear in this context to settle, then adopts the stored entry: emptied when the clear
+        // succeeded, as it was when the clear failed. A clear that starts while the stored index is
+        // being read voids that read, and the adoption starts over -- or, for a mutation whose
+        // token the clear has now invalidated, is given up. Neither a cleared entry nor this
+        // context's stale one is then written over another context's.
+        for (;;) {
+          if (token && !this._mutationStillValid(token)) {
+            break;
+          }
+          while (this._clearing) {
+            await this._clearing.catch(() => undefined);
+          }
+          const generation = this._generation;
+          const adopted = await this._adoptStoredStudy(
+            StudyInstanceUID,
+            () => !this._clearing && this._generation === generation
+          );
+          if (adopted) {
+            break;
+          }
         }
         return await mutate();
       } finally {
@@ -656,11 +665,18 @@ class LocalCacheServiceClass extends PubSubService {
    * Under the study's lock: this context's entry for the study becomes the stored one, which is
    * what the last mutation of the study, from any context, wrote. A promotion, a saved write or a
    * removal made in another tab is thereby seen before this mutation classifies anything.
+   * Nothing is applied when `stillCurrent` no longer holds once the read completes.
+   *
+   * @returns {Promise<boolean>} whether the read was still current (and applied)
    */
-  private async _adoptStoredStudy(StudyInstanceUID: string): Promise<void> {
+  private async _adoptStoredStudy(StudyInstanceUID: string, stillCurrent: () => boolean): Promise<boolean> {
     const stored = await this._readStoredIndex();
+    // A clear that started during the read has voided it: the caller starts over
+    if (!stillCurrent()) {
+      return false;
+    }
     if (!stored) {
-      return;
+      return true;
     }
     const storedStudy = stored.studies[StudyInstanceUID];
     if (storedStudy) {
@@ -669,6 +685,7 @@ class LocalCacheServiceClass extends PubSubService {
       delete this._index.studies[StudyInstanceUID];
     }
     this._rebuildMembership();
+    return true;
   }
 
   /**
@@ -941,6 +958,9 @@ class LocalCacheServiceClass extends PubSubService {
       if (!study || !this._mutationStillValid(token)) {
         return;
       }
+      // Index entries dropped for records found missing, published below even when nothing of the
+      // requested kind is removed: another context must not adopt an index that still lists them
+      let repaired = false;
       for (const series of Object.values(study.series)) {
         if (SeriesInstanceUID && series.SeriesInstanceUID !== SeriesInstanceUID) {
           continue;
@@ -952,6 +972,7 @@ class LocalCacheServiceClass extends PubSubService {
           if (this._instanceStore && !record) {
             // The bytes are gone: the index entry is stale, and so is a viewer addition for it
             this._dropIndexEntry(StudyInstanceUID, series.SeriesInstanceUID, sop);
+            repaired = true;
             if (this._index.studies[StudyInstanceUID]) {
               await this._pruneViewerAdditions(StudyInstanceUID, { SOPInstanceUID: sop }, token);
             } else {
@@ -975,6 +996,10 @@ class LocalCacheServiceClass extends PubSubService {
             await this._removeInstanceLocked(StudyInstanceUID, series.SeriesInstanceUID, sop, token);
           }
         }
+      }
+      if (repaired && this._mutationStillValid(token)) {
+        await this._persistIndex();
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
       }
     }, token);
   }
@@ -1262,7 +1287,7 @@ class LocalCacheServiceClass extends PubSubService {
         // Not published: every other context goes on reading the stored index without this
         // instance, so the save is taken back here too -- the index entry, the record and the
         // addition -- rather than leaving an addition no index lists
-        await this._rollBackViewerInstance(StudyInstanceUID, SOPInstanceUID, snapshot, previousAdditions);
+        await this._rollBackViewerInstance(StudyInstanceUID, SOPInstanceUID, snapshot, previousAdditions, token);
         throw error;
       }
       this._broadcastEvent(EVENTS.INSTANCE_CACHED, uids);
@@ -1281,27 +1306,38 @@ class LocalCacheServiceClass extends PubSubService {
   }
 
   /**
-   * Take back a viewer-created instance whose index write failed: the study's index entry returns
-   * to `snapshot`, the record is deleted, and the additions document returns to `previousAdditions`
-   * (deleted when that was empty). Under the caller's study lock. A step that fails is logged; an
-   * addition left behind is not folded into any payload, since no index lists its instance.
+   * Take back a viewer-created instance whose index write failed: the record is deleted, and,
+   * while `token` is still valid, the study's index entry returns to `snapshot` and the additions
+   * document to `previousAdditions` (deleted when that was empty). Under the caller's study lock.
+   *
+   * A clear that started since the save took its token has emptied the cache: nothing from before
+   * it is restored, in memory or in storage, and the additions document is deleted. Validity is
+   * checked again after each await, so a clear that starts during the rollback is honoured too. A
+   * step that fails is logged; an addition left behind is not folded into any payload, since no
+   * index lists its instance.
    */
   private async _rollBackViewerInstance(
     StudyInstanceUID: string,
     SOPInstanceUID: string,
     snapshot: StudySummary,
-    previousAdditions: ViewerAdditions
+    previousAdditions: ViewerAdditions,
+    token: CacheMutationToken
   ): Promise<void> {
-    this._index.studies[StudyInstanceUID] = snapshot;
-    this._rebuildMembership();
+    if (this._mutationStillValid(token)) {
+      this._index.studies[StudyInstanceUID] = snapshot;
+      this._rebuildMembership();
+    }
     if (!this._instanceStore) {
       return;
     }
     const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
     try {
       await del(SOPInstanceUID, this._instanceStore);
-      if (Object.keys(previousAdditions).length) {
+      if (Object.keys(previousAdditions).length && this._mutationStillValid(token)) {
         await set(additionsKey, previousAdditions, this._instanceStore);
+        if (!this._mutationStillValid(token)) {
+          await del(additionsKey, this._instanceStore);
+        }
       } else {
         await del(additionsKey, this._instanceStore);
       }
