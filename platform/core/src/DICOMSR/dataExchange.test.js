@@ -139,3 +139,22 @@ describe('an out-of-plane measurement', () => {
     expect(locked).toMatchObject({ isLocked: true, points: record.points, metadata: { outOfPlane: true, isLocked: true, isReadOnly: true } });
   });
 });
+
+
+describe('the study metadata dropped after a save', () => {
+  // The next load of the study lists the new report series. The study is the report's own: a
+  // series tag measurement carries no StudyInstanceUID of its own.
+  beforeEach(() => mockDeleteStudyMetadata.mockClear());
+
+  it("is the stored report's study when the measurements name no study", async () => {
+    mockStow.mockResolvedValueOnce({ omitted: [], saved: 1, uploaded: true, StudyInstanceUID: '2.25.300' });
+    await storeMeasurements({ DICOMSRSeriesTagTool: [{ description: 'tag' }] }, undefined, server);
+    expect(mockDeleteStudyMetadata).toHaveBeenCalledWith('2.25.300');
+  });
+
+  it("is the first measurement's study when the save names none", async () => {
+    mockStow.mockResolvedValueOnce({ omitted: [], saved: 1, uploaded: true });
+    await storeMeasurements({ Length: [{ StudyInstanceUID: '2.25.301' }] }, undefined, server);
+    expect(mockDeleteStudyMetadata).toHaveBeenCalledWith('2.25.301');
+  });
+});

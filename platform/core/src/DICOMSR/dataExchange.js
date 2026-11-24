@@ -84,8 +84,12 @@ const storeMeasurements = async (measurementData, filter, server, options) => {
 
   try {
     const stored = await stowSRFromMeasurements(measurementData, serverUrl, options) || {};
-    if (StudyInstanceUID && stored.uploaded !== false) {
-      studies.deleteStudyMetadataPromise(StudyInstanceUID);
+
+    // The study's memoised metadata predates the new report series. The report names its study;
+    // a measurement need not (a series tag carries no StudyInstanceUID of its own).
+    const storedStudyInstanceUID = stored.StudyInstanceUID || StudyInstanceUID;
+    if (storedStudyInstanceUID && stored.uploaded !== false) {
+      studies.deleteStudyMetadataPromise(storedStudyInstanceUID);
     }
 
     // The measurements the stored report holds, as written, are saved measurements now

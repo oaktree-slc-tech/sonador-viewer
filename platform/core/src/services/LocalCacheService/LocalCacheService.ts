@@ -43,6 +43,22 @@ const INDEX_VERSION = 1;
 // in a SOPInstanceUID (UI VR is digits and dots), so these keys can never collide with records.
 const STUDY_META_KEY_PREFIX = '__studymeta__::';
 
+// Instance-store key prefix for the instances the viewer itself added to a cached study (a saved
+// report), as DICOM+JSON. Every write of the study's metadata payload folds them in, so a payload
+// enumerated from the server before they existed cannot drop them (see cacheViewerInstance).
+const VIEWER_ADDITIONS_KEY_PREFIX = '__studyadds__::';
+
+/** One viewer-created instance, in the shapes the metadata payload holds. */
+interface ViewerAddition {
+  SeriesInstanceUID: string;
+  // WADO-RS metadata entry (DICOM+JSON) for the instance
+  instance: Record<string, any>;
+  // QIDO-RS series entry (DICOM+JSON) for its series
+  series: Record<string, any>;
+}
+
+type ViewerAdditions = Record<string, ViewerAddition>;
+
 // Fields lifted off the first cached instance's naturalized metadata so the Download Manager's
 // "Locally Stored" tab can search without re-reading every instance blob (FR-5 / AC-9).
 interface SeriesSummary {
@@ -82,6 +98,9 @@ interface StudySummary {
   // replayed in place of the network, or the series it omits would look as though they do not
   // exist (ohif-viewers#130).
   metadataPayloadPartial?: boolean;
+  // True when instances the viewer created are kept for the study (see cacheViewerInstance), so
+  // payload writes read them only for the studies that have some
+  hasViewerAdditions?: boolean;
 }
 
 interface CacheIndex {
@@ -93,6 +112,8 @@ interface CacheIndex {
 interface CacheMutationToken {
   generation: number;
   clearing: boolean;
+  // The storage resets completed when the token was taken (see _resets)
+  resets: number;
 }
 
 interface InstanceUIDs {
@@ -151,6 +172,103 @@ function _countInstances(series: SeriesSummary): { saved: number; temporary: num
     }
   });
   return { saved, temporary };
+}
+
+/**
+ * The stored record of an instance, with its metadata reduced to what IndexedDB can clone, and
+ * marked as a session copy when `session` is set.
+ */
+function _instanceRecord(
+  uids: InstanceUIDs,
+  bytes: ArrayBuffer,
+  metadata: Record<string, any>,
+  session = false
+): InstanceRecord {
+  return {
+    ...uids,
+    bytes,
+    // Structured-clone-safe copy — raw naturalized datasets throw DataCloneError in IndexedDB.
+    metadata: _toStorableMetadata(metadata),
+    byteSize: bytes.byteLength,
+    cachedAt: Date.now(),
+    ...(session ? { session: true } : {}),
+  };
+}
+
+/**
+ * A copy of DICOM+JSON that IndexedDB can store. dcmjs hands out datasets whose values include
+ * Proxy objects (its person-name values stay Proxies even after denaturalizing), and the
+ * structured clone behind every IndexedDB write rejects a Proxy with a DataCloneError. Objects
+ * and arrays are copied member by member, which reads through a Proxy; binary values are kept as
+ * they are, since IndexedDB stores them natively; functions are dropped.
+ *
+ * @input value {any} the DICOM+JSON value to copy
+ * @returns {any} a plain, structured-cloneable copy
+ */
+function _toCloneable(value: any, seen: WeakMap<object, any> = new WeakMap()): any {
+  if (value === null || typeof value !== 'object') {
+    return typeof value === 'function' ? undefined : value;
+  }
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return seen.get(value);
+  }
+  if (Array.isArray(value)) {
+    const copy: any[] = [];
+    seen.set(value, copy);
+    for (let i = 0; i < value.length; i += 1) {
+      copy.push(_toCloneable(value[i], seen));
+    }
+    return copy;
+  }
+  const copy: Record<string, any> = {};
+  seen.set(value, copy);
+  Object.keys(value).forEach(key => {
+    const member = _toCloneable(value[key], seen);
+    if (member !== undefined) {
+      copy[key] = member;
+    }
+  });
+  return copy;
+}
+
+/** A study metadata payload without the listed series; the payload itself when there are none. */
+function _withoutSeries(payload: Record<string, any>, removed?: Set<string>): Record<string, any> {
+  if (!removed || !removed.size || !payload?.instancesBySeries) {
+    return payload;
+  }
+  const instancesBySeries = { ...payload.instancesBySeries };
+  removed.forEach(uid => delete instancesBySeries[uid]);
+  const series = (Array.isArray(payload.series) ? payload.series : []).filter(
+    (entry: any) => !removed.has(entry?.['0020000E']?.Value?.[0])
+  );
+  return { ...payload, series, instancesBySeries };
+}
+
+/**
+ * A study metadata payload with the viewer additions folded in: each instance appended to its
+ * series once (by SOP Instance UID), and its series entry added when the payload does not list it.
+ */
+function _foldViewerAdditions(payload: Record<string, any>, additions: ViewerAdditions): Record<string, any> {
+  const entries = Object.entries(additions);
+  if (!entries.length || !payload?.instancesBySeries) {
+    return payload;
+  }
+  const series = Array.isArray(payload.series) ? [...payload.series] : [];
+  const instancesBySeries = { ...payload.instancesBySeries };
+  entries.forEach(([SOPInstanceUID, addition]) => {
+    const uid = addition.SeriesInstanceUID;
+    const listed = instancesBySeries[uid] || [];
+    if (!listed.some((entry: any) => entry?.['00080018']?.Value?.[0] === SOPInstanceUID)) {
+      instancesBySeries[uid] = [...listed, addition.instance];
+    }
+    if (!series.some((entry: any) => entry?.['0020000E']?.Value?.[0] === uid)) {
+      series.push(addition.series);
+    }
+  });
+  return { ...payload, series, instancesBySeries };
 }
 
 /** Fill any missing study-level fields on an index entry from an instance's metadata. */
@@ -271,6 +389,14 @@ class LocalCacheServiceClass extends PubSubService {
   // In-flight series evictions, keyed `study::series`. See removeSeries.
   private _seriesRemovals = new Map<string, Promise<void>>();
 
+  // Series removed from the imaging server during this session, by study. A download that
+  // enumerated the study before the removal would otherwise store the series again, its instances
+  // through putInstance and its metadata through the payload it commits; both refuse it. Held for
+  // the whole session, through a clear: a transfer that began before the removal may still write
+  // after the clear (a session archive transfer, which a clear does not cancel). Anything that runs
+  // after a reload enumerates the server afresh.
+  private _serverRemovedSeries = new Map<string, Set<string>>();
+
   // Serialises every mutation that touches ONE study's index entry or its metadata payload.
   // Per-series de-duplication is not enough: the payload is study-scoped, so removing series A and
   // series B at once takes two different de-duplication keys and would still interleave a
@@ -305,6 +431,10 @@ class LocalCacheServiceClass extends PubSubService {
   // would declare the cache quiet while the second was still emptying it.
   private _clearing: Promise<void> | null = null;
   private _generation = 0;
+  // The clears that actually emptied the instance store. A clear moves `_generation` whether or not
+  // it succeeded; this moves only once the records are gone, for the one caller that has to tell
+  // an attempted clear from a reset (_rollBackViewerInstance).
+  private _resets = 0;
 
   /**
    * @param options.locks - the lock manager that serialises mutations across browsing contexts;
@@ -455,12 +585,37 @@ class LocalCacheServiceClass extends PubSubService {
    * in-memory index is one context's view, the stored document is what every context writes, and
    * ownership is decided from the latter.
    */
-  private _withStudyLock<T>(StudyInstanceUID: string, mutate: () => Promise<T>): Promise<T> {
+  private _withStudyLock<T>(
+    StudyInstanceUID: string,
+    mutate: () => Promise<T>,
+    token?: CacheMutationToken
+  ): Promise<T> {
     const previous = this._studyLocks.get(StudyInstanceUID) || Promise.resolve();
     const run = async () => {
       this._heldStudies.add(StudyInstanceUID);
       try {
-        await this._adoptStoredStudy(StudyInstanceUID);
+        // A mutation that took a clear token which a clear has since invalidated abandons its
+        // write (_mutationStillValid): it adopts nothing, since the stored index may still list
+        // studies the clear has already emptied from memory. Every other mutation waits for a
+        // clear in this context to settle, then adopts the stored entry: emptied when the clear
+        // succeeded, as it was when the clear failed. A clear that starts while the stored index is
+        // being read voids that read, and the adoption starts over -- or, for a mutation whose
+        // token the clear has now invalidated, is given up. Neither a cleared entry nor this
+        // context's stale one is then written over another context's.
+        for (;;) {
+          if (token && !this._mutationStillValid(token)) {
+            break;
+          }
+          await this._settleClears();
+          const generation = this._generation;
+          const adopted = await this._adoptStoredStudy(
+            StudyInstanceUID,
+            () => !this._clearing && this._generation === generation
+          );
+          if (adopted) {
+            break;
+          }
+        }
         return await mutate();
       } finally {
         this._heldStudies.delete(StudyInstanceUID);
@@ -489,7 +644,14 @@ class LocalCacheServiceClass extends PubSubService {
    * after the clear, because by then the generation has already settled.
    */
   private _beginCacheMutation(): CacheMutationToken {
-    return { generation: this._generation, clearing: !!this._clearing };
+    return { generation: this._generation, clearing: !!this._clearing, resets: this._resets };
+  }
+
+  /** Resolves once no clear is running in this context, whatever the outcome of the clears. */
+  private async _settleClears(): Promise<void> {
+    while (this._clearing) {
+      await this._clearing.catch(() => undefined);
+    }
   }
 
   /** True when the cache has not been wiped since `token` was taken, and is not being wiped now. */
@@ -514,11 +676,18 @@ class LocalCacheServiceClass extends PubSubService {
    * Under the study's lock: this context's entry for the study becomes the stored one, which is
    * what the last mutation of the study, from any context, wrote. A promotion, a saved write or a
    * removal made in another tab is thereby seen before this mutation classifies anything.
+   * Nothing is applied when `stillCurrent` no longer holds once the read completes.
+   *
+   * @returns {Promise<boolean>} whether the read was still current (and applied)
    */
-  private async _adoptStoredStudy(StudyInstanceUID: string): Promise<void> {
+  private async _adoptStoredStudy(StudyInstanceUID: string, stillCurrent: () => boolean): Promise<boolean> {
     const stored = await this._readStoredIndex();
+    // A clear that started during the read has voided it: the caller starts over
+    if (!stillCurrent()) {
+      return false;
+    }
     if (!stored) {
-      return;
+      return true;
     }
     const storedStudy = stored.studies[StudyInstanceUID];
     if (storedStudy) {
@@ -527,6 +696,7 @@ class LocalCacheServiceClass extends PubSubService {
       delete this._index.studies[StudyInstanceUID];
     }
     this._rebuildMembership();
+    return true;
   }
 
   /**
@@ -799,6 +969,9 @@ class LocalCacheServiceClass extends PubSubService {
       if (!study || !this._mutationStillValid(token)) {
         return;
       }
+      // Index entries dropped for records found missing, published below even when nothing of the
+      // requested kind is removed: another context must not adopt an index that still lists them
+      let repaired = false;
       for (const series of Object.values(study.series)) {
         if (SeriesInstanceUID && series.SeriesInstanceUID !== SeriesInstanceUID) {
           continue;
@@ -808,8 +981,14 @@ class LocalCacheServiceClass extends PubSubService {
         for (const [sop, entry] of Object.entries(series.instances)) {
           const record = await this._readRecord(sop);
           if (this._instanceStore && !record) {
-            // The bytes are gone: the index entry is stale
+            // The bytes are gone: the index entry is stale, and so is a viewer addition for it
             this._dropIndexEntry(StudyInstanceUID, series.SeriesInstanceUID, sop);
+            repaired = true;
+            if (this._index.studies[StudyInstanceUID]) {
+              await this._pruneViewerAdditions(StudyInstanceUID, { SOPInstanceUID: sop }, token);
+            } else {
+              await this._pruneViewerAdditions(StudyInstanceUID);
+            }
             continue;
           }
           if (!!entry.session === session) {
@@ -825,11 +1004,15 @@ class LocalCacheServiceClass extends PubSubService {
           await this._removeSeries(StudyInstanceUID, series.SeriesInstanceUID, token);
         } else {
           for (const sop of matching) {
-            await this._removeInstanceLocked(StudyInstanceUID, series.SeriesInstanceUID, sop);
+            await this._removeInstanceLocked(StudyInstanceUID, series.SeriesInstanceUID, sop, token);
           }
         }
       }
-    });
+      if (repaired && this._mutationStillValid(token)) {
+        await this._persistIndex();
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+      }
+    }, token);
   }
 
   /** The stored record of an instance, or null without a store or a record. */
@@ -936,8 +1119,10 @@ class LocalCacheServiceClass extends PubSubService {
     const token = this._beginCacheMutation();
 
     // Under the study lock: this writes the same document a concurrent series removal prunes.
-    return this._withStudyLock(StudyInstanceUID, () =>
-      this._putStudyMetadataPayload(StudyInstanceUID, payload, { ...options, token })
+    return this._withStudyLock(
+      StudyInstanceUID,
+      () => this._putStudyMetadataPayload(StudyInstanceUID, payload, { ...options, token }),
+      token
     );
   }
 
@@ -980,7 +1165,337 @@ class LocalCacheServiceClass extends PubSubService {
         !!options.partial && !this.hasCompleteStudyMetadataPayloadSync(StudyInstanceUID);
 
       return this._putStudyMetadataPayload(StudyInstanceUID, merged, { partial, token });
+    }, token);
+  }
+
+  /**
+   * Add an instance the viewer created (a saved report) to the cached copy of its study, so a
+   * cached open, which replays only the study's metadata payload, presents it.
+   *
+   * The bytes are stored as an instance record and the DICOM+JSON entries are kept with the study
+   * as a viewer addition. Every later write of the study's metadata payload folds the additions in,
+   * so a download that enumerated the study before the instance existed, and commits its payload
+   * afterwards, keeps it; so does the first payload of a study still being downloaded. When a
+   * payload is stored already it is updated now, keeping its complete or partial coverage.
+   *
+   * Under the study lock and the cache-clear protocol: nothing is written for a study that is not
+   * cached when the lock is taken, and what was written is taken back if the cache is cleared
+   * while it is in flight. The instance takes the study's ownership (see _viewerInstanceOwnership).
+   * If the index write fails, the record and the addition are taken back and the call rejects.
+   *
+   * @input StudyInstanceUID {string} the study the instance belongs to
+   * @input bytes {ArrayBuffer} the instance as Part 10 bytes
+   * @input metadata {object} the instance as a naturalized dataset
+   * @input instance {object} the instance as DICOM+JSON, the shape of a WADO-RS metadata entry
+   * @input series {object} its series as DICOM+JSON, the shape of a QIDO-RS series entry
+   * @returns {Promise<boolean>} whether the instance was added
+   */
+  cacheViewerInstance({
+    StudyInstanceUID,
+    bytes,
+    metadata,
+    instance,
+    series,
+  }: {
+    StudyInstanceUID: string;
+    bytes: ArrayBuffer;
+    metadata: Record<string, any>;
+    instance: Record<string, any>;
+    series: Record<string, any>;
+  }): Promise<boolean> {
+    const SeriesInstanceUID = instance?.['0020000E']?.Value?.[0];
+    const SOPInstanceUID = instance?.['00080018']?.Value?.[0];
+    if (!StudyInstanceUID || !SeriesInstanceUID || !SOPInstanceUID || !bytes) {
+      return Promise.resolve(false);
+    }
+    // Before the lock wait, like the other mutations: a request made before a clear must not take
+    // a clean token by acquiring the lock after it
+    const token = this._beginCacheMutation();
+
+    return this._withStudyLock(StudyInstanceUID, async () => {
+      const studyBefore = this._index.studies[StudyInstanceUID];
+      if (!this._mutationStillValid(token) || !studyBefore) {
+        return false;
+      }
+      // A save whose series was removed from the server first (its upload acknowledged after the
+      // removal, or queued behind it) stores nothing: see _serverRemovedSeries
+      if (this._isServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID)) {
+        return false;
+      }
+      // The study's index entry as it was, for the rollback below: the entry is plain data
+      const snapshot: StudySummary = JSON.parse(JSON.stringify(studyBefore));
+      const uids = { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID };
+      // The ownership comes from the study, read under the lock from the adopted stored entry (see
+      // _viewerInstanceOwnership): the session sweep or a cancelled transfer takes the instance with
+      // the copy it joined, and a confirmed offline copy keeps it
+      const { session, holders } = this._viewerInstanceOwnership(StudyInstanceUID);
+      const record = _instanceRecord(uids, bytes, metadata, session);
+      const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
+      const addition: ViewerAddition = {
+        SeriesInstanceUID,
+        instance: _toCloneable(instance),
+        series: _toCloneable(series),
+      };
+      // The additions document as it was before this save, restored if the save is taken back
+      let previousAdditions: ViewerAdditions = {};
+
+      if (this._instanceStore) {
+        await set(SOPInstanceUID, record, this._instanceStore);
+        if (!this._mutationStillValid(token)) {
+          await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+          return false;
+        }
+        try {
+          // A failed read rejects: writing an empty document plus this addition would lose the
+          // additions of the study's other reports
+          previousAdditions = await this._readViewerAdditions(StudyInstanceUID);
+          await set(additionsKey, { ...previousAdditions, [SOPInstanceUID]: addition }, this._instanceStore);
+        } catch (error) {
+          // The additions document is as it was (a failed read or write changes nothing), and it may
+          // hold other reports of the study: only this instance's record is taken back
+          await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+          throw error;
+        }
+        const study = this._index.studies[StudyInstanceUID];
+        if (study) {
+          study.hasViewerAdditions = true;
+        }
+        if (!this._mutationStillValid(token)) {
+          await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+          await del(additionsKey, this._instanceStore).catch(() => {});
+          return false;
+        }
+      }
+
+      // The series was removed from the server while this save was writing (the removal records
+      // it at once and then waits for this lock): take back this instance's record and its own
+      // addition, leaving the other reports' additions
+      if (this._isServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID)) {
+        if (this._instanceStore) {
+          await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+        }
+        await this._pruneViewerAdditions(StudyInstanceUID, { SOPInstanceUID }, token).catch(() => {});
+        return false;
+      }
+
+      // Checked again without an await before it: the study may have been removed meanwhile
+      if (!this._mutationStillValid(token) || !this._index.studies[StudyInstanceUID]) {
+        if (this._instanceStore) {
+          await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+          await del(additionsKey, this._instanceStore).catch(() => {});
+        }
+        return false;
+      }
+      this._indexInstance(uids, record.byteSize, record.metadata as Record<string, any>, session, {
+        confirm: !session && !holders,
+      });
+      if (holders) {
+        this._index.studies[StudyInstanceUID].series[SeriesInstanceUID].instances[SOPInstanceUID].holders = [...holders];
+      }
+      try {
+        await this._persistIndex();
+      } catch (error) {
+        // Not published: every other context goes on reading the stored index without this
+        // instance, so the save is taken back here too -- the index entry, the record and the
+        // addition -- rather than leaving an addition no index lists
+        await this._rollBackViewerInstance(StudyInstanceUID, SOPInstanceUID, snapshot, previousAdditions, token);
+        throw error;
+      }
+      this._broadcastEvent(EVENTS.INSTANCE_CACHED, uids);
+      this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+
+      if (this._instanceStore && this.hasStudyMetadataPayloadSync(StudyInstanceUID)) {
+        const stored = await this.getStudyMetadataPayload(StudyInstanceUID).catch(() => null);
+        if (stored?.instancesBySeries) {
+          // The additions are folded in by the write itself
+          const partial = !this.hasCompleteStudyMetadataPayloadSync(StudyInstanceUID);
+          await this._putStudyMetadataPayload(StudyInstanceUID, stored, { partial, token });
+        }
+      }
+      return this._mutationStillValid(token);
+    }, token);
+  }
+
+  /**
+   * Take back a viewer-created instance whose index write failed: its record is deleted, and the
+   * study's index entry and the additions document return to how they were before the save
+   * (`snapshot`, `previousAdditions`; the document is deleted when that was empty). Under the
+   * caller's study lock.
+   *
+   * What a clear did decides what is restored, so a clear running in this context is waited for
+   * first. A clear that emptied the instance store since the save took `token` has reset the cache:
+   * nothing from before it is restored, in memory or in storage, and the additions document is
+   * deleted. A clear that failed before emptying it has reset nothing, so the earlier reports and
+   * their additions are restored as for any failed save. The check is repeated after each await,
+   * for a clear that starts during the rollback. A step that fails is logged; an addition left
+   * behind is not folded into any payload, since no index lists its instance.
+   */
+  private async _rollBackViewerInstance(
+    StudyInstanceUID: string,
+    SOPInstanceUID: string,
+    snapshot: StudySummary,
+    previousAdditions: ViewerAdditions,
+    token: CacheMutationToken
+  ): Promise<void> {
+    const reset = () => this._resets !== token.resets;
+    await this._settleClears();
+    if (!reset()) {
+      this._index.studies[StudyInstanceUID] = snapshot;
+      this._rebuildMembership();
+    }
+    if (!this._instanceStore) {
+      return;
+    }
+    const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
+    try {
+      await del(SOPInstanceUID, this._instanceStore);
+      await this._settleClears();
+      if (!reset() && Object.keys(previousAdditions).length) {
+        await set(additionsKey, previousAdditions, this._instanceStore);
+        // A clear that reset the store while the write was in flight may have run before it landed
+        await this._settleClears();
+        if (reset()) {
+          await del(additionsKey, this._instanceStore);
+        }
+      } else {
+        await del(additionsKey, this._instanceStore);
+      }
+    } catch (error) {
+      console.warn('[LocalCacheService] Could not take back a viewer instance whose index write failed.', error);
+    }
+  }
+
+  /** Whether the series was removed from the imaging server during this session. */
+  private _isServerRemovedSeries(StudyInstanceUID: string, SeriesInstanceUID: string): boolean {
+    return !!this._serverRemovedSeries.get(StudyInstanceUID)?.has(SeriesInstanceUID);
+  }
+
+  /**
+   * The viewer additions stored for a study, keyed by SOP Instance UID; empty when there are none.
+   * A failed read rejects rather than reading as empty: a caller that wrote back what it read would
+   * otherwise replace the document and lose the additions it holds.
+   */
+  private async _readViewerAdditions(StudyInstanceUID: string): Promise<ViewerAdditions> {
+    if (!this._instanceStore || !this._index.studies[StudyInstanceUID]?.hasViewerAdditions) {
+      return {};
+    }
+    return (await get<ViewerAdditions>(VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID, this._instanceStore)) || {};
+  }
+
+  /**
+   * The viewer additions whose instance the study's index entry holds. Only these are folded into a
+   * payload: an addition whose record was evicted, found missing, or never indexed (its index write
+   * failed) stays out of every payload even when the document still lists it, for instance after
+   * a prune of the document failed.
+   */
+  private _indexedViewerAdditions(StudyInstanceUID: string, additions: ViewerAdditions): ViewerAdditions {
+    const study = this._index.studies[StudyInstanceUID];
+    const indexed: ViewerAdditions = {};
+    Object.entries(additions).forEach(([sop, addition]) => {
+      if (study?.series[addition.SeriesInstanceUID]?.instances[sop]) {
+        indexed[sop] = addition;
+      }
     });
+    return indexed;
+  }
+
+  /**
+   * The ownership a viewer-created instance takes from its study, read under the study lock:
+   * - confirmed saved when the study holds a confirmed saved instance (one without holders);
+   * - saved and held by the same transfers when the study's only saved instances are provisional
+   *   (promoted by a transfer that has not completed), so that cancelling them all hands the
+   *   instance back to the session with the rest;
+   * - a session copy when the study holds only session copies.
+   */
+  private _viewerInstanceOwnership(StudyInstanceUID: string): { session: boolean; holders?: string[] } {
+    const study = this._index.studies[StudyInstanceUID];
+    const holders = new Set<string>();
+    let confirmed = false;
+    Object.values(study?.series || {}).forEach(series => {
+      Object.values(series.instances).forEach(entry => {
+        if (entry.session) {
+          return;
+        }
+        if (entry.holders?.length) {
+          entry.holders.forEach(holder => holders.add(holder));
+        } else {
+          confirmed = true;
+        }
+      });
+    });
+    if (confirmed) {
+      return { session: false };
+    }
+    return holders.size ? { session: false, holders: Array.from(holders) } : { session: true };
+  }
+
+  /**
+   * Forget the viewer additions of a study that no longer apply: all of them, or those of one
+   * series, or one instance. The key is deleted once none remain.
+   *
+   * Callers hold the study lock, which serialises this read-modify-write with saves of the study.
+   * A partial prune writes the survivors back only while `token` is still valid: after a clear the
+   * document is gone, and writing the survivors would put them back in storage the user emptied.
+   * Deleting the whole document needs no such check.
+   */
+  private async _pruneViewerAdditions(
+    StudyInstanceUID: string,
+    { SeriesInstanceUID, SOPInstanceUID }: { SeriesInstanceUID?: string; SOPInstanceUID?: string } = {},
+    token?: CacheMutationToken
+  ): Promise<void> {
+    if (!this._instanceStore) {
+      return;
+    }
+    const key = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
+    const study = this._index.studies[StudyInstanceUID];
+    if (!SeriesInstanceUID && !SOPInstanceUID) {
+      // Unconditional: the study's index entry may already be gone
+      await del(key, this._instanceStore).catch(() => {});
+      if (study) {
+        study.hasViewerAdditions = false;
+      }
+      return;
+    }
+    if (!study?.hasViewerAdditions) {
+      return;
+    }
+    const claim = token || this._beginCacheMutation();
+    if (!this._mutationStillValid(claim)) {
+      return;
+    }
+    let additions: ViewerAdditions;
+    try {
+      additions = await this._readViewerAdditions(StudyInstanceUID);
+    } catch (error) {
+      // Left as it is: an addition whose instance is no longer indexed is not folded into any
+      // payload (_indexedViewerAdditions), and the document goes with the study
+      console.warn('[LocalCacheService] Could not read the viewer additions to prune them.', error);
+      return;
+    }
+    if (!this._mutationStillValid(claim)) {
+      return;
+    }
+    let changed = false;
+    Object.entries(additions).forEach(([sop, addition]) => {
+      if (sop === SOPInstanceUID || addition.SeriesInstanceUID === SeriesInstanceUID) {
+        delete additions[sop];
+        changed = true;
+      }
+    });
+    if (!changed) {
+      return;
+    }
+    try {
+      if (Object.keys(additions).length) {
+        await set(key, additions, this._instanceStore);
+      } else {
+        await del(key, this._instanceStore);
+        study.hasViewerAdditions = false;
+      }
+    } catch (error) {
+      // As for a failed read: the stale entries are not folded into any payload
+      console.warn('[LocalCacheService] Could not prune the viewer additions.', error);
+    }
   }
 
   private async _putStudyMetadataPayload(
@@ -997,7 +1512,25 @@ class LocalCacheServiceClass extends PubSubService {
       return;
     }
 
-    await set(STUDY_META_KEY_PREFIX + StudyInstanceUID, payload, this._instanceStore);
+    // Every payload write carries the viewer additions whose instance is indexed, whatever
+    // enumeration it was built from, and none of the series removed from the server since that
+    // enumeration. When the additions cannot be read the payload is written without them and marked
+    // partial, so a cached open does not replay it in place of the server, which holds the reports.
+    let additions: ViewerAdditions = {};
+    try {
+      additions = await this._readViewerAdditions(StudyInstanceUID);
+    } catch (error) {
+      console.warn('[LocalCacheService] Could not read the viewer additions; the payload is stored as partial.', error);
+      partial = true;
+    }
+    if (!this._mutationStillValid(claim)) {
+      return;
+    }
+    const written = _withoutSeries(
+      _foldViewerAdditions(payload, this._indexedViewerAdditions(StudyInstanceUID, additions)),
+      this._serverRemovedSeries.get(StudyInstanceUID)
+    );
+    await set(STUDY_META_KEY_PREFIX + StudyInstanceUID, written, this._instanceStore);
 
     const study = this._index.studies[StudyInstanceUID];
     if (!this._mutationStillValid(claim) || !study) {
@@ -1039,6 +1572,7 @@ class LocalCacheServiceClass extends PubSubService {
     if (this._instanceStore) {
       await del(STUDY_META_KEY_PREFIX + StudyInstanceUID, this._instanceStore).catch(() => {});
     }
+    await this._pruneViewerAdditions(StudyInstanceUID);
     const study = this._index.studies[StudyInstanceUID];
     if (study) {
       study.hasMetadataPayload = false;
@@ -1049,13 +1583,16 @@ class LocalCacheServiceClass extends PubSubService {
   /**
    * Drop one series from the stored metadata payload, leaving the rest of the study's intact.
    *
-   * The payload becomes partial by definition once a series is removed from it: it no longer
-   * describes the whole study, so it must not be replayed in place of the network.
+   * A series evicted from this browser leaves the payload partial: it no longer describes the
+   * whole study, so it must not be replayed in place of the network. A series removed from the
+   * server is different: the payload still describes the whole study as the server now holds it,
+   * so `keepCoverage` leaves a complete payload complete.
    */
   private async _pruneSeriesFromMetadataPayload(
     StudyInstanceUID: string,
     SeriesInstanceUID: string,
-    token: CacheMutationToken
+    token: CacheMutationToken,
+    { keepCoverage = false, strict = false }: { keepCoverage?: boolean; strict?: boolean } = {}
   ): Promise<void> {
     const study = this._index.studies[StudyInstanceUID];
     if (!this._instanceStore || !study?.hasMetadataPayload) {
@@ -1092,12 +1629,45 @@ class LocalCacheServiceClass extends PubSubService {
       }
 
       await set(key, { ...payload, series, instancesBySeries }, this._instanceStore);
-      study.metadataPayloadPartial = true;
+      if (!keepCoverage) {
+        study.metadataPayloadPartial = true;
+      }
     } catch (error) {
+      // `strict` (a series removed from the server): the caller has to know, since the payload
+      // still lists a series that no longer exists
+      if (strict) {
+        throw error;
+      }
       console.warn(
         '[LocalCacheService] Failed to prune the removed series from the study metadata payload.',
         error
       );
+    }
+  }
+
+  /**
+   * Prune a series removed from the server from the payload and the viewer additions. A prune
+   * that fails leaves the payload partial, so a cached open no longer replays it in place of the
+   * server, and rethrows so the removal can say the offline copy was not updated.
+   */
+  private async _pruneServerRemovedSeries(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string,
+    token: CacheMutationToken
+  ): Promise<void> {
+    try {
+      await this._pruneSeriesFromMetadataPayload(StudyInstanceUID, SeriesInstanceUID, token, {
+        keepCoverage: true,
+        strict: true,
+      });
+    } catch (error) {
+      const study = this._index.studies[StudyInstanceUID];
+      if (study?.hasMetadataPayload && this._mutationStillValid(token)) {
+        study.metadataPayloadPartial = true;
+        await this._persistIndex().catch(() => {});
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+      }
+      throw error;
     }
   }
 
@@ -1252,6 +1822,13 @@ class LocalCacheServiceClass extends PubSubService {
     metadata: Record<string, any>;
     session: boolean;
   }): Promise<void> {
+    // A series removed from the server is not stored again, whoever fetched it (see
+    // _serverRemovedSeries). Checked before the write and again after it, with no await between
+    // that check and the indexing: a removal can land while the bytes are being written.
+    if (this._isServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID)) {
+      return;
+    }
+
     const byteSize = bytes.byteLength;
     // Structured-clone-safe copy — raw naturalized datasets throw DataCloneError in IndexedDB.
     const storableMetadata = _toStorableMetadata(metadata);
@@ -1275,6 +1852,10 @@ class LocalCacheServiceClass extends PubSubService {
     // index, keeping the in-memory summary consistent with what is actually persisted.
     if (this._instanceStore) {
       await set(SOPInstanceUID, record, this._instanceStore);
+      if (this._isServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID)) {
+        await del(SOPInstanceUID, this._instanceStore).catch(() => {});
+        return;
+      }
     }
 
     this._indexInstance(
@@ -1380,16 +1961,25 @@ class LocalCacheServiceClass extends PubSubService {
     this._sopSet.add(SOPInstanceUID);
   }
 
+  /**
+   * Remove one cached instance. Under the study lock, like the other mutations of the study's
+   * entry and its viewer additions, so it cannot interleave with a save of the same study.
+   */
   removeInstance(StudyInstanceUID: string, SeriesInstanceUID: string, SOPInstanceUID: string): Promise<void> {
-    return this._withStudyLock(StudyInstanceUID, () =>
-      this._removeInstanceLocked(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID)
+    // Taken before the lock wait, for the same reason as the other mutations
+    const token = this._beginCacheMutation();
+    return this._withStudyLock(
+      StudyInstanceUID,
+      () => this._removeInstanceLocked(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, token),
+      token
     );
   }
 
   private async _removeInstanceLocked(
     StudyInstanceUID: string,
     SeriesInstanceUID: string,
-    SOPInstanceUID: string
+    SOPInstanceUID: string,
+    token: CacheMutationToken
   ): Promise<void> {
     if (this._instanceStore) {
       await del(SOPInstanceUID, this._instanceStore);
@@ -1412,6 +2002,8 @@ class LocalCacheServiceClass extends PubSubService {
         delete this._index.studies[StudyInstanceUID];
         this._studySet.delete(StudyInstanceUID);
         await this._removeStudyMetadataPayload(StudyInstanceUID);
+      } else {
+        await this._pruneViewerAdditions(StudyInstanceUID, { SOPInstanceUID }, token);
       }
     }
     this._sopSet.delete(SOPInstanceUID);
@@ -1434,9 +2026,26 @@ class LocalCacheServiceClass extends PubSubService {
    * `totalBytes` from the study on the way out, leaving the index reporting a size the cache does
    * not have. The second caller now joins the first instead of racing it.
    */
+  //
+  // `removedFromServer` is for a series deleted from the imaging server rather than evicted from
+  // this browser: the study's payload keeps its complete or partial coverage, since it still
+  // describes the whole study as the server holds it, and the series is pruned from the payload
+  // and the viewer additions even when this browser holds none of its instances.
+  //
   // Deliberately not `async`: an async function adopts the promise it returns rather than handing
   // back the same object, so a joining caller could not be given the in-flight removal itself.
-  removeSeries(StudyInstanceUID: string, SeriesInstanceUID: string): Promise<void> {
+  removeSeries(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string,
+    { removedFromServer = false }: { removedFromServer?: boolean } = {}
+  ): Promise<void> {
+    if (removedFromServer && StudyInstanceUID && SeriesInstanceUID) {
+      // Recorded at once, before the lock wait: from here on nothing stores the series again
+      const removed = this._serverRemovedSeries.get(StudyInstanceUID) || new Set<string>();
+      removed.add(SeriesInstanceUID);
+      this._serverRemovedSeries.set(StudyInstanceUID, removed);
+    }
+
     const key = `${StudyInstanceUID}::${SeriesInstanceUID}`;
     const inFlight = this._seriesRemovals.get(key);
     if (inFlight) {
@@ -1446,8 +2055,10 @@ class LocalCacheServiceClass extends PubSubService {
     // Taken before the lock wait, for the same reason as the payload writers.
     const token = this._beginCacheMutation();
 
-    const removal = this._withStudyLock(StudyInstanceUID, () =>
-      this._removeSeries(StudyInstanceUID, SeriesInstanceUID, token)
+    const removal = this._withStudyLock(
+      StudyInstanceUID,
+      () => this._removeSeries(StudyInstanceUID, SeriesInstanceUID, token, { removedFromServer }),
+      token
     ).finally(() => {
       this._seriesRemovals.delete(key);
     });
@@ -1458,10 +2069,25 @@ class LocalCacheServiceClass extends PubSubService {
   private async _removeSeries(
     StudyInstanceUID: string,
     SeriesInstanceUID: string,
-    token: CacheMutationToken
+    token: CacheMutationToken,
+    { removedFromServer = false }: { removedFromServer?: boolean } = {}
   ): Promise<void> {
     const series = this._index.studies[StudyInstanceUID]?.series[SeriesInstanceUID];
     if (!series) {
+      // Nothing of the series is stored here, but a series the server no longer holds must not
+      // stay listed in the payload or the viewer additions either
+      if (removedFromServer && this._index.studies[StudyInstanceUID] && this._mutationStillValid(token)) {
+        let pruneError: unknown;
+        await this._pruneServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID, token).catch(error => {
+          pruneError = error;
+        });
+        await this._pruneViewerAdditions(StudyInstanceUID, { SeriesInstanceUID }, token);
+        await this._persistIndex();
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+        if (pruneError) {
+          throw pruneError;
+        }
+      }
       return;
     }
     const sopUids = Object.keys(series.instances);
@@ -1483,6 +2109,9 @@ class LocalCacheServiceClass extends PubSubService {
     this._seriesStudy.delete(SeriesInstanceUID);
     sopUids.forEach(sop => this._sopSet.delete(sop));
 
+    // A failed prune of a series removed from the server is reported once the rest of the removal
+    // has run: the viewer additions must go regardless, or a later payload write restores them
+    let pruneError: unknown;
     if (Object.keys(study.series).length === 0) {
       delete this._index.studies[StudyInstanceUID];
       this._studySet.delete(StudyInstanceUID);
@@ -1492,7 +2121,15 @@ class LocalCacheServiceClass extends PubSubService {
       // Left alone, an offline open would reconstruct the removed series from stale DICOM JSON and
       // present images that are no longer stored, and its metadata would linger in IndexedDB after
       // the user asked for it to be gone.
-      await this._pruneSeriesFromMetadataPayload(StudyInstanceUID, SeriesInstanceUID, token);
+      if (removedFromServer) {
+        await this._pruneServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID, token).catch(error => {
+          pruneError = error;
+        });
+      } else {
+        await this._pruneSeriesFromMetadataPayload(StudyInstanceUID, SeriesInstanceUID, token);
+      }
+      // Its viewer additions too, or the next payload write would list instances no longer stored
+      await this._pruneViewerAdditions(StudyInstanceUID, { SeriesInstanceUID }, token);
     }
     await this._persistIndex();
 
@@ -1504,6 +2141,9 @@ class LocalCacheServiceClass extends PubSubService {
       })
     );
     this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+    if (pruneError) {
+      throw pruneError;
+    }
   }
 
   async removeStudy(StudyInstanceUID: string) {
@@ -1552,8 +2192,10 @@ class LocalCacheServiceClass extends PubSubService {
     if (this._instanceStore) {
       await clear(this._instanceStore);
     }
+    this._resets += 1;
     this._index = _emptyIndex();
     this._rebuildMembership();
+    // The record of series removed from the server is kept (see _serverRemovedSeries)
     await this._persistIndex({ replace: true });
 
     this._broadcastEvent(EVENTS.CACHE_CLEARED, {});
