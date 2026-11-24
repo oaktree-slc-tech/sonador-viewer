@@ -154,9 +154,11 @@ describe('the offline copy of the stored report\'s study', () => {
     warn.mockRestore();
   });
 
-  it('is not written for a study without one', async () => {
+  it('is left to the cache to find, whatever this context believes is cached', async () => {
+    // The membership of this context can be stale (another tab saved the copy since); the cache
+    // decides under its study lock, and stores nothing for a study it does not hold
     mockCache.isStudyCachedSync.mockImplementation(() => false);
     await stowSRFromMeasurements({}, 'https://dicomweb');
-    expect(mockCache.cacheViewerInstance).not.toHaveBeenCalled();
+    expect(mockCache.cacheViewerInstance).toHaveBeenCalledTimes(1);
   });
 });

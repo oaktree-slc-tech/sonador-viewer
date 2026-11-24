@@ -175,9 +175,11 @@ const cacheStoredReport = async (dataset, part10Buffer, instanceJson) => {
   /**
   * Add a report the server has stored to the offline copy of its study, when the study has one.
   * A cached study opens from its stored metadata payload alone, so a report missing from the
-  * cache would stay missing from every later open of the study. The cache decides, under its study
-  * lock, whether the study is still cached (see LocalCacheService.cacheViewerInstance). A failure is
-  * logged and does not fail the save: the report is already on the server.
+  * cache would stay missing from every later open of the study. Whether the study has a copy is
+  * left to the cache, which decides under its study lock from the stored index (see
+  * LocalCacheService.cacheViewerInstance): this context's membership can be stale, for instance
+  * when another tab saved the copy after this one started. A failure is logged and does not fail
+  * the save: the report is already on the server.
   *
   * @param {Object} dataset - the report as a naturalized dataset
   * @param {ArrayBuffer} part10Buffer - the report as Part 10 bytes, as uploaded
@@ -185,7 +187,7 @@ const cacheStoredReport = async (dataset, part10Buffer, instanceJson) => {
   * @returns {Promise<void>}
   */
   const { StudyInstanceUID } = dataset;
-  if (!LocalCacheService?.isStudyCachedSync?.(StudyInstanceUID)) {
+  if (!StudyInstanceUID || !LocalCacheService?.cacheViewerInstance) {
     return;
   }
 

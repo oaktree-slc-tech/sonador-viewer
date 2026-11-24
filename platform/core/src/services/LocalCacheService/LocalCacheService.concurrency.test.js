@@ -429,3 +429,172 @@ describe('LocalCacheService: markSaved / markSession, with the transfers that re
     expect(service.getSeriesCopyStateSync(SERIES_B)).toBe('temporary');
   });
 });
+
+
+describe('LocalCacheService: reports the viewer saved, across contexts and lifecycles', () => {
+  const SR_SERIES = `${STUDY}.9`;
+  const ADDS = `__studyadds__::${STUDY}`;
+  const report = (sop, StudyInstanceUID = STUDY) => ({
+    StudyInstanceUID,
+    bytes: new ArrayBuffer(4),
+    metadata: { StudyInstanceUID, SeriesInstanceUID: SR_SERIES, SOPInstanceUID: sop, Modality: 'SR', ...IDENTIFIERS },
+    instance: { '0020000E': { vr: 'UI', Value: [SR_SERIES] }, '00080018': { vr: 'UI', Value: [sop] } },
+    series: { '0020000E': { vr: 'UI', Value: [SR_SERIES] }, '00080060': { vr: 'CS', Value: ['SR'] } },
+  });
+  const payload = () => ({
+    series: [{ '0020000E': { Value: [SERIES_A] } }],
+    instancesBySeries: { [SERIES_A]: [{ '00080018': { Value: ['c1'] } }] },
+  });
+  const sopsOf = (stored, series) => ((stored && stored.instancesBySeries[series]) || []).map(e => e['00080018'].Value[0]);
+  const fresh = async () => {
+    const context = new LocalCacheServiceClass({ locks });
+    await context.ready();
+    return context;
+  };
+
+  it('stores a report for a copy another context saved after this one started', async () => {
+    const other = await fresh();
+    await other.putInstance(instance('c1'));
+    await other.putStudyMetadataPayload(STUDY, payload());
+    // This context's membership is stale: it hydrated before the copy existed
+    expect(service.isStudyCachedSync(STUDY)).toBe(false);
+
+    await expect(service.cacheViewerInstance(report('sr1'))).resolves.toBe(true);
+
+    const reader = await fresh();
+    expect(reader.isInstanceCachedSync('sr1')).toBe(true);
+    expect(sopsOf(await reader.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual(['sr1']);
+  });
+
+  it('stores nothing for a study no context holds', async () => {
+    await expect(service.cacheViewerInstance(report('sr1', OTHER_STUDY))).resolves.toBe(false);
+    expect(records().has('sr1')).toBe(false);
+    expect((await fresh()).isStudyCachedSync(OTHER_STUDY)).toBe(false);
+  });
+
+  it('hands a report back with the copy a cancelled transfer promoted, and the sweep takes it', async () => {
+    await service.putInstance(instance('c1', SERIES_A, true));
+    await service.markSaved(STUDY, undefined, { holder: 'job' });
+    await service.cacheViewerInstance(report('sr1'));
+    expect(service.getSeriesCopyStateSync(SR_SERIES)).toBe('saved');
+
+    const demoted = await service.markSession(STUDY, 'job');
+    expect(demoted.sort()).toEqual(['c1', 'sr1']);
+    await service.removeSessionInstances(STUDY);
+
+    expect(records().has('sr1')).toBe(false);
+    expect(records().has(ADDS)).toBe(false);
+    expect((await fresh()).isStudyCachedSync(STUDY)).toBe(false);
+  });
+
+  it('keeps a report once the transfer that promoted the copy completes', async () => {
+    await service.putInstance(instance('c1', SERIES_A, true));
+    await service.markSaved(STUDY, undefined, { holder: 'job' });
+    await service.cacheViewerInstance(report('sr1'));
+    await service.markSaved(STUDY, undefined, { holder: 'job', confirm: true });
+
+    expect(await service.markSession(STUDY, 'job')).toEqual([]);
+    await service.removeSessionInstances(STUDY);
+    const reader = await fresh();
+    expect(reader.getSeriesCopyStateSync(SR_SERIES)).toBe('saved');
+    expect(records().get('sr1').session).toBeUndefined();
+  });
+
+  it('keeps a report saved while another transfer that holds the copy is still running', async () => {
+    await service.putInstance(instance('c1', SERIES_A, true));
+    await service.markSaved(STUDY, undefined, { holder: 'job-1' });
+    await service.markSaved(STUDY, undefined, { holder: 'job-2' });
+    await service.cacheViewerInstance(report('sr1'));
+
+    await service.markSession(STUDY, 'job-1');
+    await service.removeSessionInstances(STUDY);
+    expect(service.isInstanceCachedSync('sr1')).toBe(true);
+    expect(service.getSeriesCopyStateSync(SR_SERIES)).toBe('saved');
+
+    expect(await service.markSession(STUDY, 'job-2')).toEqual(expect.arrayContaining(['c1', 'sr1']));
+  });
+
+  it('keeps a report confirmed when the study already holds a confirmed copy', async () => {
+    await service.putInstance(instance('c1'));
+    await service.cacheViewerInstance(report('sr1'));
+    expect(await service.markSession(STUDY, 'job')).toEqual([]);
+    expect(records().get('sr1').session).toBeUndefined();
+  });
+
+  it('does not let a write made while a clear is failing demote a copy another context saved', async () => {
+    await service.putInstance(instance('x', SERIES_A, true));
+    const other = await fresh();
+    await other.markSaved(STUDY, SERIES_A, { confirm: true });
+
+    const idb = require('idb-keyval');
+    let failClear;
+    const clearSpy = jest.spyOn(idb, 'clear').mockImplementationOnce(
+      () => new Promise((resolve, reject) => { failClear = reject; })
+    );
+    const clearing = service.clearAll();
+    await flush();
+    // This context still remembers the instance as temporary
+    const write = service.putInstance(instance('x', SERIES_A, true));
+    await flush();
+    failClear(new Error('clear failed'));
+    await expect(clearing).rejects.toThrow('clear failed');
+    await write;
+    clearSpy.mockRestore();
+
+    const reader = await fresh();
+    expect(reader.isSeriesSavedSync(SERIES_A)).toBe(true);
+    expect(records().get('x').session).toBeUndefined();
+    await service.removeSessionInstances(STUDY);
+    expect(records().has('x')).toBe(true);
+  });
+
+  describe('when the index write of a save fails', () => {
+    const failNextIndexWrite = () => {
+      const idb = require('idb-keyval');
+      const original = idb.set;
+      const spy = jest.spyOn(idb, 'set').mockImplementation((key, value, store) => {
+        if (store && store.name === 'sonador-local-cache-index/index') {
+          spy.mockRestore();
+          return Promise.reject(new Error('QuotaExceededError'));
+        }
+        return original(key, value, store);
+      });
+    };
+
+    it('takes back a first report entirely', async () => {
+      await service.putInstance(instance('c1'));
+      await service.putStudyMetadataPayload(STUDY, payload());
+      failNextIndexWrite();
+      await expect(service.cacheViewerInstance(report('sr1'))).rejects.toThrow('QuotaExceededError');
+
+      expect(records().has('sr1')).toBe(false);
+      expect(records().has(ADDS)).toBe(false);
+      expect(service.isInstanceCachedSync('sr1')).toBe(false);
+      const other = await fresh();
+      await other.putStudyMetadataPayload(STUDY, payload());
+      expect(sopsOf(await other.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual([]);
+    });
+
+    it('takes back a later report and keeps the earlier one, in every context', async () => {
+      await service.putInstance(instance('c1'));
+      await service.putStudyMetadataPayload(STUDY, payload());
+      await service.cacheViewerInstance(report('sr1'));
+      failNextIndexWrite();
+      await expect(service.cacheViewerInstance(report('sr2'))).rejects.toThrow('QuotaExceededError');
+
+      expect(records().has('sr2')).toBe(false);
+      expect(Object.keys(records().get(ADDS))).toEqual(['sr1']);
+      expect(service.isInstanceCachedSync('sr2')).toBe(false);
+
+      // Another context writes a payload and evicts selectively: the earlier report alone is listed,
+      // and goes with its series
+      const other = await fresh();
+      await other.putStudyMetadataPayload(STUDY, payload());
+      expect(sopsOf(await other.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual(['sr1']);
+      await other.removeSeries(STUDY, SR_SERIES);
+      expect(records().has('sr1')).toBe(false);
+      expect(records().has(ADDS)).toBe(false);
+      expect(sopsOf(await other.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual([]);
+    });
+  });
+});

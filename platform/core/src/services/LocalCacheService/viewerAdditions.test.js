@@ -248,6 +248,8 @@ const payloadSops = payload =>
 beforeEach(async () => {
   await LocalCacheService.ready();
   await LocalCacheService.clearAll();
+  // The record of series removed from the server lasts the session, through a clear
+  LocalCacheService._serverRemovedSeries.clear();
   DownloadManagerService.cancelAllActive();
   DownloadManagerService.listJobs().forEach(job => DownloadManagerService.dismiss(job.id));
   user.getAccessToken = () => 'test-token';

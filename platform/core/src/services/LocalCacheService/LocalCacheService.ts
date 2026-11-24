@@ -390,7 +390,9 @@ class LocalCacheServiceClass extends PubSubService {
   // Series removed from the imaging server during this session, by study. A download that
   // enumerated the study before the removal would otherwise store the series again, its instances
   // through putInstance and its metadata through the payload it commits; both refuse it. Held for
-  // the session, until a clear: anything that runs after a reload enumerates the server afresh.
+  // the whole session, through a clear: a transfer that began before the removal may still write
+  // after the clear (a session archive transfer, which a clear does not cancel). Anything that runs
+  // after a reload enumerates the server afresh.
   private _serverRemovedSeries = new Map<string, Set<string>>();
 
   // Serialises every mutation that touches ONE study's index entry or its metadata payload.
@@ -577,12 +579,30 @@ class LocalCacheServiceClass extends PubSubService {
    * in-memory index is one context's view, the stored document is what every context writes, and
    * ownership is decided from the latter.
    */
-  private _withStudyLock<T>(StudyInstanceUID: string, mutate: () => Promise<T>): Promise<T> {
+  private _withStudyLock<T>(
+    StudyInstanceUID: string,
+    mutate: () => Promise<T>,
+    token?: CacheMutationToken
+  ): Promise<T> {
     const previous = this._studyLocks.get(StudyInstanceUID) || Promise.resolve();
     const run = async () => {
+      // A mutation that took a clear token which a clear has since invalidated abandons its write
+      // (_mutationStillValid): it runs at once, and adopts nothing, since the stored index may still
+      // list studies the clear has already emptied from memory.
+      const abandoned = !!token && !this._mutationStillValid(token);
+      if (!abandoned) {
+        // Every other mutation waits for a clear in this context to settle, then adopts the stored
+        // entry: emptied when the clear succeeded, as it was when the clear failed. Neither a
+        // cleared entry nor this context's stale one is written over another context's.
+        while (this._clearing) {
+          await this._clearing.catch(() => undefined);
+        }
+      }
       this._heldStudies.add(StudyInstanceUID);
       try {
-        await this._adoptStoredStudy(StudyInstanceUID);
+        if (!abandoned) {
+          await this._adoptStoredStudy(StudyInstanceUID);
+        }
         return await mutate();
       } finally {
         this._heldStudies.delete(StudyInstanceUID);
@@ -638,15 +658,8 @@ class LocalCacheServiceClass extends PubSubService {
    * removal made in another tab is thereby seen before this mutation classifies anything.
    */
   private async _adoptStoredStudy(StudyInstanceUID: string): Promise<void> {
-    // Not while a clear runs: the stored document still lists the studies the clear has already
-    // emptied from memory, until it writes the empty index, and adopting from it would bring a
-    // cleared study back into this context's index. A mutation that takes the lock now abandons
-    // its write under the clear protocol (see _beginCacheMutation).
-    if (this._clearing) {
-      return;
-    }
     const stored = await this._readStoredIndex();
-    if (!stored || this._clearing) {
+    if (!stored) {
       return;
     }
     const storedStudy = stored.studies[StudyInstanceUID];
@@ -937,8 +950,13 @@ class LocalCacheServiceClass extends PubSubService {
         for (const [sop, entry] of Object.entries(series.instances)) {
           const record = await this._readRecord(sop);
           if (this._instanceStore && !record) {
-            // The bytes are gone: the index entry is stale
+            // The bytes are gone: the index entry is stale, and so is a viewer addition for it
             this._dropIndexEntry(StudyInstanceUID, series.SeriesInstanceUID, sop);
+            if (this._index.studies[StudyInstanceUID]) {
+              await this._pruneViewerAdditions(StudyInstanceUID, { SOPInstanceUID: sop }, token);
+            } else {
+              await this._pruneViewerAdditions(StudyInstanceUID);
+            }
             continue;
           }
           if (!!entry.session === session) {
@@ -958,7 +976,7 @@ class LocalCacheServiceClass extends PubSubService {
           }
         }
       }
-    });
+    }, token);
   }
 
   /** The stored record of an instance, or null without a store or a record. */
@@ -1065,8 +1083,10 @@ class LocalCacheServiceClass extends PubSubService {
     const token = this._beginCacheMutation();
 
     // Under the study lock: this writes the same document a concurrent series removal prunes.
-    return this._withStudyLock(StudyInstanceUID, () =>
-      this._putStudyMetadataPayload(StudyInstanceUID, payload, { ...options, token })
+    return this._withStudyLock(
+      StudyInstanceUID,
+      () => this._putStudyMetadataPayload(StudyInstanceUID, payload, { ...options, token }),
+      token
     );
   }
 
@@ -1109,7 +1129,7 @@ class LocalCacheServiceClass extends PubSubService {
         !!options.partial && !this.hasCompleteStudyMetadataPayloadSync(StudyInstanceUID);
 
       return this._putStudyMetadataPayload(StudyInstanceUID, merged, { partial, token });
-    });
+    }, token);
   }
 
   /**
@@ -1124,8 +1144,8 @@ class LocalCacheServiceClass extends PubSubService {
    *
    * Under the study lock and the cache-clear protocol: nothing is written for a study that is not
    * cached when the lock is taken, and what was written is taken back if the cache is cleared
-   * while it is in flight. The instance is a saved copy when the study has a saved offline copy,
-   * and a session copy when the study holds only a temporary one.
+   * while it is in flight. The instance takes the study's ownership (see _viewerInstanceOwnership).
+   * If the index write fails, the record and the addition are taken back and the call rejects.
    *
    * @input StudyInstanceUID {string} the study the instance belongs to
    * @input bytes {ArrayBuffer} the instance as Part 10 bytes
@@ -1157,7 +1177,8 @@ class LocalCacheServiceClass extends PubSubService {
     const token = this._beginCacheMutation();
 
     return this._withStudyLock(StudyInstanceUID, async () => {
-      if (!this._mutationStillValid(token) || !this._index.studies[StudyInstanceUID]) {
+      const studyBefore = this._index.studies[StudyInstanceUID];
+      if (!this._mutationStillValid(token) || !studyBefore) {
         return false;
       }
       // A save whose series was removed from the server first (its upload acknowledged after the
@@ -1165,11 +1186,13 @@ class LocalCacheServiceClass extends PubSubService {
       if (this._isServerRemovedSeries(StudyInstanceUID, SeriesInstanceUID)) {
         return false;
       }
+      // The study's index entry as it was, for the rollback below: the entry is plain data
+      const snapshot: StudySummary = JSON.parse(JSON.stringify(studyBefore));
       const uids = { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID };
-      // The copy takes the study's state, read under the lock from the adopted stored entry: saved
-      // when the study has a saved offline copy, a session copy of a temporary one otherwise, so
-      // the session sweep takes it with the rest of the temporary copy
-      const session = !this.isStudySavedSync(StudyInstanceUID);
+      // The ownership comes from the study, read under the lock from the adopted stored entry (see
+      // _viewerInstanceOwnership): the session sweep or a cancelled transfer takes the instance with
+      // the copy it joined, and a confirmed offline copy keeps it
+      const { session, holders } = this._viewerInstanceOwnership(StudyInstanceUID);
       const record = _instanceRecord(uids, bytes, metadata, session);
       const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
       const addition: ViewerAddition = {
@@ -1177,6 +1200,8 @@ class LocalCacheServiceClass extends PubSubService {
         instance: _toCloneable(instance),
         series: _toCloneable(series),
       };
+      // The additions document as it was before this save, restored if the save is taken back
+      let previousAdditions: ViewerAdditions = {};
 
       if (this._instanceStore) {
         await set(SOPInstanceUID, record, this._instanceStore);
@@ -1185,12 +1210,13 @@ class LocalCacheServiceClass extends PubSubService {
           return false;
         }
         try {
-          const additions = await this._readViewerAdditions(StudyInstanceUID);
-          additions[SOPInstanceUID] = addition;
-          await set(additionsKey, additions, this._instanceStore);
+          // A failed read rejects: writing an empty document plus this addition would lose the
+          // additions of the study's other reports
+          previousAdditions = await this._readViewerAdditions(StudyInstanceUID);
+          await set(additionsKey, { ...previousAdditions, [SOPInstanceUID]: addition }, this._instanceStore);
         } catch (error) {
-          // The additions document is as it was (a failed write changes nothing), and it may hold
-          // other reports of the study: only this instance's record is taken back
+          // The additions document is as it was (a failed read or write changes nothing), and it may
+          // hold other reports of the study: only this instance's record is taken back
           await del(SOPInstanceUID, this._instanceStore).catch(() => {});
           throw error;
         }
@@ -1225,9 +1251,20 @@ class LocalCacheServiceClass extends PubSubService {
         return false;
       }
       this._indexInstance(uids, record.byteSize, record.metadata as Record<string, any>, session, {
-        confirm: !session,
+        confirm: !session && !holders,
       });
-      await this._persistIndex();
+      if (holders) {
+        this._index.studies[StudyInstanceUID].series[SeriesInstanceUID].instances[SOPInstanceUID].holders = [...holders];
+      }
+      try {
+        await this._persistIndex();
+      } catch (error) {
+        // Not published: every other context goes on reading the stored index without this
+        // instance, so the save is taken back here too -- the index entry, the record and the
+        // addition -- rather than leaving an addition no index lists
+        await this._rollBackViewerInstance(StudyInstanceUID, SOPInstanceUID, snapshot, previousAdditions);
+        throw error;
+      }
       this._broadcastEvent(EVENTS.INSTANCE_CACHED, uids);
       this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
 
@@ -1240,7 +1277,37 @@ class LocalCacheServiceClass extends PubSubService {
         }
       }
       return this._mutationStillValid(token);
-    });
+    }, token);
+  }
+
+  /**
+   * Take back a viewer-created instance whose index write failed: the study's index entry returns
+   * to `snapshot`, the record is deleted, and the additions document returns to `previousAdditions`
+   * (deleted when that was empty). Under the caller's study lock. A step that fails is logged; an
+   * addition left behind is not folded into any payload, since no index lists its instance.
+   */
+  private async _rollBackViewerInstance(
+    StudyInstanceUID: string,
+    SOPInstanceUID: string,
+    snapshot: StudySummary,
+    previousAdditions: ViewerAdditions
+  ): Promise<void> {
+    this._index.studies[StudyInstanceUID] = snapshot;
+    this._rebuildMembership();
+    if (!this._instanceStore) {
+      return;
+    }
+    const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
+    try {
+      await del(SOPInstanceUID, this._instanceStore);
+      if (Object.keys(previousAdditions).length) {
+        await set(additionsKey, previousAdditions, this._instanceStore);
+      } else {
+        await del(additionsKey, this._instanceStore);
+      }
+    } catch (error) {
+      console.warn('[LocalCacheService] Could not take back a viewer instance whose index write failed.', error);
+    }
   }
 
   /** Whether the series was removed from the imaging server during this session. */
@@ -1248,16 +1315,63 @@ class LocalCacheServiceClass extends PubSubService {
     return !!this._serverRemovedSeries.get(StudyInstanceUID)?.has(SeriesInstanceUID);
   }
 
-  /** The viewer additions stored for a study, keyed by SOP Instance UID; empty when there are none. */
+  /**
+   * The viewer additions stored for a study, keyed by SOP Instance UID; empty when there are none.
+   * A failed read rejects rather than reading as empty: a caller that wrote back what it read would
+   * otherwise replace the document and lose the additions it holds.
+   */
   private async _readViewerAdditions(StudyInstanceUID: string): Promise<ViewerAdditions> {
     if (!this._instanceStore || !this._index.studies[StudyInstanceUID]?.hasViewerAdditions) {
       return {};
     }
-    try {
-      return (await get<ViewerAdditions>(VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID, this._instanceStore)) || {};
-    } catch (error) {
-      return {};
+    return (await get<ViewerAdditions>(VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID, this._instanceStore)) || {};
+  }
+
+  /**
+   * The viewer additions whose instance the study's index entry holds. Only these are folded into a
+   * payload: an addition whose record was evicted, found missing, or never indexed (its index write
+   * failed) stays out of every payload even when the document still lists it, for instance after
+   * a prune of the document failed.
+   */
+  private _indexedViewerAdditions(StudyInstanceUID: string, additions: ViewerAdditions): ViewerAdditions {
+    const study = this._index.studies[StudyInstanceUID];
+    const indexed: ViewerAdditions = {};
+    Object.entries(additions).forEach(([sop, addition]) => {
+      if (study?.series[addition.SeriesInstanceUID]?.instances[sop]) {
+        indexed[sop] = addition;
+      }
+    });
+    return indexed;
+  }
+
+  /**
+   * The ownership a viewer-created instance takes from its study, read under the study lock:
+   * - confirmed saved when the study holds a confirmed saved instance (one without holders);
+   * - saved and held by the same transfers when the study's only saved instances are provisional
+   *   (promoted by a transfer that has not completed), so that cancelling them all hands the
+   *   instance back to the session with the rest;
+   * - a session copy when the study holds only session copies.
+   */
+  private _viewerInstanceOwnership(StudyInstanceUID: string): { session: boolean; holders?: string[] } {
+    const study = this._index.studies[StudyInstanceUID];
+    const holders = new Set<string>();
+    let confirmed = false;
+    Object.values(study?.series || {}).forEach(series => {
+      Object.values(series.instances).forEach(entry => {
+        if (entry.session) {
+          return;
+        }
+        if (entry.holders?.length) {
+          entry.holders.forEach(holder => holders.add(holder));
+        } else {
+          confirmed = true;
+        }
+      });
+    });
+    if (confirmed) {
+      return { session: false };
     }
+    return holders.size ? { session: false, holders: Array.from(holders) } : { session: true };
   }
 
   /**
@@ -1294,7 +1408,15 @@ class LocalCacheServiceClass extends PubSubService {
     if (!this._mutationStillValid(claim)) {
       return;
     }
-    const additions = await this._readViewerAdditions(StudyInstanceUID);
+    let additions: ViewerAdditions;
+    try {
+      additions = await this._readViewerAdditions(StudyInstanceUID);
+    } catch (error) {
+      // Left as it is: an addition whose instance is no longer indexed is not folded into any
+      // payload (_indexedViewerAdditions), and the document goes with the study
+      console.warn('[LocalCacheService] Could not read the viewer additions to prune them.', error);
+      return;
+    }
     if (!this._mutationStillValid(claim)) {
       return;
     }
@@ -1308,11 +1430,16 @@ class LocalCacheServiceClass extends PubSubService {
     if (!changed) {
       return;
     }
-    if (Object.keys(additions).length) {
-      await set(key, additions, this._instanceStore).catch(() => {});
-    } else {
-      await del(key, this._instanceStore).catch(() => {});
-      study.hasViewerAdditions = false;
+    try {
+      if (Object.keys(additions).length) {
+        await set(key, additions, this._instanceStore);
+      } else {
+        await del(key, this._instanceStore);
+        study.hasViewerAdditions = false;
+      }
+    } catch (error) {
+      // As for a failed read: the stale entries are not folded into any payload
+      console.warn('[LocalCacheService] Could not prune the viewer additions.', error);
     }
   }
 
@@ -1330,14 +1457,22 @@ class LocalCacheServiceClass extends PubSubService {
       return;
     }
 
-    // Every payload write carries the viewer additions, whatever enumeration it was built from, and
-    // none of the series removed from the server since that enumeration
-    const additions = await this._readViewerAdditions(StudyInstanceUID);
+    // Every payload write carries the viewer additions whose instance is indexed, whatever
+    // enumeration it was built from, and none of the series removed from the server since that
+    // enumeration. When the additions cannot be read the payload is written without them and marked
+    // partial, so a cached open does not replay it in place of the server, which holds the reports.
+    let additions: ViewerAdditions = {};
+    try {
+      additions = await this._readViewerAdditions(StudyInstanceUID);
+    } catch (error) {
+      console.warn('[LocalCacheService] Could not read the viewer additions; the payload is stored as partial.', error);
+      partial = true;
+    }
     if (!this._mutationStillValid(claim)) {
       return;
     }
     const written = _withoutSeries(
-      _foldViewerAdditions(payload, additions),
+      _foldViewerAdditions(payload, this._indexedViewerAdditions(StudyInstanceUID, additions)),
       this._serverRemovedSeries.get(StudyInstanceUID)
     );
     await set(STUDY_META_KEY_PREFIX + StudyInstanceUID, written, this._instanceStore);
@@ -1778,8 +1913,10 @@ class LocalCacheServiceClass extends PubSubService {
   removeInstance(StudyInstanceUID: string, SeriesInstanceUID: string, SOPInstanceUID: string): Promise<void> {
     // Taken before the lock wait, for the same reason as the other mutations
     const token = this._beginCacheMutation();
-    return this._withStudyLock(StudyInstanceUID, () =>
-      this._removeInstanceLocked(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, token)
+    return this._withStudyLock(
+      StudyInstanceUID,
+      () => this._removeInstanceLocked(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, token),
+      token
     );
   }
 
@@ -1863,8 +2000,10 @@ class LocalCacheServiceClass extends PubSubService {
     // Taken before the lock wait, for the same reason as the payload writers.
     const token = this._beginCacheMutation();
 
-    const removal = this._withStudyLock(StudyInstanceUID, () =>
-      this._removeSeries(StudyInstanceUID, SeriesInstanceUID, token, { removedFromServer })
+    const removal = this._withStudyLock(
+      StudyInstanceUID,
+      () => this._removeSeries(StudyInstanceUID, SeriesInstanceUID, token, { removedFromServer }),
+      token
     ).finally(() => {
       this._seriesRemovals.delete(key);
     });
@@ -2000,9 +2139,7 @@ class LocalCacheServiceClass extends PubSubService {
     }
     this._index = _emptyIndex();
     this._rebuildMembership();
-    // Downloads are cancelled before a clear (DownloadManagerService.cancelAllActive), so nothing
-    // that enumerated a removed series survives it to store the series again
-    this._serverRemovedSeries.clear();
+    // The record of series removed from the server is kept (see _serverRemovedSeries)
     await this._persistIndex({ replace: true });
 
     this._broadcastEvent(EVENTS.CACHE_CLEARED, {});
