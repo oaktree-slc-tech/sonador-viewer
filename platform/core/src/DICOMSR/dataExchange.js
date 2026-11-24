@@ -80,9 +80,13 @@ const storeMeasurements = async (measurementData, filter, server, options) => {
   const StudyInstanceUID = firstMeasurement && firstMeasurement.StudyInstanceUID;
 
   try {
-    await stowSRFromMeasurements(measurementData, serverUrl, options);
-    if (StudyInstanceUID) {
-      studies.deleteStudyMetadataPromise(StudyInstanceUID);
+    const stored = await stowSRFromMeasurements(measurementData, serverUrl, options);
+
+    // The study's memoised metadata predates the new report series. The report names its study;
+    // a measurement need not (a series tag carries no StudyInstanceUID of its own).
+    const storedStudyInstanceUID = (stored && stored.StudyInstanceUID) || StudyInstanceUID;
+    if (storedStudyInstanceUID) {
+      studies.deleteStudyMetadataPromise(storedStudyInstanceUID);
     }
 
     return {
