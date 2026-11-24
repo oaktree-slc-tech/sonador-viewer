@@ -205,7 +205,7 @@ export default function StudiesTableActions({  selectedRows, isWorkList }) {
       if (!StudyInstanceUID) {
         return;
       }
-      if (LocalCacheService?.isStudyCachedSync(StudyInstanceUID)) {
+      if (LocalCacheService?.isStudySavedSync(StudyInstanceUID)) {
         alreadyCached += 1;
         return;
       }

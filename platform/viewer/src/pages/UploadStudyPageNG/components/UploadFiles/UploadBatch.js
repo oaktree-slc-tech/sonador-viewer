@@ -11,7 +11,24 @@ import { ReactComponent as CloseIcon } from '@ohif/ui/src/elements/Icon/icons/ti
 
 import { ReactComponent as FileIcon } from '@ohif/ui/src/elements/Svg/svgs/file.svg';
 
+import { FILE_STATES, batchCounts, fileState } from './logic';
+
 import styles from './UploadFiles.module.scss';
+
+
+// What a file's row says about it: its state, and the message of its last failed send
+const fileStatusText = (file, t) => {
+  switch (fileState(file)) {
+    case FILE_STATES.UPLOADED:
+      return t('Uploaded');
+    case FILE_STATES.WARNING:
+      return t('Retrying') + ` ${file.attempt}/${file.attempts}`;
+    case FILE_STATES.ERROR:
+      return t('Failed') + (file.attempt > 1 ? ` ${file.attempt}/${file.attempts}` : '');
+    default:
+      return t('Pending');
+  }
+};
 
 
 function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails, isLarge, isDesktop, complete=false, variant='drawer' }) {
@@ -19,14 +36,15 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
 
   const { t } = useTranslation();
 
-  // Batch progress
-  const total = files.length;
-  const completed = !complete ? files.filter(f => f.processed && !f.failed).length : total;
-  const pct = total ? Math.floor((completed / total) * 100) : 0;
+  // Batch progress: files settled one way or the other drive the bar; the counts beside it say
+  // how many are retrying (warnings), how many are lost (errors) and how many re-sends it took
+  const { total, completed, warnings, errors, retries } = batchCounts(files);
+  const settled = completed + errors;
+  const pct = total ? Math.floor((settled / total) * 100) : 0;
 
   // Upload file tracking
   const [isExpanded, setIsExpanded] = useState(false);
-  const [batchState, setBatchState] = useState(complete || (total === completed) ? 'complete' : 'pending');
+  const [batchState, setBatchState] = useState(complete || (total === settled) ? 'complete' : 'pending');
 
   const handleClose = (evt) => {
     // Cancel all downloads and remove the batch from the list
@@ -52,11 +70,11 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
 
   useEffect(() => {
 
-    // Mark the state of the upload as complete if all files have been uploaded.
-    if (complete || (total == completed)) {
+    // Mark the state of the upload as complete once every file is settled: uploaded or failed.
+    if (complete || (total == settled)) {
       setBatchState('complete');
     }
-  }, [completed, complete])
+  }, [settled, complete])
 
 
   // Drawer layout: upload overview and files detail
@@ -74,16 +92,36 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
             <span className={styles.metaLabel}>{t('files')}</span>
           </div>
           <div className={styles.metaStat}>
-            <span className={styles.metaValue}>{complete ? total : completed}</span>
+            <span className={styles.metaValue}>{completed}</span>
             <span className={styles.metaLabel}>{t('completed')}</span>
           </div>
+          {/* Warnings, errors and retries are shown only while there are any: a zero says nothing */}
+          {warnings > 0 && (
+            <div className={classNames(styles.metaStat, styles.warning)} title={t('Files with a failed send that are being retried')}>
+              <span className={styles.metaValue}>{warnings}</span>
+              <span className={styles.metaLabel}>{t('warnings')}</span>
+            </div>
+          )}
+          {errors > 0 && (
+            <div className={classNames(styles.metaStat, styles.error)} title={t('Files that could not be uploaded')}>
+              <span className={styles.metaValue}>{errors}</span>
+              <span className={styles.metaLabel}>{t('errors')}</span>
+            </div>
+          )}
+          {retries > 0 && (
+            <div className={styles.metaStat} title={t('Sends repeated after a failure')}>
+              <span className={styles.metaValue}>{retries}</span>
+              <span className={styles.metaLabel}>{t('retries')}</span>
+            </div>
+          )}
         </div>
 
         <div className={styles.progressInline}>
           <div className={styles.progressBarWrapper}>
             <div
               className={classNames(styles.progressBar, {
-                [styles.completed]: pct === 100,
+                [styles.completed]: pct === 100 && errors === 0,
+                [styles.error]: pct === 100 && errors > 0,
               })}
               style={{ width: `${pct}%` }}
             />
@@ -105,36 +143,47 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
 
       {isExpanded && (
         <div className={styles.uploadedFiles}>
-        {files.map((f) => (
+        {files.map((f) => {
+          const state = fileState(f);
+          return (
           <div key={f.fileId} className={styles.uploadedFile}>
             {(isLarge || isDesktop) && <FileIcon />}
             <div className={styles.uploadedFileInfo}>
               <div className={styles.uploadedFileHeader}>
                 <p className={styles.filename}>
-                  {f.name} {f.failed ? '' : `(${f.processed ? 100 : 0}%)`}
+                  {f.name} {state === FILE_STATES.ERROR ? '' : `(${f.processed ? 100 : 0}%)`}
                 </p>
                 <p
                   className={classNames(styles.statusLabel, {
-                    [styles.completed]: !f.failed && f.processed,
-                    [styles.error]: f.failed,
+                    [styles.completed]: state === FILE_STATES.UPLOADED,
+                    [styles.warning]: state === FILE_STATES.WARNING,
+                    [styles.error]: state === FILE_STATES.ERROR,
                   })}
                 >
-                  {/* Stub: no status text yet */}
+                  {fileStatusText(f, t)}
                 </p>
               </div>
 
               <div className={styles.progressBarWrapper}>
                 <div
-                  style={{ width: f.processed || f.failed ? '100%' : 0 }}
+                  style={{ width: f.processed ? '100%' : 0 }}
                   className={classNames(styles.progressBar, {
-                    [styles.completed]: !f.failed && f.processed,
-                    [styles.error]: f.failed,
+                    [styles.completed]: state === FILE_STATES.UPLOADED,
+                    [styles.error]: state === FILE_STATES.ERROR,
                   })}
                 />
               </div>
+
+              {/* The last failed send's message, while the file is retried and once it has failed */}
+              {f.error && (state === FILE_STATES.WARNING || state === FILE_STATES.ERROR) && (
+                <p className={classNames(styles.fileMessage, { [styles.error]: state === FILE_STATES.ERROR })}>
+                  {f.error}
+                </p>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
         </div>
       )}
       </>
@@ -152,14 +201,18 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
           <th>File Name</th>
           <th>File Size</th>
           <th>Status</th>
+          <th>Message</th>
         </tr>
       </thead>
       <tbody>
-        {files.map((f) => (
+        {files.map((f) => {
+          const state = fileState(f);
+          return (
           <tr
             key={f.fileId}
             className={classNames(styles.modalTableRow, {
-              [styles.error]: f.failed,
+              [styles.warning]: state === FILE_STATES.WARNING,
+              [styles.error]: state === FILE_STATES.ERROR,
             })}
           >
             <td>{f.fileId+1}</td>
@@ -167,15 +220,19 @@ function UploadBatch({ uid, files, onUploadCancel, onUploadClose, onViewDetails,
             <td>{utils.formatBytes(f.size)}</td>
             <td
               className={classNames(styles.status, {
-                [styles.success]: f.processed && !f.failed,
+                [styles.success]: state === FILE_STATES.UPLOADED,
+                [styles.warning]: state === FILE_STATES.WARNING,
+                [styles.error]: state === FILE_STATES.ERROR,
               })}
             >
-              {f.processed && !f.error && t('Uploaded')}
-              {f.processed && !f.error && t(f.error)}
-              {!f.processed && t('Pending')}
+              {fileStatusText(f, t)}
+            </td>
+            <td className={styles.message}>
+              {(state === FILE_STATES.WARNING || state === FILE_STATES.ERROR) ? f.error : ''}
             </td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
     </div>

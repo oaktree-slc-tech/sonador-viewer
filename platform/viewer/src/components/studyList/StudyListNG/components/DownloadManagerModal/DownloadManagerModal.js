@@ -16,6 +16,7 @@ import OHIF, {
   DownloadManagerService,
   JOB_STATES,
   LocalCacheService,
+  notifyStudiesQueued,
   redux,
   SERIES_TRANSFER_STATES,
   TRANSFER_MODES,
@@ -176,11 +177,37 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
 
   // Per-series eviction from the details card (ohif-viewers#130, FR-6). Reversible and unconfirmed,
   // like every other offline-copy removal in this dialog.
-  const handleRemoveSeries = (StudyInstanceUID, SeriesInstanceUID) => {
+  const handleRemoveSeries = (StudyInstanceUID, SeriesInstanceUID, state) => {
     if (!StudyInstanceUID || !SeriesInstanceUID) {
       return;
     }
-    LocalCacheService.removeSeries(StudyInstanceUID, SeriesInstanceUID);
+    // A temporary copy is evicted outright; a saved series loses its saved copies only
+    // (imaging-development-env#103)
+    if (state === 'temporary') {
+      LocalCacheService.removeSeries(StudyInstanceUID, SeriesInstanceUID);
+    } else {
+      LocalCacheService.removeSavedInstances(StudyInstanceUID, SeriesInstanceUID);
+    }
+  };
+
+  // Keep: a temporary copy becomes a saved offline copy through the ordinary offline transfer,
+  // which fetches only what the cache is missing and promotes what it already holds
+  // (imaging-development-env#103).
+  const handleKeepStudy = summary => {
+    if (!activeServer || DownloadManagerService?.isStudyDownloading(summary.StudyInstanceUID)) {
+      return;
+    }
+    const job = DownloadManagerService.enqueueStudy({
+      server: activeServer,
+      StudyInstanceUID: summary.StudyInstanceUID,
+      descriptor: {
+        PatientName: summary.PatientName,
+        PatientID: summary.PatientID,
+        StudyDescription: summary.StudyDescription,
+        AccessionNumber: summary.AccessionNumber,
+      },
+    });
+    notifyStudiesQueued({ queued: [job] });
   };
 
   // FR-8: no removal control for a series a transfer is still writing, so a removal can never be
@@ -407,6 +434,20 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
                 {summary.seriesCount} {t('series')} · {summary.instanceCount} {t('instances')}
                 {summary.modalities ? <> · {summary.modalities}</> : null} · {formatBytes(summary.totalBytes)}
               </div>
+              {/* Saved versus temporary copies (imaging-development-env#103), on a line of its own */}
+              <div
+                className={styles.rowState}
+                title={summary.state === 'temporary' ? t('Cleared when the study is closed') : undefined}
+              >
+                <Icon name={summary.state === 'temporary' ? 'offline-cache-temporary' : 'offline-cache'} />
+                <span>
+                  {summary.state === 'temporary'
+                    ? `${t('Temporary copy')} · ${t('Cleared when the study is closed').toLowerCase()}`
+                    : summary.temporarySeriesCount
+                      ? `${summary.savedSeriesCount} ${t('of')} ${summary.seriesCount} ${t('series')} ${t('available offline')}, ${summary.temporarySeriesCount} ${t('temporary')}`
+                      : t('Available offline')}
+                </span>
+              </div>
             </button>
           </PopoverTrigger>
           <StudyOfflineDetailsCard
@@ -415,14 +456,41 @@ export default function DownloadManagerModal({ isOpen, onClose }) {
             isSeriesRemovable={isSeriesRemovable(summary.StudyInstanceUID)}
           />
         </Popover>
-        <button
-          type="button"
-          className={styles.actionButton}
-          title={t('Remove Offline Copy')}
-          onClick={() => LocalCacheService.removeStudy(summary.StudyInstanceUID)}
-        >
-          <Icon name="trash" />
-        </button>
+        {summary.state === 'temporary' ? (
+          <>
+            <button
+              type="button"
+              className={styles.actionButton}
+              title={t('Keep this study as an offline copy')}
+              aria-label={t('Keep Offline')}
+              disabled={!activeServer || DownloadManagerService?.isStudyDownloading(summary.StudyInstanceUID)}
+              onClick={() => handleKeepStudy(summary)}
+            >
+              <Icon name="offline-cache" />
+            </button>
+            <button
+              type="button"
+              className={styles.actionButton}
+              title={t('Remove Temporary Copy')}
+              onClick={() => LocalCacheService.removeSessionInstances(summary.StudyInstanceUID)}
+            >
+              <Icon name="trash" />
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={styles.actionButton}
+            title={
+              summary.temporarySeriesCount
+                ? t('Remove the saved copies of this study; temporary copies stay until the study is closed')
+                : t('Remove Offline Copy')
+            }
+            onClick={() => LocalCacheService.removeSavedInstances(summary.StudyInstanceUID)}
+          >
+            <Icon name="trash" />
+          </button>
+        )}
       </div>
     ));
   };

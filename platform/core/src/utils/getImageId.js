@@ -1,4 +1,5 @@
 import getWADORSImageId from './getWADORSImageId';
+import { isSeriesScheduledSync } from '../services/LocalCacheService/sessionArchiveRegistry';
 
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
 import {
@@ -80,8 +81,18 @@ export default function getImageId(instance, frame, thumbnail = false) {
   if (isRemote) {
     const SOPInstanceUID =
       instance.SOPInstanceUID || instance.SopInstanceUID || instance.metadata?.SOPInstanceUID;
+    const SeriesInstanceUID =
+      instance.SeriesInstanceUID || instance.metadata?.SeriesInstanceUID;
 
-    if (SOPInstanceUID && LocalCacheService.isInstanceCachedSync(SOPInstanceUID)) {
+    // Also local when the series is being fetched as an archive for this session
+    // (imaging-development-env#103): the id is memoised now, the member lands later, and the local
+    // reader waits for it. Not for a thumbnail: its one preview image is fetched at once over the
+    // per-instance route rather than held until the archive delivers that instance.
+    if (
+      SOPInstanceUID &&
+      (LocalCacheService.isInstanceCachedSync(SOPInstanceUID) ||
+        (!thumbnail && isSeriesScheduledSync(SeriesInstanceUID)))
+    ) {
       // Record the remote imageId so the loader can fall back per-instance on a cache miss (FR-10).
       registerRemoteFallback(SOPInstanceUID, remoteImageId);
       return buildSonadorLocalImageId(SOPInstanceUID, frame);

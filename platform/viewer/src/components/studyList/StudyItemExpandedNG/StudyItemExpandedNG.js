@@ -236,7 +236,7 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
   // resolved booleans and stays a presentation component (AR-2).
   useLocalCacheVersion();
   const seriesIsCached = !!(
-    selectedSeriesUID && LocalCacheService?.isSeriesCachedSync(selectedSeriesUID)
+    selectedSeriesUID && LocalCacheService?.isSeriesSavedSync(selectedSeriesUID)
   );
   const seriesIsTransferring = !!(
     selectedSeriesUID && DownloadManagerService?.isSeriesDownloading(selectedSeriesUID)
@@ -277,7 +277,8 @@ export default function StudyItemExpandedNG({ studyId,  study }) {
     if (!seriesDescriptor?.SeriesInstanceUID) {
       return;
     }
-    LocalCacheService.removeSeries(studyId, seriesDescriptor.SeriesInstanceUID);
+    // The saved copy only; a temporary copy stays until its viewing session ends
+    LocalCacheService.removeSavedInstances(studyId, seriesDescriptor.SeriesInstanceUID);
   };
 
 

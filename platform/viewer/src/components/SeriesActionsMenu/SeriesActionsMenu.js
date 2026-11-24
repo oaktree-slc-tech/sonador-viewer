@@ -103,7 +103,7 @@ export default function SeriesActionsMenu({
   // both of these exist precisely so a render path never has to await IndexedDB -- and kept live
   // by useLocalCacheVersion rather than by local state anyone has to remember to invalidate.
   useLocalCacheVersion();
-  const isSeriesCached = !!LocalCacheService?.isSeriesCachedSync(SeriesInstanceUID);
+  const isSeriesCached = !!LocalCacheService?.isSeriesSavedSync(SeriesInstanceUID);
   const isSeriesTransferring = !!DownloadManagerService?.isSeriesDownloading(SeriesInstanceUID);
   // FR-8: a study transfer still writing this series would silently re-cache it a moment after a
   // removal, so the removal is withheld until nothing is transferring it.
@@ -155,9 +155,10 @@ export default function SeriesActionsMenu({
   };
 
   const handleRemoveOffline = () => {
-    // Evicts this browser's copy only. Reversible, so no confirmation (#130 FR-5) -- deliberately
-    // unlike Remove Series below.
-    LocalCacheService.removeSeries(StudyInstanceUID, SeriesInstanceUID);
+    // Evicts this browser's saved copy only. Reversible, so no confirmation (#130 FR-5) --
+    // deliberately unlike Remove Series below. A temporary copy a viewing session fetched is left
+    // to that session's exit (imaging-development-env#103).
+    LocalCacheService.removeSavedInstances(StudyInstanceUID, SeriesInstanceUID);
   };
 
   const handleConfirmRemove = async () => {

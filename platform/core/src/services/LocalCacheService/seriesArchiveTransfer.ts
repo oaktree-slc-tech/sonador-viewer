@@ -112,6 +112,8 @@ interface TransferOptions {
   /** SOP instances of this series already in the cache before the transfer started, so a re-queue
    * does not double-count them into the job's completed total. */
   alreadyCached?: Set<string>;
+  /** Store the members as session copies (SessionArchiveLoader) rather than as a saved offline copy. */
+  session?: boolean;
   isCancelled: () => boolean;
   /**
    * Hands the request's `AbortController` to the caller the moment it exists, BEFORE the fetch is
@@ -162,6 +164,7 @@ export default async function transferSeriesArchive({
   SeriesInstanceUID,
   metadataBySOP,
   alreadyCached,
+  session = false,
   isCancelled,
   onRequestStarted,
   onState,
@@ -321,6 +324,7 @@ export default async function transferSeriesArchive({
         SeriesInstanceUID,
         metadataBySOP,
         alreadyCached,
+        session,
         result,
         onInstanceStored,
         onUnmatchedInstance,
@@ -494,6 +498,7 @@ async function _storeMember({
   SeriesInstanceUID,
   metadataBySOP,
   alreadyCached,
+  session = false,
   result,
   onInstanceStored,
   onUnmatchedInstance,
@@ -504,6 +509,7 @@ async function _storeMember({
   SeriesInstanceUID: string;
   metadataBySOP: Record<string, any>;
   alreadyCached?: Set<string>;
+  session?: boolean;
   result: SeriesArchiveResult;
   onInstanceStored?: (uids: any) => void;
   onUnmatchedInstance?: (instance: {
@@ -573,6 +579,7 @@ async function _storeMember({
     ...uids,
     bytes: _toArrayBuffer(bytes),
     metadata,
+    session,
   });
 
   if (!alreadyCached || !alreadyCached.has(uids.SOPInstanceUID)) {

@@ -18,6 +18,8 @@ const KEYS = {
   FOLLOW: 'segEditorFollowSelection',
   PREVIEW: 'segEditorPreviewColor',
   MESH: 'segEditorMeshColor',
+  ARCHIVE_LOADING: 'studyArchiveLoading',
+  UPLOAD: 'uploadAttempts',
 };
 
 // Stand-ins for the runtime holders, built inside the factory (jest hoists the mock above this
@@ -32,10 +34,18 @@ jest.mock('@ohif/core', () => {
       segEditorFollowSelection: false,
       segEditorPreviewColor: '#ff8500',
       segEditorMeshColor: 'auto',
+      studyArchiveLoading: false,
+      uploadAttempts: 10,
     },
     getGeneral(key) { return this.values[key]; },
     // Server-side keys only, as the real service's getGeneralValues
-    getGeneralValues() { return { warnLockedModelsOnOpenAsSegmentation: this.values.warnLockedModelsOnOpenAsSegmentation }; },
+    getGeneralValues() {
+      return {
+        warnLockedModelsOnOpenAsSegmentation: this.values.warnLockedModelsOnOpenAsSegmentation,
+        studyArchiveLoading: this.values.studyArchiveLoading,
+        uploadAttempts: this.values.uploadAttempts,
+      };
+    },
     setGeneral: jest.fn(function (key, value) { this.values[key] = value; }),
     subscribe(event, listener) {
       this.listeners.push(listener);
@@ -58,6 +68,8 @@ jest.mock('@ohif/core', () => {
   };
   return {
     DownloadManagerService: downloads,
+    // Whether this browser can open studies as archives (the cache's shared lock)
+    LocalCacheService: { hasSharedLock: jest.fn(() => true) },
     DownloadManagerServiceEvents: { TRANSFER_MODE_CHANGED: 'transfer', RETRY_ATTEMPTS_CHANGED: 'retry' },
     RETRY_ATTEMPTS_DEFAULT: 3,
     RETRY_ATTEMPTS_MAX: 5,
@@ -70,6 +82,12 @@ jest.mock('@ohif/core', () => {
     SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY: 'segEditorMeshColor',
     SEG_EDITOR_PREVIEW_COLOR_DEFAULT: '#ff8500',
     SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY: 'segEditorPreviewColor',
+    STUDY_ARCHIVE_LOADING_DEFAULT: false,
+    STUDY_ARCHIVE_LOADING_PREFERENCE_KEY: 'studyArchiveLoading',
+    UPLOAD_ATTEMPTS_DEFAULT: 10,
+    UPLOAD_ATTEMPTS_MAX: 20,
+    UPLOAD_ATTEMPTS_MIN: 1,
+    UPLOAD_ATTEMPTS_PREFERENCE_KEY: 'uploadAttempts',
     UserPreferencesService: preferences,
     UserPreferencesServiceEvents: { GENERAL_CHANGED: 'event::general_changed' },
     uiNotificationService: { show: (...args) => mockNotify(...args) },
@@ -169,6 +187,9 @@ afterEach(() => {
 });
 
 const byId = id => document.getElementById(id);
+// The numeric rows carry no element id: on the Application tab the inputs are, in order, the
+// offline attempt budget and the upload attempt budget
+const uploadInput = () => document.querySelectorAll('input')[1];
 const click = element => act(() => {
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -352,8 +373,10 @@ describe('GeneralTabNG', () => {
       [KEYS.FOLLOW, true, { persist: false }],
       [KEYS.PREVIEW, '#ff8500', { persist: false }],
       [KEYS.MESH, 'auto', { persist: false }],
+      [KEYS.ARCHIVE_LOADING, false, { persist: false }],
+      [KEYS.UPLOAD, 10, { persist: false }],
     ]));
-    expect(mockPrefs.setGeneral).toHaveBeenCalledTimes(4);
+    expect(mockPrefs.setGeneral).toHaveBeenCalledTimes(6);
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(lastPayload()).toEqual({
@@ -364,6 +387,8 @@ describe('GeneralTabNG', () => {
         // Untouched: the holder's hydrated value, not the built-in default
         offlineRetryAttempts: 4,
         warnLockedModelsOnOpenAsSegmentation: false,
+        studyArchiveLoading: false,
+        uploadAttempts: 10,
       },
     });
     expect(lastMessage()).toEqual(expect.objectContaining({
@@ -426,14 +451,79 @@ describe('GeneralTabNG', () => {
     expect(mockPrefs.setGeneral).toHaveBeenCalledWith(KEYS.PREVIEW, '#112233', { persist: false });
   });
 
+  it('offers the study archive loading switch and the upload attempt budget on the Application tab, hydrated from the service', () => {
+    mockPrefs.values[KEYS.ARCHIVE_LOADING] = true;
+    mockPrefs.values[KEYS.UPLOAD] = 7;
+    mount();
+    expect(checked(byId('study-archive-loading'))).toBe(true);
+    expect(uploadInput().value).toBe('7');
+    // The Uploads group sits after Offline storage, Viewer before it
+    const labels = Array.from(document.querySelectorAll('p'))
+      .map(node => node.textContent)
+      .filter(text => ['Viewer', 'Offline storage', 'Uploads'].includes(text));
+    expect(labels).toEqual(['Viewer', 'Offline storage', 'Uploads']);
+  });
+
+  it('Save applies the study archive loading and the upload attempts to the service, posts them, and names them', async () => {
+    mount();
+    click(byId('study-archive-loading'));
+    const input = uploadInput();
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+    await save();
+    expect(mockPrefs.setGeneral).toHaveBeenCalledWith(KEYS.ARCHIVE_LOADING, true, { persist: false });
+    expect(mockPrefs.setGeneral).toHaveBeenCalledWith(KEYS.UPLOAD, 9, { persist: false });
+    expect(lastPayload().values.studyArchiveLoading).toBe(true);
+    expect(lastPayload().values.uploadAttempts).toBe(9);
+    expect(lastMessage().message).toBe('StudyArchiveLoadingSavedOn UploadAttemptsSaved(9)');
+    // Where this browser can open studies as archives, the help text says nothing about a fallback
+    expect(byId('study-archive-loading-help').textContent).not.toContain('UnsupportedHere');
+  });
+
+  it('where this browser cannot open studies as archives, says so beside the switch and in the save message, and still offers and saves the account preference', async () => {
+    const { LocalCacheService } = require('@ohif/core');
+    LocalCacheService.hasSharedLock.mockReturnValue(false);
+    try {
+      mount();
+      expect(byId('study-archive-loading-help').textContent).toContain('StudyArchiveLoadingUnsupportedHere');
+      expect(checked(byId('study-archive-loading'))).toBe(false);
+      click(byId('study-archive-loading'));
+      await save();
+      expect(mockPrefs.setGeneral).toHaveBeenCalledWith(KEYS.ARCHIVE_LOADING, true, { persist: false });
+      expect(lastPayload().values.studyArchiveLoading).toBe(true);
+      expect(lastMessage().message).toBe('StudyArchiveLoadingSavedOnUnsupportedHere');
+      // Turning it off reads the same everywhere
+      click(byId('study-archive-loading'));
+      await save();
+      expect(lastMessage().message).toBe('StudyArchiveLoadingSavedOff');
+    } finally {
+      LocalCacheService.hasSharedLock.mockReturnValue(true);
+    }
+  });
+
+  it('keeps the upload attempt budget inside its bounds when stepped by key', () => {
+    mockPrefs.values[KEYS.UPLOAD] = 20;
+    mount();
+    const input = uploadInput();
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    });
+    expect(input.value).toBe('20');
+  });
+
   it('Reset Defaults returns every field on both tabs to its default without saving', () => {
     mockPrefs.values[KEYS.LOCKED] = false;
     mockPrefs.values[KEYS.FOLLOW] = true;
     mockPrefs.values[KEYS.MESH] = '#336699';
+    mockPrefs.values[KEYS.ARCHIVE_LOADING] = true;
+    mockPrefs.values[KEYS.UPLOAD] = 3;
     mount();
     click(document.querySelector('[data-cy="settings-reset"]'));
     expect(checked(byId('offline-archive-transfer'))).toBe(false);
     expect(document.querySelector('input').value).toBe('3');
+    expect(checked(byId('study-archive-loading'))).toBe(false);
+    expect(uploadInput().value).toBe('10');
     openTab('general-settings-seg-editor');
     expect(checked(byId('locked-models-warning'))).toBe(true);
     expect(checked(byId('seg-editor-follow-selection'))).toBe(false);

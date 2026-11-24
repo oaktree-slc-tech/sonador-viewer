@@ -5,6 +5,10 @@
 // rendered for studies that are not locally cached, so the column collapses to its padding when no
 // study on the page is available offline.
 //
+// Two looks (imaging-development-env#103): the solid cloud for a study with a saved offline copy
+// (of any of its series), the dashed hollow cloud for a study the cache holds only as temporary
+// copies fetched for a viewing session. The label carries the breakdown by series.
+//
 // The badge opens the same details panel the Offline Storage dialog uses (StudyOfflineDetailsCard),
 // fed by the study's summary from the local cache index.
 
@@ -34,17 +38,28 @@ export default function OfflineIndicatorCell({ row }) {
   // (the worklist keys its rows by worklist entry id instead, so row.id is not usable here).
   const StudyInstanceUID = row?.original?.StudyInstanceUID?.value;
 
-  if (!LocalCacheService?.isStudyCachedSync(StudyInstanceUID)) {
+  const copies = LocalCacheService?.getStudyCopyStateSync?.(StudyInstanceUID);
+  if (!copies || copies.state === 'none') {
     return null;
   }
+  const temporary = copies.state === 'temporary';
+  const label = temporary
+    ? `${t('Temporary copy')} (${copies.temporarySeriesCount} ${t('series')}; ${t('Cleared when the study is closed').toLowerCase()})`
+    : `${t('Available offline')} (${copies.savedSeriesCount} ${t('of')} ${copies.seriesCount} ${t('series')} ${t('available offline')}` +
+      (copies.temporarySeriesCount ? `, ${copies.temporarySeriesCount} ${t('temporary')})` : ')');
 
   const summary = LocalCacheService.getStudySummary(StudyInstanceUID);
 
   // The per-series removal control from the Offline Storage dialog is offered here too
   // (ohif-viewers#130, §5.2): it is the same card over the same data, and withholding the control
   // on one copy of it would make the two behave differently for no reason a user could infer.
-  const handleRemoveSeries = (studyUID, SeriesInstanceUID) => {
-    LocalCacheService.removeSeries(studyUID, SeriesInstanceUID);
+  const handleRemoveSeries = (studyUID, SeriesInstanceUID, state) => {
+    // A temporary copy is evicted outright; a saved series loses its saved copies only
+    if (state === 'temporary') {
+      LocalCacheService.removeSeries(studyUID, SeriesInstanceUID);
+    } else {
+      LocalCacheService.removeSavedInstances(studyUID, SeriesInstanceUID);
+    }
   };
 
   // No control for a series a transfer is still writing (#130 FR-8) -- the same rule the Offline
@@ -61,15 +76,17 @@ export default function OfflineIndicatorCell({ row }) {
         <button
           type="button"
           className={styles.indicator}
-          aria-label={t('Available offline')}
+          aria-label={label}
+          title={label}
           data-cy="offline-indicator"
+          data-copy-state={copies.state}
           // The row toggles its drawer on click; keep activating the badge from collapsing the
           // row out from under the panel the user is reading. stopPropagation only -- Radix
           // composes the open/close toggle into this same handler and a preventDefault would
           // swallow it.
           onClick={event => event.stopPropagation()}
         >
-          <Icon name="offline-cache" />
+          <Icon name={temporary ? 'offline-cache-temporary' : 'offline-cache'} />
         </button>
       </PopoverTrigger>
       <StudyOfflineDetailsCard

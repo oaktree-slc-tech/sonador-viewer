@@ -123,7 +123,10 @@ class DicomLoaderService {
 
   _fetchAndRecache(dataset, SOPInstanceUID) {
     // Network fetch with an opportunistic write-back into the offline cache (validated Part10
-    // only, and only for studies the user has saved offline).
+    // only, and only for studies the cache already holds). The copy takes the study's state: it
+    // completes a saved offline copy, or joins the temporary copies of a study a viewing session
+    // fetched (imaging-development-env#103) -- so a model or report viewed alongside such a study
+    // does not become a saved copy the user never asked for.
     const network = this.getDataByImageType(dataset) || this.getDataByDatasetType(dataset);
     if (!network || typeof network.then !== 'function') {
       return network;
@@ -142,6 +145,7 @@ class DicomLoaderService {
           SOPInstanceUID,
           bytes,
           metadata: { SOPInstanceUID, Modality, SeriesDescription },
+          session: !LocalCacheService.isStudySavedSync?.(StudyInstanceUID),
         }).catch(() => {});
       }
       return bytes;

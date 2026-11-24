@@ -13,6 +13,13 @@
 //
 // The in-memory index (+ membership Sets) is what makes FR-2's preferential imageId selection cheap:
 // `getImageId()` is synchronous and cannot await IndexedDB, so it consults `isInstanceCachedSync`.
+//
+// The stores are shared by every browsing context of the origin. Ownership of a copy (saved, or a
+// viewing session's temporary copy) is therefore decided from the STORED index, under a per-study
+// lock that is held across contexts through the Web Locks API where the browser offers it: a
+// mutation adopts the stored entry for its study once it holds the lock, and writes the index back,
+// under a shared index lock, as a merge that takes every study it does not hold from the store
+// (imaging-development-env#103). Without the API the viewer creates no temporary copies.
 
 import { get, set, del, clear, createStore } from 'idb-keyval';
 
@@ -44,7 +51,13 @@ interface SeriesSummary {
   SeriesNumber?: string | number;
   Modality?: string;
   totalBytes: number;
-  instances: Record<string, { byteSize: number }>;
+  // `session` marks an instance fetched for the current viewing session only (SessionArchiveLoader,
+  // imaging-development-env#103), as opposed to one the user saved as an offline copy. A session
+  // instance is evicted when the study is left; the saved-copy queries ignore it. `holders` names
+  // the offline transfers that rely on a promoted copy while they run: the copy is saved for as long
+  // as one of them is active or until one completes, and a cancelled transfer hands back only a copy
+  // no other transfer still relies on.
+  instances: Record<string, { byteSize: number; session?: boolean; holders?: string[] }>;
 }
 
 interface StudySummary {
@@ -88,15 +101,56 @@ interface InstanceUIDs {
   SOPInstanceUID: string;
 }
 
+/**
+ * The part of the Web Locks API the cache uses to serialise its mutations across browsing contexts
+ * (`navigator.locks`); injectable, and absent where the API is not available -- the viewer then
+ * creates no temporary copies (see SessionArchiveLoader), so the only copies are saved ones.
+ */
+export interface LockManagerLike {
+  request<T>(name: string, options: { mode: 'exclusive' }, callback: () => Promise<T>): Promise<T>;
+}
+
 interface InstanceRecord extends InstanceUIDs {
   bytes: ArrayBuffer;
   metadata: Record<string, unknown>;
   byteSize: number;
   cachedAt: number;
+  session?: boolean;
 }
 
 function _emptyIndex(): CacheIndex {
   return { version: INDEX_VERSION, studies: {} };
+}
+
+function _hasSavedInstance(series: SeriesSummary): boolean {
+  return Object.values(series.instances).some(entry => !entry.session);
+}
+
+function _hasSessionInstance(series: SeriesSummary): boolean {
+  return Object.values(series.instances).some(entry => !!entry.session);
+}
+
+/** The copy state the UI shows for a cached scope: a saved instance anywhere in it makes it saved. */
+export type CopyState = 'saved' | 'temporary' | 'none';
+
+function _seriesCopyState(series: SeriesSummary | undefined): CopyState {
+  if (!series || !Object.keys(series.instances).length) {
+    return 'none';
+  }
+  return _hasSavedInstance(series) ? 'saved' : 'temporary';
+}
+
+function _countInstances(series: SeriesSummary): { saved: number; temporary: number } {
+  let saved = 0;
+  let temporary = 0;
+  Object.values(series.instances).forEach(entry => {
+    if (entry.session) {
+      temporary += 1;
+    } else {
+      saved += 1;
+    }
+  });
+  return { saved, temporary };
 }
 
 /** Fill any missing study-level fields on an index entry from an instance's metadata. */
@@ -133,6 +187,18 @@ function _backfillStudyFields(study: StudySummary, metadata: Record<string, any>
 function _hasIndexedDB(): boolean {
   return typeof indexedDB !== 'undefined';
 }
+
+/** The browser's lock manager, where there is one. Without it the lock is this context's alone. */
+function _defaultLocks(): LockManagerLike | null {
+  const locks = typeof navigator !== 'undefined' ? (navigator as any).locks : undefined;
+  return locks && typeof locks.request === 'function' ? (locks as LockManagerLike) : null;
+}
+
+function _lockName(StudyInstanceUID: string): string {
+  return `sonador-local-cache::${StudyInstanceUID}`;
+}
+
+const INDEX_LOCK_NAME = 'sonador-local-cache::index';
 
 // Naturalized datasets coming out of the retrieve pipeline (dcmjs / metadata providers) carry
 // values the structured-clone algorithm rejects — functions, accessors, Proxies, circular refs —
@@ -197,6 +263,8 @@ class LocalCacheServiceClass extends PubSubService {
   private _sopSet = new Set<string>();
   private _seriesSet = new Set<string>();
   private _studySet = new Set<string>();
+  // SeriesInstanceUID -> StudyInstanceUID, for the series-level queries that are asked without a study
+  private _seriesStudy = new Map<string, string>();
 
   private _ready: Promise<void>;
 
@@ -207,7 +275,18 @@ class LocalCacheServiceClass extends PubSubService {
   // Per-series de-duplication is not enough: the payload is study-scoped, so removing series A and
   // series B at once takes two different de-duplication keys and would still interleave a
   // read-modify-write over the same document, dropping one of the two removals.
+  // Within this context this is a promise chain per study; across contexts the same critical
+  // section is held through the Web Locks API when the browser offers it (`_lockManager`).
   private _studyLocks = new Map<string, Promise<unknown>>();
+  // The studies whose lock this context HOLDS right now, as opposed to waits for: only their entries
+  // are this context's to write (see _persistIndex)
+  private _heldStudies = new Set<string>();
+  private _locksOption: LockManagerLike | null | undefined;
+
+  // Writes of the index document are serialised too, within this context and, through the shared
+  // index lock, across contexts: each one is a read-merge-write (see _persistIndex), and two of them
+  // interleaving would lose one's studies.
+  private _indexWrites: Promise<void> = Promise.resolve();
 
   // The cache-wide clear protocol. `_clearing` is true for the WHOLE of clearAll, including its
   // failure path, and `_generation` moves once when it ends. A mutation captures both before it
@@ -227,8 +306,13 @@ class LocalCacheServiceClass extends PubSubService {
   private _clearing: Promise<void> | null = null;
   private _generation = 0;
 
-  constructor() {
+  /**
+   * @param options.locks - the lock manager that serialises mutations across browsing contexts;
+   *   defaults to `navigator.locks`, `null` for none (tests inject a shared fake)
+   */
+  constructor({ locks }: { locks?: LockManagerLike | null } = {}) {
     super(EVENTS);
+    this._locksOption = locks;
     if (_hasIndexedDB()) {
       this._instanceStore = createStore('sonador-local-cache', 'instances');
       this._indexStore = createStore('sonador-local-cache-index', 'index');
@@ -240,6 +324,19 @@ class LocalCacheServiceClass extends PubSubService {
   // singleton (mirrors how DicomMetadataStore is consumed).
   create() {
     return this;
+  }
+
+  /** The lock manager shared between contexts, if any: the injected one, else the browser's. */
+  private _lockManager(): LockManagerLike | null {
+    return this._locksOption !== undefined ? this._locksOption : _defaultLocks();
+  }
+
+  /**
+   * Whether mutations are serialised across browsing contexts. Without it only saved copies are
+   * safe to hold: the viewer does not create temporary copies then (SessionArchiveLoader).
+   */
+  hasSharedLock(): boolean {
+    return !!this._lockManager();
   }
 
   /** Resolves once the in-memory index has been hydrated from IndexedDB. */
@@ -273,19 +370,23 @@ class LocalCacheServiceClass extends PubSubService {
       this._index = _emptyIndex();
     }
     this._rebuildMembership();
-    await this._repairIndexFromRecords();
+    // In the background: each study is repaired under its lock, and waiting for a lock another
+    // context holds must not hold up this context's start
+    this._repairIndexFromRecords().catch(error => {
+      console.warn('[LocalCacheService] Index repair failed.', error);
+    });
   }
 
   /**
    * One idb read per incomplete study: earlier builds indexed studies with missing patient/episode
    * fields (e.g. array-typed PatientName was dropped). The instance records still hold the
-   * metadata, so repair the index from them at startup instead of requiring a re-download.
+   * metadata, so repair the index from them at startup instead of requiring a re-download. Each
+   * study is repaired under its lock, like any other mutation of its entry, after `ready()`.
    */
   private async _repairIndexFromRecords(): Promise<void> {
     if (!this._instanceStore) {
       return;
     }
-    let dirty = false;
 
     // Fields can be spread across instances/series, so scan several records per incomplete study
     // (bounded, stopping early once every field is filled).
@@ -293,30 +394,36 @@ class LocalCacheServiceClass extends PubSubService {
     const isComplete = (study: StudySummary) =>
       !!(study.PatientName && study.PatientID && study.StudyDescription && study.AccessionNumber && study.ServiceEpisodeID);
 
-    for (const study of Object.values(this._index.studies)) {
-      if (isComplete(study)) {
+    for (const StudyInstanceUID of Object.keys(this._index.studies)) {
+      if (isComplete(this._index.studies[StudyInstanceUID])) {
         continue;
       }
-      const sopUids: string[] = [];
-      Object.values(study.series).forEach(series => sopUids.push(...Object.keys(series.instances)));
+      await this._withStudyLock(StudyInstanceUID, async () => {
+        const study = this._index.studies[StudyInstanceUID];
+        if (!study || isComplete(study)) {
+          return;
+        }
+        const sopUids: string[] = [];
+        Object.values(study.series).forEach(series => sopUids.push(...Object.keys(series.instances)));
 
-      for (const sop of sopUids.slice(0, MAX_REPAIR_READS_PER_STUDY)) {
-        try {
-          const record = await get<InstanceRecord>(sop, this._instanceStore);
-          if (record?.metadata && _backfillStudyFields(study, record.metadata as Record<string, any>)) {
-            dirty = true;
+        let dirty = false;
+        for (const sop of sopUids.slice(0, MAX_REPAIR_READS_PER_STUDY)) {
+          try {
+            const record = await get<InstanceRecord>(sop, this._instanceStore);
+            if (record?.metadata && _backfillStudyFields(study, record.metadata as Record<string, any>)) {
+              dirty = true;
+            }
+          } catch (error) {
+            console.warn('[LocalCacheService] Index repair read failed for', sop, error);
           }
-        } catch (error) {
-          console.warn('[LocalCacheService] Index repair read failed for', sop, error);
+          if (isComplete(study)) {
+            break;
+          }
         }
-        if (isComplete(study)) {
-          break;
+        if (dirty) {
+          await this._persistIndex();
         }
-      }
-    }
-
-    if (dirty) {
-      await this._persistIndex();
+      });
     }
   }
 
@@ -324,11 +431,13 @@ class LocalCacheServiceClass extends PubSubService {
     this._sopSet.clear();
     this._seriesSet.clear();
     this._studySet.clear();
+    this._seriesStudy.clear();
 
     Object.values(this._index.studies).forEach(study => {
       this._studySet.add(study.StudyInstanceUID);
       Object.values(study.series).forEach(series => {
         this._seriesSet.add(series.SeriesInstanceUID);
+        this._seriesStudy.set(series.SeriesInstanceUID, study.StudyInstanceUID);
         Object.keys(series.instances).forEach(sop => this._sopSet.add(sop));
       });
     });
@@ -337,13 +446,30 @@ class LocalCacheServiceClass extends PubSubService {
   /**
    * Run `mutate` with exclusive access to one study's index entry and metadata payload.
    *
-   * A plain promise chain per study: each caller waits on the previous one, so mutations queue in
-   * arrival order instead of interleaving their awaits. Failures do not poison the chain -- the
-   * next waiter runs regardless -- and the map entry is dropped once nothing is queued behind it.
+   * Within this context a promise chain per study: each caller waits on the previous one, so
+   * mutations queue in arrival order instead of interleaving their awaits. Failures do not poison
+   * the chain -- the next waiter runs regardless -- and the map entry is dropped once nothing is
+   * queued behind it. Across contexts the study is held through the Web Locks API where the browser
+   * has it, so two tabs cannot classify and delete over each other either. Once the lock is held,
+   * this context's entry for the study is replaced by the stored one (`_adoptStoredStudy`): the
+   * in-memory index is one context's view, the stored document is what every context writes, and
+   * ownership is decided from the latter.
    */
   private _withStudyLock<T>(StudyInstanceUID: string, mutate: () => Promise<T>): Promise<T> {
     const previous = this._studyLocks.get(StudyInstanceUID) || Promise.resolve();
-    const result = previous.catch(() => undefined).then(mutate);
+    const run = async () => {
+      this._heldStudies.add(StudyInstanceUID);
+      try {
+        await this._adoptStoredStudy(StudyInstanceUID);
+        return await mutate();
+      } finally {
+        this._heldStudies.delete(StudyInstanceUID);
+      }
+    };
+    const locks = this._lockManager();
+    const result = previous
+      .catch(() => undefined)
+      .then(() => (locks ? locks.request(_lockName(StudyInstanceUID), { mode: 'exclusive' }, run) : run()));
 
     const settled = result.catch(() => undefined);
     this._studyLocks.set(StudyInstanceUID, settled);
@@ -371,12 +497,78 @@ class LocalCacheServiceClass extends PubSubService {
     return !token.clearing && !this._clearing && token.generation === this._generation;
   }
 
-  private async _persistIndex(): Promise<void> {
+  /** The stored index document, or null without a store, a document or a readable one. */
+  private async _readStoredIndex(): Promise<CacheIndex | null> {
     if (!this._indexStore) {
+      return null;
+    }
+    try {
+      const stored = await get<CacheIndex>(INDEX_KEY, this._indexStore);
+      return stored && stored.version === INDEX_VERSION ? stored : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Under the study's lock: this context's entry for the study becomes the stored one, which is
+   * what the last mutation of the study, from any context, wrote. A promotion, a saved write or a
+   * removal made in another tab is thereby seen before this mutation classifies anything.
+   */
+  private async _adoptStoredStudy(StudyInstanceUID: string): Promise<void> {
+    const stored = await this._readStoredIndex();
+    if (!stored) {
       return;
     }
-    // The index holds no ArrayBuffers, so it is safe to structured-clone into IndexedDB.
-    await set(INDEX_KEY, this._index, this._indexStore);
+    const storedStudy = stored.studies[StudyInstanceUID];
+    if (storedStudy) {
+      this._index.studies[StudyInstanceUID] = storedStudy;
+    } else {
+      delete this._index.studies[StudyInstanceUID];
+    }
+    this._rebuildMembership();
+  }
+
+  /**
+   * Write the index: a read-merge-write of the stored document, under the shared index lock and
+   * serialised within this context.
+   *
+   * The studies whose lock this context holds are being mutated here, their entries adopted from
+   * the store when the lock was taken, so they are written from memory. Every other study is taken
+   * from the stored document as it is now, present or absent: a write from this context can neither
+   * drop a study another context saved since this one hydrated, nor bring back one it removed. A
+   * study this context is still waiting for is not its to write. The merged document also becomes
+   * this context's index. With `replace` the in-memory index is written as it is (clearAll).
+   */
+  private _persistIndex({ replace = false }: { replace?: boolean } = {}): Promise<void> {
+    if (!this._indexStore) {
+      return Promise.resolve();
+    }
+    const write = async () => {
+      if (!replace) {
+        const stored = await this._readStoredIndex();
+        if (stored) {
+          const merged: CacheIndex = { version: INDEX_VERSION, studies: {} };
+          const uids = new Set([...Object.keys(stored.studies), ...Object.keys(this._index.studies)]);
+          uids.forEach(uid => {
+            const entry = this._heldStudies.has(uid) ? this._index.studies[uid] : stored.studies[uid];
+            if (entry) {
+              merged.studies[uid] = entry;
+            }
+          });
+          this._index = merged;
+          this._rebuildMembership();
+        }
+      }
+      // The index holds no ArrayBuffers, so it is safe to structured-clone into IndexedDB.
+      await set(INDEX_KEY, this._index, this._indexStore);
+    };
+    const locks = this._lockManager();
+    const queued = this._indexWrites
+      .catch(() => undefined)
+      .then(() => (locks ? locks.request(INDEX_LOCK_NAME, { mode: 'exclusive' }, write) : write()));
+    this._indexWrites = queued;
+    return queued;
   }
 
   // ---- Synchronous membership (safe from React render / getImageId) --------------------------
@@ -397,6 +589,284 @@ class LocalCacheServiceClass extends PubSubService {
     return Array.from(this._studySet);
   }
 
+  // ---- Saved copies versus session copies (imaging-development-env#103) ----------------------
+  //
+  // Membership above answers "are the bytes here" -- what image loading and transfer skipping
+  // need. The queries below answer "does the user have an offline copy": a study or series counts
+  // as saved once it holds an instance that was not fetched for the session only.
+
+  /** Whether the study holds at least one instance saved as an offline copy. */
+  isStudySavedSync(StudyInstanceUID?: string): boolean {
+    const study = StudyInstanceUID ? this._index.studies[StudyInstanceUID] : undefined;
+    if (!study) {
+      return false;
+    }
+    return Object.values(study.series).some(series => _hasSavedInstance(series));
+  }
+
+  /** Whether the series holds at least one instance saved as an offline copy. */
+  isSeriesSavedSync(SeriesInstanceUID?: string): boolean {
+    const StudyInstanceUID = SeriesInstanceUID ? this._seriesStudy.get(SeriesInstanceUID) : undefined;
+    const series = StudyInstanceUID ? this._index.studies[StudyInstanceUID]?.series[SeriesInstanceUID!] : undefined;
+    return !!series && _hasSavedInstance(series);
+  }
+
+  /** Whether the study holds any instance fetched for a viewing session. */
+  hasSessionInstancesSync(StudyInstanceUID?: string): boolean {
+    const study = StudyInstanceUID ? this._index.studies[StudyInstanceUID] : undefined;
+    return !!study && Object.values(study.series).some(series => _hasSessionInstance(series));
+  }
+
+  /** The studies holding session instances, for the loader's start-up sweep. */
+  getSessionStudyUIDsSync(): string[] {
+    return Object.keys(this._index.studies).filter(uid => this.hasSessionInstancesSync(uid));
+  }
+
+  /** 'saved' when the series holds a saved instance, 'temporary' when it holds session copies only. */
+  getSeriesCopyStateSync(SeriesInstanceUID?: string): CopyState {
+    const StudyInstanceUID = SeriesInstanceUID ? this._seriesStudy.get(SeriesInstanceUID) : undefined;
+    return _seriesCopyState(StudyInstanceUID ? this._index.studies[StudyInstanceUID]?.series[SeriesInstanceUID!] : undefined);
+  }
+
+  /**
+   * The study's copy state and its breakdown by series: 'saved' as soon as one series is saved,
+   * 'temporary' when every cached series is a session copy, 'none' when nothing is cached.
+   */
+  getStudyCopyStateSync(StudyInstanceUID?: string): {
+    state: CopyState;
+    seriesCount: number;
+    savedSeriesCount: number;
+    temporarySeriesCount: number;
+  } {
+    const study = StudyInstanceUID ? this._index.studies[StudyInstanceUID] : undefined;
+    const seriesList = study ? Object.values(study.series) : [];
+    let savedSeriesCount = 0;
+    let temporarySeriesCount = 0;
+    seriesList.forEach(series => {
+      const state = _seriesCopyState(series);
+      if (state === 'saved') {
+        savedSeriesCount += 1;
+      } else if (state === 'temporary') {
+        temporarySeriesCount += 1;
+      }
+    });
+    const state: CopyState = savedSeriesCount ? 'saved' : temporarySeriesCount ? 'temporary' : 'none';
+    return { state, seriesCount: seriesList.length, savedSeriesCount, temporarySeriesCount };
+  }
+
+  /**
+   * Remove the saved instances of a study, or of one of its series, leaving session copies alone:
+   * what "Remove offline copy" means while a viewing session may still be reading them. Runs under
+   * the study lock and classifies each instance from the stored ownership at that moment, so a copy
+   * promoted or stored while the removal waited is kept (imaging-development-env#103).
+   */
+  removeSavedInstances(StudyInstanceUID: string, SeriesInstanceUID?: string): Promise<void> {
+    return this._removeInstancesOfKind(StudyInstanceUID, SeriesInstanceUID, false);
+  }
+
+  /**
+   * Turn the session instances of a study, or of one of its series, into saved ones: what an
+   * offline transfer of that scope means, since the transfer skips the bytes that are already here.
+   * The stored records are rewritten as well as the index, so a reader working from another
+   * browsing context's index sees the new ownership in the record. Runs under the study lock.
+   *
+   * `holder` is the transfer: a copy it promotes, or finds promoted and not yet confirmed, carries
+   * it as a holder, and stays saved for as long as any holder remains (`markSession` removes one).
+   * With `confirm` the transfer has completed and every saved copy of the scope is confirmed: the
+   * holders are cleared and no cancellation can hand the copies back. Returns the SOP Instance UIDs
+   * it promoted.
+   */
+  markSaved(
+    StudyInstanceUID: string,
+    SeriesInstanceUID?: string,
+    { holder, confirm = false }: { holder?: string; confirm?: boolean } = {}
+  ): Promise<string[]> {
+    return this._withStudyLock(StudyInstanceUID, async () => {
+      const study = this._index.studies[StudyInstanceUID];
+      if (!study) {
+        return [];
+      }
+      const promoted: string[] = [];
+      let changed = false;
+      for (const series of Object.values(study.series)) {
+        if (SeriesInstanceUID && series.SeriesInstanceUID !== SeriesInstanceUID) {
+          continue;
+        }
+        for (const [sop, entry] of Object.entries(series.instances)) {
+          if (entry.session) {
+            const record = await this._readRecord(sop);
+            if (record && this._instanceStore) {
+              const { session: _omitted, ...saved } = record;
+              await set(sop, saved, this._instanceStore);
+            }
+            delete entry.session;
+            entry.holders = [];
+            promoted.push(sop);
+            changed = true;
+          }
+          if (confirm) {
+            if (entry.holders) {
+              delete entry.holders;
+              changed = true;
+            }
+          } else if (holder && entry.holders && !entry.holders.includes(holder)) {
+            entry.holders.push(holder);
+            changed = true;
+          }
+          if (entry.holders && !entry.holders.length) {
+            // Promoted without a holder: nothing can hand it back, it is saved outright
+            delete entry.holders;
+          }
+        }
+      }
+      if (changed) {
+        await this._persistIndex();
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+      }
+      return promoted;
+    });
+  }
+
+  /**
+   * A transfer that was cancelled hands back the copies it relied on: `holder` is removed from every
+   * promoted copy of the study, and a copy left without holders returns to the viewing session it
+   * came from. A copy another active transfer still relies on, or one confirmed since (a completed
+   * transfer, a saved write), stays saved. Returns the SOP Instance UIDs handed back.
+   */
+  markSession(StudyInstanceUID: string, holder: string): Promise<string[]> {
+    return this._withStudyLock(StudyInstanceUID, async () => {
+      const study = this._index.studies[StudyInstanceUID];
+      if (!study || !holder) {
+        return [];
+      }
+      const demoted: string[] = [];
+      let changed = false;
+      for (const series of Object.values(study.series)) {
+        for (const [sop, entry] of Object.entries(series.instances)) {
+          if (entry.session || !entry.holders || !entry.holders.includes(holder)) {
+            continue;
+          }
+          entry.holders = entry.holders.filter(id => id !== holder);
+          changed = true;
+          if (entry.holders.length) {
+            continue;
+          }
+          const record = await this._readRecord(sop);
+          if (record && this._instanceStore) {
+            await set(sop, { ...record, session: true }, this._instanceStore);
+          }
+          delete entry.holders;
+          entry.session = true;
+          demoted.push(sop);
+        }
+      }
+      if (changed) {
+        await this._persistIndex();
+        this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
+      }
+      return demoted;
+    });
+  }
+
+  /**
+   * Evict the session instances of a study and nothing else: a series that is wholly session goes
+   * through the series removal (which also prunes the metadata payload), a series the user partly
+   * saved loses only its session instances. Same protection as `removeSavedInstances`.
+   */
+  removeSessionInstances(StudyInstanceUID: string): Promise<void> {
+    return this._removeInstancesOfKind(StudyInstanceUID, undefined, true);
+  }
+
+  /**
+   * Remove the instances of one kind (session or saved) from a study, or from one of its series.
+   *
+   * Under the study lock, which also brought this context's entry for the study up to date with the
+   * stored one, so the ownership it classifies from is what the last mutation in any context wrote.
+   * An instance whose record is gone drops its index entry instead. The series removal path is
+   * taken only when every instance the series still holds is of the kind being removed.
+   */
+  private _removeInstancesOfKind(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string | undefined,
+    session: boolean
+  ): Promise<void> {
+    if (!StudyInstanceUID) {
+      return Promise.resolve();
+    }
+    const token = this._beginCacheMutation();
+    return this._withStudyLock(StudyInstanceUID, async () => {
+      const study = this._index.studies[StudyInstanceUID];
+      if (!study || !this._mutationStillValid(token)) {
+        return;
+      }
+      for (const series of Object.values(study.series)) {
+        if (SeriesInstanceUID && series.SeriesInstanceUID !== SeriesInstanceUID) {
+          continue;
+        }
+        const matching: string[] = [];
+        let others = 0;
+        for (const [sop, entry] of Object.entries(series.instances)) {
+          const record = await this._readRecord(sop);
+          if (this._instanceStore && !record) {
+            // The bytes are gone: the index entry is stale
+            this._dropIndexEntry(StudyInstanceUID, series.SeriesInstanceUID, sop);
+            continue;
+          }
+          if (!!entry.session === session) {
+            matching.push(sop);
+          } else {
+            others += 1;
+          }
+        }
+        if (!matching.length || !this._mutationStillValid(token)) {
+          continue;
+        }
+        if (others === 0 && this._index.studies[StudyInstanceUID]?.series[series.SeriesInstanceUID]) {
+          await this._removeSeries(StudyInstanceUID, series.SeriesInstanceUID, token);
+        } else {
+          for (const sop of matching) {
+            await this._removeInstanceLocked(StudyInstanceUID, series.SeriesInstanceUID, sop);
+          }
+        }
+      }
+    });
+  }
+
+  /** The stored record of an instance, or null without a store or a record. */
+  private async _readRecord(SOPInstanceUID: string): Promise<InstanceRecord | null> {
+    if (!this._instanceStore) {
+      return null;
+    }
+    try {
+      return (await get<InstanceRecord>(SOPInstanceUID, this._instanceStore)) || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /** Forget an instance whose bytes another context has already removed; no record is touched. */
+  private _dropIndexEntry(StudyInstanceUID: string, SeriesInstanceUID: string, SOPInstanceUID: string): void {
+    const study = this._index.studies[StudyInstanceUID];
+    const series = study?.series[SeriesInstanceUID];
+    const entry = series?.instances[SOPInstanceUID];
+    if (!study || !series || !entry) {
+      return;
+    }
+    study.totalBytes -= entry.byteSize;
+    series.totalBytes -= entry.byteSize;
+    delete series.instances[SOPInstanceUID];
+    this._sopSet.delete(SOPInstanceUID);
+    if (Object.keys(series.instances).length === 0) {
+      delete study.series[SeriesInstanceUID];
+      this._seriesSet.delete(SeriesInstanceUID);
+      this._seriesStudy.delete(SeriesInstanceUID);
+    }
+    if (Object.keys(study.series).length === 0) {
+      delete this._index.studies[StudyInstanceUID];
+      this._studySet.delete(StudyInstanceUID);
+    }
+  }
+
   /** Running summary for FR-6/FR-8 hover popups; O(1), read from the maintained index. */
   getStudySummary(StudyInstanceUID: string) {
     const study = this._index.studies[StudyInstanceUID];
@@ -404,6 +874,7 @@ class LocalCacheServiceClass extends PubSubService {
       return null;
     }
     const seriesList = Object.values(study.series);
+    const copies = this.getStudyCopyStateSync(StudyInstanceUID);
     return {
       StudyInstanceUID,
       PatientName: study.PatientName,
@@ -417,6 +888,10 @@ class LocalCacheServiceClass extends PubSubService {
       instanceCount: seriesList.reduce((n, s) => n + Object.keys(s.instances).length, 0),
       totalBytes: study.totalBytes,
       cachedAt: study.cachedAt,
+      // Saved versus temporary (session) copies, for the indicators (imaging-development-env#103)
+      state: copies.state,
+      savedSeriesCount: copies.savedSeriesCount,
+      temporarySeriesCount: copies.temporarySeriesCount,
     };
   }
 
@@ -425,6 +900,7 @@ class LocalCacheServiceClass extends PubSubService {
     if (!series) {
       return null;
     }
+    const counts = _countInstances(series);
     return {
       SeriesInstanceUID,
       SeriesDescription: series.SeriesDescription,
@@ -432,6 +908,9 @@ class LocalCacheServiceClass extends PubSubService {
       Modality: series.Modality,
       instanceCount: Object.keys(series.instances).length,
       totalBytes: series.totalBytes,
+      state: _seriesCopyState(series),
+      savedInstanceCount: counts.saved,
+      temporaryInstanceCount: counts.temporary,
     };
   }
 
@@ -629,14 +1108,20 @@ class LocalCacheServiceClass extends PubSubService {
       return [];
     }
     return Object.values(study.series)
-      .map(series => ({
-        SeriesInstanceUID: series.SeriesInstanceUID,
-        SeriesNumber: series.SeriesNumber,
-        SeriesDescription: series.SeriesDescription,
-        Modality: series.Modality,
-        instanceCount: Object.keys(series.instances).length,
-        totalBytes: series.totalBytes,
-      }))
+      .map(series => {
+        const counts = _countInstances(series);
+        return {
+          SeriesInstanceUID: series.SeriesInstanceUID,
+          SeriesNumber: series.SeriesNumber,
+          SeriesDescription: series.SeriesDescription,
+          Modality: series.Modality,
+          instanceCount: Object.keys(series.instances).length,
+          totalBytes: series.totalBytes,
+          state: _seriesCopyState(series),
+          savedInstanceCount: counts.saved,
+          temporaryInstanceCount: counts.temporary,
+        };
+      })
       .sort((a, b) => Number(a.SeriesNumber || 0) - Number(b.SeriesNumber || 0));
   }
 
@@ -722,7 +1207,8 @@ class LocalCacheServiceClass extends PubSubService {
   /**
    * Persist a single instance. `metadata` must be the naturalized dataset (carrying the UID +
    * search fields). Throws on quota exhaustion so the caller (DownloadManagerService) can surface a
-   * visible error rather than failing silently (AC-10).
+   * visible error rather than failing silently (AC-10). `session` marks a copy fetched for the
+   * viewing session only (see the saved-copy queries); an instance already saved stays saved.
    */
   async putInstance({
     StudyInstanceUID,
@@ -730,20 +1216,50 @@ class LocalCacheServiceClass extends PubSubService {
     SOPInstanceUID,
     bytes,
     metadata,
+    session = false,
   }: {
     StudyInstanceUID: string;
     SeriesInstanceUID: string;
     SOPInstanceUID: string;
     bytes: ArrayBuffer;
     metadata: Record<string, any>;
+    session?: boolean;
   }): Promise<void> {
     if (!StudyInstanceUID || !SeriesInstanceUID || !SOPInstanceUID) {
       throw new Error('[LocalCacheService] putInstance requires Study/Series/SOP InstanceUID.');
     }
 
+    // Under the study lock, like every other mutation of the study's records and index entry, so a
+    // write cannot land between a removal's classification and its deletion
+    // (imaging-development-env#103)
+    return this._withStudyLock(StudyInstanceUID, () =>
+      this._putInstanceLocked({ StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID, bytes, metadata, session })
+    );
+  }
+
+  private async _putInstanceLocked({
+    StudyInstanceUID,
+    SeriesInstanceUID,
+    SOPInstanceUID,
+    bytes,
+    metadata,
+    session,
+  }: {
+    StudyInstanceUID: string;
+    SeriesInstanceUID: string;
+    SOPInstanceUID: string;
+    bytes: ArrayBuffer;
+    metadata: Record<string, any>;
+    session: boolean;
+  }): Promise<void> {
     const byteSize = bytes.byteLength;
     // Structured-clone-safe copy — raw naturalized datasets throw DataCloneError in IndexedDB.
     const storableMetadata = _toStorableMetadata(metadata);
+    // Saved wins, in the record as in the index: a session fetch of an instance that is saved (here
+    // or, through the stored index adopted under the lock, in another context) refreshes the bytes
+    // and keeps the saved copy; a saved write of a session copy promotes it.
+    const existing = this._index.studies[StudyInstanceUID]?.series[SeriesInstanceUID]?.instances[SOPInstanceUID];
+    const sessionFlag = existing ? !!existing.session && session : session;
     const record: InstanceRecord = {
       StudyInstanceUID,
       SeriesInstanceUID,
@@ -752,6 +1268,7 @@ class LocalCacheServiceClass extends PubSubService {
       metadata: storableMetadata,
       byteSize,
       cachedAt: Date.now(),
+      ...(sessionFlag ? { session: true } : {}),
     };
 
     // Write the (large) blob first. If IndexedDB is over quota this rejects before we mutate the
@@ -760,15 +1277,23 @@ class LocalCacheServiceClass extends PubSubService {
       await set(SOPInstanceUID, record, this._instanceStore);
     }
 
-    this._indexInstance({ StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID }, byteSize, storableMetadata);
+    this._indexInstance(
+      { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID },
+      byteSize,
+      storableMetadata,
+      sessionFlag,
+      // A saved write confirms the copy: a transfer that promoted it earlier and is then cancelled
+      // must not hand it back
+      { confirm: !session }
+    );
     try {
       await this._persistIndex();
     } catch (error) {
       // The record IS stored and the in-memory index reflects it, so subscribers must still hear
-      // about it — only the on-disk index summary is stale. Because _persistIndex writes the whole
-      // index document, ANY later successful persist heals this; until then a reload would leave
-      // the record orphaned (clearAll's store-level clear sweeps orphans). Rethrow so the caller
-      // still surfaces the quota condition (AC-10).
+      // about it — only the on-disk index summary is stale. The next mutation of the study adopts
+      // the stored entry and drops this one, and a reload never sees it, so the record stays
+      // orphaned until clearAll's store-level clear sweeps it. Rethrow so the caller still surfaces
+      // the quota condition (AC-10).
       this._broadcastEvent(EVENTS.INSTANCE_CACHED, { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID });
       this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
       throw error;
@@ -782,7 +1307,13 @@ class LocalCacheServiceClass extends PubSubService {
     this._broadcastEvent(EVENTS.STUDY_CACHE_UPDATED, { StudyInstanceUID });
   }
 
-  private _indexInstance(uids: InstanceUIDs, byteSize: number, metadata: Record<string, any>): void {
+  private _indexInstance(
+    uids: InstanceUIDs,
+    byteSize: number,
+    metadata: Record<string, any>,
+    session = false,
+    { confirm = false }: { confirm?: boolean } = {}
+  ): void {
     const { StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID } = uids;
 
     let study = this._index.studies[StudyInstanceUID];
@@ -819,6 +1350,7 @@ class LocalCacheServiceClass extends PubSubService {
       };
       study.series[SeriesInstanceUID] = series;
     }
+    this._seriesStudy.set(SeriesInstanceUID, StudyInstanceUID);
 
     if (metadata?.Modality && study.ModalitiesInStudy.indexOf(metadata.Modality) === -1) {
       study.ModalitiesInStudy.push(metadata.Modality);
@@ -833,14 +1365,32 @@ class LocalCacheServiceClass extends PubSubService {
       study.totalBytes += byteSize;
       series.totalBytes += byteSize;
     }
-    series.instances[SOPInstanceUID] = { byteSize };
+    // Session only while every write of this instance was a session write: a saved copy is never
+    // demoted by a later session fetch, and a session copy is promoted by a saved write
+    const sessionFlag = existing ? !!existing.session && session : session;
+    const holders = !sessionFlag && !confirm && existing?.holders?.length ? existing.holders : undefined;
+    series.instances[SOPInstanceUID] = {
+      byteSize,
+      ...(sessionFlag ? { session: true } : {}),
+      ...(holders ? { holders } : {}),
+    };
 
     this._studySet.add(StudyInstanceUID);
     this._seriesSet.add(SeriesInstanceUID);
     this._sopSet.add(SOPInstanceUID);
   }
 
-  async removeInstance(StudyInstanceUID: string, SeriesInstanceUID: string, SOPInstanceUID: string) {
+  removeInstance(StudyInstanceUID: string, SeriesInstanceUID: string, SOPInstanceUID: string): Promise<void> {
+    return this._withStudyLock(StudyInstanceUID, () =>
+      this._removeInstanceLocked(StudyInstanceUID, SeriesInstanceUID, SOPInstanceUID)
+    );
+  }
+
+  private async _removeInstanceLocked(
+    StudyInstanceUID: string,
+    SeriesInstanceUID: string,
+    SOPInstanceUID: string
+  ): Promise<void> {
     if (this._instanceStore) {
       await del(SOPInstanceUID, this._instanceStore);
     }
@@ -856,6 +1406,7 @@ class LocalCacheServiceClass extends PubSubService {
       if (Object.keys(series.instances).length === 0) {
         delete study.series[SeriesInstanceUID];
         this._seriesSet.delete(SeriesInstanceUID);
+        this._seriesStudy.delete(SeriesInstanceUID);
       }
       if (Object.keys(study.series).length === 0) {
         delete this._index.studies[StudyInstanceUID];
@@ -929,6 +1480,7 @@ class LocalCacheServiceClass extends PubSubService {
     study.totalBytes -= series.totalBytes;
     delete study.series[SeriesInstanceUID];
     this._seriesSet.delete(SeriesInstanceUID);
+    this._seriesStudy.delete(SeriesInstanceUID);
     sopUids.forEach(sop => this._sopSet.delete(sop));
 
     if (Object.keys(study.series).length === 0) {
@@ -1002,7 +1554,7 @@ class LocalCacheServiceClass extends PubSubService {
     }
     this._index = _emptyIndex();
     this._rebuildMembership();
-    await this._persistIndex();
+    await this._persistIndex({ replace: true });
 
     this._broadcastEvent(EVENTS.CACHE_CLEARED, {});
     studyUids.forEach(StudyInstanceUID =>
@@ -1056,5 +1608,5 @@ function _formatPatientName(pn: any): string | undefined {
 
 const LocalCacheService = new LocalCacheServiceClass();
 
-export { LocalCacheService, EVENTS as LocalCacheServiceEvents };
+export { LocalCacheService, LocalCacheServiceClass, EVENTS as LocalCacheServiceEvents };
 export default LocalCacheService;

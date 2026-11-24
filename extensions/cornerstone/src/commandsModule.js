@@ -748,7 +748,9 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       }
 
       DownloadManagerService.cancelStudy(StudyInstanceUID);
-      await LocalCacheService.removeStudy(StudyInstanceUID);
+      // The saved copy only: a temporary copy this viewing session fetched stays until the study
+      // is left (imaging-development-env#103)
+      await LocalCacheService.removeSavedInstances(StudyInstanceUID);
 
       UINotificationService?.show({
         title: 'Offline copy removed',

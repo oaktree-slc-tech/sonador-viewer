@@ -9,6 +9,7 @@ import DownloadManagerService, {
   RETRY_ATTEMPTS_MAX,
 } from './DownloadManagerService';
 import rehydrateStudyFromCache from './rehydrateStudyFromCache';
+import SessionArchiveLoader from './SessionArchiveLoader';
 import {
   notifyStudiesQueued,
   notifySeriesQueued,
@@ -29,6 +30,7 @@ export {
   RETRY_ATTEMPTS_MIN,
   RETRY_ATTEMPTS_MAX,
   rehydrateStudyFromCache,
+  SessionArchiveLoader,
   notifyStudiesQueued,
   notifySeriesQueued,
   clearOfflineStorageWithNotice,

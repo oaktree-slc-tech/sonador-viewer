@@ -81,6 +81,20 @@
 
 // A series whose transfer failed, so the row that needs attention is findable at a glance
 // (ohif-viewers#129).
+// A series row's copy state: the cloud icon centred on its label (imaging-development-env#103)
+.copyState {
+  display: inline-flex;
+  align-items: center;
+  column-gap: 4px;
+  white-space: nowrap;
+
+  svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+  }
+}
+
 .transferFailed {
   color: #e46e6e;
 }

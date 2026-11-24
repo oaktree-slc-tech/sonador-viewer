@@ -12,6 +12,9 @@ import {
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT as PREVIEW_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY as PREVIEW_KEY,
   SEG_EDITOR_HOTKEY_DEFAULTS as HOTKEY_DEFAULTS,
+  STUDY_ARCHIVE_LOADING_PREFERENCE_KEY as ARCHIVE_LOADING_KEY,
+  UPLOAD_ATTEMPTS_DEFAULT,
+  UPLOAD_ATTEMPTS_PREFERENCE_KEY as UPLOAD_KEY,
   UserPreferencesServiceClass,
   UserPreferencesServiceEvents as EVENTS,
 } from './UserPreferencesService';
@@ -39,7 +42,37 @@ describe('UserPreferencesService', () => {
 
   it('starts from the defaults', () => {
     expect(service.getGeneral(KEY)).toBe(true);
-    expect(service.getGeneralValues()).toEqual({ [KEY]: true });
+    expect(service.getGeneralValues()).toEqual({
+      [KEY]: true,
+      [UPLOAD_KEY]: UPLOAD_ATTEMPTS_DEFAULT,
+      [ARCHIVE_LOADING_KEY]: false,
+    });
+  });
+
+  it('holds the upload attempt budget as a bounded integer, 10 by default', () => {
+    expect(service.getGeneral(UPLOAD_KEY)).toBe(10);
+    service.setGeneral(UPLOAD_KEY, 1, { persist: false });
+    service.setGeneral(UPLOAD_KEY, 20, { persist: false });
+    expect(service.getGeneral(UPLOAD_KEY)).toBe(20);
+    [0, 21, 2.5, '5', true, null].forEach(value => {
+      expect(() => service.setGeneral(UPLOAD_KEY, value, { persist: false })).toThrow('Invalid value');
+    });
+    // A stored value outside the bounds reads as the default
+    service.applyHydratedGeneral({ [UPLOAD_KEY]: 50 });
+    expect(service.getGeneral(UPLOAD_KEY)).toBe(20);
+    const fresh = new UserPreferencesServiceClass();
+    fresh.applyHydratedGeneral({ [UPLOAD_KEY]: 50 });
+    expect(fresh.getGeneral(UPLOAD_KEY)).toBe(10);
+    fresh.applyHydratedGeneral({ [UPLOAD_KEY]: 15 });
+    expect(fresh.getGeneral(UPLOAD_KEY)).toBe(15);
+  });
+
+  it('holds study archive loading as a boolean, off by default, posted with the section', () => {
+    expect(service.getGeneral(ARCHIVE_LOADING_KEY)).toBe(false);
+    expect(service.isLocalOnly(ARCHIVE_LOADING_KEY)).toBe(false);
+    service.setGeneral(ARCHIVE_LOADING_KEY, true, { persist: false });
+    expect(service.getGeneral(ARCHIVE_LOADING_KEY)).toBe(true);
+    expect(() => service.setGeneral(ARCHIVE_LOADING_KEY, 'yes', { persist: false })).toThrow('Invalid value');
   });
 
   it('applies a hydrated value and announces it', () => {
@@ -116,7 +149,11 @@ describe('UserPreferencesService: local-only keys (the Seg Editor preview colour
     expect(service.getGeneral(PREVIEW_KEY)).toBe(PREVIEW_DEFAULT);
     expect(PREVIEW_DEFAULT).toBe('#ff8500');
     expect(service.isLocalOnly(PREVIEW_KEY)).toBe(true);
-    expect(service.getGeneralValues()).toEqual({ [KEY]: true });
+    expect(service.getGeneralValues()).toEqual({
+      [KEY]: true,
+      [UPLOAD_KEY]: UPLOAD_ATTEMPTS_DEFAULT,
+      [ARCHIVE_LOADING_KEY]: false,
+    });
   });
 
   it('keeps a choice in the browser, without a section write, and reads it back in a new session', async () => {

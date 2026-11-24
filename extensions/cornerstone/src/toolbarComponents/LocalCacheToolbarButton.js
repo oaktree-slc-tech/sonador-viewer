@@ -28,7 +28,7 @@ function LocalCacheToolbarButton({ toolbarClickCallback, button, isActive }) {
   // Derive the current cache/download state for the active study.
   const computeState = useCallback(() => {
     return {
-      cached: LocalCacheService.isStudyCachedSync(StudyInstanceUID),
+      cached: LocalCacheService.isStudySavedSync(StudyInstanceUID),
       downloading: DownloadManagerService.isStudyDownloading(StudyInstanceUID),
     };
   }, [StudyInstanceUID]);

@@ -21,6 +21,7 @@ import {
   NotificationLogService,
   ServicesManager,
   startArchiveNotifications,
+  SessionArchiveLoader,
   startDownloadNotifications,
   SystemContextProvider,
   ToolbarService,
@@ -185,6 +186,10 @@ class App extends Component {
     // tree that queued them, so completion and failure are reported from a service-level
     // subscription rather than from any component.
     startDownloadNotifications();
+
+    // Archive-based study loading (imaging-development-env#103): the claim heartbeat shared between
+    // browsing contexts, and the sweep of session copies a closed context left behind.
+    SessionArchiveLoader.start();
 
     // Same reasoning for archive exports (ohif-viewers#52): the server builds the archive on
     // demand, so an export routinely settles long after the study list that queued it is gone.

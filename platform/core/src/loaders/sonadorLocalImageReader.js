@@ -15,6 +15,7 @@
 // one blob instead of leaking a new one each frame request.
 
 import LocalCacheService from '../services/LocalCacheService/LocalCacheService';
+import { isInstancePendingSync, whenInstanceAvailable } from '../services/LocalCacheService/sessionArchiveRegistry';
 
 export const SONADOR_LOCAL_SCHEME = 'sonadorlocal';
 
@@ -189,12 +190,26 @@ function _adoptDelegate(result, state) {
 async function _loadCachedInstanceImage(imageId, options, { wadoImageLoader, remoteLoad }, state) {
   const { SOPInstanceUID, frame } = parseSonadorLocalImageId(imageId);
 
-  let bytes = null;
-  try {
-    bytes = await LocalCacheService.getInstanceBytes(SOPInstanceUID);
-  } catch (error) {
-    console.warn(`[sonadorlocal] Error reading cached bytes for ${SOPInstanceUID}.`, error);
-    bytes = null;
+  const readBytes = async () => {
+    try {
+      return await LocalCacheService.getInstanceBytes(SOPInstanceUID);
+    } catch (error) {
+      console.warn(`[sonadorlocal] Error reading cached bytes for ${SOPInstanceUID}.`, error);
+      return null;
+    }
+  };
+
+  let bytes = await readBytes();
+
+  // An instance a series archive in flight still owes (imaging-development-env#103): wait for the
+  // member rather than fetching the image a second time over the per-instance route. The wait ends
+  // when the member is stored or the archive gives up, and a miss after that falls back below.
+  if (!bytes && isInstancePendingSync(SOPInstanceUID)) {
+    await whenInstanceAvailable(SOPInstanceUID);
+    if (state && state.decached) {
+      return null;
+    }
+    bytes = await readBytes();
   }
 
   if (!bytes) {

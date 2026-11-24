@@ -178,14 +178,32 @@
               display: flex;
               align-items: center;
               column-gap: 10px;
+              white-space: nowrap;
 
               &.completed {
                 color: #2ee979;
               }
 
-              &.error {
+              &.warning {
                 color: #d8a059;
               }
+
+              &.error {
+                color: #f05a5a;
+              }
+            }
+          }
+
+          // The last failed send's message, under the file's bar
+          .fileMessage {
+            margin: 0;
+            font-size: 12px;
+            line-height: 14px;
+            color: #d8a059;
+            overflow-wrap: anywhere;
+
+            &.error {
+              color: #f05a5a;
             }
           }
         }
@@ -281,12 +299,29 @@
   }
 
   .modalTableRow {
-    &.error td {
+    &.warning td {
       color: #d8a059;
+    }
+
+    &.error td {
+      color: #f05a5a;
     }
 
     td.status.success {
       color: #2ee979;
+    }
+
+    td.status.warning {
+      color: #d8a059;
+    }
+
+    td.status.error {
+      color: #f05a5a;
+    }
+
+    td.message {
+      font-size: 12px;
+      overflow-wrap: anywhere;
     }
 
     &:not(:last-of-type) {
@@ -357,6 +392,15 @@
         color: #d3d3d3;
         font-size: 12px;
         line-height: 14px;
+      }
+
+      // Counts that call for attention are coloured only while they are above zero
+      &.warning .metaValue {
+        color: #d8a059;
+      }
+
+      &.error .metaValue {
+        color: #f05a5a;
       }
     }
   }

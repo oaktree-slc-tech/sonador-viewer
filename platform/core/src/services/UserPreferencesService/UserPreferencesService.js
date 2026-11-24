@@ -102,10 +102,25 @@ export const LANDMARKS_FOLLOW_SELECTION_DEFAULT = false;
 export const ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY = 'annotationsRegionLeadValue';
 export const ANNOTATIONS_REGION_LEAD_VALUE_DEFAULT = 'area';
 
+// How many times the Uploads page sends a DICOM file before it counts as failed (its attempt
+// budget per file). Set from the Settings page; read by the uploader when a batch starts.
+export const UPLOAD_ATTEMPTS_PREFERENCE_KEY = 'uploadAttempts';
+export const UPLOAD_ATTEMPTS_DEFAULT = 10;
+export const UPLOAD_ATTEMPTS_MIN = 1;
+export const UPLOAD_ATTEMPTS_MAX = 20;
+
+// Whether a study opens by fetching each of its series as one server-built archive into the local
+// cache (the transfer offline storage uses) instead of one request per image. Off by default; the
+// fetched copy lasts for the session (SessionArchiveLoader).
+export const STUDY_ARCHIVE_LOADING_PREFERENCE_KEY = 'studyArchiveLoading';
+export const STUDY_ARCHIVE_LOADING_DEFAULT = false;
+
 // The keys held here and their defaults, which also fix each key's type: a stored value of another
 // type (a document edited by hand, or written by another release) is read as the default.
 const GENERAL_DEFAULTS = Object.freeze({
   [LOCKED_MODELS_WARNING_PREFERENCE_KEY]: true,
+  [UPLOAD_ATTEMPTS_PREFERENCE_KEY]: UPLOAD_ATTEMPTS_DEFAULT,
+  [STUDY_ARCHIVE_LOADING_PREFERENCE_KEY]: STUDY_ARCHIVE_LOADING_DEFAULT,
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: SEG_EDITOR_MESH_COLOR_DEFAULT,
   [SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
@@ -116,6 +131,8 @@ const GENERAL_DEFAULTS = Object.freeze({
 // Values a key accepts beyond its default's type
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const VALIDATORS = Object.freeze({
+  [UPLOAD_ATTEMPTS_PREFERENCE_KEY]: value =>
+    Number.isInteger(value) && value >= UPLOAD_ATTEMPTS_MIN && value <= UPLOAD_ATTEMPTS_MAX,
   [SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY]: value => HEX_COLOR.test(value),
   [SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY]: value => value === SEG_EDITOR_MESH_COLOR_AUTO || HEX_COLOR.test(value),
   [ANNOTATIONS_REGION_LEAD_VALUE_PREFERENCE_KEY]: value => value === 'area' || value === 'mean',

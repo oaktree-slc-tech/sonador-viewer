@@ -71,6 +71,8 @@ const { composeGeneralSettingsWrite, persistGeneralPreferences } = require('./ge
 
 const SERVER = { language: 'en-US', offlineArchiveTransfer: false, offlineRetryAttempts: 3 };
 const STORED = { language: 'de-DE', offlineArchiveTransfer: true, offlineRetryAttempts: 5 };
+// The service's other server-side keys ride along on every section write, at their defaults here
+const SERVICE_KEYS = { studyArchiveLoading: false, uploadAttempts: 10 };
 const documentWith = (general) => ({ viewer: { '0.4': { general: { ...general } } }, studylist: {} });
 
 const httpError = (status) => { const e = new Error(`HTTP ${status}`); e.status = status; return e; };
@@ -123,7 +125,7 @@ describe('persisting a choice made before hydration lands', () => {
     await init;
     await write;
 
-    expect(posts()).toEqual([{ section: 'general', payload: { version: '0.4', values: { ...STORED, [WARN]: false } } }]);
+    expect(posts()).toEqual([{ section: 'general', payload: { version: '0.4', values: { ...STORED, [WARN]: false, ...SERVICE_KEYS } } }]);
     // The GET landing afterwards did not reinstate the warning
     expect(UserPreferencesService.getGeneral(WARN)).toBe(false);
   });
@@ -136,7 +138,7 @@ describe('persisting a choice made before hydration lands', () => {
     await UserPreferencesService.setGeneral(WARN, false);
 
     expect(api.getUserPreferenceSection).toHaveBeenCalledWith('general', '0.4');
-    expect(posts()[0].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(posts()[0].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
   });
 
   it('writes nothing when neither the document nor the section can be read', async () => {
@@ -159,7 +161,7 @@ describe('persisting a choice made before hydration lands', () => {
     await UserPreferencesService.setGeneral(WARN, false);
 
     expect(api.getUserPreferenceSection).not.toHaveBeenCalled();
-    expect(posts()[0].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(posts()[0].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
   });
 
   it('keeps a stored language as stored, without applying it, while the selector is hidden', async () => {
@@ -195,7 +197,7 @@ describe('the section a Settings save writes', () => {
 
     // Every key of the section is then on screen, so the holders serve as the base, as before
     const write = await composeGeneralSettingsWrite({ [WARN]: false }, { languageSelection: true });
-    expect(write).toEqual({ version: '0.4', values: { ...SERVER, language: 'fr', [WARN]: false } });
+    expect(write).toEqual({ version: '0.4', values: { ...SERVER, language: 'fr', [WARN]: false, ...SERVICE_KEYS } });
     i18n.language = 'en-US';
   });
 
@@ -204,7 +206,7 @@ describe('the section a Settings save writes', () => {
     api.getUserPreferenceSection.mockRejectedValue(new Error('still offline'));
     await initUserPreferences();
 
-    await expect(composeGeneralSettingsWrite({ [WARN]: false })).rejects.toThrow('still offline');
+    await expect(composeGeneralSettingsWrite({ [WARN]: false, ...SERVICE_KEYS })).rejects.toThrow('still offline');
   });
 });
 
@@ -228,7 +230,7 @@ describe('a general write still queued from an earlier save', () => {
     const result = await UserPreferencesService.setGeneral(WARN, false);
 
     expect(api.getUserPreferenceSection).not.toHaveBeenCalled();
-    expect(posts().slice(-1)[0].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(posts().slice(-1)[0].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
     // The earlier entry was superseded by a write that carried its values
     expect(readQueue()).toEqual([]);
     expect(result).toEqual({ outcome: 'saved', results: {} });
@@ -243,7 +245,7 @@ describe('a general write still queued from an earlier save', () => {
 
     const queue = readQueue();
     expect(queue).toHaveLength(1);
-    expect(queue[0].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(queue[0].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
   });
 
   it('is written after a startup replay still in flight, so the replay cannot overwrite it', async () => {
@@ -266,7 +268,7 @@ describe('a general write still queued from an earlier save', () => {
     await write;
 
     expect(posts()).toHaveLength(2);
-    expect(posts()[1].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(posts()[1].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
     expect(readQueue()).toEqual([]);
     expect(UserPreferencesService.getGeneral(WARN)).toBe(false);
   });
@@ -282,6 +284,6 @@ describe('a general write still queued from an earlier save', () => {
 
     await UserPreferencesService.setGeneral(WARN, false);
 
-    expect(posts().slice(-1)[0].payload.values).toEqual({ ...STORED, [WARN]: false });
+    expect(posts().slice(-1)[0].payload.values).toEqual({ ...STORED, [WARN]: false, ...SERVICE_KEYS });
   });
 });

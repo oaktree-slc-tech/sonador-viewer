@@ -15,12 +15,14 @@ import OHIF, {
   log, 
   metadata, 
   notificationLogService,
+  SessionArchiveLoader,
   studies,
   uiNotificationService,
   utils,
 } from '@ohif/core';
 
 import { extensionManager } from '../App';
+import { awaitPreferencesForLoad } from './studyLoadGate';
 
 // Contexts
 import AppContext from '../context/AppContext';
@@ -187,6 +189,11 @@ const _addSeriesToStudy = (studyMetadata, series) => {
     studyMetadata.addSeries(seriesMetadata);
   }
 
+  // Archive-based loading (imaging-development-env#103): the series' instances are known from here
+  // on, and its display sets are built next, so it is registered first for their image ids to come
+  // out local
+  SessionArchiveLoader.registerSeries({ StudyInstanceUID: study.StudyInstanceUID, seriesMetadata });
+
   studyMetadata.createAndAddDisplaySetsForSeries(sopClassHandlerModules, seriesMetadata);
 
   study.displaySets = studyMetadata.getDisplaySets();
@@ -267,6 +274,9 @@ function ViewerRetrieveStudyData({
   
   let cancelableSeriesPromises;
   let cancelableStudiesPromises;
+  // Moves on whenever the pending loads are purged, so a load that was waiting for the preferences
+  // can tell it belongs to a view that has since been left or reset
+  const loadGenerationRef = useRef(0);
   
   
   const studyDidLoad = (study, studyMetadata, filters) => {
@@ -278,6 +288,9 @@ function ViewerRetrieveStudyData({
     * @param {string} [filter.seriesInstanceUID] - series instance uid to filter results against
     */
     
+    // Series that arrived with the remaining-series load join the archive fetching
+    SessionArchiveLoader.registerStudy({ server: serverRef.current || server, studyMetadata });
+
     // User message
     const promoted = _promoteList(study, studyMetadata, filters, isFilterStrategy);
 
@@ -318,6 +331,11 @@ function ViewerRetrieveStudyData({
 
         setStudyData(study.StudyInstanceUID, _thinStudyData(study));
         const studyMetadata = new OHIFStudyMetadata(study, study.StudyInstanceUID);
+
+        // Archive-based loading (imaging-development-env#103): registered BEFORE the display sets
+        // are built, so the image ids they memoise come out local and are served from the cache as
+        // each series archive lands
+        SessionArchiveLoader.registerStudy({ server: serverRef.current || server, studyMetadata });
 
         _updateStudyDisplaySets(study, studyMetadata);
         _updateStudyMetadataManager(study, studyMetadata);
@@ -396,6 +414,18 @@ function ViewerRetrieveStudyData({
 
     options = options || {};
     displaySetService.triggerApiEvent(OHIF.display.Enums.EVENTS.STUDY_FETCH_START);
+
+    // The user's preferences decide how the study is loaded (archive-based loading reads them when
+    // the study registers, imaging-development-env#103), and their hydration is an asynchronous
+    // fetch started before this route mounts. Waiting for it to settle, one way or the other, keeps
+    // a cold load from fixing the study's image ids before the preference is known. The wait is one
+    // of this view's cancelable loads: a view left or reset meanwhile does not retrieve, register or
+    // transfer anything for a study it no longer shows.
+    const loadGeneration = loadGenerationRef.current;
+    const current = await awaitPreferencesForLoad(cancelableStudiesPromises);
+    if (!current || loadGeneration !== loadGenerationRef.current) {
+      return;
+    }
 
     try {
       const filters = {};
@@ -501,6 +531,7 @@ function ViewerRetrieveStudyData({
   
   const purgeCancellablePromises = useCallback(() => {
     // Cancel all pending fetch study operations.
+    loadGenerationRef.current += 1;
 
     for (let studyInstanceUIDs in cancelableStudiesPromises) {
       if ('cancel' in cancelableStudiesPromises[studyInstanceUIDs]) {
@@ -530,6 +561,11 @@ function ViewerRetrieveStudyData({
       studyMetadataManager.purge();
       purgeCancellablePromises();
 
+      // The studies being left give up their session archive copies
+      if (prevStudyInstanceUIDs) {
+        SessionArchiveLoader.closeStudies(prevStudyInstanceUIDs.filter((uid) => !studyInstanceUIDs.includes(uid)));
+      }
+
       // Reset the Issues list for the studies being opened. DICOM is immutable, so anything still
       // wrong with a study is re-reported as it loads; carrying entries across navigations would
       // instead show conditions from a previous load that may no longer hold (ohif-viewers#84).
@@ -549,6 +585,7 @@ function ViewerRetrieveStudyData({
 
     return () => {
       purgeCancellablePromises();
+      SessionArchiveLoader.closeStudies(studyInstanceUIDs);
     };
   }, []);
 
@@ -593,6 +630,15 @@ function ViewerRetrieveStudyData({
         await displaySet.load();
       }
     }
+
+    // The series on screen is fetched before the ones waiting (imaging-development-env#103)
+    const displayset_activated = displaySetService.subscribe(
+      displaySetService.EVENTS.DISPLAY_SET_ACTIVATED, ({ displaySetInstanceUID }) => {
+        const displaySet = displaySetInstanceUID && displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+        if (displaySet && displaySet.SeriesInstanceUID) {
+          SessionArchiveLoader.prioritize(displaySet.SeriesInstanceUID);
+        }
+      });
 
     const displayset_triggerload_added = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SET_ADDED, triggerLoad)
@@ -648,6 +694,7 @@ function ViewerRetrieveStudyData({
 
       // Unsubscribe from event handlers
       displayset_added.unsubscribe();
+      displayset_activated.unsubscribe();
       displayset_triggerload_added.unsubscribe();
       displayset_triggerload_updated.unsubscribe();
       displayset_datasync.unsubscribe();

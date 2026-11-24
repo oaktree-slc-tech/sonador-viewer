@@ -1,15 +1,17 @@
 // Settings > General: two tabs under one header and one footer.
 // APPLICATION holds what belongs to the application as a whole: the language (hidden until the
-// interface is translated: LANGUAGE_SELECTION_ENABLED) and the offline-storage transfer settings.
+// interface is translated: LANGUAGE_SELECTION_ENABLED), how studies open, the offline-storage
+// transfer settings and the upload attempt budget.
 // SEGMENTATION EDITOR holds the editor's own preferences: how it opens, follows a selection, and
 // what its 3D tools draw. The tabs are the dialog tabs the Viewer Metadata page uses
 // (components/TabsNG); the tab bodies are presentational (ApplicationSettingsTab,
 // SegEditorSettingsTab) and every field's state, hydration and save live here, so one Save posts
 // the general section once for both tabs.
 //
-// Persistence is unchanged: the language, the offline-transfer settings and the locked-models
-// warning are the server-side `general` section; the three segEditor* keys are
-// UserPreferencesService's local-only keys (kept in this browser, never posted). A section POST
+// Persistence is unchanged: the language, the offline-transfer settings, the locked-models
+// warning, the study archive loading and the upload attempt budget are the server-side `general`
+// section; the three segEditor* keys are UserPreferencesService's local-only keys (kept in this
+// browser, never posted). A section POST
 // replaces the section wholesale, so Save lays this page's own fields over a base holding the
 // user's settings for the rest (lib/generalPreferences), and posts nothing if none can be read.
 
@@ -20,6 +22,7 @@ import {
   DownloadManagerService,
   DownloadManagerServiceEvents,
   LOCKED_MODELS_WARNING_PREFERENCE_KEY,
+  LocalCacheService,
   RETRY_ATTEMPTS_DEFAULT,
   RETRY_ATTEMPTS_MAX,
   RETRY_ATTEMPTS_MIN,
@@ -30,6 +33,12 @@ import {
   SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY,
   SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY,
+  STUDY_ARCHIVE_LOADING_DEFAULT,
+  STUDY_ARCHIVE_LOADING_PREFERENCE_KEY,
+  UPLOAD_ATTEMPTS_DEFAULT,
+  UPLOAD_ATTEMPTS_MAX,
+  UPLOAD_ATTEMPTS_MIN,
+  UPLOAD_ATTEMPTS_PREFERENCE_KEY,
   UserPreferencesService,
   UserPreferencesServiceEvents,
 } from '@ohif/core';
@@ -65,11 +74,15 @@ const LOCKED = LOCKED_MODELS_WARNING_PREFERENCE_KEY;
 const FOLLOW = SEG_EDITOR_FOLLOW_SELECTION_PREFERENCE_KEY;
 const PREVIEW = SEG_EDITOR_PREVIEW_COLOR_PREFERENCE_KEY;
 const MESH = SEG_EDITOR_MESH_COLOR_PREFERENCE_KEY;
-const SERVICE_FIELDS = [LOCKED, FOLLOW, PREVIEW, MESH];
+const ARCHIVE_LOADING = STUDY_ARCHIVE_LOADING_PREFERENCE_KEY;
+const UPLOAD = UPLOAD_ATTEMPTS_PREFERENCE_KEY;
+const SERVICE_FIELDS = [LOCKED, FOLLOW, PREVIEW, MESH, ARCHIVE_LOADING, UPLOAD];
 const ALL_FIELDS = [ARCHIVE_FIELD, RETRY_FIELD, ...SERVICE_FIELDS];
 
 const FALLBACK_DEFAULTS = {
   [LOCKED]: true,
+  [ARCHIVE_LOADING]: STUDY_ARCHIVE_LOADING_DEFAULT,
+  [UPLOAD]: UPLOAD_ATTEMPTS_DEFAULT,
   [FOLLOW]: SEG_EDITOR_FOLLOW_SELECTION_DEFAULT,
   [PREVIEW]: SEG_EDITOR_PREVIEW_COLOR_DEFAULT,
   [MESH]: SEG_EDITOR_MESH_COLOR_DEFAULT,
@@ -172,9 +185,19 @@ export default function GeneralTabNG() {
   const [followSelection, setFollowSelection] = useState(() => stored(FOLLOW));
   const [previewColor, setPreviewColor] = useState(() => stored(PREVIEW));
   const [meshColor, setMeshColor] = useState(() => stored(MESH));
+  // The application's other service-held keys (imaging-development-env#103): whether a study opens
+  // as per-series archives, and the Uploads page's attempt budget per file. Both are read by their
+  // feature when it starts (opening a study, starting a batch), so a change never affects what is
+  // already in progress.
+  const [studyArchiveLoading, setStudyArchiveLoading] = useState(() => stored(ARCHIVE_LOADING));
+  // Whether THIS browser can open studies as archives (the cache needs a lock shared between its
+  // tabs). The preference is the account's and is kept either way; the page says what happens here.
+  const studyArchiveLoadingSupported = LocalCacheService?.hasSharedLock ? LocalCacheService.hasSharedLock() : true;
+  const [uploadAttempts, setUploadAttempts] = useState(() => stored(UPLOAD));
   useEffect(() => {
     setBaseline(current => ({
       ...current, [LOCKED]: lockedModelsWarning, [FOLLOW]: followSelection, [PREVIEW]: previewColor, [MESH]: meshColor,
+      [ARCHIVE_LOADING]: studyArchiveLoading, [UPLOAD]: uploadAttempts,
     }));
   }, []);
   const meshColorAuto = meshColor === SEG_EDITOR_MESH_COLOR_AUTO;
@@ -196,6 +219,8 @@ export default function GeneralTabNG() {
       [FOLLOW]: setFollowSelection,
       [PREVIEW]: setPreviewColor,
       [MESH]: setMeshColor,
+      [ARCHIVE_LOADING]: setStudyArchiveLoading,
+      [UPLOAD]: setUploadAttempts,
     };
     const land = (key, value) => {
       setters[key](current => latch.accept(key, value, current));
@@ -219,6 +244,16 @@ export default function GeneralTabNG() {
   const handlePreviewColorChange = edit(PREVIEW, setPreviewColor);
   const handleMeshColorPick = edit(MESH, setMeshColor);
   const handleMeshColorAutoChange = edit(MESH, auto => setMeshColor(auto ? SEG_EDITOR_MESH_COLOR_AUTO : lastMeshPick.current));
+  const handleStudyArchiveLoadingChange = edit(ARCHIVE_LOADING, setStudyArchiveLoading);
+  const handleUploadAttemptsChange = edit(UPLOAD, setUploadAttempts);
+  const stepUploadAttempts = useCallback(
+    delta => {
+      latch.markEdited(UPLOAD);
+      changed.add(UPLOAD);
+      setUploadAttempts(current => Math.min(UPLOAD_ATTEMPTS_MAX, Math.max(UPLOAD_ATTEMPTS_MIN, current + delta)));
+    },
+    [latch, changed]
+  );
 
   const { mutateAsync: saveGeneralSection } = useUpdateUserPreferenceSection(PREFERENCE_SECTIONS.GENERAL);
 
@@ -229,6 +264,8 @@ export default function GeneralTabNG() {
     [FOLLOW]: followSelection,
     [PREVIEW]: previewColor.toLowerCase(),
     [MESH]: meshColor.toLowerCase(),
+    [ARCHIVE_LOADING]: studyArchiveLoading,
+    [UPLOAD]: uploadAttempts,
   };
   // A save that did not reach the account leaves Save in the footer, so it can be made again
   const [saveUnconfirmed, setSaveUnconfirmed] = useState(false);
@@ -244,6 +281,8 @@ export default function GeneralTabNG() {
     setFollowSelection(baseline[FOLLOW]);
     setPreviewColor(baseline[PREVIEW]);
     setMeshColor(baseline[MESH]);
+    setStudyArchiveLoading(baseline[ARCHIVE_LOADING]);
+    setUploadAttempts(baseline[UPLOAD]);
     latch.reset();
     changed.clear();
     setSaveUnconfirmed(false);
@@ -264,6 +303,8 @@ export default function GeneralTabNG() {
     UserPreferencesService?.setGeneral?.(FOLLOW, !!followSelection, { persist: false });
     UserPreferencesService?.setGeneral?.(PREVIEW, preview, { persist: false });
     UserPreferencesService?.setGeneral?.(MESH, mesh, { persist: false });
+    UserPreferencesService?.setGeneral?.(ARCHIVE_LOADING, !!studyArchiveLoading, { persist: false });
+    UserPreferencesService?.setGeneral?.(UPLOAD, uploadAttempts, { persist: false });
 
     // The confirmation names what changed and what it now does, not that something was saved
     const detail = [
@@ -275,6 +316,11 @@ export default function GeneralTabNG() {
       changed.has(MESH) && (mesh === SEG_EDITOR_MESH_COLOR_AUTO
         ? t('SegEditorMeshColorSavedAuto')
         : t('SegEditorMeshColorSavedFixed', { color: mesh })),
+      changed.has(ARCHIVE_LOADING) && t(
+        !studyArchiveLoading ? 'StudyArchiveLoadingSavedOff'
+          : studyArchiveLoadingSupported ? 'StudyArchiveLoadingSavedOn' : 'StudyArchiveLoadingSavedOnUnsupportedHere'
+      ),
+      changed.has(UPLOAD) && t('UploadAttemptsSaved', { count: uploadAttempts }),
     ].filter(Boolean).join(' ');
     // What is applied is now what Cancel would put back
     setBaseline({ ...values });
@@ -295,6 +341,8 @@ export default function GeneralTabNG() {
         [ARCHIVE_TRANSFER_PREFERENCE_KEY]: archiveTransfer,
         [RETRY_ATTEMPTS_PREFERENCE_KEY]: retryAttempts,
         [LOCKED]: lockedModelsWarning,
+        [ARCHIVE_LOADING]: studyArchiveLoading,
+        [UPLOAD]: uploadAttempts,
       },
       payload =>
         saveGeneralSection(payload).then(
@@ -326,6 +374,8 @@ export default function GeneralTabNG() {
     setFollowSelection(defaultOf(FOLLOW));
     setPreviewColor(defaultOf(PREVIEW));
     setMeshColor(defaultOf(MESH));
+    setStudyArchiveLoading(defaultOf(ARCHIVE_LOADING));
+    setUploadAttempts(defaultOf(UPLOAD));
   };
 
   return (
@@ -347,6 +397,12 @@ export default function GeneralTabNG() {
             retryAttempts={retryAttempts}
             onRetryAttemptsChange={handleRetryAttemptsChange}
             onStepRetryAttempts={stepRetryAttempts}
+            studyArchiveLoading={studyArchiveLoading}
+            studyArchiveLoadingSupported={studyArchiveLoadingSupported}
+            onStudyArchiveLoadingChange={handleStudyArchiveLoadingChange}
+            uploadAttempts={uploadAttempts}
+            onUploadAttemptsChange={handleUploadAttemptsChange}
+            onStepUploadAttempts={stepUploadAttempts}
           />
         </TabsNG.Content>
         <TabsNG.Content value={TAB_SEG_EDITOR} className={styles.settings}>

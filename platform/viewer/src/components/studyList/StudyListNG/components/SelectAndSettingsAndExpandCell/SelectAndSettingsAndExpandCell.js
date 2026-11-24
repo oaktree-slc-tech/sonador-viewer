@@ -99,7 +99,7 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
   // Local/offline cache state for this study (ohif-viewers#125, FR-6/FR-7). useLocalCacheVersion
   // forces a re-render whenever the cache or a download job changes, so these stay reactive.
   useLocalCacheVersion();
-  const isCached = LocalCacheService?.isStudyCachedSync(StudyInstanceUID);
+  const isCached = LocalCacheService?.isStudySavedSync(StudyInstanceUID);
   const isDownloading = DownloadManagerService?.isStudyDownloading(StudyInstanceUID);
 
   const link = RoutesUtil.parseViewerPath(appConfig, activeServer, {
@@ -151,7 +151,8 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
       },
     },
     {
-      // Remove this study's locally cached copy (shown only when cached, FR-7).
+      // Remove this study's saved offline copy (shown only when one is saved, FR-7). Temporary copies
+      // a viewing session fetched are left to that session's exit (imaging-development-env#103).
       id: 'remove-offline',
       Label: () => (
         <div className={styles.rowDotsOption}>
@@ -161,7 +162,7 @@ export default function SelectAndSettingsAndExpandCell({ row  }) {
       ),
       onClick: () => {
         DownloadManagerService.cancelStudy(StudyInstanceUID);
-        LocalCacheService.removeStudy(StudyInstanceUID);
+        LocalCacheService.removeSavedInstances(StudyInstanceUID);
       },
     },
     {
