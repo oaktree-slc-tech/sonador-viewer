@@ -213,9 +213,15 @@ export default class MeasurementApi {
     const { toolState: globalToolState } = cornerstoneTools.globalImageIdSpecificToolStateManager;
     const { uid, _id } = MeasurementApi._unpackMeasurementData(measurementRep);
 
-    // Locate element to remove based on tool state
-    const imageIdToolState = globalToolState[imageId];
-    const { data: globalToolData } = imageIdToolState[toolType];
+    // Locate element to remove based on tool state. The image may hold no state for the tool, or
+    // none at all: a measurement whose display set was removed (a deleted report series) is cleared
+    // after its image's tool state has gone.
+    const imageIdToolState = globalToolState && imageId ? globalToolState[imageId] : undefined;
+    if (!imageIdToolState) {
+      log.warn('[measurementAPI:purgeToolData] no global tool state registered for imageId=' + imageId);
+      return;
+    }
+    const { data: globalToolData } = imageIdToolState[toolType] || {};
 
     if (!globalToolData || !globalToolData.length) {
       log.warn('[measurementAPI:purgeToolData] no tool data registered with global state for toolType='+toolType);

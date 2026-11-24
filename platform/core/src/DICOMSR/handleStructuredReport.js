@@ -145,13 +145,63 @@ const retrieveMeasurementFromSR = async (series, studies, serverUrl, external) =
 };
 
 
+// Series-level attributes copied from a stored report into the series entry of the cached study
+// metadata payload, which has the shape of a QIDO-RS series result.
+const PAYLOAD_SERIES_TAGS = [
+  '0020000D', // StudyInstanceUID
+  '0020000E', // SeriesInstanceUID
+  '00080060', // Modality
+  '00200011', // SeriesNumber
+  '0008103E', // SeriesDescription
+  '00080021', // SeriesDate
+  '00080031', // SeriesTime
+];
+
+const cacheStoredReport = async (dataset, part10Buffer, instanceJson) => {
+  /**
+  * Add a report the server has stored to the offline copy of its study, when the study has one.
+  * A cached study opens from its stored metadata payload alone, so a report missing from the
+  * cache would stay missing from every later open of the study. The cache decides, under its study
+  * lock, whether the study is still cached (see LocalCacheService.cacheViewerInstance). A failure is
+  * logged and does not fail the save: the report is already on the server.
+  *
+  * @param {Object} dataset - the report as a naturalized dataset
+  * @param {ArrayBuffer} part10Buffer - the report as Part 10 bytes, as uploaded
+  * @param {Object} instanceJson - the report as DICOM+JSON (the denaturalized dataset)
+  * @returns {Promise<void>}
+  */
+  const { StudyInstanceUID } = dataset;
+  if (!LocalCacheService?.isStudyCachedSync?.(StudyInstanceUID)) {
+    return;
+  }
+
+  try {
+    const series = {};
+    PAYLOAD_SERIES_TAGS.forEach(tag => {
+      if (instanceJson[tag]) {
+        series[tag] = instanceJson[tag];
+      }
+    });
+    await LocalCacheService.cacheViewerInstance({
+      StudyInstanceUID,
+      bytes: part10Buffer,
+      metadata: dataset,
+      instance: instanceJson,
+      series,
+    });
+  } catch (error) {
+    console.warn('[DICOM-SR:stowSRFromMeasurements] the stored report was not added to the offline copy of its study', error);
+  }
+};
+
+
 const stowSRFromMeasurements = async (measurements, serverUrl, options) => {
   /**
   * Function to store measurements to DICOM Structured Reports in determined server.
   *
   * @param {Object} measurements - OHIF measurementData object
   * @param {string} serverUrl - Server URL to be used on request
-  * @returns {Promise}
+  * @returns {Promise<Object>} `{ StudyInstanceUID }` of the stored report
   */
 
   const measurementApi = ohifMeasurements.MeasurementApi.Instance;
@@ -192,6 +242,10 @@ const stowSRFromMeasurements = async (measurements, serverUrl, options) => {
   await dicomWeb.storeInstances({
     datasets: [part10Buffer],
   });
+  await cacheStoredReport(dataset, part10Buffer, dicomDict.dict);
+
+  // The study the stored report belongs to, whose cached metadata no longer lists all its series
+  return { StudyInstanceUID: dataset.StudyInstanceUID };
 };
 
 

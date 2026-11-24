@@ -598,6 +598,21 @@ function ViewerRetrieveStudyData({
     const displayset_triggerload_updated = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SET_CHANGED, triggerLoad);
 
+    const clearAllMeasurements = () => {
+      // Clear every measurement before the study's measurements are rebuilt, whatever the active
+      // viewport shows. Each step runs on its own: `runCommand` returns the command's result, and
+      // `clearAnnotations` returns nothing, so chaining them with `&&` would skip the rest. A
+      // failure to clear the viewport's tool state must not keep the API clear or the reload from
+      // running.
+      try {
+        commandsManager.runCommand('clearAnnotations');
+      } catch (error) {
+        log.warn('[viewer:fetch-data:clear-measurements] clearing the viewport annotations failed', error);
+      }
+      measurementApi.clearMeasurements();
+      measurementApi.measurementService.clearMeasurements();
+    };
+
     const displayset_datasync = displaySetService.subscribe(
       displaySetService.EVENTS.DISPLAY_SET_DATASYNC, async ({ apiEvent, ...apiData }) => {
         
@@ -609,9 +624,7 @@ function ViewerRetrieveStudyData({
         if (apiEvent && apiEvent == OHIF.display.Enums.EVENTS.STUDY_RELOAD) {
           
           // Clear measurements/annotations and force-reload study data
-          commandsManager.runCommand('clearAnnotations')
-            && measurementApi.clearMeasurements()
-            && measurementApi.measurementService.clearMeasurements();
+          clearAllMeasurements();
           reloadStudyData();
           
         } else if (apiEvent && apiEvent == OHIF.display.Enums.EVENTS.VIEWER_RENDER) {
@@ -625,10 +638,8 @@ function ViewerRetrieveStudyData({
           if (apiData.dcm) {
 
             // Clear annotations
-            commandsManager.runCommand('clearAnnotations')
-              && measurementApi.clearMeasurements() 
-              && measurementApi.measurementService.clearMeasurements();
-            
+            clearAllMeasurements();
+
             setTimeout(async () => {
 
               // Add local DICOM series

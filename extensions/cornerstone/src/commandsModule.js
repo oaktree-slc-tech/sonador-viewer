@@ -213,7 +213,7 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
                     const { _id, uid } = OHIF.measurements.MeasurementApi._unpackMeasurementData(measurementData);
                     if (!_id && !uid) {
                       
-                      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
+                      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports }) || {};
                       if (!enabledElement) {
                         console.warn('[cornerstone:commands:seriesTagDialog] unable to retrieve enabled element');
                         return;
@@ -388,10 +388,14 @@ const commandsModule = ({ commandsManager, servicesManager }) => {
       log.debug('[cornerstone:commandsManager:clearAnnotations] annotation count (pre-clear)',
         OHIF.measurements.MeasurementApi.Instance.measurementsCount());
 
-      // Retrieve currently active element
-      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports });
+      // Retrieve currently active element (nothing when the active viewport has no image)
+      const { element, enabledElement } = actions.getCornerstoneEnabledElement({ viewports }) || {};
       if (!enabledElement || !enabledElement.image) {
-        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image.');
+        // No image tool state to remove (the active viewport shows a report or nothing), but the
+        // measurements still go: they belong to the study, not to the viewport
+        log.warn('[cornerstone:commandsManager:clearAnnotations] no enabled element or no image. '
+          + 'Clear service measurements and return.');
+        OHIF.measurements.MeasurementApi.Instance.clearMeasurements();
         return;
       }
 

@@ -55,6 +55,38 @@ const _evictOfflineCopy = async (StudyInstanceUID) => {
 };
 
 
+const _evictOfflineSeries = async (StudyInstanceUID, SeriesInstanceUID) => {
+  // A series removed from the server takes its part of the offline copy with it: its instances,
+  // its entry in the study's stored metadata, and any report the viewer saved into it. Left
+  // behind, a cached open of the study keeps presenting the removed series, and a removed report
+  // keeps its measurements.
+  //
+  // The study's copy keeps its coverage (`removedFromServer`): what remains still describes the
+  // whole study as the server holds it. Called whether or not the study is cached yet: the cache
+  // also refuses the series to any download that enumerated the study before the removal, a first
+  // download included. Best-effort, like the study eviction above.
+  if (!LocalCacheService?.removeSeries) {
+    return;
+  }
+
+  try {
+    DownloadManagerService?.cancelSeries?.(SeriesInstanceUID);
+    await LocalCacheService.removeSeries(StudyInstanceUID, SeriesInstanceUID, { removedFromServer: true });
+  } catch (err) {
+    uiNotificationService.show({
+      title: 'Offline copy not updated',
+      message: 'The series was removed from the imaging server, but it could not be removed from '
+        + "this browser's offline copy of the study. Remove the study from Offline Storage.",
+      type: 'warning',
+      autoClose: false,
+      studyInstanceUID: StudyInstanceUID,
+      seriesInstanceUID: SeriesInstanceUID,
+      error: err,
+    });
+  }
+};
+
+
 const _notifyFailure = ({ title, message, err, StudyInstanceUID, SeriesInstanceUID }) => {
   // FR-13: a failed removal is visible and diagnosable. Sticky, because a transient toast for a
   // destructive operation that did NOT happen is worse than no toast — the user walks away
@@ -236,8 +268,10 @@ export default function useRemoveResource() {
       }
 
       // Success path only, and BEFORE the invalidation below — the refetch that invalidation
-      // triggers has to miss these caches, or it rebuilds the rail exactly as it was.
+      // triggers has to miss these caches, or it rebuilds the rail exactly as it was. The offline
+      // copy too: a study with one is rebuilt from it, not from the server.
       purgeRemovedResourceMetadata({ StudyInstanceUID, SeriesInstanceUID });
+      await _evictOfflineSeries(StudyInstanceUID, SeriesInstanceUID);
 
       uiNotificationService.show({
         title: 'Series removed',
