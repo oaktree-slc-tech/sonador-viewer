@@ -28,9 +28,20 @@ jest.mock('@tanstack/react-query', () => ({
   }),
 }));
 
+// The offline cache: a study is cached only when a test says so
+const mockCache = {
+  cached: false,
+  isStudyCachedSync: () => mockCache.cached,
+  removeStudy: jest.fn(),
+  removeSeries: jest.fn((...args) => {
+    callLog.push('evict-series');
+    return Promise.resolve();
+  }),
+};
+const mockCancelSeries = jest.fn();
 jest.mock('@ohif/core', () => ({
-  LocalCacheService: { isStudyCachedSync: () => false, removeStudy: jest.fn() },
-  DownloadManagerService: { cancelStudy: jest.fn() },
+  get LocalCacheService() { return mockCache; },
+  DownloadManagerService: { cancelStudy: jest.fn(), cancelSeries: (...args) => mockCancelSeries(...args) },
   uiNotificationService: { show: (...args) => mockShow(...args) },
 }));
 
@@ -68,6 +79,7 @@ const SERIES_UID = '1.2.3.4.5';
 beforeEach(() => {
   callLog.length = 0;
   jest.clearAllMocks();
+  mockCache.cached = false;
 });
 
 
@@ -128,6 +140,55 @@ describe('series removal', () => {
 
     expect(ok).toBe(false);
     expect(mockPurgeRemoved).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("series removal: this browser's offline copy", () => {
+  const descriptor = { StudyInstanceUID: STUDY_UID, SeriesInstanceUID: SERIES_UID };
+
+  it('removes the series from the offline copy, keeping its coverage, before invalidating', async () => {
+    mockCache.cached = true;
+    mockRemoveSeries.mockResolvedValue({ status: 200 });
+
+    const { removeSeriesResource } = useRemoveResource();
+    await expect(removeSeriesResource(SERVER, descriptor)).resolves.toBe(true);
+
+    expect(mockCancelSeries).toHaveBeenCalledWith(SERIES_UID);
+    expect(mockCache.removeSeries).toHaveBeenCalledWith(STUDY_UID, SERIES_UID, { removedFromServer: true });
+    expect(callLog.indexOf('invalidate')).toBeGreaterThan(callLog.indexOf('evict-series'));
+  });
+
+  it('leaves the offline copy alone when the delete failed', async () => {
+    mockCache.cached = true;
+    mockRemoveSeries.mockRejectedValue(Object.assign(new Error('denied'), { status: 403 }));
+
+    const { removeSeriesResource } = useRemoveResource();
+    await removeSeriesResource(SERVER, descriptor);
+
+    expect(mockCache.removeSeries).not.toHaveBeenCalled();
+  });
+
+  it('records the removal for a study without an offline copy, so a first download cannot store it', async () => {
+    mockRemoveSeries.mockResolvedValue({ status: 200 });
+
+    const { removeSeriesResource } = useRemoveResource();
+    await removeSeriesResource(SERVER, descriptor);
+
+    expect(mockCache.removeSeries).toHaveBeenCalledWith(STUDY_UID, SERIES_UID, { removedFromServer: true });
+  });
+
+  it('still reports the removal when the offline copy cannot be updated, with a warning', async () => {
+    mockCache.cached = true;
+    mockRemoveSeries.mockResolvedValue({ status: 200 });
+    mockCache.removeSeries.mockImplementationOnce(() => Promise.reject(new Error('quota')));
+
+    const { removeSeriesResource } = useRemoveResource();
+    await expect(removeSeriesResource(SERVER, descriptor)).resolves.toBe(true);
+
+    const titles = mockShow.mock.calls.map(([arg]) => arg.title);
+    expect(titles).toContain('Offline copy not updated');
+    expect(titles).toContain('Series removed');
   });
 });
 

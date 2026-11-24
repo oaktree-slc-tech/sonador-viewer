@@ -657,3 +657,276 @@ describe('LocalCacheService: copy state and saved-only removal (imaging-developm
     expect(LocalCacheService.isInstanceCachedSync('sop-3')).toBe(false);
   });
 });
+
+describe('LocalCacheService: instances the viewer created (cacheViewerInstance)', () => {
+  const KEY = `__studymeta__::${STUDY}`;
+  const ADDS = `__studyadds__::${STUDY}`;
+  const SERIES_SR = `${STUDY}.9`;
+  const srInstance = sop => ({
+    '0020000D': { vr: 'UI', Value: [STUDY] },
+    '0020000E': { vr: 'UI', Value: [SERIES_SR] },
+    '00080018': { vr: 'UI', Value: [sop] },
+    '00080060': { vr: 'CS', Value: ['SR'] },
+  });
+  const srSeries = { '0020000E': { vr: 'UI', Value: [SERIES_SR] }, '00080060': { vr: 'CS', Value: ['SR'] } };
+  const report = sop => ({
+    StudyInstanceUID: STUDY,
+    bytes: new ArrayBuffer(10),
+    metadata: { StudyInstanceUID: STUDY, SeriesInstanceUID: SERIES_SR, SOPInstanceUID: sop, Modality: 'SR' },
+    instance: srInstance(sop),
+    series: srSeries,
+  });
+  const serverSnapshot = () => ({
+    series: [{ '0020000E': { Value: [SERIES_A] } }],
+    instancesBySeries: { [SERIES_A]: [{ '00080018': { Value: ['1'] } }] },
+  });
+  const sopsOf = (payload, series) => (payload.instancesBySeries[series] || []).map(e => e['00080018'].Value[0]);
+  let stored;
+  let idb;
+
+  beforeEach(async () => {
+    await LocalCacheService.ready();
+    await LocalCacheService.clearAll();
+    await LocalCacheService.putInstance(makeInstance('1', { SeriesInstanceUID: SERIES_A }));
+
+    stored = new Map();
+    idb = require('idb-keyval');
+    LocalCacheService._instanceStore = {};
+    jest.spyOn(idb, 'get').mockImplementation(async key => stored.get(key));
+    jest.spyOn(idb, 'set').mockImplementation(async (key, value) => { stored.set(key, value); });
+    jest.spyOn(idb, 'del').mockImplementation(async key => { stored.delete(key); });
+    jest.spyOn(idb, 'clear').mockImplementation(async () => { stored.clear(); });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    LocalCacheService._instanceStore = null;
+  });
+
+  it('stores the instance and adds it and its series to a stored payload, which stays complete', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await expect(LocalCacheService.cacheViewerInstance(report('sr-1'))).resolves.toBe(true);
+
+    expect(stored.get('sr-1').bytes.byteLength).toBe(10);
+    expect(LocalCacheService.isInstanceCachedSync('sr-1')).toBe(true);
+    const payload = stored.get(KEY);
+    expect(payload.series.map(e => e['0020000E'].Value[0])).toEqual([SERIES_A, SERIES_SR]);
+    expect(sopsOf(payload, SERIES_A)).toEqual(['1']);
+    expect(sopsOf(payload, SERIES_SR)).toEqual(['sr-1']);
+    expect(LocalCacheService.hasCompleteStudyMetadataPayloadSync(STUDY)).toBe(true);
+  });
+
+  it('keeps the instance when a payload enumerated before it is committed afterwards', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    expect(sopsOf(stored.get(KEY), SERIES_SR)).toEqual(['sr-1']);
+
+    await LocalCacheService.mergeStudyMetadataPayload(STUDY, serverSnapshot(), { partial: true });
+    expect(sopsOf(stored.get(KEY), SERIES_SR)).toEqual(['sr-1']);
+  });
+
+  it('stores a saved copy for a study with a saved offline copy', async () => {
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    expect(stored.get('sr-1').session).toBeUndefined();
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_SR)).toBe('saved');
+    expect(LocalCacheService.hasSessionInstancesSync(STUDY)).toBe(false);
+  });
+
+  it('stores a session copy for a study held only as a temporary copy, which the session sweep takes', async () => {
+    await LocalCacheService.clearAll();
+    await LocalCacheService.putInstance({ ...makeInstance('1', { SeriesInstanceUID: SERIES_A }), session: true });
+    await expect(LocalCacheService.cacheViewerInstance(report('sr-1'))).resolves.toBe(true);
+
+    expect(stored.get('sr-1').session).toBe(true);
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_SR)).toBe('temporary');
+    expect(LocalCacheService.isStudySavedSync(STUDY)).toBe(false);
+    expect(stored.has(ADDS)).toBe(true);
+
+    await LocalCacheService.removeSessionInstances(STUDY);
+    expect(LocalCacheService.isStudyCachedSync(STUDY)).toBe(false);
+    expect(stored.has('sr-1')).toBe(false);
+    expect(stored.has(ADDS)).toBe(false);
+  });
+
+  it('keeps the report of a temporary copy the user then saves', async () => {
+    await LocalCacheService.clearAll();
+    await LocalCacheService.putInstance({ ...makeInstance('1', { SeriesInstanceUID: SERIES_A }), session: true });
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    await LocalCacheService.markSaved(STUDY, undefined, { confirm: true });
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.removeSessionInstances(STUDY);
+
+    expect(LocalCacheService.getSeriesCopyStateSync(SERIES_SR)).toBe('saved');
+    expect(stored.get('sr-1').session).toBeUndefined();
+    expect(sopsOf(stored.get(KEY), SERIES_SR)).toEqual(['sr-1']);
+  });
+
+  it('carries an instance added before the study has a payload into its first payload', async () => {
+    await expect(LocalCacheService.cacheViewerInstance(report('sr-1'))).resolves.toBe(true);
+    expect(stored.has(KEY)).toBe(false);
+
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    expect(sopsOf(stored.get(KEY), SERIES_SR)).toEqual(['sr-1']);
+    expect(sopsOf(stored.get(KEY), SERIES_A)).toEqual(['1']);
+  });
+
+  it('lists an instance once however often it is added or a payload is written', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+    await LocalCacheService.cacheViewerInstance(report('sr-2'));
+    await LocalCacheService.cacheViewerInstance(report('sr-2'));
+    await LocalCacheService.putStudyMetadataPayload(STUDY, stored.get(KEY));
+
+    const payload = stored.get(KEY);
+    expect(payload.series.filter(e => e['0020000E'].Value[0] === SERIES_SR)).toHaveLength(1);
+    expect(sopsOf(payload, SERIES_SR)).toEqual(['sr-1', 'sr-2']);
+  });
+
+  it('keeps a partial payload partial', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot(), { partial: true });
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+    expect(sopsOf(stored.get(KEY), SERIES_SR)).toEqual(['sr-1']);
+    expect(LocalCacheService.hasStudyMetadataPayloadSync(STUDY)).toBe(true);
+    expect(LocalCacheService.hasCompleteStudyMetadataPayloadSync(STUDY)).toBe(false);
+  });
+
+  it('writes nothing for a study that is not cached', async () => {
+    await expect(LocalCacheService.cacheViewerInstance({ ...report('sr-1'), StudyInstanceUID: '2.25.404' }))
+      .resolves.toBe(false);
+    expect(stored.size).toBe(0);
+    expect(LocalCacheService.isInstanceCachedSync('sr-1')).toBe(false);
+  });
+
+  it('forgets the additions of a removed series, so a later payload does not list them', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    await LocalCacheService.removeSeries(STUDY, SERIES_SR);
+    expect(stored.has(ADDS)).toBe(false);
+    expect(stored.has('sr-1')).toBe(false);
+
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    expect(stored.get(KEY).instancesBySeries[SERIES_SR]).toBeUndefined();
+  });
+
+  it('removes a series deleted from the server and keeps a complete payload complete', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    await LocalCacheService.removeSeries(STUDY, SERIES_SR, { removedFromServer: true });
+    expect(stored.has('sr-1')).toBe(false);
+    expect(stored.has(ADDS)).toBe(false);
+    expect(stored.get(KEY).instancesBySeries[SERIES_SR]).toBeUndefined();
+    expect(stored.get(KEY).series.map(e => e['0020000E'].Value[0])).toEqual([SERIES_A]);
+    expect(LocalCacheService.hasCompleteStudyMetadataPayloadSync(STUDY)).toBe(true);
+    expect(LocalCacheService.isInstanceCachedSync('sr-1')).toBe(false);
+  });
+
+  it('marks the payload partial when a series is only evicted from this browser', async () => {
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+
+    await LocalCacheService.removeSeries(STUDY, SERIES_SR);
+    expect(stored.get(KEY).instancesBySeries[SERIES_SR]).toBeUndefined();
+    expect(LocalCacheService.hasCompleteStudyMetadataPayloadSync(STUDY)).toBe(false);
+  });
+
+  it('prunes a series deleted from the server that this browser holds no instances of', async () => {
+    const SERIES_REMOTE = `${STUDY}.7`;
+    await LocalCacheService.putStudyMetadataPayload(STUDY, {
+      series: [{ '0020000E': { Value: [SERIES_A] } }, { '0020000E': { Value: [SERIES_REMOTE] } }],
+      instancesBySeries: { [SERIES_A]: [{ '00080018': { Value: ['1'] } }], [SERIES_REMOTE]: [{ '00080018': { Value: ['r-1'] } }] },
+    });
+
+    await LocalCacheService.removeSeries(STUDY, SERIES_REMOTE, { removedFromServer: true });
+    expect(stored.get(KEY).instancesBySeries[SERIES_REMOTE]).toBeUndefined();
+    expect(stored.get(KEY).series.map(e => e['0020000E'].Value[0])).toEqual([SERIES_A]);
+    expect(LocalCacheService.hasCompleteStudyMetadataPayloadSync(STUDY)).toBe(true);
+    expect(LocalCacheService.isStudyCachedSync(STUDY)).toBe(true);
+  });
+
+  it('forgets the additions of a removed study', async () => {
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+    await LocalCacheService.removeStudy(STUDY);
+    expect(stored.has(ADDS)).toBe(false);
+    expect(LocalCacheService.isStudyCachedSync(STUDY)).toBe(false);
+  });
+
+  it('writes nothing when it was requested during a clear', async () => {
+    let finishClear;
+    idb.clear.mockImplementation(() => new Promise(resolve => { finishClear = () => { stored.clear(); resolve(); }; }));
+    const wipe = LocalCacheService.clearAll();
+    await waitFor(() => typeof finishClear === 'function');
+
+    const add = LocalCacheService.cacheViewerInstance(report('sr-1'));
+    finishClear();
+    await expect(Promise.all([wipe, add])).resolves.toEqual([undefined, false]);
+
+    expect(stored.size).toBe(0);
+    expect(LocalCacheService.isInstanceCachedSync('sr-1')).toBe(false);
+    expect(LocalCacheService.getCachedStudyUIDsSync()).toEqual([]);
+  });
+
+  it('stores DICOM+JSON whose values are Proxies, as dcmjs hands them out', async () => {
+    // IndexedDB structured-clones what it stores, and a Proxy cannot be cloned
+    idb.set.mockImplementation(async (key, value) => { stored.set(key, structuredClone(value)); });
+    const proxied = value => new Proxy(value, {});
+    const instance = srInstance('sr-1');
+    instance['00100010'] = { vr: 'PN', Value: [proxied({ Alphabetic: 'Test^Patient' })] };
+    await LocalCacheService.putStudyMetadataPayload(STUDY, serverSnapshot());
+
+    await expect(LocalCacheService.cacheViewerInstance({ ...report('sr-1'), instance: proxied(instance) }))
+      .resolves.toBe(true);
+    const listed = stored.get(KEY).instancesBySeries[SERIES_SR][0];
+    expect(listed['00100010'].Value[0].Alphabetic).toBe('Test^Patient');
+  });
+
+  it('takes back the instance record, and keeps the other additions, when the additions write fails', async () => {
+    await LocalCacheService.cacheViewerInstance(report('sr-1'));
+    const before = structuredClone(stored.get(ADDS));
+    // Reads return copies, as IndexedDB's do
+    idb.get.mockImplementation(async key => (stored.has(key) ? structuredClone(stored.get(key)) : undefined));
+    idb.set.mockImplementation(async (key, value) => {
+      if (key === ADDS) {
+        throw Object.assign(new Error('could not be cloned'), { name: 'DataCloneError' });
+      }
+      stored.set(key, value);
+    });
+
+    await expect(LocalCacheService.cacheViewerInstance(report('sr-2'))).rejects.toMatchObject({ name: 'DataCloneError' });
+    expect(stored.has('sr-2')).toBe(false);
+    expect(LocalCacheService.isInstanceCachedSync('sr-2')).toBe(false);
+    expect(stored.get(ADDS)).toEqual(before);
+    expect(Object.keys(stored.get(ADDS))).toEqual(['sr-1']);
+  });
+
+  it('takes back what it wrote when a clear starts while the bytes are being stored', async () => {
+    let releaseWrite;
+    let wipe;
+    idb.set.mockImplementation(async (key, value) => {
+      if (key === 'sr-1') {
+        // The clear starts while this write is in flight; IndexedDB commits the write first
+        stored.set(key, value);
+        wipe = LocalCacheService.clearAll();
+        await new Promise(resolve => { releaseWrite = resolve; });
+        return;
+      }
+      stored.set(key, value);
+    });
+
+    const add = LocalCacheService.cacheViewerInstance(report('sr-1'));
+    await waitFor(() => typeof releaseWrite === 'function');
+    releaseWrite();
+    await expect(add).resolves.toBe(false);
+    await wipe;
+
+    expect(stored.has('sr-1')).toBe(false);
+    expect(stored.has(ADDS)).toBe(false);
+    expect(LocalCacheService.isInstanceCachedSync('sr-1')).toBe(false);
+    expect(LocalCacheService.getCachedStudyUIDsSync()).toEqual([]);
+  });
+});
