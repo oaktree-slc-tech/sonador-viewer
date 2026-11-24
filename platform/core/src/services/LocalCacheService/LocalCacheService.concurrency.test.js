@@ -788,6 +788,47 @@ describe('LocalCacheService: a clear landing inside adoption, a sweep repair, an
       await expectEmptied();
     });
 
+    it('restores the earlier report when a clear that started while the index write was pending fails', async () => {
+      await arrange();
+      const write = holdNextIndexWrite();
+      const save = service.cacheViewerInstance(report('sr2'));
+      await until(() => write.isHeld, "the save's index write");
+      jest.spyOn(idb, 'clear').mockImplementationOnce(() => Promise.reject(new Error('clear failed')));
+      await expect(service.clearAll()).rejects.toThrow('clear failed');
+      write.fail(new Error('QuotaExceededError'));
+      await expect(save).rejects.toThrow('QuotaExceededError');
+
+      expect(Object.keys(records().get(ADDS))).toEqual(['sr1']);
+      expect(records().has('sr1')).toBe(true);
+      expect(records().has('sr2')).toBe(false);
+      expect(service.isInstanceCachedSync('sr2')).toBe(false);
+      expect(service.isInstanceCachedSync('sr1')).toBe(true);
+      const other = await fresh();
+      await other.putStudyMetadataPayload(STUDY, payload());
+      expect(sopsOf(await other.getStudyMetadataPayload(STUDY), SR_SERIES)).toEqual(['sr1']);
+    });
+
+    it('restores the earlier report when a clear that started during the rollback fails', async () => {
+      await arrange();
+      const write = holdNextIndexWrite();
+      const save = service.cacheViewerInstance(report('sr2'));
+      await until(() => write.isHeld, "the save's index write");
+      const releaseDelete = hold('sr2');
+      write.fail(new Error('QuotaExceededError'));
+      await flush();
+      jest.spyOn(idb, 'clear').mockImplementationOnce(() => Promise.reject(new Error('clear failed')));
+      const clearing = service.clearAll().then(() => null, error => error);
+      await flush();
+      releaseDelete();
+      expect((await clearing).message).toBe('clear failed');
+      await expect(save).rejects.toThrow('QuotaExceededError');
+
+      expect(Object.keys(records().get(ADDS))).toEqual(['sr1']);
+      expect(records().has('sr2')).toBe(false);
+      expect(service.isInstanceCachedSync('sr2')).toBe(false);
+      expect(service.isInstanceCachedSync('sr1')).toBe(true);
+    });
+
     it('restores nothing from before a clear that started while the rollback was deleting', async () => {
       await arrange();
       const write = holdNextIndexWrite();

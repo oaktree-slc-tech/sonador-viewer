@@ -112,6 +112,8 @@ interface CacheIndex {
 interface CacheMutationToken {
   generation: number;
   clearing: boolean;
+  // The storage resets completed when the token was taken (see _resets)
+  resets: number;
 }
 
 interface InstanceUIDs {
@@ -429,6 +431,10 @@ class LocalCacheServiceClass extends PubSubService {
   // would declare the cache quiet while the second was still emptying it.
   private _clearing: Promise<void> | null = null;
   private _generation = 0;
+  // The clears that actually emptied the instance store. A clear moves `_generation` whether or not
+  // it succeeded; this moves only once the records are gone, for the one caller that has to tell
+  // an attempted clear from a reset (_rollBackViewerInstance).
+  private _resets = 0;
 
   /**
    * @param options.locks - the lock manager that serialises mutations across browsing contexts;
@@ -600,9 +606,7 @@ class LocalCacheServiceClass extends PubSubService {
           if (token && !this._mutationStillValid(token)) {
             break;
           }
-          while (this._clearing) {
-            await this._clearing.catch(() => undefined);
-          }
+          await this._settleClears();
           const generation = this._generation;
           const adopted = await this._adoptStoredStudy(
             StudyInstanceUID,
@@ -640,7 +644,14 @@ class LocalCacheServiceClass extends PubSubService {
    * after the clear, because by then the generation has already settled.
    */
   private _beginCacheMutation(): CacheMutationToken {
-    return { generation: this._generation, clearing: !!this._clearing };
+    return { generation: this._generation, clearing: !!this._clearing, resets: this._resets };
+  }
+
+  /** Resolves once no clear is running in this context, whatever the outcome of the clears. */
+  private async _settleClears(): Promise<void> {
+    while (this._clearing) {
+      await this._clearing.catch(() => undefined);
+    }
   }
 
   /** True when the cache has not been wiped since `token` was taken, and is not being wiped now. */
@@ -1306,15 +1317,18 @@ class LocalCacheServiceClass extends PubSubService {
   }
 
   /**
-   * Take back a viewer-created instance whose index write failed: the record is deleted, and,
-   * while `token` is still valid, the study's index entry returns to `snapshot` and the additions
-   * document to `previousAdditions` (deleted when that was empty). Under the caller's study lock.
+   * Take back a viewer-created instance whose index write failed: its record is deleted, and the
+   * study's index entry and the additions document return to how they were before the save
+   * (`snapshot`, `previousAdditions`; the document is deleted when that was empty). Under the
+   * caller's study lock.
    *
-   * A clear that started since the save took its token has emptied the cache: nothing from before
-   * it is restored, in memory or in storage, and the additions document is deleted. Validity is
-   * checked again after each await, so a clear that starts during the rollback is honoured too. A
-   * step that fails is logged; an addition left behind is not folded into any payload, since no
-   * index lists its instance.
+   * What a clear did decides what is restored, so a clear running in this context is waited for
+   * first. A clear that emptied the instance store since the save took `token` has reset the cache:
+   * nothing from before it is restored, in memory or in storage, and the additions document is
+   * deleted. A clear that failed before emptying it has reset nothing, so the earlier reports and
+   * their additions are restored as for any failed save. The check is repeated after each await,
+   * for a clear that starts during the rollback. A step that fails is logged; an addition left
+   * behind is not folded into any payload, since no index lists its instance.
    */
   private async _rollBackViewerInstance(
     StudyInstanceUID: string,
@@ -1323,7 +1337,9 @@ class LocalCacheServiceClass extends PubSubService {
     previousAdditions: ViewerAdditions,
     token: CacheMutationToken
   ): Promise<void> {
-    if (this._mutationStillValid(token)) {
+    const reset = () => this._resets !== token.resets;
+    await this._settleClears();
+    if (!reset()) {
       this._index.studies[StudyInstanceUID] = snapshot;
       this._rebuildMembership();
     }
@@ -1333,9 +1349,12 @@ class LocalCacheServiceClass extends PubSubService {
     const additionsKey = VIEWER_ADDITIONS_KEY_PREFIX + StudyInstanceUID;
     try {
       await del(SOPInstanceUID, this._instanceStore);
-      if (Object.keys(previousAdditions).length && this._mutationStillValid(token)) {
+      await this._settleClears();
+      if (!reset() && Object.keys(previousAdditions).length) {
         await set(additionsKey, previousAdditions, this._instanceStore);
-        if (!this._mutationStillValid(token)) {
+        // A clear that reset the store while the write was in flight may have run before it landed
+        await this._settleClears();
+        if (reset()) {
           await del(additionsKey, this._instanceStore);
         }
       } else {
@@ -2173,6 +2192,7 @@ class LocalCacheServiceClass extends PubSubService {
     if (this._instanceStore) {
       await clear(this._instanceStore);
     }
+    this._resets += 1;
     this._index = _emptyIndex();
     this._rebuildMembership();
     // The record of series removed from the server is kept (see _serverRemovedSeries)
