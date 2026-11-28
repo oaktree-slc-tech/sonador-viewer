@@ -3,8 +3,16 @@
 //
 // ui-next PopoverContent portals to document.body, so it must out-stack the ModalNG content
 // (z-index 200) it is opened over — Radix copies the CONTENT's z-index onto the popper wrapper, so
-// it is set here, on the content class. Width overrides the default w-64, and the background and
-// text colour the component's theme tokens with the study list's gray/black scheme.
+// it is set here, on the content class. The background and text colour override the component's
+// theme tokens with the study list's gray/black scheme.
+//
+// WIDTH IS DECIDED BY THE SERIES TABLE. The card is `max-content` wide, so a table carrying the
+// Transfer column, a byte progress figure and the removal control gets exactly the room it needs
+// instead of running past a fixed cap. Only the viewport bounds it (Radix reports the room left on
+// the chosen side), and in that one case the table scrolls sideways rather than overrunning the
+// card. The identifier lines above the table are kept out of the measurement with
+// `contain: inline-size`, so a long study description wraps at the width the table set instead
+// of stretching the card to the length of its own text.
 //
 // The border is NOT set here: PopoverContent carries the --overlay-line token, which is the
 // canonical charcoal for every floating menu surface (ohif-viewers#128). This rule used to restate
@@ -12,15 +20,26 @@
 // Radix primitive in two different colours depending on the consumer.
 .detailsCard {
   z-index: 1080;
-  width: auto;
+  width: max-content;
   min-width: 360px;
-  max-width: 520px;
+  max-width: min(calc(100vw - 32px), var(--radix-popover-content-available-width, 100vw));
+  box-sizing: border-box;
   background: #1e1f23;
   color: #d3d3d3;
   // Stated here rather than inherited from the primitive: PopoverContent's own padding is `p-1`.
   padding: 16px;
   border-radius: 6px;
   text-align: left;
+}
+
+// The study identifier lines. Size-contained in the inline axis so their text does not take part
+// in sizing the card (see above); they lay out at whatever width the table decided. Containment
+// adds no break opportunities, so an unbroken value (a long patient ID or a description without
+// spaces) is allowed to break anywhere rather than run past the card's edge.
+.detailsHeader {
+  contain: inline-size;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .detailsTitle {
@@ -49,9 +68,16 @@
   margin-top: 4px;
 }
 
+// Scroll container for the table, used only when the viewport is narrower than the table's
+// natural width; everywhere else the card has already grown to fit and nothing scrolls.
+.detailsTableScroll {
+  margin-top: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .detailsTable {
   width: 100%;
-  margin-top: 10px;
   border-collapse: collapse;
   font-size: 12px;
 
@@ -69,14 +95,26 @@
     padding: 4px 10px 4px 0;
     border-bottom: 1px solid #2a2d34;
     white-space: nowrap;
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-right: 0;
   }
 
   tr:last-child td {
     border-bottom: none;
   }
+}
+
+// The one column with free text. Capped on a block inside the cell, not on the cell itself: a
+// max-width on a table cell is not honoured in automatic table layout, so a long description
+// grew the table. Past the cap the description wraps rather than being clipped, so the whole
+// text stays readable without a hover-only tooltip.
+.seriesDescription {
+  max-width: 260px;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 // A series whose transfer failed, so the row that needs attention is findable at a glance

@@ -122,79 +122,91 @@ export default function StudyOfflineDetailsCard({
         className={styles.detailsCard}
         data-cy="offline-details-card"
       >
-        {(item?.PatientName || item?.PatientID) && (
-          <div className={styles.detailsTitle}>
-            {item.PatientName}
-            {item.PatientID && <span className={styles.rowTitleSecondary}>{item.PatientID}</span>}
-          </div>
-        )}
-        {item?.StudyDescription && <div className={styles.detailsDescription}>"{item.StudyDescription}"</div>}
-        {copyLine && <div className={styles.detailsAttr}>{copyLine}</div>}
-        {item?.AccessionNumber && (
-          <div className={styles.detailsAttr}>
-            {t('AccessionNumber')} {item.AccessionNumber}
-          </div>
-        )}
-        {item?.ServiceEpisodeID && (
-          <div className={styles.detailsAttr}>
-            {t('Service Episode ID')} {item.ServiceEpisodeID}
-          </div>
-        )}
+        {/* The identifier lines sit in their own box so the series table alone sizes the card
+            (see the stylesheet). */}
+        <div className={styles.detailsHeader}>
+          {(item?.PatientName || item?.PatientID) && (
+            <div className={styles.detailsTitle}>
+              {item.PatientName}
+              {item.PatientID && <span className={styles.rowTitleSecondary}>{item.PatientID}</span>}
+            </div>
+          )}
+          {item?.StudyDescription && <div className={styles.detailsDescription}>"{item.StudyDescription}"</div>}
+          {copyLine && <div className={styles.detailsAttr}>{copyLine}</div>}
+          {item?.AccessionNumber && (
+            <div className={styles.detailsAttr}>
+              {t('AccessionNumber')} {item.AccessionNumber}
+            </div>
+          )}
+          {item?.ServiceEpisodeID && (
+            <div className={styles.detailsAttr}>
+              {t('Service Episode ID')} {item.ServiceEpisodeID}
+            </div>
+          )}
+        </div>
         {seriesSummaries.length > 0 ? (
-          <table className={styles.detailsTable}>
-            <thead>
-              <tr>
-                <th>{t('Series #')}</th>
-                <th>{t('StudyDescription')}</th>
-                <th>{t('Modality')}</th>
-                <th>{t('Instances')}</th>
-                <th>{t('Size')}</th>
-                <th>{t('Copy')}</th>
-                {job && <th>{t('Transfer')}</th>}
-                {/* Empty header, like the study table's offline-indicator column. */}
-                {showActions && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {seriesSummaries.map(series => (
-                <tr key={series.SeriesInstanceUID}>
-                  <td>{series.SeriesNumber ?? ''}</td>
-                  <td>{series.SeriesDescription || ''}</td>
-                  <td>{series.Modality || ''}</td>
-                  <td>{series.instanceCount}</td>
-                  <td>{formatBytes(series.totalBytes)}</td>
-                  <td>{renderCopyCell(series.state, t)}</td>
-                  {job && <td>{renderTransferCell(series.transfer, t)}</td>}
-                  {showActions && (
+          <div className={styles.detailsTableScroll}>
+            <table className={styles.detailsTable}>
+              <thead>
+                <tr>
+                  <th>{t('Series #')}</th>
+                  <th>{t('StudyDescription')}</th>
+                  <th>{t('Modality')}</th>
+                  <th>{t('Instances')}</th>
+                  <th>{t('Size')}</th>
+                  <th>{t('Copy')}</th>
+                  {job && <th>{t('Transfer')}</th>}
+                  {/* Empty header, like the study table's offline-indicator column. */}
+                  {showActions && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {seriesSummaries.map(series => (
+                  <tr key={series.SeriesInstanceUID}>
+                    <td>{series.SeriesNumber ?? ''}</td>
                     <td>
-                      {series.instanceCount > 0 && canRemove(series) && (
-                        <button
-                          type="button"
-                          className={styles.seriesRemoveButton}
-                          data-cy="offline-series-remove"
-                          data-series-uid={series.SeriesInstanceUID}
-                          title={series.state === 'temporary' ? t('Remove Temporary Copy') : t('Remove Offline Storage')}
-                          aria-label={
-                            series.state === 'temporary'
-                              ? t("Remove this series' temporary copy")
-                              : t('Remove this series from offline storage')
-                          }
-                          // The row underneath a study-table card toggles its drawer; keep it
-                          // from reacting to a click meant for this control (AR-5).
-                          onClick={event => {
-                            event.stopPropagation();
-                            onRemoveSeries(item?.StudyInstanceUID, series.SeriesInstanceUID, series.state);
-                          }}
-                        >
-                          <Icon name="trash" />
-                        </button>
+                      {series.SeriesDescription ? (
+                        <div className={styles.seriesDescription}>{series.SeriesDescription}</div>
+                      ) : (
+                        ''
                       )}
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <td>{series.Modality || ''}</td>
+                    <td>{series.instanceCount}</td>
+                    <td>{formatBytes(series.totalBytes)}</td>
+                    <td>{renderCopyCell(series.state, t)}</td>
+                    {job && <td>{renderTransferCell(series.transfer, t)}</td>}
+                    {showActions && (
+                      <td>
+                        {series.instanceCount > 0 && canRemove(series) && (
+                          <button
+                            type="button"
+                            className={styles.seriesRemoveButton}
+                            data-cy="offline-series-remove"
+                            data-series-uid={series.SeriesInstanceUID}
+                            title={series.state === 'temporary' ? t('Remove Temporary Copy') : t('Remove Offline Storage')}
+                            aria-label={
+                              series.state === 'temporary'
+                                ? t("Remove this series' temporary copy")
+                                : t('Remove this series from offline storage')
+                            }
+                            // The row underneath a study-table card toggles its drawer; keep it
+                            // from reacting to a click meant for this control (AR-5).
+                            onClick={event => {
+                              event.stopPropagation();
+                              onRemoveSeries(item?.StudyInstanceUID, series.SeriesInstanceUID, series.state);
+                            }}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className={styles.detailsAttr}>{t('No series cached yet')}</div>
         )}
